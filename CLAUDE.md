@@ -10,14 +10,20 @@
 
 | Item | Value |
 |---|---|
-| Project / repo | `<github_user>/<repo_name>` |
-| Domain | `<domain.com>` |
-| Document root | `/home/<cpanel_user>/<domain.com>` |
-| Database name | `<db_name>` |
-| Database user | `<db_user>` (usually same as DB name) |
+| Project / repo | `devgeereact/ritagreen_os` |
+| Domain | `ritagreenservices.com` |
+| Document root | `/home/<cpanel_user>/ritagreenservices.com` (confirm cPanel user) |
+| Database name | `ritagreen_os` (cPanel may prefix as `<cpaneluser>_ritagreen_os`) |
+| Database user | `ritagreen_os` (usually same as DB name) |
 | Database host | `localhost` |
 | Deploy branch | `main` |
-| FTP username | `<ftp_user>@<domain.com>` |
+| FTP username | `ritagreen_os@ritagreenservices.com` |
+
+> **Stack note:** this project is **TypeScript** (Pulse-UI kit), not plain JS. It is a
+> **merged single Vite app**: public corporate site at the root, internal CMS behind
+> `/login` → `/app/*`. PHP API + `schema.sql` live in `server/` (version-controlled,
+> uploaded to the doc root by hand, excluded from the FTP deploy). OpenRouter model is
+> set in `config.php` as `OR_MODEL`. Seed super-admin: `dev@ritagreenservices.com` / `Testing123!`.
 
 ---
 
