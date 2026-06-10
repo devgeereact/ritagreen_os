@@ -19,5 +19,8 @@ jobs:
           server:   ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps          # secure FTP — Namecheap prefers this
+          port: 21
+          timeout: 600000         # 10 min, in case the handshake is slow
           local-dir: ./dist/
-          server-dir: ./        # FTP account scoped to the ritagreen folder
+          server-dir: ./          # FTP account scoped to this site's folder
