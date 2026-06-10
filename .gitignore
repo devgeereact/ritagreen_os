@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Server secrets — never commit (DB creds + OpenRouter key live here on the server)
+server/config.php
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
