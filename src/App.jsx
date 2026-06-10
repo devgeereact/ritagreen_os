@@ -14,31 +14,45 @@ function App() {
 
   return (
     <main className="coming-soon">
-      <div className="badge">Launching soon</div>
+      <header className="brand">
+        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-name">RitaGreen</span>
+      </header>
 
-      <h1>RitaGreen OS</h1>
-      <p className="tagline">
-        Something fresh is growing. We're putting the finishing touches on it.
-      </p>
+      <div className="hero">
+        <p className="eyebrow">Launching soon</p>
+        <h1>Something fresh is growing.</h1>
+        <p className="tagline">
+          We're putting the finishing touches on RitaGreen OS. Leave your email
+          and we'll let you know the moment it's live.
+        </p>
 
-      {submitted ? (
-        <p className="thanks">Thanks — you're on the list. We'll be in touch.</p>
-      ) : (
-        <form className="notify" onSubmit={handleSubmit}>
-          <input
-            type="email"
-            required
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-label="Email address"
-          />
-          <button type="submit">Notify me</button>
-        </form>
-      )}
+        {submitted ? (
+          <p className="thanks" role="status">
+            <span className="thanks-check" aria-hidden="true" />
+            You're on the list — we'll be in touch.
+          </p>
+        ) : (
+          <form className="notify" onSubmit={handleSubmit} noValidate>
+            <label className="visually-hidden" htmlFor="email">
+              Email address
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button type="submit">Notify me</button>
+          </form>
+        )}
+      </div>
 
       <footer className="foot">
-        <span>© {new Date().getFullYear()} RitaGreen</span>
+        © {new Date().getFullYear()} RitaGreen. All rights reserved.
       </footer>
     </main>
   )
