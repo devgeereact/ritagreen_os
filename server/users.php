@@ -1,0 +1,90 @@
+<?php
+// User & role management (admin only).
+// GET  /users.php                          -> { users: [...] }
+// POST /users.php {name, email, role, division?, password} -> create
+// POST /users.php?action=deactivate&id=5   -> soft-delete a user
+require __DIR__ . '/lib.php';
+
+$user = require_auth($conn);
+$action = $_GET['action'] ?? '';
+
+const ROLES = ['super_admin', 'admin', 'manager', 'trainer', 'editor', 'employee', 'client'];
+const DIVS = ['care', 'academy', 'cleaning', 'security'];
+
+if (method() === 'GET') {
+    require_role($user, 'super_admin', 'admin');
+    $res = $conn->query(
+        'SELECT id, name, email, role, division, created_at,
+                (deleted_at IS NULL) AS active
+         FROM users ORDER BY name'
+    );
+    $users = [];
+    while ($row = $res->fetch_assoc()) {
+        $row['id'] = (int) $row['id'];
+        $row['active'] = (bool) $row['active'];
+        $users[] = $row;
+    }
+    json_out(['users' => $users]);
+}
+
+if ($action === 'deactivate' && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A user is required.');
+    if ($id === (int) $user['id']) fail('You cannot deactivate your own account.', 409);
+
+    $stmt = $conn->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    // Revoke their tokens so access stops immediately.
+    $del = $conn->prepare('DELETE FROM tokens WHERE user_id = ?');
+    $del->bind_param('i', $id);
+    $del->execute();
+
+    audit($conn, (int) $user['id'], 'user.deactivate', "#$id");
+    json_out(['ok' => true]);
+}
+
+if (method() === 'POST') {
+    require_role($user, 'super_admin', 'admin');
+    $data = body();
+    $name = trim((string) ($data['name'] ?? ''));
+    $email = strtolower(trim((string) ($data['email'] ?? '')));
+    $role = trim((string) ($data['role'] ?? 'employee'));
+    $division = trim((string) ($data['division'] ?? ''));
+    $password = (string) ($data['password'] ?? '');
+
+    if ($name === '' || $email === '') fail('Name and email are required.');
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
+    if (!in_array($role, ROLES, true)) fail('Invalid role.');
+    if (strlen($password) < 8) fail('The password must be at least 8 characters.');
+
+    // Only a super_admin can mint another super_admin.
+    if ($role === 'super_admin' && $user['role'] !== 'super_admin') {
+        fail('Only a super admin can create another super admin.', 403);
+    }
+
+    $divisionVal = in_array($division, DIVS, true) ? $division : null;
+
+    // Email must be unique.
+    $stmt = $conn->prepare('SELECT id FROM users WHERE email = ?');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    if ($stmt->get_result()->fetch_assoc()) fail('A user with that email already exists.', 409);
+
+    $hash = password_hash($password, PASSWORD_BCRYPT);
+    $stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division) VALUES (?, ?, ?, ?, ?)');
+    $stmt->bind_param('sssss', $name, $email, $hash, $role, $divisionVal);
+    $stmt->execute();
+    $id = $conn->insert_id;
+
+    audit($conn, (int) $user['id'], 'user.create', "$email ($role)");
+    json_out([
+        'user' => [
+            'id' => (int) $id, 'name' => $name, 'email' => $email,
+            'role' => $role, 'division' => $divisionVal, 'active' => true,
+        ],
+    ], 201);
+}
+
+fail('Method not allowed.', 405);

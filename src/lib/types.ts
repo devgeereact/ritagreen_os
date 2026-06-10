@@ -63,6 +63,24 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type AdminUser = {
+  id: number
+  name: string
+  email: string
+  role: string
+  division: string | null
+  active: boolean
+  created_at: string
+}
+
+export type AuditEntry = {
+  id: number
+  action: string
+  detail: string
+  user: string | null
+  created_at: string
+}
+
 export type Programme = {
   id: number
   title: string

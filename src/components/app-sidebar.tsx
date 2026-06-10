@@ -52,6 +52,7 @@ const navMain = [
   { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
   { title: "Academy", url: "/app/academy", icon: GraduationCap },
   { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
+  { title: "Settings", url: "/app/settings", icon: Settings2 },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
 ]
 
@@ -59,7 +60,6 @@ const navMain = [
 const navSoon = [
   { title: "Quoting", icon: ReceiptText },
   { title: "Analytics", icon: BarChart3 },
-  { title: "Settings", icon: Settings2 },
 ]
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {

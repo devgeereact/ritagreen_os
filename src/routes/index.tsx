@@ -33,6 +33,7 @@ import Jobs from "@/pages/app/Jobs"
 import Invoicing from "@/pages/app/Invoicing"
 import Academy from "@/pages/app/Academy"
 import AcademyDetail from "@/pages/app/AcademyDetail"
+import Settings from "@/pages/app/Settings"
 import SmokeTest from "@/pages/app/SmokeTest"
 
 export const router = createBrowserRouter([
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: "invoicing", element: <Invoicing /> },
           { path: "academy", element: <Academy /> },
           { path: "academy/:id", element: <AcademyDetail /> },
+          { path: "settings", element: <Settings /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],
       },
