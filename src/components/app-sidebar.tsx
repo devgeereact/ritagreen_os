@@ -51,6 +51,7 @@ const navMain = [
   { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
   { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
   { title: "Academy", url: "/app/academy", icon: GraduationCap },
+  { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
   { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
   { title: "Settings", url: "/app/settings", icon: Settings2 },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
@@ -58,7 +59,6 @@ const navMain = [
 
 // Modules scoped for later passes — shown disabled so the shape is visible.
 const navSoon = [
-  { title: "Quoting", icon: ReceiptText },
   { title: "Analytics", icon: BarChart3 },
 ]
 

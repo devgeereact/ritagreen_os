@@ -112,6 +112,26 @@ export type Job = {
   created_at: string
 }
 
+export type Quote = {
+  id: number
+  number: string
+  client_id: number | null
+  client: string | null
+  division: DivisionId
+  title: string
+  net_pence: number
+  vat_pence: number
+  total_pence: number
+  status: "draft" | "sent" | "accepted" | "declined"
+  invoice_id: number | null
+  created_at: string
+}
+
+export type QuoteTotals = {
+  open_pence: number
+  won_pence: number
+}
+
 export type Invoice = {
   id: number
   number: string

@@ -189,6 +189,24 @@ CREATE TABLE IF NOT EXISTS invoices (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Quotes / estimates ----
+CREATE TABLE IF NOT EXISTS quotes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  number VARCHAR(32) NOT NULL,
+  client_id INT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  title VARCHAR(190) NOT NULL,
+  net_pence INT NOT NULL DEFAULT 0,
+  vat_pence INT NOT NULL DEFAULT 0,
+  total_pence INT NOT NULL DEFAULT 0,
+  status ENUM('draft','sent','accepted','declined') NOT NULL DEFAULT 'draft',
+  invoice_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_quote_number (number),
+  KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Jobs / work orders ----
 CREATE TABLE IF NOT EXISTS jobs (
   id INT AUTO_INCREMENT PRIMARY KEY,
