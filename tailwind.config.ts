@@ -13,6 +13,11 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Montserrat", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["Merriweather", "ui-serif", "Georgia", "serif"],
+        mono: ["'Source Code Pro'", "ui-monospace", "monospace"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

@@ -3,74 +3,75 @@
 @tailwind utilities;
 
 @layer base {
+  /* RitaGreen palette — warm cream + forest green (HSL channels for Tailwind v3) */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 142 72% 29%;          /* RitaGreen brand #15803D */
+    --background: 38 36% 96%;
+    --foreground: 9 28% 19%;
+    --card: 38 36% 96%;
+    --card-foreground: 9 28% 19%;
+    --popover: 38 36% 96%;
+    --popover-foreground: 9 28% 19%;
+    --primary: 123 46% 34%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 140 30% 96%;
-    --secondary-foreground: 142 60% 18%;
-    --muted: 140 20% 96.1%;
-    --muted-foreground: 150 8% 45%;
-    --accent: 142 45% 94%;           /* light green tint */
-    --accent-foreground: 142 60% 18%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 145 14% 90%;
-    --input: 145 14% 90%;
-    --ring: 142 72% 29%;
-    --chart-1: 142 71% 45%;  /* green-3 */
-    --chart-2: 142 76% 36%;  /* green-2 */
-    --chart-3: 142 72% 29%;  /* brand */
-    --chart-4: 199 89% 48%;  /* care sky */
-    --chart-5: 262 83% 58%;  /* academy purple */
+    --secondary: 125 39% 94%;
+    --secondary-foreground: 124 55% 24%;
+    --muted: 34 35% 91%;
+    --muted-foreground: 15 25% 34%;
+    --accent: 122 38% 84%;
+    --accent-foreground: 124 55% 24%;
+    --destructive: 0 66% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 34 27% 83%;
+    --input: 34 27% 83%;
+    --ring: 123 46% 34%;
+    --chart-1: 122 39% 49%;
+    --chart-2: 123 43% 39%;
+    --chart-3: 123 46% 34%;
+    --chart-4: 124 55% 24%;
+    --chart-5: 126 51% 8%;
     --radius: 0.5rem;
-    --sidebar-background: 145 25% 98%;
-    --sidebar-foreground: 150 10% 26%;
-    --sidebar-primary: 142 72% 29%;
+    --sidebar-background: 34 35% 91%;
+    --sidebar-foreground: 9 28% 19%;
+    --sidebar-primary: 123 46% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 142 45% 94%;
-    --sidebar-accent-foreground: 142 60% 18%;
-    --sidebar-border: 145 18% 90%;
-    --sidebar-ring: 142 72% 29%}
+    --sidebar-accent: 122 38% 84%;
+    --sidebar-accent-foreground: 124 55% 24%;
+    --sidebar-border: 34 27% 83%;
+    --sidebar-ring: 123 46% 34%}
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 142 71% 45%;          /* RitaGreen #22C55E for dark */
-    --primary-foreground: 142 80% 10%;
-    --secondary: 150 12% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 150 10% 15%;
-    --muted-foreground: 150 8% 64%;
-    --accent: 150 14% 17%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 150 8% 16%;
-    --input: 150 8% 16%;
-    --ring: 142 71% 45%;
-     --chart-1: 142 71% 55%;
-    --chart-2: 142 76% 45%;
-    --chart-3: 142 72% 38%;
-    --chart-4: 199 89% 55%;
-    --chart-5: 262 83% 66%;
-    --sidebar-background: 150 12% 9%;
-    --sidebar-foreground: 145 15% 92%;
-    --sidebar-primary: 142 71% 45%;
-    --sidebar-primary-foreground: 142 80% 10%;
-    --sidebar-accent: 150 10% 16%;
-    --sidebar-accent-foreground: 145 15% 92%;
-    --sidebar-border: 150 8% 16%;
-    --sidebar-ring: 142 71% 45%}
+    --background: 133 20% 14%;
+    --foreground: 33 27% 92%;
+    --card: 125 13% 20%;
+    --card-foreground: 33 27% 92%;
+    --popover: 125 13% 20%;
+    --popover-foreground: 33 27% 92%;
+    --primary: 122 39% 49%;
+    --primary-foreground: 126 51% 8%;
+    --secondary: 115 10% 26%;
+    --secondary-foreground: 114 14% 86%;
+    --muted: 125 13% 20%;
+    --muted-foreground: 35 19% 81%;
+    --accent: 123 43% 39%;
+    --accent-foreground: 33 27% 92%;
+    --destructive: 0 66% 47%;
+    --destructive-foreground: 33 27% 92%;
+    --border: 115 10% 26%;
+    --input: 115 10% 26%;
+    --ring: 122 39% 49%;
+    --chart-1: 123 38% 64%;
+    --chart-2: 123 38% 57%;
+    --chart-3: 122 39% 49%;
+    --chart-4: 123 41% 45%;
+    --chart-5: 123 43% 39%;
+    --sidebar-background: 133 20% 14%;
+    --sidebar-foreground: 33 27% 92%;
+    --sidebar-primary: 122 39% 49%;
+    --sidebar-primary-foreground: 126 51% 8%;
+    --sidebar-accent: 123 43% 39%;
+    --sidebar-accent-foreground: 33 27% 92%;
+    --sidebar-border: 115 10% 26%;
+    --sidebar-ring: 122 39% 49%}
 }
 
 
@@ -455,7 +456,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }
 
