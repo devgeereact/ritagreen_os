@@ -63,6 +63,37 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type Job = {
+  id: number
+  client_id: number | null
+  client: string | null
+  division: DivisionId
+  type: "care_visit" | "clean" | "guard_shift" | "course" | "other"
+  title: string
+  priority: "emergency" | "high" | "standard"
+  status: "booked" | "assigned" | "in_progress" | "done" | "cancelled"
+  scheduled_for: string | null
+  created_at: string
+}
+
+export type Invoice = {
+  id: number
+  number: string
+  client_id: number | null
+  client: string | null
+  division: DivisionId
+  net_pence: number
+  vat_pence: number
+  total_pence: number
+  status: "draft" | "sent" | "paid" | "overdue" | "void"
+  created_at: string
+}
+
+export type InvoiceTotals = {
+  outstanding_pence: number
+  paid_pence: number
+}
+
 export type DashboardSummary = {
   active_programmes: number
   enrolments: number

@@ -29,6 +29,8 @@ import ClientDetail from "@/pages/app/ClientDetail"
 import Workers from "@/pages/app/Workers"
 import Compliance from "@/pages/app/Compliance"
 import Scheduling from "@/pages/app/Scheduling"
+import Jobs from "@/pages/app/Jobs"
+import Invoicing from "@/pages/app/Invoicing"
 import SmokeTest from "@/pages/app/SmokeTest"
 
 export const router = createBrowserRouter([
@@ -72,7 +74,9 @@ export const router = createBrowserRouter([
           { path: "clients/:id", element: <ClientDetail /> },
           { path: "workers", element: <Workers /> },
           { path: "scheduling", element: <Scheduling /> },
+          { path: "jobs", element: <Jobs /> },
           { path: "compliance", element: <Compliance /> },
+          { path: "invoicing", element: <Invoicing /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],
       },

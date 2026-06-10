@@ -174,13 +174,35 @@ CREATE TABLE IF NOT EXISTS sessions (
 -- ---- Invoices (money in pence) ----
 CREATE TABLE IF NOT EXISTS invoices (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  number VARCHAR(32) NOT NULL,
   client_id INT NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  net_pence INT NOT NULL DEFAULT 0,
+  vat_pence INT NOT NULL DEFAULT 0,
   total_pence INT NOT NULL DEFAULT 0,
   status ENUM('draft','sent','paid','overdue','void') NOT NULL DEFAULT 'draft',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_number (number),
   KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Jobs / work orders ----
+CREATE TABLE IF NOT EXISTS jobs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  type ENUM('care_visit','clean','guard_shift','course','other') NOT NULL DEFAULT 'other',
+  title VARCHAR(190) NOT NULL,
+  priority ENUM('emergency','high','standard') NOT NULL DEFAULT 'standard',
+  status ENUM('booked','assigned','in_progress','done','cancelled') NOT NULL DEFAULT 'booked',
+  scheduled_for DATETIME NULL,
+  notes TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  KEY idx_status (status),
+  KEY idx_client (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Certificates (public verification) ----
