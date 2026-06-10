@@ -1,0 +1,25 @@
+# SPA routing for RitaGreenOS.
+# Real files and directories (api.php, assets, etc.) are served as-is;
+# everything else falls through to index.html so React Router can handle it.
+# Pass the Authorization header through to PHP (often stripped on shared hosts).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+  # Don't rewrite requests for the PHP API or other real files/directories.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Send everything else to the SPA entry point.
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Send wrong-extension assets with the right type just in case.
+<IfModule mod_mime.c>
+  AddType application/javascript .js
+  AddType text/css .css
+</IfModule>
