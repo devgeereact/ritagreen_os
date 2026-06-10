@@ -2,7 +2,6 @@ import { Outlet } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { NotificationDropdown } from "@/components/notification-dropdown"
 import { AppLauncherDropdown } from "@/components/appLauncher-dropdown"
-import { Button } from "@/components/ui/button"
 
 import {
   Breadcrumb,
@@ -80,18 +79,12 @@ export default function AppLayout() {
                   className="-ml-1 rounded-full h-10 w-10 [&_svg]:!size-5 hover:bg-muted/60 transition-colors"
                 />
                 <div className="header-quick-link hidden md:flex items-center gap-1">
-                   <Button variant="ghost" className="font-medium text-sm h-8 px-3 py-0 rounded-lg">
-                    Pricing
-                  </Button>
-                    <Button variant="ghost" className="font-medium text-sm h-8 px-3 py-0 rounded-lg">
-                      Docs
-                    </Button>
-                    <Button variant="ghost" className="font-medium text-sm h-8 px-3 py-0 rounded-lg">
-                      Reports
-                    </Button>
-                    <Button variant="ghost" className="font-medium text-sm h-8 px-3 py-0 rounded-lg">
-                      Support
-                    </Button>
+                  <a
+                    href="/"
+                    className="font-medium text-sm h-8 px-3 inline-flex items-center rounded-lg hover:bg-muted/60"
+                  >
+                    View website
+                  </a>
                 </div>
               </div>
 

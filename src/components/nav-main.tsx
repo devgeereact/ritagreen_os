@@ -28,9 +28,11 @@ type MenuItem = {
 export function NavMain({ items }: { items: MenuItem[] }) {
   const location = useLocation()
 
+  const toPath = (url: string) => (url.startsWith("/") ? url : `/${url}`)
   const isActiveRoute = (url: string) => {
-  return location.pathname.startsWith(`/${url}`)
-}
+    const path = toPath(url)
+    return location.pathname === path || location.pathname.startsWith(`${path}/`)
+  }
 
   const renderMenuItems = (menuItems: MenuItem[]) => {
     return menuItems.map((item) => {
@@ -61,7 +63,7 @@ export function NavMain({ items }: { items: MenuItem[] }) {
     tooltip={item.title}
     isActive={isActiveRoute(item.url)}
   >
-    <Link to={item.url}>
+    <Link to={toPath(item.url)}>
       {item.icon && <item.icon className="h-4 w-4" />}
       <span>{item.title}</span>
     </Link>
@@ -114,7 +116,7 @@ export function NavMain({ items }: { items: MenuItem[] }) {
                                   asChild
                                   isActive={isActiveRoute(child.url)}
                                 >
-                                  <Link to={child.url}>
+                                                  <Link to={toPath(child.url)}>
                                     <span>{child.title}</span>
                                   </Link>
                                 </SidebarMenuSubButton>
@@ -130,7 +132,7 @@ export function NavMain({ items }: { items: MenuItem[] }) {
                         asChild
                         isActive={isActiveRoute(subItem.url)}
                       >
-                        <Link to={subItem.url}>
+                        <Link to={toPath(subItem.url)}>
                           <span>{subItem.title}</span>
                         </Link>
                       </SidebarMenuSubButton>
