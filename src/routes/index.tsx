@@ -31,6 +31,8 @@ import Compliance from "@/pages/app/Compliance"
 import Scheduling from "@/pages/app/Scheduling"
 import Jobs from "@/pages/app/Jobs"
 import Invoicing from "@/pages/app/Invoicing"
+import Academy from "@/pages/app/Academy"
+import AcademyDetail from "@/pages/app/AcademyDetail"
 import SmokeTest from "@/pages/app/SmokeTest"
 
 export const router = createBrowserRouter([
@@ -77,6 +79,8 @@ export const router = createBrowserRouter([
           { path: "jobs", element: <Jobs /> },
           { path: "compliance", element: <Compliance /> },
           { path: "invoicing", element: <Invoicing /> },
+          { path: "academy", element: <Academy /> },
+          { path: "academy/:id", element: <AcademyDetail /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],
       },

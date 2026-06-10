@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS contact_enquiries (
 CREATE TABLE IF NOT EXISTS programmes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   title VARCHAR(190) NOT NULL,
+  description TEXT NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'academy',
   status ENUM('draft','published','archived') NOT NULL DEFAULT 'draft',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -157,6 +158,7 @@ CREATE TABLE IF NOT EXISTS enrolments (
   programme_id INT NOT NULL,
   learner_name VARCHAR(160) NOT NULL,
   status ENUM('enrolled','in_progress','completed','withdrawn') NOT NULL DEFAULT 'enrolled',
+  certificate_public_id VARCHAR(40) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_programme (programme_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

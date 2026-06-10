@@ -63,6 +63,24 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type Programme = {
+  id: number
+  title: string
+  description: string | null
+  division: DivisionId
+  status: "draft" | "published" | "archived"
+  enrolments: number
+  created_at: string
+}
+
+export type Enrolment = {
+  id: number
+  learner_name: string
+  status: "enrolled" | "in_progress" | "completed" | "withdrawn"
+  certificate_public_id: string | null
+  created_at: string
+}
+
 export type Job = {
   id: number
   client_id: number | null

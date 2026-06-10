@@ -71,3 +71,10 @@ export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}):
 
   return data as T
 }
+
+// AI draft helper. Routes every prompt server-side through ai.php so the
+// OpenRouter key never reaches the browser.
+export async function aiDraft(prompt: string, system?: string): Promise<string> {
+  const res = await api<{ reply: string }>("ai.php", { method: "POST", body: { prompt, system } })
+  return res.reply
+}
