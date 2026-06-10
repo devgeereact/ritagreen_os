@@ -27,6 +27,8 @@ import Dashboard from "@/pages/app/Dashboard"
 import Clients from "@/pages/app/Clients"
 import ClientDetail from "@/pages/app/ClientDetail"
 import Workers from "@/pages/app/Workers"
+import Compliance from "@/pages/app/Compliance"
+import Scheduling from "@/pages/app/Scheduling"
 import SmokeTest from "@/pages/app/SmokeTest"
 
 export const router = createBrowserRouter([
@@ -69,6 +71,8 @@ export const router = createBrowserRouter([
           { path: "clients", element: <Clients /> },
           { path: "clients/:id", element: <ClientDetail /> },
           { path: "workers", element: <Workers /> },
+          { path: "scheduling", element: <Scheduling /> },
+          { path: "compliance", element: <Compliance /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],
       },

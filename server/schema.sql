@@ -199,3 +199,21 @@ CREATE TABLE IF NOT EXISTS certificates (
 -- Demo certificate so the public /verify page can be tested.
 INSERT IGNORE INTO certificates (public_id, learner_name, course, issued_on, status) VALUES
   ('RG-2026-00123', 'Jane Doe', 'Health & Social Care (Level 3)', '2026-03-15', 'issued');
+
+-- ---- Shifts (scheduling & dispatch) ----
+CREATE TABLE IF NOT EXISTS shifts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  worker_id INT NOT NULL,
+  client_id INT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  title VARCHAR(190) NOT NULL,
+  site_name VARCHAR(190) NULL,
+  starts_at DATETIME NOT NULL,
+  ends_at DATETIME NOT NULL,
+  status ENUM('scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_worker_time (worker_id, starts_at),
+  KEY idx_time (starts_at),
+  CONSTRAINT fk_shifts_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

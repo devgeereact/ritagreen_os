@@ -47,13 +47,13 @@ const navMain = [
   { title: "Command Centre", url: "/app", icon: Gauge },
   { title: "Clients", url: "/app/clients", icon: Handshake },
   { title: "Workers", url: "/app/workers", icon: Users },
+  { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
+  { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
 ]
 
 // Modules scoped for later passes — shown disabled so the shape is visible.
 const navSoon = [
-  { title: "Scheduling", icon: CalendarRange },
-  { title: "Compliance", icon: ShieldCheck },
   { title: "Jobs", icon: ClipboardList },
   { title: "Academy", icon: GraduationCap },
   { title: "Quoting", icon: ReceiptText },

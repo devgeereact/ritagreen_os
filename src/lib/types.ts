@@ -31,6 +31,38 @@ export type Worker = {
   created_at: string
 }
 
+export type ComplianceItem = {
+  worker_id: number
+  worker: string
+  division: DivisionId
+  type: string
+  identifier: string | null
+  expiry: string | null
+  status: "valid" | "expiring" | "expired" | "unknown"
+  days: number | null
+}
+
+export type ComplianceSummary = {
+  valid: number
+  expiring: number
+  expired: number
+  unknown: number
+}
+
+export type Shift = {
+  id: number
+  worker_id: number
+  worker: string
+  division: DivisionId
+  title: string
+  site_name: string | null
+  client_id: number | null
+  client: string | null
+  starts_at: string
+  ends_at: string
+  status: "scheduled" | "completed" | "cancelled"
+}
+
 export type DashboardSummary = {
   active_programmes: number
   enrolments: number
