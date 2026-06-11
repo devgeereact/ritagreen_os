@@ -27,6 +27,7 @@ import Dashboard from "@/pages/app/Dashboard"
 import Clients from "@/pages/app/Clients"
 import ClientDetail from "@/pages/app/ClientDetail"
 import Enquiries from "@/pages/app/Enquiries"
+import Comms from "@/pages/app/Comms"
 import Workers from "@/pages/app/Workers"
 import Compliance from "@/pages/app/Compliance"
 import Scheduling from "@/pages/app/Scheduling"
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
           { path: "academy/:id", element: <AcademyDetail /> },
           { path: "analytics", element: <Analytics /> },
           { path: "files", element: <Files /> },
+          { path: "comms", element: <Comms /> },
           { path: "settings", element: <Settings /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],

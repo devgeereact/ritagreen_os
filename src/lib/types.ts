@@ -63,6 +63,15 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type Announcement = {
+  id: number
+  audience: "all" | "care" | "academy" | "cleaning" | "security"
+  title: string
+  body: string
+  author: string | null
+  created_at: string
+}
+
 export type FileDoc = {
   id: number
   original_name: string

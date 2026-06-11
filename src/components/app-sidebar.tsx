@@ -7,6 +7,7 @@ import {
   Inbox,
   FolderOpen,
   FileSignature,
+  Megaphone,
   Users,
   CalendarRange,
   ShieldCheck,
@@ -59,6 +60,7 @@ const navMain = [
   { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
   { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
   { title: "Files", url: "/app/files", icon: FolderOpen },
+  { title: "Comms", url: "/app/comms", icon: Megaphone },
   { title: "Settings", url: "/app/settings", icon: Settings2 },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
 ]

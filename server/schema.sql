@@ -189,6 +189,17 @@ CREATE TABLE IF NOT EXISTS invoices (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Announcements (communication hub) ----
+CREATE TABLE IF NOT EXISTS announcements (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  author_id INT NULL,
+  audience ENUM('all','care','academy','cleaning','security') NOT NULL DEFAULT 'all',
+  title VARCHAR(190) NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_audience (audience)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Contracts / recurring services ----
 CREATE TABLE IF NOT EXISTS contracts (
   id INT AUTO_INCREMENT PRIMARY KEY,
