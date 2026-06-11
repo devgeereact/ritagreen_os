@@ -36,6 +36,7 @@ import Invoicing from "@/pages/app/Invoicing"
 import Academy from "@/pages/app/Academy"
 import AcademyDetail from "@/pages/app/AcademyDetail"
 import Analytics from "@/pages/app/Analytics"
+import Files from "@/pages/app/Files"
 import Settings from "@/pages/app/Settings"
 import SmokeTest from "@/pages/app/SmokeTest"
 
@@ -88,6 +89,7 @@ export const router = createBrowserRouter([
           { path: "academy", element: <Academy /> },
           { path: "academy/:id", element: <AcademyDetail /> },
           { path: "analytics", element: <Analytics /> },
+          { path: "files", element: <Files /> },
           { path: "settings", element: <Settings /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],

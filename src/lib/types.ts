@@ -63,6 +63,16 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type FileDoc = {
+  id: number
+  original_name: string
+  mime: string
+  size_bytes: number
+  category: "contract" | "certificate" | "policy" | "rams" | "id" | "other"
+  uploaded_by: string | null
+  created_at: string
+}
+
 export type Enquiry = {
   id: number
   name: string

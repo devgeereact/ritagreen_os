@@ -9,6 +9,9 @@
   RewriteCond %{HTTP:Authorization} .
   RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+  # Uploaded files are served only through files.php (which checks auth).
+  RewriteRule ^uploads/ - [F,L]
+
   # Don't rewrite requests for the PHP API or other real files/directories.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d

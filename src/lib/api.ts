@@ -72,6 +72,39 @@ export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}):
   return data as T
 }
 
+// Multipart upload. Browser sets the Content-Type boundary, so we don't.
+export async function uploadFile<T = unknown>(endpoint: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" }
+  const token = getToken()
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}/${endpoint}`, { method: "POST", headers, body: form })
+  } catch {
+    throw new ApiError("Cannot reach the server.", 0)
+  }
+  const text = await res.text()
+  const data = text ? JSON.parse(text) : null
+  if (!res.ok) {
+    const msg = data && typeof data === "object" && "error" in data ? (data as { error: string }).error : `Upload failed (${res.status}).`
+    throw new ApiError(msg, res.status)
+  }
+  return data as T
+}
+
+// Authenticated download — fetch with the token, then save the blob.
+export async function downloadFile(endpoint: string, filename: string): Promise<void> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers["Authorization"] = `Bearer ${token}`
+  const res = await fetch(`${API_BASE}/${endpoint}`, { headers })
+  if (!res.ok) throw new ApiError(`Download failed (${res.status}).`, res.status)
+  const blob = await res.blob()
+  const { saveAs } = await import("file-saver")
+  saveAs(blob, filename)
+}
+
 // AI draft helper. Routes every prompt server-side through ai.php so the
 // OpenRouter key never reaches the browser.
 export async function aiDraft(prompt: string, system?: string): Promise<string> {

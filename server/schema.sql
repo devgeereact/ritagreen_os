@@ -242,6 +242,22 @@ CREATE TABLE IF NOT EXISTS certificates (
 INSERT IGNORE INTO certificates (public_id, learner_name, course, issued_on, status) VALUES
   ('RG-2026-00123', 'Jane Doe', 'Health & Social Care (Level 3)', '2026-03-15', 'issued');
 
+-- ---- Files / document centre ----
+CREATE TABLE IF NOT EXISTS files (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  stored_name VARCHAR(190) NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  mime VARCHAR(120) NOT NULL,
+  size_bytes INT NOT NULL DEFAULT 0,
+  category ENUM('contract','certificate','policy','rams','id','other') NOT NULL DEFAULT 'other',
+  client_id INT NULL,
+  worker_id INT NULL,
+  uploaded_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  KEY idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Shifts (scheduling & dispatch) ----
 CREATE TABLE IF NOT EXISTS shifts (
   id INT AUTO_INCREMENT PRIMARY KEY,

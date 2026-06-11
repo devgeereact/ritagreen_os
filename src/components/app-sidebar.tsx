@@ -5,6 +5,7 @@ import {
   Gauge,
   Handshake,
   Inbox,
+  FolderOpen,
   Users,
   CalendarRange,
   ShieldCheck,
@@ -55,6 +56,7 @@ const navMain = [
   { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
   { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
   { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
+  { title: "Files", url: "/app/files", icon: FolderOpen },
   { title: "Settings", url: "/app/settings", icon: Settings2 },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
 ]
