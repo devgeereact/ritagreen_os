@@ -34,6 +34,7 @@ import Quotes from "@/pages/app/Quotes"
 import Invoicing from "@/pages/app/Invoicing"
 import Academy from "@/pages/app/Academy"
 import AcademyDetail from "@/pages/app/AcademyDetail"
+import Analytics from "@/pages/app/Analytics"
 import Settings from "@/pages/app/Settings"
 import SmokeTest from "@/pages/app/SmokeTest"
 
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
           { path: "invoicing", element: <Invoicing /> },
           { path: "academy", element: <Academy /> },
           { path: "academy/:id", element: <AcademyDetail /> },
+          { path: "analytics", element: <Analytics /> },
           { path: "settings", element: <Settings /> },
           { path: "smoke-test", element: <SmokeTest /> },
         ],

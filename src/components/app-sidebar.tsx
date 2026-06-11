@@ -41,8 +41,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/providers/auth-provider"
 
-// Pass-1 navigation. Built modules are linked; the rest of the 16-module
-// platform lands in later passes.
+// RitaGreenOS module navigation.
 const navMain = [
   { title: "Command Centre", url: "/app", icon: Gauge },
   { title: "Clients", url: "/app/clients", icon: Handshake },
@@ -53,13 +52,9 @@ const navMain = [
   { title: "Academy", url: "/app/academy", icon: GraduationCap },
   { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
   { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
+  { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
   { title: "Settings", url: "/app/settings", icon: Settings2 },
   { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
-]
-
-// Modules scoped for later passes — shown disabled so the shape is visible.
-const navSoon = [
-  { title: "Analytics", icon: BarChart3 },
 ]
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
@@ -81,19 +76,6 @@ export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
 
         <SidebarContent>
           <NavMain items={navMain} />
-          <SidebarMenu className="px-2">
-            <p className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground group-data-[collapsible=icon]:hidden">
-              Coming soon
-            </p>
-            {navSoon.map((m) => (
-              <SidebarMenuItem key={m.title}>
-                <SidebarMenuButton tooltip={`${m.title} (coming soon)`} disabled className="opacity-50">
-                  <m.icon className="h-4 w-4" />
-                  <span>{m.title}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
         </SidebarContent>
 
         <SidebarFooter className="h-16 justify-center border-t">
