@@ -11,6 +11,7 @@ import About from "@/pages/public/About"
 import Services from "@/pages/public/Services"
 import ServiceDetail from "@/pages/public/ServiceDetail"
 import Sectors from "@/pages/public/Sectors"
+import Careers from "@/pages/public/Careers"
 import Accreditations from "@/pages/public/Accreditations"
 import Resources from "@/pages/public/Resources"
 import Article from "@/pages/public/Article"
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
       { path: "services", element: <Services /> },
       { path: "services/:slug", element: <ServiceDetail /> },
       { path: "sectors", element: <Sectors /> },
+      { path: "careers", element: <Careers /> },
       { path: "accreditations", element: <Accreditations /> },
       { path: "resources", element: <Resources /> },
       { path: "resources/:slug", element: <Article /> },

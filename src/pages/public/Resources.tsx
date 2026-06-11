@@ -4,12 +4,20 @@ import { ArrowRight, Clock } from "lucide-react"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
 import { Badge } from "@/components/ui/badge"
 import { ARTICLES, CATEGORIES } from "@/lib/resources"
+import { useSeo } from "@/hooks/use-seo"
 
 function fmt(date: string) {
   return new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
 }
 
 export default function Resources() {
+  useSeo({
+    title: "Resources — guides on care, training, cleaning & security",
+    description:
+      "Practical reading for the people who hire us — care managers, landlords, agents and event organisers. Guides on choosing a care provider, SIA checks, infection control and more.",
+    path: "/resources",
+  })
+
   const [cat, setCat] = useState<string>("All")
   const sorted = [...ARTICLES].sort((a, b) => (a.date < b.date ? 1 : -1))
   const [featured, ...rest] = sorted

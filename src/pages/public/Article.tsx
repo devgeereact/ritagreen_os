@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Section, CtaBand } from "@/components/public/section"
 import { ARTICLES, findArticle } from "@/lib/resources"
+import { useSeo } from "@/hooks/use-seo"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
 function fmt(date: string) {
@@ -12,6 +13,25 @@ function fmt(date: string) {
 export default function Article() {
   const { slug } = useParams()
   const article = slug ? findArticle(slug) : null
+
+  useSeo({
+    title: article ? article.title : "Article not found",
+    description: article ? article.excerpt : "We couldn't find that article.",
+    path: `/resources/${slug ?? ""}`,
+    ogType: "article",
+    jsonLd: article
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Article",
+          headline: article.title,
+          description: article.excerpt,
+          datePublished: article.date,
+          articleSection: article.category,
+          author: { "@type": "Organization", name: "RitaGreen Services" },
+        }
+      : undefined,
+  })
+
   if (!article) return <NotFoundPublic />
 
   const related = ARTICLES.filter(

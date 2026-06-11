@@ -10,6 +10,7 @@ import {
   HardHat,
 } from "lucide-react"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { useSeo } from "@/hooks/use-seo"
 
 const SECTORS = [
   {
@@ -70,6 +71,13 @@ const DIVISION_LABEL: Record<string, { label: string; accent: string }> = {
 }
 
 export default function Sectors() {
+  useSeo({
+    title: "Sectors we serve — care, housing, events & more",
+    description:
+      "RitaGreen works across care and nursing homes, the NHS, landlords and managing agents, events, offices, construction and training. Whatever the setting, the standard is the same.",
+    path: "/sectors",
+  })
+
   return (
     <>
       <PageHeader

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageHeader, Section } from "@/components/public/section"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 type Certificate = {
   id: string
@@ -17,6 +18,13 @@ type Certificate = {
 // Public certificate verification — no login. Employers check a RitaGreen
 // academy certificate is genuine by its id.
 export default function Verify() {
+  useSeo({
+    title: "Verify a certificate — RitaGreen Academy",
+    description:
+      "Confirm a RitaGreen Academy certificate is genuine. Enter the certificate ID to see the learner, course and issue date.",
+    path: "/verify",
+  })
+
   const { id } = useParams()
   const navigate = useNavigate()
   const [query, setQuery] = useState(id ?? "")

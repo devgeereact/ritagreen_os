@@ -3,8 +3,16 @@ import { ArrowRight } from "lucide-react"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, PILLARS, HOW_WE_WORK, ASSURANCE } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function About() {
+  useSeo({
+    title: "About RitaGreen — one trusted name, four divisions",
+    description:
+      "RitaGreen Services is a London company that looks after people through every part of their day — care, training, cleaning and security under one name, one standard and one promise.",
+    path: "/about",
+  })
+
   return (
     <>
       <PageHeader

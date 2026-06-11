@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function NotFoundPublic() {
+  useSeo({
+    title: "Page not found",
+    description: "The page may have moved or never existed. Try the homepage or get in touch.",
+  })
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col items-center px-4 py-28 text-center">
       <p className="text-6xl font-bold text-primary">404</p>

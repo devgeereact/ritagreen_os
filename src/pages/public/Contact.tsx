@@ -17,6 +17,7 @@ import { Faqs } from "@/components/public/Faqs"
 import { api, ApiError } from "@/lib/api"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, FAQS } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 
 const NEXT_STEPS = [
   "We read your enquiry and route it to the right division.",
@@ -26,6 +27,13 @@ const NEXT_STEPS = [
 ]
 
 export default function Contact() {
+  useSeo({
+    title: "Contact RitaGreen — tell us what you need",
+    description:
+      "One enquiry reaches the right division — care staff, training, cleaning or security. We'll get the right people ready, usually the same day. Call or send a message.",
+    path: "/contact",
+  })
+
   const [submitting, setSubmitting] = useState(false)
   const [division, setDivision] = useState("")
 

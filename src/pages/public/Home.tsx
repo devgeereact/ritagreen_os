@@ -13,8 +13,33 @@ import { Section, CtaBand } from "@/components/public/section"
 import { Faqs } from "@/components/public/Faqs"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, WHY, HOW_WE_WORK, STATS, FAQS, ASSURANCE } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function Home() {
+  useSeo({
+    title: "Care, training, cleaning & security staff in London",
+    description:
+      "RitaGreen is one trusted London name for care staff, training, cleaning and security. Every worker is DBS-checked, qualified and ready — call one number and the whole day is covered.",
+    path: "/",
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: COMPANY.legalName,
+      url: "https://ritagreenservices.com",
+      email: COMPANY.email,
+      telephone: COMPANY.phone,
+      areaServed: "London, United Kingdom",
+      slogan: COMPANY.primaryTagline,
+      description: COMPANY.promise,
+      knowsAbout: [
+        "Care staffing",
+        "Care Certificate training",
+        "Commercial cleaning",
+        "SIA security",
+      ],
+    },
+  })
+
   return (
     <>
       {/* Hero */}

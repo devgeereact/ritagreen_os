@@ -1,5 +1,6 @@
 import { PageHeader, Section } from "@/components/public/section"
 import { COMPANY } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 
 type LegalKind = "privacy" | "terms" | "cookies"
 
@@ -141,6 +142,7 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
 
 export default function Legal({ kind }: { kind: LegalKind }) {
   const c = CONTENT[kind]
+  useSeo({ title: c.title, description: c.intro, path: `/${kind}` })
   return (
     <>
       <PageHeader eyebrow="Legal" title={c.title} intro={c.intro} />

@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { useSeo } from "@/hooks/use-seo"
 
 const ITEMS = [
   {
@@ -81,6 +82,13 @@ const VETTING = [
 ]
 
 export default function Accreditations() {
+  useSeo({
+    title: "Accreditations & compliance — the standards behind every shift",
+    description:
+      "CQC-aligned care, SIA-licensed security, enhanced DBS and BS 7858 vetting, COSHH-controlled cleaning, insurance and GDPR. Compliance checked before staff are dispatched and tracked to renewal.",
+    path: "/accreditations",
+  })
+
   return (
     <>
       <PageHeader

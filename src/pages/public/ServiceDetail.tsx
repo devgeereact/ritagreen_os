@@ -4,11 +4,20 @@ import { Button } from "@/components/ui/button"
 import { Section, CtaBand } from "@/components/public/section"
 import { findService } from "@/lib/divisions"
 import { COMPANY } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
 export default function ServiceDetail() {
   const { slug } = useParams()
   const found = slug ? findService(slug) : null
+
+  useSeo({
+    title: found ? `${found.service.name} — ${found.division.name}` : "Service not found",
+    description: found
+      ? `${found.service.summary} ${found.division.headline} Checked, qualified people from ${COMPANY.legalName}.`
+      : "We couldn't find that service.",
+    path: `/services/${slug ?? ""}`,
+  })
 
   if (!found) return <NotFoundPublic />
   const { division, service } = found

@@ -4,8 +4,16 @@ import { Button } from "@/components/ui/button"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
 import { DIVISIONS } from "@/lib/divisions"
 import { ENGAGEMENTS } from "@/lib/company"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function Services() {
+  useSeo({
+    title: "Services — care, training, cleaning & security",
+    description:
+      "Four divisions, one standard. Care staffing, Care Certificate training, commercial and care cleaning, and SIA-licensed security — every service delivered by checked, qualified people under one account.",
+    path: "/services",
+  })
+
   return (
     <>
       <PageHeader
