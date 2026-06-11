@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Mail, Phone, MapPin, Clock } from "lucide-react"
+import { Mail, Phone, MapPin, Clock, Check } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,8 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PageHeader, Section } from "@/components/public/section"
+import { Faqs } from "@/components/public/Faqs"
 import { api, ApiError } from "@/lib/api"
 import { DIVISIONS } from "@/lib/divisions"
+import { COMPANY, FAQS } from "@/lib/company"
+
+const NEXT_STEPS = [
+  "We read your enquiry and route it to the right division.",
+  "A named contact replies — usually the same working day.",
+  "We confirm scope, availability and rates in writing.",
+  "We vet, brief and send the right people, then keep cover steady.",
+]
 
 export default function Contact() {
   const [submitting, setSubmitting] = useState(false)
@@ -54,10 +63,11 @@ export default function Contact() {
     <>
       <PageHeader
         eyebrow="Contact"
-        title="Tell us what you need"
-        intro="One enquiry reaches the right division. Staff, training, cleaning or security, start here."
+        title="Tell us what you need, and when"
+        intro="One enquiry reaches the right division — staff, training, cleaning or security. We'll get the right people ready, usually the same day."
       />
       <Section className="grid gap-12 md:grid-cols-3">
+        {/* Form */}
         <form onSubmit={onSubmit} className="space-y-5 md:col-span-2" noValidate>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -91,23 +101,55 @@ export default function Contact() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="message">Message</Label>
-            <Textarea id="message" name="message" rows={5} required />
+            <Textarea
+              id="message"
+              name="message"
+              rows={5}
+              required
+              placeholder="Tell us the role, the site and the times you need covered."
+            />
           </div>
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? "Sending…" : "Send enquiry"}
           </Button>
+          <p className="text-xs text-muted-foreground">
+            By sending this you agree we may contact you about your enquiry. We handle your details
+            under our{" "}
+            <a href="/privacy" className="font-medium text-primary hover:underline">privacy policy</a>.
+          </p>
         </form>
 
+        {/* Aside */}
         <aside className="space-y-5 text-sm">
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="font-semibold">Get in touch</h2>
             <ul className="mt-3 space-y-3 text-muted-foreground">
-              <li className="flex items-center gap-3"><Phone className="size-4 text-primary" /> 020 0000 0000</li>
-              <li className="flex items-center gap-3"><Mail className="size-4 text-primary" /> hello@ritagreenservices.com</li>
-              <li className="flex items-start gap-3"><MapPin className="mt-0.5 size-4 text-primary" /> London, United Kingdom</li>
-              <li className="flex items-center gap-3"><Clock className="size-4 text-primary" /> Mon–Fri, 9am–5pm</li>
+              <li>
+                <a href={COMPANY.phoneHref} className="flex items-center gap-3 hover:text-foreground">
+                  <Phone className="size-4 text-primary" /> {COMPANY.phone}
+                </a>
+              </li>
+              <li>
+                <a href={`mailto:${COMPANY.email}`} className="flex items-center gap-3 hover:text-foreground">
+                  <Mail className="size-4 text-primary" /> {COMPANY.email}
+                </a>
+              </li>
+              <li className="flex items-start gap-3"><MapPin className="mt-0.5 size-4 text-primary" /> {COMPANY.area}</li>
+              <li className="flex items-start gap-3"><Clock className="mt-0.5 size-4 text-primary" /> {COMPANY.hours}</li>
             </ul>
           </div>
+
+          <div className="rounded-xl border border-border bg-secondary/40 p-5">
+            <h2 className="font-semibold">What happens next</h2>
+            <ol className="mt-3 space-y-2 text-muted-foreground">
+              {NEXT_STEPS.map((s) => (
+                <li key={s} className="flex items-start gap-2">
+                  <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {s}
+                </li>
+              ))}
+            </ol>
+          </div>
+
           <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
             <p>Already a client or worker? Use the member login to reach your account.</p>
             <a href="/login" className="mt-2 inline-block font-medium text-primary hover:underline">
@@ -116,6 +158,17 @@ export default function Contact() {
           </div>
         </aside>
       </Section>
+
+      {/* FAQ */}
+      <section className="border-t border-border bg-secondary/30">
+        <div className="mx-auto max-w-3xl px-4 py-14 md:py-20">
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Before you ask</h2>
+          <p className="mt-3 text-muted-foreground">
+            A few answers to the questions we hear most. Anything else, just send a message.
+          </p>
+          <Faqs items={FAQS} className="mt-8" />
+        </div>
+      </section>
     </>
   )
 }

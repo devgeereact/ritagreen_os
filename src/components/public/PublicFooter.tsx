@@ -2,6 +2,7 @@ import { Link } from "react-router-dom"
 import { ArrowUp, Linkedin, Facebook, Mail, Phone } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
 import { DIVISIONS } from "@/lib/divisions"
+import { COMPANY } from "@/lib/company"
 
 export function PublicFooter() {
   return (
@@ -9,19 +10,22 @@ export function PublicFooter() {
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
+          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
+            {COMPANY.primaryTagline}
+          </p>
           <p className="mt-3 max-w-xs text-sm text-muted-foreground">
             Care, training, cleaning and security across London. Trained, checked and trusted staff,
             from one name.
           </p>
           <div className="mt-4 space-y-1 text-sm text-muted-foreground">
-            <a href="tel:+442000000000" className="flex items-center gap-2 hover:text-foreground">
-              <Phone className="size-4" /> 020 0000 0000
+            <a href={COMPANY.phoneHref} className="flex items-center gap-2 hover:text-foreground">
+              <Phone className="size-4" /> {COMPANY.phone}
             </a>
             <a
-              href="mailto:hello@ritagreenservices.com"
+              href={`mailto:${COMPANY.email}`}
               className="flex items-center gap-2 hover:text-foreground"
             >
-              <Mail className="size-4" /> hello@ritagreenservices.com
+              <Mail className="size-4" /> {COMPANY.email}
             </a>
           </div>
         </div>
@@ -67,7 +71,7 @@ export function PublicFooter() {
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-muted-foreground sm:flex-row">
           <p>
-            © {new Date().getFullYear()} RitaGreen Healthcare Services Ltd. Company No. 12528439.
+            © {new Date().getFullYear()} {COMPANY.legalName}. Company No. {COMPANY.companyNo}.
           </p>
           <div className="flex items-center gap-4">
             <a href="#" aria-label="LinkedIn" className="hover:text-foreground"><Linkedin className="size-4" /></a>
