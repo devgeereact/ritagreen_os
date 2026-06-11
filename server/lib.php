@@ -3,7 +3,37 @@
 // Each endpoint starts with: require __DIR__ . '/lib.php';
 // which pulls in config.php ($conn) and sets up CORS + JSON helpers.
 
+// Surface fatals / mysqli exceptions as JSON instead of a blank 500 HTML page.
+mysqli_report(MYSQLI_REPORT_OFF);
+set_exception_handler(function (Throwable $e) {
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+    }
+    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    exit;
+});
+set_error_handler(function ($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) return false;
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+if (!file_exists(__DIR__ . '/config.php')) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'config.php is missing on the server. Upload it to the document root.']);
+    exit;
+}
 require __DIR__ . '/config.php';
+
+foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
+    if (!defined($_required)) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => "config.php is missing constant $_required. Copy config.sample.php fields into it."]);
+        exit;
+    }
+}
 
 // ----- CORS (must run before any output) -----
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';

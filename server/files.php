@@ -101,7 +101,7 @@ if (method() === 'POST') {
         'INSERT INTO files (stored_name, original_name, mime, size_bytes, category, client_id, worker_id, uploaded_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $stmt->bind_param('sssssiii', $stored, $original, $mime, $size, $category, $clientId, $workerId, $uid);
+    $stmt->bind_param('sssisiii', $stored, $original, $mime, $size, $category, $clientId, $workerId, $uid);
     $stmt->execute();
     $id = $conn->insert_id;
 
