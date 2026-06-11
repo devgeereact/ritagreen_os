@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
+import { AiAssistant } from "@/components/app/ai-assistant"
 import { NotificationDropdown } from "@/components/notification-dropdown"
 import { AppLauncherDropdown } from "@/components/appLauncher-dropdown"
 
@@ -91,6 +92,7 @@ export default function AppLayout() {
                 <div className="ml-auto">
                     <div className="flex items-center gap-1">
                         <GlobalSearch />
+                        <AiAssistant />
                         <ThemeToggle />
                         <LanguageDropdown />
                         <AppLauncherDropdown />

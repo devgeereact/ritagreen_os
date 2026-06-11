@@ -63,6 +63,17 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type Enquiry = {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  division: string
+  message: string
+  status: "new" | "handled"
+  created_at: string
+}
+
 export type AdminUser = {
   id: number
   name: string

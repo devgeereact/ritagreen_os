@@ -26,6 +26,7 @@ import Login from "@/pages/auth/Login"
 import Dashboard from "@/pages/app/Dashboard"
 import Clients from "@/pages/app/Clients"
 import ClientDetail from "@/pages/app/ClientDetail"
+import Enquiries from "@/pages/app/Enquiries"
 import Workers from "@/pages/app/Workers"
 import Compliance from "@/pages/app/Compliance"
 import Scheduling from "@/pages/app/Scheduling"
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Dashboard /> },
           { path: "clients", element: <Clients /> },
           { path: "clients/:id", element: <ClientDetail /> },
+          { path: "enquiries", element: <Enquiries /> },
           { path: "workers", element: <Workers /> },
           { path: "scheduling", element: <Scheduling /> },
           { path: "jobs", element: <Jobs /> },

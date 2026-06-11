@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import {
   Gauge,
   Handshake,
+  Inbox,
   Users,
   CalendarRange,
   ShieldCheck,
@@ -45,6 +46,7 @@ import { useAuth } from "@/providers/auth-provider"
 const navMain = [
   { title: "Command Centre", url: "/app", icon: Gauge },
   { title: "Clients", url: "/app/clients", icon: Handshake },
+  { title: "Enquiries", url: "/app/enquiries", icon: Inbox },
   { title: "Workers", url: "/app/workers", icon: Users },
   { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
   { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
