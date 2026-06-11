@@ -28,4 +28,39 @@ $stmt = $conn->prepare(
 $stmt->bind_param('sssss', $name, $email, $phone, $division, $message);
 $stmt->execute();
 
+// Notify the office and confirm to the sender. Non-fatal: the lead is already
+// saved, so any mail failure must not turn a successful submission into an error.
+if (mail_enabled()) {
+    $isCareers = strpos($message, 'CAREERS APPLICATION') === 0;
+    $kind = $isCareers ? 'careers application' : 'enquiry';
+    $phoneLine = $phone !== '' ? $phone : '—';
+
+    // 1) Office alert — reply goes straight to the sender.
+    $officeSubject = $isCareers
+        ? "New careers application — $name"
+        : "New website enquiry ($division) — $name";
+    $officeBody = "A new $kind came in from the RitaGreen website.\n\n"
+        . "Name:     $name\n"
+        . "Email:    $email\n"
+        . "Phone:    $phoneLine\n"
+        . "About:    $division\n\n"
+        . "Message:\n$message\n\n"
+        . "— Reply to this email to respond to $name directly.";
+    send_mail(MAIL_TO, $officeSubject, $officeBody, $email);
+
+    // 2) Autoresponder to the sender — reply goes to the office.
+    $senderSubject = $isCareers
+        ? 'Thanks for your application to RitaGreen Academy'
+        : 'Thanks for contacting RitaGreen Services';
+    $senderBody = "Hi $name,\n\n"
+        . ($isCareers
+            ? "Thanks for applying to train with RitaGreen Academy. We've received your "
+              . "application and will be in touch about the next intake, costs and what happens next.\n\n"
+            : "Thanks for getting in touch. We've received your enquiry and a named contact "
+              . "will reply shortly — usually the same working day.\n\n")
+        . "If it's urgent, call us and we'll get the right people ready.\n\n"
+        . "— RitaGreen Services\nQualified. Checked. Ready.";
+    send_mail($email, $senderSubject, $senderBody, MAIL_TO);
+}
+
 json_out(['ok' => true], 201);

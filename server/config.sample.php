@@ -33,6 +33,16 @@ define('OR_TITLE', 'RitaGreenOS');
 define('OPENWEATHER_API_KEY', 'CHANGE_ME');
 define('OPENWEATHER_UNITS', 'metric');
 
+// ----- Email notifications (public enquiries & careers applications) -----
+// When enabled, contact.php emails the office on every submission and sends the
+// sender a confirmation. Uses PHP mail() (works on cPanel/Namecheap shared
+// hosting). MAIL_FROM should be a real mailbox or alias on your domain so it
+// passes SPF/DKIM and doesn't land in spam. Leave MAIL_ENABLED false to skip.
+define('MAIL_ENABLED', false);
+define('MAIL_FROM', 'no-reply@ritagreenservices.com');   // a mailbox/alias on the domain
+define('MAIL_FROM_NAME', 'RitaGreen Services');
+define('MAIL_TO', 'hello@ritagreenservices.com');        // where office alerts go
+
 // ----- CORS -----
 // In dev the React app runs on localhost:5173 and calls the live API.
 // Lock this to the dev origins you actually use.

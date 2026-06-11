@@ -17,6 +17,21 @@ export default function ServiceDetail() {
       ? `${found.service.summary} ${found.division.headline} Checked, qualified people from ${COMPANY.legalName}.`
       : "We couldn't find that service.",
     path: `/services/${slug ?? ""}`,
+    jsonLd: found
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Service",
+          name: found.service.name,
+          serviceType: found.division.name,
+          description: found.service.summary,
+          areaServed: "London, United Kingdom",
+          provider: {
+            "@type": "Organization",
+            name: COMPANY.legalName,
+            url: "https://ritagreenservices.com",
+          },
+        }
+      : undefined,
   })
 
   if (!found) return <NotFoundPublic />

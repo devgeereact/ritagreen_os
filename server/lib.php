@@ -127,3 +127,38 @@ function audit(mysqli $conn, ?int $userId, string $action, string $detail = ''):
     $stmt->bind_param('iss', $userId, $action, $detail);
     $stmt->execute();
 }
+
+// ----- Email notifications -----
+// Optional: only fires when config.php defines MAIL_ENABLED, MAIL_FROM and
+// MAIL_TO. Used to alert the office the moment a public enquiry or application
+// arrives, and to send the sender a friendly autoresponder. Sending failures
+// are deliberately non-fatal — the lead is already saved in the database.
+
+function mail_enabled(): bool
+{
+    return defined('MAIL_ENABLED') && MAIL_ENABLED
+        && defined('MAIL_FROM') && MAIL_FROM !== ''
+        && defined('MAIL_TO') && MAIL_TO !== '';
+}
+
+// Send a plain-text email. Returns true on hand-off to the MTA, false otherwise.
+// $to and $replyTo must be pre-validated addresses (e.g. FILTER_VALIDATE_EMAIL).
+function send_mail(string $to, string $subject, string $body, ?string $replyTo = null): bool
+{
+    if (!defined('MAIL_FROM') || MAIL_FROM === '') return false;
+    // Strip CR/LF to block header injection via the subject.
+    $subject = trim(str_replace(["\r", "\n"], ' ', $subject));
+
+    $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RitaGreen Services';
+    $headers = [
+        'From: ' . $fromName . ' <' . MAIL_FROM . '>',
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+        'Content-Transfer-Encoding: 8bit',
+    ];
+    if ($replyTo && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+        $headers[] = 'Reply-To: ' . $replyTo;
+    }
+
+    return @mail($to, $subject, $body, implode("\r\n", $headers));
+}
