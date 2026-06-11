@@ -6,10 +6,12 @@
 // password and the OpenRouter key. Only api.php/auth.php/etc require it.
 
 // ----- Error display -----
-// Helpful while wiring up the server. lib.php already turns errors into JSON,
-// so turn these OFF once everything works to avoid leaking details.
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
+// Flip GK_DEBUG to true only while debugging. In production errors are logged
+// (check cPanel error_log) but never shown, so nothing leaks to callers.
+define('GK_DEBUG', false);
+ini_set('display_errors', GK_DEBUG ? '1' : '0');
+ini_set('display_startup_errors', GK_DEBUG ? '1' : '0');
+ini_set('log_errors', '1');
 error_reporting(E_ALL);
 
 // ----- Database (cPanel MySQL) -----
