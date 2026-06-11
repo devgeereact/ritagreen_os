@@ -133,6 +133,22 @@ export type Job = {
   created_at: string
 }
 
+export type Contract = {
+  id: number
+  client_id: number | null
+  client: string | null
+  division: DivisionId
+  title: string
+  scope: string | null
+  rate_pence: number
+  frequency: "weekly" | "fortnightly" | "monthly" | "quarterly"
+  sla_hours: number | null
+  start_date: string
+  end_date: string
+  status: "active" | "expired" | "cancelled"
+  days_to_renewal: number
+}
+
 export type Quote = {
   id: number
   number: string

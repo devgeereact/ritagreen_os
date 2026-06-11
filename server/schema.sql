@@ -189,6 +189,26 @@ CREATE TABLE IF NOT EXISTS invoices (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Contracts / recurring services ----
+CREATE TABLE IF NOT EXISTS contracts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  title VARCHAR(190) NOT NULL,
+  scope TEXT NULL,
+  rate_pence INT NOT NULL DEFAULT 0,
+  frequency ENUM('weekly','fortnightly','monthly','quarterly') NOT NULL DEFAULT 'monthly',
+  sla_hours INT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status ENUM('active','expired','cancelled') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  KEY idx_status (status),
+  KEY idx_end (end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Quotes / estimates ----
 CREATE TABLE IF NOT EXISTS quotes (
   id INT AUTO_INCREMENT PRIMARY KEY,
