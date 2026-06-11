@@ -189,6 +189,21 @@ CREATE TABLE IF NOT EXISTS invoices (
   KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Timesheets (time tracking) ----
+CREATE TABLE IF NOT EXISTS timesheets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  worker_id INT NOT NULL,
+  work_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  minutes INT NOT NULL DEFAULT 0,
+  status ENUM('pending','approved') NOT NULL DEFAULT 'pending',
+  approved_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_worker_date (worker_id, work_date),
+  CONSTRAINT fk_ts_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Announcements (communication hub) ----
 CREATE TABLE IF NOT EXISTS announcements (
   id INT AUTO_INCREMENT PRIMARY KEY,

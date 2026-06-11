@@ -63,6 +63,18 @@ export type Shift = {
   status: "scheduled" | "completed" | "cancelled"
 }
 
+export type Timesheet = {
+  id: number
+  worker_id: number
+  worker: string
+  division: DivisionId
+  work_date: string
+  start_time: string
+  end_time: string
+  minutes: number
+  status: "pending" | "approved"
+}
+
 export type Announcement = {
   id: number
   audience: "all" | "care" | "academy" | "cleaning" | "security"

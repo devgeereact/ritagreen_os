@@ -34,6 +34,7 @@ import Scheduling from "@/pages/app/Scheduling"
 import Jobs from "@/pages/app/Jobs"
 import Quotes from "@/pages/app/Quotes"
 import Contracts from "@/pages/app/Contracts"
+import Timetable from "@/pages/app/Timetable"
 import Invoicing from "@/pages/app/Invoicing"
 import Academy from "@/pages/app/Academy"
 import AcademyDetail from "@/pages/app/AcademyDetail"
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
           { path: "enquiries", element: <Enquiries /> },
           { path: "workers", element: <Workers /> },
           { path: "scheduling", element: <Scheduling /> },
+          { path: "timetable", element: <Timetable /> },
           { path: "jobs", element: <Jobs /> },
           { path: "compliance", element: <Compliance /> },
           { path: "quotes", element: <Quotes /> },
