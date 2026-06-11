@@ -57,7 +57,13 @@ export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}):
     try {
       data = JSON.parse(text)
     } catch {
-      throw new ApiError("The server returned an unexpected response.", res.status)
+      // HTML instead of JSON = the endpoint is missing on the server and the
+      // SPA rewrite served index.html. Almost always means server/*.php has
+      // not been uploaded to the document root yet.
+      const msg = text.trimStart().startsWith("<")
+        ? `The ${endpoint.split("?")[0]} endpoint is not on the server yet. Upload the server/ PHP files to the document root.`
+        : "The server returned an unexpected response."
+      throw new ApiError(msg, res.status)
     }
   }
 
