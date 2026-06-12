@@ -40,6 +40,7 @@ const Jobs = lazy(() => import("@/pages/app/Jobs"))
 const Quotes = lazy(() => import("@/pages/app/Quotes"))
 const Contracts = lazy(() => import("@/pages/app/Contracts"))
 const Timetable = lazy(() => import("@/pages/app/Timetable"))
+const Timesheets = lazy(() => import("@/pages/app/Timesheets"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
@@ -109,6 +110,7 @@ export const router = createBrowserRouter([
           { path: "workers", element: cms(<Workers />) },
           { path: "scheduling", element: cms(<Scheduling />) },
           { path: "timetable", element: cms(<Timetable />) },
+          { path: "timesheets", element: cms(<Timesheets />) },
           { path: "jobs", element: cms(<Jobs />) },
           { path: "compliance", element: cms(<Compliance />) },
           { path: "quotes", element: cms(<Quotes />) },
