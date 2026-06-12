@@ -35,7 +35,7 @@ export default function Resources() {
       <Section className="!pb-0">
         <Link
           to={`/resources/${featured.slug}`}
-          className="group grid overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-2"
+          className="group grid overflow-hidden surface md:grid-cols-2"
         >
           <div className="flex min-h-[12rem] items-center justify-center bg-secondary/50 p-8">
             <span className="font-serif text-2xl font-bold text-primary/70">{featured.category}</span>
@@ -81,7 +81,7 @@ export default function Resources() {
             <Link
               key={a.slug}
               to={`/resources/${a.slug}`}
-              className="group flex flex-col rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md"
+              className="group flex flex-col surface p-6 transition-shadow hover:shadow-md"
             >
               <div className="flex items-center justify-between">
                 <Badge variant="secondary">{a.category}</Badge>

@@ -163,7 +163,7 @@ export default function Careers() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {STEPS.map((s) => (
-            <div key={s.step} className="rounded-xl border border-border bg-card p-6">
+            <div key={s.step} className="surface p-6">
               <span className="grid size-11 place-items-center rounded-lg bg-accent text-primary">
                 <s.icon className="size-5" />
               </span>
@@ -266,7 +266,7 @@ export default function Careers() {
         </div>
 
         <aside className="space-y-5 text-sm">
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="surface p-5">
             <CalendarCheck className="size-6 text-primary" />
             <h3 className="mt-3 font-semibold">Rolling intakes</h3>
             <p className="mt-2 text-muted-foreground">

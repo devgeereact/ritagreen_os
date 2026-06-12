@@ -53,7 +53,7 @@ export default function Services() {
               <Link
                 key={s.slug}
                 to={`/services/${s.slug}`}
-                className="group flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
+                className="group flex flex-col surface p-5 transition-shadow hover:shadow-md"
               >
                 <h3 className="font-semibold">{s.name}</h3>
                 <p className="mt-2 flex-1 text-sm text-muted-foreground">{s.summary}</p>
@@ -66,7 +66,7 @@ export default function Services() {
 
           {/* Audience + assurance */}
           <div className="mt-8 grid gap-5 md:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="surface p-6">
               <h3 className="flex items-center gap-2 font-semibold">
                 <Users className="size-4 text-primary" /> Who it's for
               </h3>

@@ -192,7 +192,7 @@ export default function Quote() {
 
         {/* Aside */}
         <aside className="space-y-5 text-sm">
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="surface p-5">
             <h2 className="font-semibold">What's included</h2>
             <ul className="mt-3 space-y-2">
               {INCLUDED.map((i) => (
@@ -218,7 +218,7 @@ export default function Quote() {
               ))}
             </ol>
           </div>
-          <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
+          <div className="surface p-5 text-muted-foreground">
             <p>Prefer to talk it through first?</p>
             <a href={COMPANY.phoneHref} className="mt-1 block font-medium text-primary hover:underline">
               {COMPANY.phone}

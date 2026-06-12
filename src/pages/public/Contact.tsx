@@ -129,7 +129,7 @@ export default function Contact() {
 
         {/* Aside */}
         <aside className="space-y-5 text-sm">
-          <div className="rounded-xl border border-border bg-card p-5">
+          <div className="surface p-5">
             <h2 className="font-semibold">Get in touch</h2>
             <ul className="mt-3 space-y-3 text-muted-foreground">
               <li>
@@ -158,7 +158,7 @@ export default function Contact() {
             </ol>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-5 text-muted-foreground">
+          <div className="surface p-5 text-muted-foreground">
             <p>Already a client or worker? Use the member login to reach your account.</p>
             <a href="/login" className="mt-2 inline-block font-medium text-primary hover:underline">
               Member login

@@ -101,7 +101,7 @@ export default function Accreditations() {
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           {ITEMS.map((i) => (
-            <div key={i.name} className="flex gap-4 rounded-xl border border-border bg-card p-6">
+            <div key={i.name} className="flex gap-4 surface p-6">
               <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-accent text-primary">
                 <i.icon className="size-5" />
               </span>
@@ -128,7 +128,7 @@ export default function Accreditations() {
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {VETTING.map((v) => (
-              <div key={v.step} className="rounded-xl border border-border bg-card p-6">
+              <div key={v.step} className="surface p-6">
                 <span className="font-mono text-sm font-semibold text-primary">{v.step}</span>
                 <h3 className="mt-3 font-semibold">{v.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{v.body}</p>
@@ -140,7 +140,7 @@ export default function Accreditations() {
 
       {/* Verify certificate */}
       <Section>
-        <div className="rounded-2xl border border-border bg-card p-8 md:p-12">
+        <div className="surface p-8 md:p-12">
           <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div className="max-w-xl">
               <BadgeCheck className="size-8 text-primary" />

@@ -77,7 +77,7 @@ export default function Article() {
             <Link
               key={a.slug}
               to={`/resources/${a.slug}`}
-              className="group rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
+              className="group surface p-5 transition-shadow hover:shadow-md"
             >
               <Badge variant="secondary">{a.category}</Badge>
               <h3 className="mt-3 text-sm font-semibold">{a.title}</h3>

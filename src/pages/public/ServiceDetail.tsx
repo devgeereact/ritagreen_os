@@ -120,7 +120,7 @@ export default function ServiceDetail() {
                   <Link
                     key={s.slug}
                     to={`/services/${s.slug}`}
-                    className="group rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md"
+                    className="group surface p-5 transition-shadow hover:shadow-md"
                   >
                     <h3 className="font-semibold">{s.name}</h3>
                     <p className="mt-2 text-sm text-muted-foreground">{s.summary}</p>
@@ -136,7 +136,7 @@ export default function ServiceDetail() {
 
         {/* Sticky enquiry aside */}
         <aside className="md:sticky md:top-24 md:h-fit">
-          <div className="rounded-xl border border-border bg-card p-6">
+          <div className="surface p-6">
             <h3 className="font-semibold">Get a quote for {service.name.toLowerCase()}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Tell us what you need and when. We'll confirm availability and a price in writing.

@@ -28,13 +28,22 @@ export function PageHeader({
   intro?: string
 }) {
   return (
-    <div className="border-b border-border bg-secondary/40">
-      <div className="mx-auto max-w-6xl px-4 py-14 md:py-20">
+    <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
+      <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
         {eyebrow && (
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">{eyebrow}</p>
+          <p className="eyebrow animate-fade-up">
+            <span className="inline-block size-1.5 rounded-full bg-primary" />
+            {eyebrow}
+          </p>
         )}
-        <h1 className="mt-2 max-w-3xl text-3xl font-bold tracking-tight md:text-4xl">{title}</h1>
-        {intro && <p className="mt-4 max-w-2xl text-lg text-muted-foreground">{intro}</p>}
+        <h1 className="mt-3 max-w-3xl animate-fade-up animation-delay-100 text-[2.2rem] font-bold leading-[1.08] md:text-5xl">
+          {title}
+        </h1>
+        {intro && (
+          <p className="mt-5 max-w-2xl animate-fade-up animation-delay-200 text-lg leading-relaxed text-muted-foreground">
+            {intro}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -53,11 +62,16 @@ export function CtaBand({
 }) {
   return (
     <Section>
-      <div className="rounded-2xl bg-primary px-6 py-10 text-primary-foreground md:px-12 md:py-14">
-        <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+      <div className="relative overflow-hidden rounded-3xl bg-primary px-6 py-12 text-primary-foreground shadow-lift md:px-12 md:py-16">
+        <div className="bg-grid-faint pointer-events-none absolute inset-0 opacity-60" />
+        <div
+          className="pointer-events-none absolute -right-16 -top-16 size-64 rounded-full opacity-40"
+          style={{ background: "radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%)" }}
+        />
+        <div className="relative flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
           <div>
             <h2 className="text-2xl font-bold md:text-3xl">{title}</h2>
-            <p className="mt-2 max-w-xl text-primary-foreground/80">{body}</p>
+            <p className="mt-3 max-w-xl text-primary-foreground/85">{body}</p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-3">
             <Button asChild size="lg" variant="secondary">

@@ -88,7 +88,7 @@ export default function Sectors() {
       <Section>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SECTORS.map((s) => (
-            <div key={s.name} className="flex flex-col rounded-xl border border-border bg-card p-6">
+            <div key={s.name} className="flex flex-col surface p-6">
               <span className="grid size-11 place-items-center rounded-lg bg-accent text-primary">
                 <s.icon className="size-5" />
               </span>

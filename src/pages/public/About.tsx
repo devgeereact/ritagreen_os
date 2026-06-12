@@ -45,11 +45,11 @@ export default function About() {
             </p>
           </div>
           <div className="space-y-6">
-            <div className="rounded-xl border border-border bg-card p-5">
+            <div className="surface p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">Our promise</h2>
               <p className="mt-2 text-sm text-muted-foreground">{COMPANY.promise}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-5">
+            <div className="surface p-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-primary">Our vision</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 A London where a care home, a landlord or an event organiser can call one trusted name
@@ -70,7 +70,7 @@ export default function About() {
           <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">Our four pillars</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PILLARS.map((p) => (
-              <div key={p.key} className="rounded-xl border border-border bg-card p-6">
+              <div key={p.key} className="surface p-6">
                 <h3 className="font-semibold text-primary">{p.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{p.body}</p>
               </div>
@@ -91,7 +91,7 @@ export default function About() {
             <Link
               key={d.id}
               to={`/services#${d.id}`}
-              className="group flex flex-col rounded-xl border border-border bg-card p-6 transition-shadow hover:shadow-md"
+              className="group flex flex-col surface p-6 transition-shadow hover:shadow-md"
             >
               <div className="flex items-center gap-2">
                 <span className="size-3 rounded-full" style={{ backgroundColor: d.accent }} />
@@ -116,7 +116,7 @@ export default function About() {
           </p>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {HOW_WE_WORK.map((s) => (
-              <div key={s.step} className="rounded-xl border border-border bg-card p-6">
+              <div key={s.step} className="surface p-6">
                 <span className="font-mono text-sm font-semibold text-primary">{s.step}</span>
                 <h3 className="mt-3 font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
@@ -135,7 +135,7 @@ export default function About() {
         </p>
         <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {ASSURANCE.map((a) => (
-            <div key={a.title} className="rounded-xl border border-border bg-card p-6">
+            <div key={a.title} className="surface p-6">
               <h3 className="font-semibold text-foreground">{a.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{a.body}</p>
             </div>
