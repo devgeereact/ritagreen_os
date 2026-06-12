@@ -3,6 +3,8 @@
 // React never touches MySQL. Every call goes to a PHP endpoint that returns
 // JSON. In dev we hit the live API over HTTPS (api.php sends CORS headers);
 // in production the build is served from the same domain, so the base is "".
+import { saveAs } from "file-saver"
+
 export const API_BASE = import.meta.env.DEV ? "https://ritagreenservices.com" : ""
 
 const TOKEN_KEY = "rgos_token"
@@ -107,7 +109,6 @@ export async function downloadFile(endpoint: string, filename: string): Promise<
   const res = await fetch(`${API_BASE}/${endpoint}`, { headers })
   if (!res.ok) throw new ApiError(`Download failed (${res.status}).`, res.status)
   const blob = await res.blob()
-  const { saveAs } = await import("file-saver")
   saveAs(blob, filename)
 }
 

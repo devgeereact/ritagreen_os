@@ -1,11 +1,13 @@
+import { lazy, Suspense, type ReactElement } from "react"
 import { createBrowserRouter } from "react-router-dom"
+import { Loader2 } from "lucide-react"
 
 import PublicLayout from "@/layouts/PublicLayout"
 import AppLayout from "@/layouts/AppLayout"
 import RequireAuth from "@/auth/RequireAuth"
 import ErrorPage from "@/pages/ErrorPage"
 
-// Public corporate site
+// Public corporate site — eager: this is the first paint for most visitors.
 import Home from "@/pages/public/Home"
 import About from "@/pages/public/About"
 import Services from "@/pages/public/Services"
@@ -24,26 +26,40 @@ import NotFoundPublic from "@/pages/public/NotFoundPublic"
 // Auth
 import Login from "@/pages/auth/Login"
 
-// CMS
-import Dashboard from "@/pages/app/Dashboard"
-import Clients from "@/pages/app/Clients"
-import ClientDetail from "@/pages/app/ClientDetail"
-import Enquiries from "@/pages/app/Enquiries"
-import Comms from "@/pages/app/Comms"
-import Workers from "@/pages/app/Workers"
-import Compliance from "@/pages/app/Compliance"
-import Scheduling from "@/pages/app/Scheduling"
-import Jobs from "@/pages/app/Jobs"
-import Quotes from "@/pages/app/Quotes"
-import Contracts from "@/pages/app/Contracts"
-import Timetable from "@/pages/app/Timetable"
-import Invoicing from "@/pages/app/Invoicing"
-import Academy from "@/pages/app/Academy"
-import AcademyDetail from "@/pages/app/AcademyDetail"
-import Analytics from "@/pages/app/Analytics"
-import Files from "@/pages/app/Files"
-import Settings from "@/pages/app/Settings"
-import SmokeTest from "@/pages/app/SmokeTest"
+// CMS — lazy-loaded so public visitors never download the internal app bundle.
+const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
+const Clients = lazy(() => import("@/pages/app/Clients"))
+const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
+const Enquiries = lazy(() => import("@/pages/app/Enquiries"))
+const Comms = lazy(() => import("@/pages/app/Comms"))
+const Workers = lazy(() => import("@/pages/app/Workers"))
+const Compliance = lazy(() => import("@/pages/app/Compliance"))
+const Scheduling = lazy(() => import("@/pages/app/Scheduling"))
+const Jobs = lazy(() => import("@/pages/app/Jobs"))
+const Quotes = lazy(() => import("@/pages/app/Quotes"))
+const Contracts = lazy(() => import("@/pages/app/Contracts"))
+const Timetable = lazy(() => import("@/pages/app/Timetable"))
+const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
+const Academy = lazy(() => import("@/pages/app/Academy"))
+const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
+const Analytics = lazy(() => import("@/pages/app/Analytics"))
+const Files = lazy(() => import("@/pages/app/Files"))
+const Settings = lazy(() => import("@/pages/app/Settings"))
+const SmokeTest = lazy(() => import("@/pages/app/SmokeTest"))
+
+// Suspense fallback while a lazy CMS chunk loads.
+function PageLoader() {
+  return (
+    <div className="flex h-full min-h-[60vh] w-full items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+
+// Wrap a lazy CMS element in a Suspense boundary.
+const cms = (el: ReactElement): ReactElement => (
+  <Suspense fallback={<PageLoader />}>{el}</Suspense>
+)
 
 export const router = createBrowserRouter([
   // 🌐 PUBLIC CORPORATE SITE
@@ -83,25 +99,25 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <Dashboard /> },
-          { path: "clients", element: <Clients /> },
-          { path: "clients/:id", element: <ClientDetail /> },
-          { path: "enquiries", element: <Enquiries /> },
-          { path: "workers", element: <Workers /> },
-          { path: "scheduling", element: <Scheduling /> },
-          { path: "timetable", element: <Timetable /> },
-          { path: "jobs", element: <Jobs /> },
-          { path: "compliance", element: <Compliance /> },
-          { path: "quotes", element: <Quotes /> },
-          { path: "contracts", element: <Contracts /> },
-          { path: "invoicing", element: <Invoicing /> },
-          { path: "academy", element: <Academy /> },
-          { path: "academy/:id", element: <AcademyDetail /> },
-          { path: "analytics", element: <Analytics /> },
-          { path: "files", element: <Files /> },
-          { path: "comms", element: <Comms /> },
-          { path: "settings", element: <Settings /> },
-          { path: "smoke-test", element: <SmokeTest /> },
+          { index: true, element: cms(<Dashboard />) },
+          { path: "clients", element: cms(<Clients />) },
+          { path: "clients/:id", element: cms(<ClientDetail />) },
+          { path: "enquiries", element: cms(<Enquiries />) },
+          { path: "workers", element: cms(<Workers />) },
+          { path: "scheduling", element: cms(<Scheduling />) },
+          { path: "timetable", element: cms(<Timetable />) },
+          { path: "jobs", element: cms(<Jobs />) },
+          { path: "compliance", element: cms(<Compliance />) },
+          { path: "quotes", element: cms(<Quotes />) },
+          { path: "contracts", element: cms(<Contracts />) },
+          { path: "invoicing", element: cms(<Invoicing />) },
+          { path: "academy", element: cms(<Academy />) },
+          { path: "academy/:id", element: cms(<AcademyDetail />) },
+          { path: "analytics", element: cms(<Analytics />) },
+          { path: "files", element: cms(<Files />) },
+          { path: "comms", element: cms(<Comms />) },
+          { path: "settings", element: cms(<Settings />) },
+          { path: "smoke-test", element: cms(<SmokeTest />) },
         ],
       },
     ],
