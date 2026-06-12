@@ -141,17 +141,27 @@ function mail_enabled(): bool
         && defined('MAIL_TO') && MAIL_TO !== '';
 }
 
-// Send a plain-text email. Returns true on hand-off to the MTA, false otherwise.
+// True when SMTP is configured, so send_mail() should use it instead of mail().
+function smtp_configured(): bool
+{
+    return defined('SMTP_HOST') && SMTP_HOST !== ''
+        && defined('SMTP_USER') && SMTP_USER !== ''
+        && defined('SMTP_PASS') && SMTP_PASS !== '';
+}
+
+// Send a plain-text email. Uses SMTP when configured, otherwise PHP mail().
 // $to and $replyTo must be pre-validated addresses (e.g. FILTER_VALIDATE_EMAIL).
-function send_mail(string $to, string $subject, string $body, ?string $replyTo = null): bool
+// $extraHeaders lets callers add e.g. In-Reply-To / References for threaded
+// replies. Returns true on successful hand-off to the mail server.
+function send_mail(string $to, string $subject, string $body, ?string $replyTo = null, array $extraHeaders = []): bool
 {
     if (!defined('MAIL_FROM') || MAIL_FROM === '') return false;
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
     // Strip CR/LF to block header injection via the subject.
     $subject = trim(str_replace(["\r", "\n"], ' ', $subject));
 
     $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RitaGreen Services';
     $headers = [
-        'From: ' . $fromName . ' <' . MAIL_FROM . '>',
         'MIME-Version: 1.0',
         'Content-Type: text/plain; charset=UTF-8',
         'Content-Transfer-Encoding: 8bit',
@@ -159,6 +169,111 @@ function send_mail(string $to, string $subject, string $body, ?string $replyTo =
     if ($replyTo && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
         $headers[] = 'Reply-To: ' . $replyTo;
     }
+    foreach ($extraHeaders as $h) {
+        $h = trim(str_replace(["\r", "\n"], '', (string) $h));
+        if ($h !== '') $headers[] = $h;
+    }
 
-    return @mail($to, $subject, $body, implode("\r\n", $headers));
+    if (smtp_configured()) {
+        return smtp_send($to, $subject, $body, $fromName, $headers);
+    }
+
+    // PHP mail() fallback — it injects To/Subject itself, so we only pass the rest.
+    $mailHeaders = array_merge(['From: ' . $fromName . ' <' . MAIL_FROM . '>'], $headers);
+    return @mail($to, $subject, $body, implode("\r\n", $mailHeaders));
+}
+
+// Minimal SMTP client over a socket (AUTH LOGIN). No Composer/PHPMailer needed,
+// so it runs on stock cPanel/Namecheap shared hosting. $headers is the list of
+// extra header lines (MIME, Reply-To, In-Reply-To, …); From/To/Subject/Date/
+// Message-ID are added here. Returns true only if the server accepts the message.
+function smtp_send(string $to, string $subject, string $body, string $fromName, array $headers): bool
+{
+    $host = SMTP_HOST;
+    $port = defined('SMTP_PORT') ? (int) SMTP_PORT : 465;
+    $secure = defined('SMTP_SECURE') ? strtolower((string) SMTP_SECURE) : '';
+    $from = MAIL_FROM;
+
+    $transport = $secure === 'ssl' ? "ssl://$host" : $host;
+    $fp = @stream_socket_client(
+        "$transport:$port",
+        $errno,
+        $errstr,
+        20,
+        STREAM_CLIENT_CONNECT,
+        stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]])
+    );
+    if (!$fp) {
+        error_log("SMTP connect failed: $errno $errstr");
+        return false;
+    }
+    stream_set_timeout($fp, 20);
+
+    // Read a (possibly multi-line) reply and check its leading status code.
+    $read = function () use ($fp): string {
+        $data = '';
+        while (($line = fgets($fp, 515)) !== false) {
+            $data .= $line;
+            // Lines like "250-..." continue; "250 ..." (space) is the last line.
+            if (isset($line[3]) && $line[3] === ' ') break;
+        }
+        return $data;
+    };
+    $cmd = function (string $line, string $expect) use ($fp, $read): bool {
+        fwrite($fp, $line . "\r\n");
+        $resp = $read();
+        return substr($resp, 0, 3) === $expect;
+    };
+
+    $ok = true;
+    $read(); // server greeting (220)
+    $ehloHost = $_SERVER['SERVER_NAME'] ?? 'localhost';
+    $ok = $ok && $cmd("EHLO $ehloHost", '250');
+
+    if ($secure === 'tls') {
+        $ok = $ok && $cmd('STARTTLS', '220');
+        if ($ok && !@stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
+            fclose($fp);
+            return false;
+        }
+        $ok = $ok && $cmd("EHLO $ehloHost", '250');
+    }
+
+    $ok = $ok && $cmd('AUTH LOGIN', '334');
+    $ok = $ok && $cmd(base64_encode(SMTP_USER), '334');
+    $ok = $ok && $cmd(base64_encode(SMTP_PASS), '235');
+    $ok = $ok && $cmd('MAIL FROM:<' . $from . '>', '250');
+    $ok = $ok && $cmd('RCPT TO:<' . $to . '>', '250');
+    $ok = $ok && $cmd('DATA', '354');
+
+    if ($ok) {
+        $msgId = '<' . bin2hex(random_bytes(12)) . '@' . preg_replace('/^.*@/', '', $from) . '>';
+        $lines = array_merge([
+            'Date: ' . date('r'),
+            'Message-ID: ' . $msgId,
+            'From: ' . encode_mime_word($fromName) . ' <' . $from . '>',
+            'To: <' . $to . '>',
+            'Subject: ' . encode_mime_word($subject),
+        ], $headers, ['', $body]);
+
+        $message = implode("\r\n", $lines);
+        // Dot-stuffing: any line that starts with '.' must be doubled.
+        $message = preg_replace('/^\./m', '..', $message);
+        fwrite($fp, $message . "\r\n.\r\n");
+        $resp = $read();
+        $ok = substr($resp, 0, 3) === '250';
+    }
+
+    @fwrite($fp, "QUIT\r\n");
+    @fclose($fp);
+    return $ok;
+}
+
+// RFC 2047 encode a header value so non-ASCII (names, subjects) survive transit.
+function encode_mime_word(string $text): string
+{
+    if (preg_match('/[\x80-\xff]/', $text)) {
+        return '=?UTF-8?B?' . base64_encode($text) . '?=';
+    }
+    return $text;
 }

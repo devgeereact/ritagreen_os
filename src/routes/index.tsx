@@ -31,6 +31,7 @@ const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
 const Clients = lazy(() => import("@/pages/app/Clients"))
 const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
 const Enquiries = lazy(() => import("@/pages/app/Enquiries"))
+const Mailbox = lazy(() => import("@/pages/app/Mailbox"))
 const Comms = lazy(() => import("@/pages/app/Comms"))
 const Workers = lazy(() => import("@/pages/app/Workers"))
 const Compliance = lazy(() => import("@/pages/app/Compliance"))
@@ -103,6 +104,7 @@ export const router = createBrowserRouter([
           { path: "clients", element: cms(<Clients />) },
           { path: "clients/:id", element: cms(<ClientDetail />) },
           { path: "enquiries", element: cms(<Enquiries />) },
+          { path: "inbox", element: cms(<Mailbox />) },
           { path: "workers", element: cms(<Workers />) },
           { path: "scheduling", element: cms(<Scheduling />) },
           { path: "timetable", element: cms(<Timetable />) },

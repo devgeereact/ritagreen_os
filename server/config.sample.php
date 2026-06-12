@@ -35,13 +35,30 @@ define('OPENWEATHER_UNITS', 'metric');
 
 // ----- Email notifications (public enquiries & careers applications) -----
 // When enabled, contact.php emails the office on every submission and sends the
-// sender a confirmation. Uses PHP mail() (works on cPanel/Namecheap shared
-// hosting). MAIL_FROM should be a real mailbox or alias on your domain so it
-// passes SPF/DKIM and doesn't land in spam. Leave MAIL_ENABLED false to skip.
+// sender a confirmation, and the in-app inbox can send replies. MAIL_FROM should
+// be a real mailbox or alias on your domain so it passes SPF/DKIM and doesn't
+// land in spam. Leave MAIL_ENABLED false to skip outgoing mail entirely.
 define('MAIL_ENABLED', false);
-define('MAIL_FROM', 'no-reply@ritagreenservices.com');   // a mailbox/alias on the domain
+define('MAIL_FROM', 'hello@ritagreenservices.com');      // a mailbox/alias on the domain
 define('MAIL_FROM_NAME', 'RitaGreen Services');
 define('MAIL_TO', 'hello@ritagreenservices.com');        // where office alerts go
+
+// ----- Outgoing mail (SMTP) -----
+// Leave SMTP_HOST blank to fall back to PHP mail(). On cPanel/Namecheap use the
+// mail server hostname (e.g. premiumNNN.web-hosting.com or mail.<domain>) with a
+// real mailbox + password. SMTP_SECURE must match the port.
+define('SMTP_HOST', '');                                 // e.g. 'mail.ritagreenservices.com' — blank => mail()
+define('SMTP_PORT', 465);                                // 465 = SSL, 587 = STARTTLS
+define('SMTP_SECURE', 'ssl');                            // 'ssl' | 'tls' | ''  (match the port)
+define('SMTP_USER', 'hello@ritagreenservices.com');
+define('SMTP_PASS', 'CHANGE_ME');                        // mailbox password — server only, never commit
+
+// ----- Incoming mail (IMAP) for the in-app inbox -----
+// Requires the PHP imap extension. Leave IMAP_HOST blank to disable the inbox.
+define('IMAP_HOST', '');                                 // e.g. 'mail.ritagreenservices.com' — blank => disabled
+define('IMAP_PORT', 993);                                // 993 = IMAP over SSL
+define('IMAP_USER', 'hello@ritagreenservices.com');
+define('IMAP_PASS', 'CHANGE_ME');                        // mailbox password — server only, never commit
 
 // ----- CORS -----
 // In dev the React app runs on localhost:5173 and calls the live API.
