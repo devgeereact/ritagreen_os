@@ -15,9 +15,11 @@ export function LoadingBlock({ rows = 3 }: { rows?: number }) {
 
 export function ErrorBlock({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center">
-      <AlertCircle className="size-8 text-destructive" />
-      <p className="mt-3 text-sm text-muted-foreground">{message}</p>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-destructive/30 bg-destructive/5 py-14 text-center">
+      <span className="grid size-12 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+        <AlertCircle className="size-6" />
+      </span>
+      <p className="mt-4 max-w-sm text-sm text-muted-foreground">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
           Try again
@@ -29,11 +31,13 @@ export function ErrorBlock({ message, onRetry }: { message: string; onRetry?: ()
 
 export function EmptyBlock({ title, hint, action }: { title: string; hint?: string; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12 text-center">
-      <Inbox className="size-8 text-muted-foreground" />
-      <p className="mt-3 font-medium">{title}</p>
-      {hint && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{hint}</p>}
-      {action && <div className="mt-4">{action}</div>}
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 py-14 text-center">
+      <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
+        <Inbox className="size-6" />
+      </span>
+      <p className="mt-4 font-semibold">{title}</p>
+      {hint && <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">{hint}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   )
 }

@@ -45,15 +45,15 @@ export default function Dashboard() {
           </p>
         </div>
         {/* Division switcher */}
-        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border/70 bg-card p-1 shadow-soft">
           {DIVISION_TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setDivision(t.id)}
               className={
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all " +
                 (division === t.id
-                  ? "bg-primary text-primary-foreground"
+                  ? "bg-primary text-primary-foreground shadow-soft"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground")
               }
             >
@@ -144,14 +144,22 @@ function Kpi({
       : tone === "amber"
         ? "text-amber-600"
         : "text-primary"
+  const chipClass =
+    tone === "red"
+      ? "bg-destructive/10 text-destructive"
+      : tone === "amber"
+        ? "bg-amber-500/10 text-amber-600"
+        : "bg-primary/10 text-primary"
   return (
-    <Card>
+    <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevate">
       <CardContent className="pt-6">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <Icon className={`size-4 ${toneClass}`} />
+          <span className={`grid size-9 place-items-center rounded-xl ${chipClass}`}>
+            <Icon className="size-4" />
+          </span>
         </div>
-        <p className="mt-2 text-2xl font-bold">{value}</p>
+        <p className={`mt-3 text-2xl font-bold ${tone !== "primary" ? toneClass : ""}`}>{value}</p>
       </CardContent>
     </Card>
   )
