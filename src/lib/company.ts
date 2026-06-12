@@ -11,11 +11,21 @@ export const COMPANY = {
   primaryTagline: "Qualified. Checked. Ready.",
   heroLine: "People you can count on, every part of the day.",
   area: "London and surrounding boroughs",
-  phone: "020 0000 0000",
-  phoneHref: "tel:+442000000000",
+  phone: "0203 105 2218",
+  phoneHref: "tel:+442031052218",
+  emergencyPhone: "+44 (0)7377 563859",
+  emergencyPhoneHref: "tel:+447377563859",
   email: "hello@ritagreenservices.com",
-  hours: "Mon–Fri, 9am–5pm · urgent cover answered out of hours",
+  hours: "Mon–Fri, 9am–5pm · 24hr line for urgent cover",
 } as const
+
+// Social profiles — all @ritagreenservices__
+export const SOCIALS = [
+  { key: "instagram", label: "Instagram", href: "https://instagram.com/ritagreenservices__" },
+  { key: "facebook", label: "Facebook", href: "https://facebook.com/ritagreenservices__" },
+  { key: "linkedin", label: "LinkedIn", href: "https://linkedin.com/company/ritagreenservices__" },
+  { key: "x", label: "X", href: "https://x.com/ritagreenservices__" },
+] as const
 
 // Brand pillars — the four things that make the model work.
 export const PILLARS = [

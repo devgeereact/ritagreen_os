@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { Outlet, useLocation } from "react-router-dom"
 import { PublicNav } from "@/components/public/PublicNav"
 import { PublicFooter } from "@/components/public/PublicFooter"
+import { CookieConsent } from "@/components/public/CookieConsent"
 
 // Forces light theme + scroll handling for the public corporate site.
 export default function PublicLayout() {
@@ -25,6 +26,7 @@ export default function PublicLayout() {
         <Outlet />
       </main>
       <PublicFooter />
+      <CookieConsent />
     </div>
   )
 }

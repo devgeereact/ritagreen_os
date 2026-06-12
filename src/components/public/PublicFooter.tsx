@@ -1,8 +1,16 @@
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { ArrowUp, Linkedin, Facebook, Mail, Phone } from "lucide-react"
+import { ArrowUp, Instagram, Linkedin, Facebook, Mail, Phone } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
 import { DIVISIONS } from "@/lib/divisions"
-import { COMPANY } from "@/lib/company"
+import { COMPANY, SOCIALS } from "@/lib/company"
+
+const SOCIAL_ICON: Record<string, ReactNode> = {
+  instagram: <Instagram className="size-4" />,
+  facebook: <Facebook className="size-4" />,
+  linkedin: <Linkedin className="size-4" />,
+  x: <i className="bi bi-twitter-x text-[15px] leading-none" />,
+}
 
 export function PublicFooter() {
   return (
@@ -20,6 +28,10 @@ export function PublicFooter() {
           <div className="mt-4 space-y-1 text-sm text-muted-foreground">
             <a href={COMPANY.phoneHref} className="flex items-center gap-2 hover:text-foreground">
               <Phone className="size-4" /> {COMPANY.phone}
+            </a>
+            <a href={COMPANY.emergencyPhoneHref} className="flex items-center gap-2 hover:text-foreground">
+              <Phone className="size-4" /> {COMPANY.emergencyPhone}
+              <span className="text-xs font-medium text-primary">24hr</span>
             </a>
             <a
               href={`mailto:${COMPANY.email}`}
@@ -76,8 +88,18 @@ export function PublicFooter() {
             © {new Date().getFullYear()} {COMPANY.legalName}. Company No. {COMPANY.companyNo}.
           </p>
           <div className="flex items-center gap-4">
-            <a href="#" aria-label="LinkedIn" className="hover:text-foreground"><Linkedin className="size-4" /></a>
-            <a href="#" aria-label="Facebook" className="hover:text-foreground"><Facebook className="size-4" /></a>
+            {SOCIALS.map((s) => (
+              <a
+                key={s.key}
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={s.label}
+                className="hover:text-foreground"
+              >
+                {SOCIAL_ICON[s.key]}
+              </a>
+            ))}
             <button
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
               className="flex items-center gap-1 hover:text-foreground"
