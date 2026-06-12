@@ -29,6 +29,15 @@ define('OR_MODELS', ['openai/gpt-oss-120b:free', 'anthropic/claude-sonnet-4.6'])
 define('OR_REFERER', 'https://ritagreenservices.com');
 define('OR_TITLE', 'RitaGreenOS');
 
+// ----- Stripe (card payments via hosted Checkout; secrets stay server-side) -----
+// Until these are real, payments.php returns 503 and Invoicing keeps using
+// manual mark-paid. Get keys at dashboard.stripe.com → Developers → API keys.
+// STRIPE_WEBHOOK_SECRET (whsec_...) comes from the webhook you register pointing
+// at https://ritagreenservices.com/payments.php?action=webhook (event:
+// checkout.session.completed).
+define('STRIPE_SECRET_KEY', 'CHANGE_ME');                // sk_live_... or sk_test_...
+define('STRIPE_WEBHOOK_SECRET', 'CHANGE_ME');            // whsec_...
+
 // ----- OpenWeather (read only by a future weather.php) -----
 define('OPENWEATHER_API_KEY', 'CHANGE_ME');
 define('OPENWEATHER_UNITS', 'metric');
@@ -66,6 +75,8 @@ define('IMAP_PASS', 'CHANGE_ME');                        // mailbox password —
 define('ALLOWED_ORIGINS', [
     'http://localhost:5178',
     'http://127.0.0.1:5178',
+    'http://localhost:5180',
+    'http://127.0.0.1:5180',
     'https://ritagreenservices.com',
     'https://www.ritagreenservices.com',
 ]);

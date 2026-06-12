@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Plus, Banknote, CheckCircle2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Banknote, CheckCircle2, CreditCard, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,6 +56,22 @@ const DIVISIONS = [
 export default function Invoicing() {
   const { data, loading, error, reload } = useApi<Data>("invoices.php")
   const [open, setOpen] = useState(false)
+  const [paying, setPaying] = useState<number | null>(null)
+
+  // Returning from Stripe Checkout. The webhook is the source of truth for
+  // "paid"; this just confirms to the user and refreshes the list.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get("paid")) {
+      toast.success("Payment received — invoice marked paid.")
+      reload()
+      window.history.replaceState({}, "", "/app/invoicing")
+    } else if (p.get("cancelled")) {
+      toast("Card payment cancelled.")
+      window.history.replaceState({}, "", "/app/invoicing")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function markPaid(id: number) {
     try {
@@ -64,6 +80,20 @@ export default function Invoicing() {
       reload()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not update the invoice.")
+    }
+  }
+
+  async function payByCard(id: number) {
+    setPaying(id)
+    try {
+      const res = await api<{ url: string }>("payments.php?action=checkout", {
+        method: "POST",
+        body: { invoice_id: id },
+      })
+      window.location.href = res.url
+    } catch (err) {
+      setPaying(null)
+      toast.error(err instanceof ApiError ? err.message : "Could not start the card payment.")
     }
   }
 
@@ -140,9 +170,23 @@ export default function Invoicing() {
                       <TableCell className="text-muted-foreground">{shortDate(inv.created_at)}</TableCell>
                       <TableCell className="text-right">
                         {inv.status !== "paid" && (
-                          <Button size="sm" variant="outline" onClick={() => markPaid(inv.id)}>
-                            Mark paid
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => payByCard(inv.id)}
+                              disabled={paying === inv.id}
+                            >
+                              {paying === inv.id ? (
+                                <Loader2 className="mr-1 size-4 animate-spin" />
+                              ) : (
+                                <CreditCard className="mr-1 size-4" />
+                              )}
+                              Pay by card
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => markPaid(inv.id)}>
+                              Mark paid
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
