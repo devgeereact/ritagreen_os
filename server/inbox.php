@@ -88,6 +88,14 @@ function decode_part(string $raw, int $encoding, string $subtype): string
 $action = $_GET['action'] ?? 'list';
 $verb = method();
 
+// ---- Unread count (cheap; for the sidebar badge) ----
+if ($verb === 'GET' && $action === 'unread') {
+    $imap = open_inbox($ref);
+    $unseen = imap_search($imap, 'UNSEEN', SE_UID) ?: [];
+    imap_close($imap);
+    json_out(['unread' => count($unseen)]);
+}
+
 // ---- List recent messages ----
 if ($verb === 'GET' && $action === 'list') {
     $limit = min(100, max(1, (int) ($_GET['limit'] ?? 30)));

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Gauge,
@@ -46,6 +47,27 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/providers/auth-provider"
+import { api } from "@/lib/api"
+
+// Poll the mailbox for unread count to badge the Inbox nav item. Silent on
+// failure (e.g. IMAP not configured) so the sidebar never breaks.
+function useInboxUnread(): number {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    let alive = true
+    const load = () =>
+      api<{ unread: number }>("inbox.php?action=unread")
+        .then((r) => alive && setCount(r.unread))
+        .catch(() => {})
+    load()
+    const id = setInterval(load, 60_000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+  return count
+}
 
 // RitaGreenOS module navigation.
 const navMain = [
@@ -74,6 +96,10 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 }
 
 export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
+  const unread = useInboxUnread()
+  const items = navMain.map((i) =>
+    i.url === "/app/inbox" ? { ...i, badge: unread || undefined } : i,
+  )
   return (
     <div
       onMouseEnter={() => onHoverChange?.(true)}
@@ -87,7 +113,7 @@ export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
         </SidebarHeader>
 
         <SidebarContent>
-          <NavMain items={navMain} />
+          <NavMain items={items} />
         </SidebarContent>
 
         <SidebarFooter className="h-16 justify-center border-t">

@@ -11,6 +11,7 @@ import {
 import {
   SidebarGroup,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -22,6 +23,7 @@ type MenuItem = {
   title: string
   url: string
   icon?: LucideIcon
+  badge?: number
   items?: MenuItem[]
 }
 
@@ -68,6 +70,11 @@ export function NavMain({ items }: { items: MenuItem[] }) {
       <span>{item.title}</span>
     </Link>
   </SidebarMenuButton>
+  {item.badge ? (
+    <SidebarMenuBadge className="bg-primary text-primary-foreground">
+      {item.badge > 99 ? "99+" : item.badge}
+    </SidebarMenuBadge>
+  ) : null}
 </SidebarMenuItem>
         )
       }
