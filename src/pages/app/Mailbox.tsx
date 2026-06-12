@@ -1,13 +1,33 @@
 import { useState } from "react"
-import { Mail, RefreshCw, Send, CornerUpLeft, CircleDot } from "lucide-react"
+import { Link } from "react-router-dom"
+import { Mail, RefreshCw, Send, CornerUpLeft, CircleDot, Building2, UserPlus, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { DIVISION_LABELS, shortDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
+
+type LinkedClient = {
+  id: number
+  name: string
+  contact_name: string | null
+  phone: string | null
+  type: string
+  status: string
+}
+type LinkedEnquiry = {
+  id: number
+  division: string
+  status: string
+  preview: string
+  created_at: string
+}
+type MailContact = { client: LinkedClient | null; enquiries: LinkedEnquiry[] }
 
 type MailListItem = {
   uid: number
@@ -27,6 +47,68 @@ type MailMessage = {
   message_id: string
   date: string | null
   body: string
+  contact?: MailContact
+}
+
+// CRM context for the sender — links the email to a known client and surfaces
+// their past enquiries, so staff reply with the full picture.
+function ContactPanel({ contact, email }: { contact: MailContact; email: string }) {
+  const { client, enquiries } = contact
+  const known = client || enquiries.length > 0
+
+  return (
+    <div className="border-b border-border/60 bg-muted/30 px-6 py-4">
+      {!known && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <UserPlus className="size-4" />
+          <span>New contact — {email} is not in the CRM yet.</span>
+        </div>
+      )}
+
+      {client && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Building2 className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{client.name}</span>
+              <Badge variant="outline" className="capitalize">{client.type.replace("_", " ")}</Badge>
+              <Badge variant={client.status === "active" ? "default" : "secondary"} className="capitalize">
+                {client.status}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {client.contact_name ? `${client.contact_name} · ` : ""}
+              {client.phone ?? email}
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline" className="ml-auto">
+            <Link to={`/app/clients/${client.id}`}>
+              Open client <ArrowRight className="ml-1 size-3.5" />
+            </Link>
+          </Button>
+        </div>
+      )}
+
+      {enquiries.length > 0 && (
+        <div className={cn(client && "mt-3 border-t border-border/60 pt-3")}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Past enquiries ({enquiries.length})
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {enquiries.map((e) => (
+              <li key={e.id} className="flex items-center gap-2 text-sm">
+                <Badge variant="secondary" className="shrink-0">{DIVISION_LABELS[e.division] ?? e.division}</Badge>
+                <span className="truncate text-muted-foreground">{e.preview}</span>
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">{shortDate(e.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function when(iso: string | null): string {
@@ -184,6 +266,8 @@ export default function Mailbox() {
                     <span className="ml-auto">{when(message.date)}</span>
                   </div>
                 </div>
+
+                {message.contact && <ContactPanel contact={message.contact} email={message.from_email} />}
 
                 <div className="flex-1 overflow-y-auto whitespace-pre-wrap p-6 text-sm leading-relaxed text-foreground">
                   {message.body || <span className="text-muted-foreground">(This message has no plain-text body.)</span>}

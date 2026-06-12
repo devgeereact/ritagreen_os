@@ -37,6 +37,44 @@ function address_of(string $header): string
     return '';
 }
 
+// Match a sender email against the CRM so staff see who they're replying to.
+// Returns the linked client (if any) and the sender's recent enquiries.
+function lookup_contact(mysqli $conn, string $email): array
+{
+    $out = ['client' => null, 'enquiries' => []];
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return $out;
+
+    $stmt = $conn->prepare(
+        'SELECT id, name, contact_name, phone, type, status
+         FROM clients WHERE email = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $client = $stmt->get_result()->fetch_assoc();
+    if ($client) {
+        $client['id'] = (int) $client['id'];
+        $out['client'] = $client;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT id, division, status, message, created_at
+         FROM contact_enquiries WHERE email = ? ORDER BY created_at DESC LIMIT 5'
+    );
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $out['enquiries'][] = [
+            'id' => (int) $row['id'],
+            'division' => $row['division'],
+            'status' => $row['status'],
+            'preview' => mb_substr(trim((string) $row['message']), 0, 100),
+            'created_at' => $row['created_at'],
+        ];
+    }
+    return $out;
+}
+
 // Walk the MIME structure and return the best plain-text body we can find.
 function message_text($imap, int $uid): string
 {
@@ -132,16 +170,18 @@ if ($verb === 'GET' && $action === 'message') {
     if (!$ov) { imap_close($imap); fail('Message not found.', 404); }
     $o = $ov[0];
     $from = isset($o->from) ? imap_utf8($o->from) : '';
+    $fromEmail = address_of($from);
     $body = message_text($imap, $uid);
     @imap_setflag_full($imap, (string) $uid, '\\Seen', ST_UID);
     $message = [
         'uid' => $uid,
         'subject' => isset($o->subject) && $o->subject !== '' ? imap_utf8($o->subject) : '(no subject)',
         'from' => $from,
-        'from_email' => address_of($from),
+        'from_email' => $fromEmail,
         'message_id' => $o->message_id ?? '',
         'date' => isset($o->date) ? date('c', strtotime($o->date)) : null,
         'body' => $body,
+        'contact' => lookup_contact($conn, $fromEmail),
     ];
     imap_close($imap);
     json_out(['message' => $message]);
