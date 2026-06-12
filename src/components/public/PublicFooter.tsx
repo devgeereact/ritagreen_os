@@ -6,7 +6,7 @@ import { COMPANY } from "@/lib/company"
 
 export function PublicFooter() {
   return (
-    <footer className="mt-20 border-t border-border bg-secondary/40">
+    <footer className="mt-20 border-t border-border bg-soft-mesh">
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />

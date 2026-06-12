@@ -27,7 +27,6 @@ import ThemeCustomizer from "@/components/theme-customizer"
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
-import { LanguageDropdown } from "@/components/language-dropdown"
 import { UserDropdown } from "@/components/UserDropdown"
 
 export default function AppLayout() {
@@ -94,13 +93,9 @@ export default function AppLayout() {
                         <GlobalSearch />
                         <AiAssistant />
                         <ThemeToggle />
-                        <LanguageDropdown />
                         <AppLauncherDropdown />
                         <div className="relative hidden md:inline-flex">
                             <NotificationDropdown />
-                            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-                                5
-                            </span>
                         </div>
                          <UserDropdown />
                     </div>
