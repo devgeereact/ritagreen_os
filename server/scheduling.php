@@ -7,6 +7,21 @@
 // check (DBS for care, SIA for security) or no right to work cannot be scheduled.
 require __DIR__ . '/lib.php';
 
+// Latest expiry of a still-relevant cert on the compliance register, so a valid
+// SIA/DBS recorded in Compliance counts at scheduling time — keeping Scheduling
+// and the Compliance register in agreement instead of two disconnected sources.
+function max_cert_expiry(mysqli $conn, int $workerId, string $like): ?string
+{
+    $stmt = $conn->prepare(
+        'SELECT MAX(expiry) AS e FROM certifications
+         WHERE worker_id = ? AND type LIKE ? AND expiry IS NOT NULL'
+    );
+    $stmt->bind_param('is', $workerId, $like);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row && $row['e'] ? $row['e'] : null;
+}
+
 $user = require_auth($conn);
 
 if (method() === 'GET') {
@@ -69,12 +84,18 @@ if (method() === 'POST') {
     if (!$w['right_to_work']) fail($w['name'] . ' has no right-to-work on file and cannot be scheduled.', 409);
     $today = date('Y-m-d');
     if ($w['division'] === 'security') {
-        if (!$w['sia_expiry'] || $w['sia_expiry'] < $today) {
+        $sia = $w['sia_expiry'];
+        $certSia = max_cert_expiry($conn, $workerId, '%SIA%');
+        if ($certSia && (!$sia || $certSia > $sia)) $sia = $certSia;
+        if (!$sia || $sia < $today) {
             fail($w['name'] . "'s SIA licence is missing or expired. They cannot be scheduled.", 409);
         }
     }
     if ($w['division'] === 'care') {
-        if ($w['dbs_expiry'] && $w['dbs_expiry'] < $today) {
+        $dbs = $w['dbs_expiry'];
+        $certDbs = max_cert_expiry($conn, $workerId, '%DBS%');
+        if ($certDbs && (!$dbs || $certDbs > $dbs)) $dbs = $certDbs;
+        if ($dbs && $dbs < $today) {
             fail($w['name'] . "'s DBS check has expired. They cannot be scheduled.", 409);
         }
     }

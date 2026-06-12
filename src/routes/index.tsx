@@ -44,6 +44,7 @@ const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
 const Analytics = lazy(() => import("@/pages/app/Analytics"))
+const Insights = lazy(() => import("@/pages/app/Insights"))
 const Files = lazy(() => import("@/pages/app/Files"))
 const Settings = lazy(() => import("@/pages/app/Settings"))
 const SmokeTest = lazy(() => import("@/pages/app/SmokeTest"))
@@ -116,6 +117,7 @@ export const router = createBrowserRouter([
           { path: "academy", element: cms(<Academy />) },
           { path: "academy/:id", element: cms(<AcademyDetail />) },
           { path: "analytics", element: cms(<Analytics />) },
+          { path: "insights", element: cms(<Insights />) },
           { path: "files", element: cms(<Files />) },
           { path: "comms", element: cms(<Comms />) },
           { path: "settings", element: cms(<Settings />) },
