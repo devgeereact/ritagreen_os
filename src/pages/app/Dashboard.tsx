@@ -17,6 +17,7 @@ import { useApi } from "@/hooks/use-api"
 import type { DashboardSummary } from "@/lib/types"
 import { gbp, DIVISION_LABELS, DIVISION_ACCENTS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
+import { WeatherWidget } from "@/components/app/weather-widget"
 
 const DIVISION_TABS = [
   { id: "all", label: "All divisions" },
@@ -61,6 +62,8 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      <WeatherWidget />
 
       {loading && <LoadingBlock rows={4} />}
       {error && <ErrorBlock message={error} onRetry={reload} />}
