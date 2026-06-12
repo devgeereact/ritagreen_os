@@ -42,27 +42,27 @@ export default function Article() {
 
   return (
     <>
-      <div className="border-b border-border bg-secondary/40">
-        <div className="mx-auto max-w-3xl px-4 py-12 md:py-16">
-          <Link to="/resources" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
+        <div className="mx-auto max-w-3xl px-4 py-14 md:py-20">
+          <Link to="/resources" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="size-4" /> All resources
           </Link>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3 animate-fade-up">
             <Badge variant="secondary">{article.category}</Badge>
             <span className="text-xs text-muted-foreground">{fmt(article.date)}</span>
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="size-3" /> {article.readMins} min read
             </span>
           </div>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">{article.title}</h1>
-          <p className="mt-3 text-lg text-muted-foreground">{article.excerpt}</p>
+          <h1 className="mt-3 text-3xl font-bold leading-tight md:text-5xl animate-fade-up animation-delay-100">{article.title}</h1>
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground animate-fade-up animation-delay-200">{article.excerpt}</p>
         </div>
       </div>
 
       <Section className="max-w-3xl">
         <div className="space-y-5 text-lg leading-relaxed text-muted-foreground">
           {article.body.map((p, i) => (
-            <p key={i} className={i === 0 ? "text-foreground" : undefined}>
+            <p key={i} className={i === 0 ? "text-xl font-medium leading-relaxed text-foreground" : undefined}>
               {p}
             </p>
           ))}
@@ -77,12 +77,12 @@ export default function Article() {
             <Link
               key={a.slug}
               to={`/resources/${a.slug}`}
-              className="group surface p-5 transition-shadow hover:shadow-md"
+              className="group surface-interactive p-5"
             >
               <Badge variant="secondary">{a.category}</Badge>
               <h3 className="mt-3 text-sm font-semibold">{a.title}</h3>
               <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                Read <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+                Read <ArrowRight className="size-3 transition-transform group-hover:translate-x-1" />
               </span>
             </Link>
           ))}

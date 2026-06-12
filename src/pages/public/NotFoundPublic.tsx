@@ -9,15 +9,17 @@ export default function NotFoundPublic() {
   })
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col items-center px-4 py-28 text-center">
-      <p className="text-6xl font-bold text-primary">404</p>
-      <h1 className="mt-4 text-2xl font-bold">We can't find that page</h1>
-      <p className="mt-2 max-w-md text-muted-foreground">
-        The page may have moved or never existed. Try the homepage or get in touch.
-      </p>
-      <div className="mt-6 flex gap-3">
-        <Button asChild><Link to="/">Back to home</Link></Button>
-        <Button asChild variant="outline"><Link to="/contact">Contact us</Link></Button>
+    <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden bg-hero-mesh px-4 py-28">
+      <div className="flex max-w-md flex-col items-center text-center animate-fade-up">
+        <p className="font-bold leading-none text-primary text-7xl md:text-8xl">404</p>
+        <h1 className="mt-6 text-2xl font-bold">We can't find that page</h1>
+        <p className="mt-3 leading-relaxed text-muted-foreground">
+          The page may have moved or never existed. Try the homepage or get in touch.
+        </p>
+        <div className="mt-7 flex gap-3">
+          <Button asChild className="shadow-lift"><Link to="/">Back to home</Link></Button>
+          <Button asChild variant="outline"><Link to="/contact">Contact us</Link></Button>
+        </div>
       </div>
     </div>
   )

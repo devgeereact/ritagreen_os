@@ -147,24 +147,27 @@ export default function Legal({ kind }: { kind: LegalKind }) {
     <>
       <PageHeader eyebrow="Legal" title={c.title} intro={c.intro} />
       <Section className="max-w-3xl">
-        <p className="rounded-lg border border-border bg-secondary/40 p-4 text-sm text-muted-foreground">
+        <p className="surface border-l-2 border-primary bg-soft-mesh p-5 text-sm leading-relaxed text-muted-foreground">
           Last updated{" "}
           {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })}. This is a
           plain-English summary and a starting template — it should be reviewed by a qualified UK
           solicitor before launch, and placeholders (registered office, ICO reference, exact figures)
           confirmed.
         </p>
-        <div className="mt-8 space-y-8">
-          {c.sections.map((s) => (
-            <div key={s.h}>
-              <h2 className="text-lg font-semibold">{s.h}</h2>
-              <p className="mt-2 text-muted-foreground">{s.p}</p>
+        <div className="mt-10 space-y-10">
+          {c.sections.map((s, i) => (
+            <div key={s.h} className={i > 0 ? "border-t border-border/60 pt-10" : undefined}>
+              <h2 className="flex items-baseline gap-3 text-lg font-semibold">
+                <span className="font-mono text-sm font-bold text-primary">{String(i + 1).padStart(2, "0")}</span>
+                {s.h}
+              </h2>
+              <p className="mt-3 leading-relaxed text-muted-foreground">{s.p}</p>
               {s.list && (
-                <ul className="mt-3 space-y-2">
+                <ul className="mt-4 space-y-2">
                   {s.list.map((li) => (
                     <li
                       key={li}
-                      className="flex items-start gap-2 text-sm text-muted-foreground"
+                      className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground"
                     >
                       <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
                       {li}

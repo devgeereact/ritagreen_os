@@ -101,13 +101,13 @@ export default function Accreditations() {
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           {ITEMS.map((i) => (
-            <div key={i.name} className="flex gap-4 surface p-6">
-              <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-accent text-primary">
-                <i.icon className="size-5" />
+            <div key={i.name} className="surface-interactive flex gap-4 p-7">
+              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
+                <i.icon className="size-6" strokeWidth={1.75} />
               </span>
               <div>
                 <h3 className="font-semibold">{i.name}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{i.body}</p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{i.body}</p>
               </div>
             </div>
           ))}
@@ -115,23 +115,23 @@ export default function Accreditations() {
       </Section>
 
       {/* Vetting process */}
-      <section className="border-y border-border bg-secondary/40">
-        <div className="mx-auto max-w-6xl px-4 py-14 md:py-20">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            How we vet
-          </p>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+      <section className="border-y border-border bg-soft-mesh">
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
+          <p className="eyebrow">How we vet</p>
+          <h2 className="mt-3 text-2xl font-bold md:text-3xl">
             Every worker, checked before they start
           </h2>
-          <p className="mt-3 max-w-2xl text-muted-foreground">
+          <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
             We never let vetting or licensing slip to win a job. Here's the order we do it in.
           </p>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {VETTING.map((v) => (
-              <div key={v.step} className="surface p-6">
-                <span className="font-mono text-sm font-semibold text-primary">{v.step}</span>
-                <h3 className="mt-3 font-semibold">{v.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{v.body}</p>
+              <div key={v.step} className="surface relative p-7">
+                <span className="grid size-10 place-items-center rounded-full bg-primary font-mono text-sm font-bold text-primary-foreground shadow-soft">
+                  {v.step}
+                </span>
+                <h3 className="mt-4 font-semibold">{v.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{v.body}</p>
               </div>
             ))}
           </div>
@@ -140,19 +140,21 @@ export default function Accreditations() {
 
       {/* Verify certificate */}
       <Section>
-        <div className="surface p-8 md:p-12">
+        <div className="surface bg-soft-mesh p-8 shadow-elevate md:p-12">
           <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
             <div className="max-w-xl">
-              <BadgeCheck className="size-8 text-primary" />
-              <h2 className="mt-3 text-2xl font-bold tracking-tight">
+              <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <BadgeCheck className="size-6" />
+              </span>
+              <h2 className="mt-4 text-2xl font-bold">
                 Verify a RitaGreen Academy certificate
               </h2>
-              <p className="mt-2 text-muted-foreground">
+              <p className="mt-3 leading-relaxed text-muted-foreground">
                 Employers can confirm any certificate we issue is genuine in seconds — enter the
                 certificate ID and we'll show you the learner, the course and the issue date.
               </p>
             </div>
-            <Button asChild size="lg" className="shrink-0">
+            <Button asChild size="lg" className="shrink-0 shadow-lift">
               <Link to="/verify">
                 Verify a certificate <ArrowRight className="ml-1 size-4" />
               </Link>

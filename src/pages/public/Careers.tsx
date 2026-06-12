@@ -150,38 +150,36 @@ export default function Careers() {
       {/* How it works */}
       <Section>
         <div className="max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            The route in
-          </p>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
+          <p className="eyebrow">The route in</p>
+          <h2 className="mt-3 text-2xl font-bold md:text-3xl">
             Train, get checked, get hired
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-4 leading-relaxed text-muted-foreground">
             Most training leaves you with a certificate and another job hunt. Ours leads somewhere
             real — because we hire the people we train.
           </p>
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {STEPS.map((s) => (
-            <div key={s.step} className="surface p-6">
-              <span className="grid size-11 place-items-center rounded-lg bg-accent text-primary">
-                <s.icon className="size-5" />
+            <div key={s.step} className="surface-interactive p-7">
+              <span className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
+                <s.icon className="size-6" strokeWidth={1.75} />
               </span>
-              <div className="mt-4 flex items-center gap-2">
-                <span className="font-mono text-sm font-semibold text-primary">{s.step}</span>
+              <div className="mt-5 flex items-center gap-2">
+                <span className="font-mono text-sm font-bold text-primary">{s.step}</span>
                 <h3 className="font-semibold">{s.title}</h3>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
             </div>
           ))}
         </div>
       </Section>
 
       {/* What you learn + why */}
-      <section className="border-y border-border bg-secondary/40">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 md:grid-cols-2 md:py-20">
+      <section className="border-y border-border bg-soft-mesh">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">What you'll learn</h2>
+            <h2 className="text-2xl font-bold">What you'll learn</h2>
             <p className="mt-3 text-muted-foreground">
               Content mapped to Skills for Care guidance and the Care Certificate framework, with a
               verifiable certificate on completion.
@@ -195,7 +193,7 @@ export default function Careers() {
             </ul>
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Why train with RitaGreen</h2>
+            <h2 className="text-2xl font-bold">Why train with RitaGreen</h2>
             <ul className="mt-5 space-y-3">
               {PERKS.map((p) => (
                 <li key={p} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -266,15 +264,17 @@ export default function Careers() {
         </div>
 
         <aside className="space-y-5 text-sm">
-          <div className="surface p-5">
-            <CalendarCheck className="size-6 text-primary" />
-            <h3 className="mt-3 font-semibold">Rolling intakes</h3>
-            <p className="mt-2 text-muted-foreground">
+          <div className="surface p-6">
+            <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+              <CalendarCheck className="size-6" strokeWidth={1.75} />
+            </span>
+            <h3 className="mt-4 font-semibold">Rolling intakes</h3>
+            <p className="mt-2 leading-relaxed text-muted-foreground">
               We run regular intakes through the year. Apply any time and we'll place you on the next
               available cohort.
             </p>
           </div>
-          <div className="rounded-xl border border-border bg-secondary/40 p-5 text-muted-foreground">
+          <div className="surface bg-soft-mesh p-6 text-muted-foreground">
             <p>Employer upskilling a team instead?</p>
             <Link to="/services#academy" className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:underline">
               See academy training <ArrowRight className="size-3.5" />
@@ -284,9 +284,10 @@ export default function Careers() {
       </Section>
 
       {/* FAQ */}
-      <section className="border-t border-border bg-secondary/30">
-        <div className="mx-auto max-w-3xl px-4 py-14 md:py-20">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Questions about training</h2>
+      <section className="border-t border-border bg-soft-mesh">
+        <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
+          <p className="eyebrow">FAQ</p>
+          <h2 className="mt-3 text-2xl font-bold md:text-3xl">Questions about training</h2>
           <Faqs items={FAQS_CAREERS} className="mt-8" />
         </div>
       </section>

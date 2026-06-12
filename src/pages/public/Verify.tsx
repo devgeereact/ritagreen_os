@@ -81,27 +81,27 @@ export default function Verify() {
           {loading && <p className="text-muted-foreground">Checking…</p>}
 
           {!loading && result && (
-            <div className="rounded-xl border border-primary/30 bg-accent p-6">
-              <div className="flex items-center gap-2 text-primary">
+            <div className="surface overflow-hidden border-primary/30 shadow-elevate animate-fade-up">
+              <div className="flex items-center gap-3 border-b border-primary/20 bg-primary/10 px-6 py-4 text-primary">
                 <BadgeCheck className="size-6" />
                 <span className="font-semibold">Valid certificate</span>
               </div>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <div><dt className="text-muted-foreground">Certificate ID</dt><dd className="font-medium">{result.id}</dd></div>
-                <div><dt className="text-muted-foreground">Learner</dt><dd className="font-medium">{result.learner_name}</dd></div>
-                <div><dt className="text-muted-foreground">Course</dt><dd className="font-medium">{result.course}</dd></div>
-                <div><dt className="text-muted-foreground">Issued</dt><dd className="font-medium">{result.issued_on}</dd></div>
+              <dl className="grid gap-5 p-6 text-sm sm:grid-cols-2">
+                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Certificate ID</dt><dd className="mt-1 font-medium">{result.id}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Learner</dt><dd className="mt-1 font-medium">{result.learner_name}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
               </dl>
             </div>
           )}
 
           {!loading && notFound && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6">
-              <div className="flex items-center gap-2 text-destructive">
+            <div className="surface overflow-hidden border-destructive/30 animate-fade-up">
+              <div className="flex items-center gap-3 border-b border-destructive/20 bg-destructive/10 px-6 py-4 text-destructive">
                 <XCircle className="size-6" />
                 <span className="font-semibold">No certificate found</span>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="p-6 text-sm leading-relaxed text-muted-foreground">
                 We couldn't find a certificate with that ID. Check the ID and try again, or contact us.
               </p>
             </div>

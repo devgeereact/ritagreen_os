@@ -35,12 +35,15 @@ export default function Resources() {
       <Section className="!pb-0">
         <Link
           to={`/resources/${featured.slug}`}
-          className="group grid overflow-hidden surface md:grid-cols-2"
+          className="group grid overflow-hidden surface shadow-elevate transition-all duration-300 hover:-translate-y-1 hover:shadow-lift md:grid-cols-2"
         >
-          <div className="flex min-h-[12rem] items-center justify-center bg-secondary/50 p-8">
-            <span className="font-serif text-2xl font-bold text-primary/70">{featured.category}</span>
+          <div className="relative flex min-h-[14rem] items-center justify-center overflow-hidden bg-hero-mesh p-8">
+            <span className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
+              Featured
+            </span>
+            <span className="font-serif text-3xl font-bold text-primary/70">{featured.category}</span>
           </div>
-          <div className="flex flex-col p-6 md:p-8">
+          <div className="flex flex-col p-7 md:p-9">
             <div className="flex items-center gap-3">
               <Badge variant="secondary">{featured.category}</Badge>
               <span className="text-xs text-muted-foreground">{fmt(featured.date)}</span>
@@ -48,10 +51,10 @@ export default function Resources() {
                 <Clock className="size-3" /> {featured.readMins} min read
               </span>
             </div>
-            <h2 className="mt-4 text-2xl font-bold tracking-tight">{featured.title}</h2>
-            <p className="mt-3 flex-1 text-muted-foreground">{featured.excerpt}</p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary">
-              Read article <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            <h2 className="mt-4 text-2xl font-bold">{featured.title}</h2>
+            <p className="mt-3 flex-1 leading-relaxed text-muted-foreground">{featured.excerpt}</p>
+            <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-primary">
+              Read article <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
             </span>
           </div>
         </Link>
@@ -81,7 +84,7 @@ export default function Resources() {
             <Link
               key={a.slug}
               to={`/resources/${a.slug}`}
-              className="group flex flex-col surface p-6 transition-shadow hover:shadow-md"
+              className="group surface-interactive flex flex-col p-6"
             >
               <div className="flex items-center justify-between">
                 <Badge variant="secondary">{a.category}</Badge>
@@ -90,11 +93,11 @@ export default function Resources() {
                 </span>
               </div>
               <h2 className="mt-4 font-semibold">{a.title}</h2>
-              <p className="mt-2 flex-1 text-sm text-muted-foreground">{a.excerpt}</p>
-              <div className="mt-4 flex items-center justify-between">
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{a.excerpt}</p>
+              <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
                 <span className="text-xs text-muted-foreground">{fmt(a.date)}</span>
                 <span className="inline-flex items-center gap-1 text-sm font-medium text-primary">
-                  Read <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+                  Read <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
                 </span>
               </div>
             </Link>

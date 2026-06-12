@@ -88,18 +88,18 @@ export default function Sectors() {
       <Section>
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SECTORS.map((s) => (
-            <div key={s.name} className="flex flex-col surface p-6">
-              <span className="grid size-11 place-items-center rounded-lg bg-accent text-primary">
-                <s.icon className="size-5" />
+            <div key={s.name} className="surface-interactive flex flex-col p-7">
+              <span className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
+                <s.icon className="size-6" strokeWidth={1.75} />
               </span>
-              <h3 className="mt-4 font-semibold">{s.name}</h3>
-              <p className="mt-2 flex-1 text-sm text-muted-foreground">{s.body}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <h3 className="mt-5 font-semibold">{s.name}</h3>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+              <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
                 {s.serves.map((id) => (
                   <Link
                     key={id}
                     to={`/services#${id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1 text-xs font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-accent"
                   >
                     <span
                       className="size-2 rounded-full"

@@ -15,11 +15,15 @@ export function Faqs({
   return (
     <Accordion type="single" collapsible className={className}>
       {items.map((f, i) => (
-        <AccordionItem key={f.q} value={`faq-${i}`}>
-          <AccordionTrigger className="text-left text-base font-semibold">
+        <AccordionItem
+          key={f.q}
+          value={`faq-${i}`}
+          className="surface mb-3 border-b-0 px-5 transition-colors data-[state=open]:border-primary/30"
+        >
+          <AccordionTrigger className="text-left text-base font-semibold hover:no-underline">
             {f.q}
           </AccordionTrigger>
-          <AccordionContent className="text-muted-foreground">{f.a}</AccordionContent>
+          <AccordionContent className="leading-relaxed text-muted-foreground">{f.a}</AccordionContent>
         </AccordionItem>
       ))}
     </Accordion>

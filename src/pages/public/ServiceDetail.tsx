@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Phone, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Section, CtaBand } from "@/components/public/section"
 import { findService } from "@/lib/divisions"
+import { divisionIcon, accentTint } from "@/lib/division-icons"
 import { COMPANY } from "@/lib/company"
 import { useSeo } from "@/hooks/use-seo"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
@@ -37,26 +38,34 @@ export default function ServiceDetail() {
   if (!found) return <NotFoundPublic />
   const { division, service } = found
   const related = division.services.filter((s) => s.slug !== service.slug)
+  const Icon = divisionIcon(division.id)
 
   return (
     <>
       {/* Hero */}
-      <div className="border-b border-border bg-secondary/40">
-        <div className="mx-auto max-w-6xl px-4 py-12 md:py-16">
+      <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
+        <div className="mx-auto max-w-6xl px-4 py-14 md:py-20">
           <Link
             to={`/services#${division.id}`}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" /> {division.name}
           </Link>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="size-3 rounded-full" style={{ backgroundColor: division.accent }} />
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {division.name}
-            </p>
+          <div className="mt-6 flex items-start gap-4 animate-fade-up">
+            <span
+              className="grid size-14 shrink-0 place-items-center rounded-2xl ring-1 ring-inset ring-black/5"
+              style={{ backgroundColor: accentTint(division.accent, 0.14), color: division.accent }}
+            >
+              <Icon className="size-7" strokeWidth={1.75} />
+            </span>
+            <div>
+              <p className="eyebrow">{division.name}</p>
+              <h1 className="mt-1.5 text-3xl font-bold leading-tight md:text-5xl">{service.name}</h1>
+            </div>
           </div>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">{service.name}</h1>
-          <p className="mt-3 max-w-2xl text-lg text-muted-foreground">{service.summary}</p>
+          <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground animate-fade-up animation-delay-100">
+            {service.summary}
+          </p>
         </div>
       </div>
 
@@ -82,9 +91,12 @@ export default function ServiceDetail() {
           </div>
 
           {/* Assurance */}
-          <div className="rounded-xl border border-border bg-secondary/40 p-6">
+          <div className="surface bg-soft-mesh p-7">
             <h2 className="flex items-center gap-2 text-xl font-semibold">
-              <ShieldCheck className="size-5 text-primary" /> How we keep it safe and compliant
+              <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+                <ShieldCheck className="size-5" />
+              </span>
+              How we keep it safe and compliant
             </h2>
             <ul className="mt-4 space-y-3">
               {division.assurance.map((a) => (
@@ -135,13 +147,19 @@ export default function ServiceDetail() {
         </div>
 
         {/* Sticky enquiry aside */}
-        <aside className="md:sticky md:top-24 md:h-fit">
-          <div className="surface p-6">
-            <h3 className="font-semibold">Get a quote for {service.name.toLowerCase()}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
+        <aside className="md:sticky md:top-28 md:h-fit">
+          <div className="surface overflow-hidden p-7 shadow-elevate">
+            <span
+              className="grid size-11 place-items-center rounded-xl ring-1 ring-inset ring-black/5"
+              style={{ backgroundColor: accentTint(division.accent, 0.14), color: division.accent }}
+            >
+              <Icon className="size-5" strokeWidth={1.75} />
+            </span>
+            <h3 className="mt-4 text-lg font-semibold">Get a quote for {service.name.toLowerCase()}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Tell us what you need and when. We'll confirm availability and a price in writing.
             </p>
-            <Button asChild className="mt-4 w-full">
+            <Button asChild className="mt-5 w-full shadow-lift">
               <Link to={`/quote?service=${division.id}`}>Get a quote</Link>
             </Button>
             <Button asChild variant="outline" className="mt-2 w-full">
@@ -149,7 +167,7 @@ export default function ServiceDetail() {
             </Button>
             <a
               href={COMPANY.phoneHref}
-              className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
+              className="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-primary hover:underline"
             >
               <Phone className="size-4" /> {COMPANY.phone}
             </a>

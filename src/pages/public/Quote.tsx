@@ -202,17 +202,17 @@ export default function Quote() {
               ))}
             </ul>
           </div>
-          <div className="rounded-xl border border-border bg-secondary/40 p-5">
+          <div className="surface bg-soft-mesh p-5">
             <h2 className="font-semibold">What happens next</h2>
-            <ol className="mt-3 space-y-4">
+            <ol className="mt-4 space-y-4">
               {STEPS.map((s) => (
                 <li key={s.title} className="flex gap-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-primary">
-                    <s.icon className="size-4" />
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
+                    <s.icon className="size-4" strokeWidth={1.75} />
                   </span>
                   <div>
                     <p className="font-medium text-foreground">{s.title}</p>
-                    <p className="text-muted-foreground">{s.body}</p>
+                    <p className="mt-0.5 leading-relaxed text-muted-foreground">{s.body}</p>
                   </div>
                 </li>
               ))}

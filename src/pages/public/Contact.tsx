@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Mail, Phone, MapPin, Clock, Check } from "lucide-react"
+import { Mail, Phone, MapPin, Clock } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -147,12 +147,15 @@ export default function Contact() {
             </ul>
           </div>
 
-          <div className="rounded-xl border border-border bg-secondary/40 p-5">
+          <div className="surface bg-soft-mesh p-5">
             <h2 className="font-semibold">What happens next</h2>
-            <ol className="mt-3 space-y-2 text-muted-foreground">
-              {NEXT_STEPS.map((s) => (
-                <li key={s} className="flex items-start gap-2">
-                  <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {s}
+            <ol className="mt-4 space-y-3 text-muted-foreground">
+              {NEXT_STEPS.map((s, i) => (
+                <li key={s} className="flex items-start gap-3">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="leading-relaxed">{s}</span>
                 </li>
               ))}
             </ol>
@@ -168,10 +171,11 @@ export default function Contact() {
       </Section>
 
       {/* FAQ */}
-      <section className="border-t border-border bg-secondary/30">
-        <div className="mx-auto max-w-3xl px-4 py-14 md:py-20">
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Before you ask</h2>
-          <p className="mt-3 text-muted-foreground">
+      <section className="border-t border-border bg-soft-mesh">
+        <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
+          <p className="eyebrow">FAQ</p>
+          <h2 className="mt-3 text-2xl font-bold md:text-3xl">Before you ask</h2>
+          <p className="mt-4 leading-relaxed text-muted-foreground">
             A few answers to the questions we hear most. Anything else, just send a message.
           </p>
           <Faqs items={FAQS} className="mt-8" />
