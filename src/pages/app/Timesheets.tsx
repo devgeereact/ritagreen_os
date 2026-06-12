@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { Plus, Clock, CheckCircle2, Check } from "lucide-react"
+import { Plus, Clock, CheckCircle2, Check, Download } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { exportCsv } from "@/lib/csv"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -72,7 +73,31 @@ export default function Timesheets() {
             Log worker hours and approve them for payroll across the group.
           </p>
         </div>
-        <NewEntryDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        <div className="flex items-center gap-2">
+          {data && data.timesheets.some((t) => t.status === "approved") && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                exportCsv(
+                  "ritagreen-payroll-approved.csv",
+                  data.timesheets
+                    .filter((t) => t.status === "approved")
+                    .map((t) => ({
+                      worker: t.worker,
+                      division: DIVISION_LABELS[t.division] ?? t.division,
+                      date: t.work_date,
+                      start: t.start_time,
+                      end: t.end_time,
+                      hours: (t.minutes / 60).toFixed(2),
+                    })),
+                )
+              }
+            >
+              <Download className="mr-1 size-4" /> Export payroll CSV
+            </Button>
+          )}
+          <NewEntryDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        </div>
       </div>
 
       {loading && <LoadingBlock rows={5} />}
