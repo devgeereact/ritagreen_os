@@ -137,12 +137,15 @@ export default function ServiceDetail() {
         {/* Sticky enquiry aside */}
         <aside className="md:sticky md:top-24 md:h-fit">
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="font-semibold">Enquire about {service.name.toLowerCase()}</h3>
+            <h3 className="font-semibold">Get a quote for {service.name.toLowerCase()}</h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Tell us what you need and when. We'll confirm availability and a price in writing.
             </p>
             <Button asChild className="mt-4 w-full">
-              <Link to="/contact">Enquire now</Link>
+              <Link to={`/quote?service=${division.id}`}>Get a quote</Link>
+            </Button>
+            <Button asChild variant="outline" className="mt-2 w-full">
+              <Link to="/contact">Ask a question</Link>
             </Button>
             <a
               href={COMPANY.phoneHref}

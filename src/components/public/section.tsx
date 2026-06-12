@@ -43,9 +43,13 @@ export function PageHeader({
 export function CtaBand({
   title = "Need staff, training or a quote?",
   body = "Tell us what you need and we will route it to the right team. One enquiry, one trusted name.",
+  ctaTo = "/quote",
+  ctaLabel = "Get a quote",
 }: {
   title?: string
   body?: string
+  ctaTo?: string
+  ctaLabel?: string
 }) {
   return (
     <Section>
@@ -55,9 +59,19 @@ export function CtaBand({
             <h2 className="text-2xl font-bold md:text-3xl">{title}</h2>
             <p className="mt-2 max-w-xl text-primary-foreground/80">{body}</p>
           </div>
-          <Button asChild size="lg" variant="secondary" className="shrink-0">
-            <Link to="/contact">Enquire now</Link>
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <Button asChild size="lg" variant="secondary">
+              <Link to={ctaTo}>{ctaLabel}</Link>
+            </Button>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="border-primary-foreground/40 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+            >
+              <Link to="/contact">Talk to us</Link>
+            </Button>
+          </div>
         </div>
       </div>
     </Section>

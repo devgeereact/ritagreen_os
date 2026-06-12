@@ -59,8 +59,8 @@ export default function Home() {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button asChild size="lg">
-                <Link to="/contact">
-                  Get cover today <ArrowRight className="ml-1 size-4" />
+                <Link to="/quote">
+                  Get a quote <ArrowRight className="ml-1 size-4" />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">

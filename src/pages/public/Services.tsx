@@ -92,9 +92,14 @@ export default function Services() {
             </div>
           </div>
 
-          <Button asChild className="mt-6">
-            <Link to="/contact">Enquire about {d.descriptor.toLowerCase()}</Link>
-          </Button>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button asChild>
+              <Link to={`/quote?service=${d.id}`}>Get a {d.descriptor.toLowerCase()} quote</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/contact">Ask a question</Link>
+            </Button>
+          </div>
         </Section>
       ))}
 

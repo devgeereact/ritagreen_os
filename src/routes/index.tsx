@@ -16,6 +16,7 @@ import Accreditations from "@/pages/public/Accreditations"
 import Resources from "@/pages/public/Resources"
 import Article from "@/pages/public/Article"
 import Contact from "@/pages/public/Contact"
+import Quote from "@/pages/public/Quote"
 import Verify from "@/pages/public/Verify"
 import Legal from "@/pages/public/Legal"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
@@ -60,6 +61,7 @@ export const router = createBrowserRouter([
       { path: "resources", element: <Resources /> },
       { path: "resources/:slug", element: <Article /> },
       { path: "contact", element: <Contact /> },
+      { path: "quote", element: <Quote /> },
       { path: "verify", element: <Verify /> },
       { path: "verify/:id", element: <Verify /> },
       { path: "privacy", element: <Legal kind="privacy" /> },
