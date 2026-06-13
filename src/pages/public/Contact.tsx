@@ -90,12 +90,35 @@ export default function Contact() {
         <form onSubmit={onSubmit} className="space-y-5 md:col-span-2" noValidate>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" name="name" required autoComplete="name" />
+              <Label htmlFor="name">
+                Name <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                required
+                autoComplete="name"
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? "name-error" : undefined}
+                onChange={() => errors.name && setErrors((p) => ({ ...p, name: undefined }))}
+              />
+              {errors.name && <p id="name-error" className="text-xs text-destructive">{errors.name}</p>}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" />
+              <Label htmlFor="email">
+                Email <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
+                onChange={() => errors.email && setErrors((p) => ({ ...p, email: undefined }))}
+              />
+              {errors.email && <p id="email-error" className="text-xs text-destructive">{errors.email}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
@@ -119,14 +142,20 @@ export default function Contact() {
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="message">Message</Label>
+            <Label htmlFor="message">
+              Message <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Textarea
               id="message"
               name="message"
               rows={5}
               required
               placeholder="Tell us the role, the site and the times you need covered."
+              aria-invalid={!!errors.message}
+              aria-describedby={errors.message ? "message-error" : undefined}
+              onChange={() => errors.message && setErrors((p) => ({ ...p, message: undefined }))}
             />
+            {errors.message && <p id="message-error" className="text-xs text-destructive">{errors.message}</p>}
           </div>
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? "Sending…" : "Send enquiry"}

@@ -101,6 +101,7 @@ export default function Careers() {
 
   const [submitting, setSubmitting] = useState(false)
   const [role, setRole] = useState("carer")
+  const [errors, setErrors] = useState<{ name?: string; email?: string; about?: string }>({})
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -112,8 +113,15 @@ export default function Careers() {
     const about = String(data.get("about") || "").trim()
     const roleLabel = ROLES.find((r) => r.value === role)?.label ?? role
 
-    if (!name || !email || !about) {
-      toast.error("Please add your name, email and a few words about you.")
+    // Inline per-field validation so the offending field is marked, not just a toast.
+    const next: typeof errors = {}
+    if (!name) next.name = "Please tell us your name."
+    if (!email) next.email = "Please add an email so we can reply."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "That email doesn't look right."
+    if (!about) next.about = "Tell us a few words about you."
+    setErrors(next)
+    if (Object.keys(next).length > 0) {
+      form.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
       return
     }
 
@@ -131,6 +139,7 @@ export default function Careers() {
       toast.success("Thanks. We've got your application and will be in touch about the next intake.")
       form.reset()
       setRole("carer")
+      setErrors({})
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
       toast.error(msg)
