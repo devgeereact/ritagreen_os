@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { Plus, Banknote, CheckCircle2, CreditCard, Loader2 } from "lucide-react"
+import { Plus, Banknote, CheckCircle2, CreditCard, Loader2, FileDown } from "lucide-react"
+import { invoicePdf } from "@/lib/pdf"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -169,25 +170,26 @@ export default function Invoicing() {
                       <TableCell><Badge variant={STATUS_VARIANT[inv.status]} className="capitalize">{inv.status}</Badge></TableCell>
                       <TableCell className="text-muted-foreground">{shortDate(inv.created_at)}</TableCell>
                       <TableCell className="text-right">
-                        {inv.status !== "paid" && (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => payByCard(inv.id)}
-                              disabled={paying === inv.id}
-                            >
-                              {paying === inv.id ? (
-                                <Loader2 className="mr-1 size-4 animate-spin" />
-                              ) : (
-                                <CreditCard className="mr-1 size-4" />
-                              )}
-                              Pay by card
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => markPaid(inv.id)}>
-                              Mark paid
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => invoicePdf(inv)} aria-label="Download PDF">
+                            <FileDown className="size-4" />
+                          </Button>
+                          {inv.status !== "paid" && (
+                            <>
+                              <Button size="sm" onClick={() => payByCard(inv.id)} disabled={paying === inv.id}>
+                                {paying === inv.id ? (
+                                  <Loader2 className="mr-1 size-4 animate-spin" />
+                                ) : (
+                                  <CreditCard className="mr-1 size-4" />
+                                )}
+                                Pay by card
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => markPaid(inv.id)}>
+                                Mark paid
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

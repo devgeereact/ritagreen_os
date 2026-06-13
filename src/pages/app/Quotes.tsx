@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { Plus, FileText, CheckCircle2 } from "lucide-react"
+import { Plus, FileText, CheckCircle2, FileDown } from "lucide-react"
+import { quotePdf } from "@/lib/pdf"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -147,6 +148,9 @@ export default function Quotes() {
                       <TableCell><Badge variant={STATUS_VARIANT[q.status]} className="capitalize">{q.status}</Badge></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => quotePdf(q)} aria-label="Download PDF">
+                            <FileDown className="size-4" />
+                          </Button>
                           {q.status === "draft" && (
                             <Button size="sm" variant="ghost" onClick={() => setStatus(q.id, "sent")}>Mark sent</Button>
                           )}

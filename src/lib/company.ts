@@ -17,6 +17,19 @@ export const COMPANY = {
   emergencyPhoneHref: "tel:+447377563859",
   email: "hello@ritagreenservices.com",
   hours: "Mon–Fri, 9am–5pm · 24hr line for urgent cover",
+  registeredAddress: "London, United Kingdom", // TODO: set full registered office address
+} as const
+
+// Billing details rendered on invoice/quote PDFs. FILL THESE before sending real
+// invoices — a UK VAT invoice must show the VAT number, and clients pay against
+// the bank details. Leave a value as "" to hide that line on the PDF.
+export const BILLING = {
+  vatNumber: "", // e.g. "GB 123 4567 89" — leave "" if not VAT registered
+  bankName: "", // e.g. "Barclays"
+  accountName: "RitaGreen Services Ltd",
+  sortCode: "", // e.g. "20-00-00"
+  accountNumber: "", // e.g. "12345678"
+  paymentTermsDays: 14,
 } as const
 
 // Social profiles — all @ritagreenservices__
