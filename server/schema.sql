@@ -346,20 +346,256 @@ CREATE TABLE IF NOT EXISTS files (
   CONSTRAINT fk_files_uploader FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ---- Shifts (scheduling & dispatch) ----
-CREATE TABLE IF NOT EXISTS shifts (
+-- =====================================================================
+-- Build pass 2 — Sprint A §4 Compliance hardening
+-- Renewal reminder dedup log, company insurance register, reference checks,
+-- plus DBS update-service + re-check scheduling fields on workers.
+-- Re-importing this file is safe: tables use IF NOT EXISTS and the worker
+-- columns use ADD COLUMN IF NOT EXISTS (MariaDB on the shared host supports it).
+-- =====================================================================
+
+-- ---- Renewal reminder log (dedup for the 90/60/30/expired digest) ----
+-- expiry-alerts.php writes one row per (credential, tier) it has emailed about,
+-- so a 60-day nudge never fires twice. credential_key is e.g. 'dbs:12',
+-- 'sia:12', 'cert:88', 'ins:3'. tier is 'd90' | 'd60' | 'd30' | 'expired'.
+CREATE TABLE IF NOT EXISTS compliance_reminders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  credential_key VARCHAR(64) NOT NULL,
+  tier ENUM('d90','d60','d30','expired') NOT NULL,
+  sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_cred_tier (credential_key, tier),
+  KEY idx_sent (sent_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Company insurance & certificate register (company level) ----
+-- EL must be at least £5m to win contracts; cover_pence stored in pence.
+CREATE TABLE IF NOT EXISTS insurance (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  type ENUM('employers_liability','public_liability','professional_indemnity','other') NOT NULL DEFAULT 'public_liability',
+  insurer VARCHAR(160) NOT NULL,
+  policy_no VARCHAR(80) NULL,
+  cover_pence BIGINT NOT NULL DEFAULT 0,
+  start_date DATE NULL,
+  expiry DATE NULL,
+  notes VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  KEY idx_ins_expiry (expiry)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Reference checks (2+ per worker, gaps explained) ----
+CREATE TABLE IF NOT EXISTS worker_references (
   id INT AUTO_INCREMENT PRIMARY KEY,
   worker_id INT NOT NULL,
+  referee_name VARCHAR(160) NOT NULL,
+  referee_org VARCHAR(160) NULL,
+  relationship VARCHAR(80) NULL,
+  email VARCHAR(190) NULL,
+  phone VARCHAR(40) NULL,
+  status ENUM('requested','received','verified','gap_explained') NOT NULL DEFAULT 'requested',
+  gap_note VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_ref_worker (worker_id),
+  CONSTRAINT fk_ref_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- DBS update-service + re-check scheduling on workers ----
+ALTER TABLE workers
+  ADD COLUMN IF NOT EXISTS dbs_update_service TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS recheck_due DATE NULL;
+
+-- =====================================================================
+-- Build pass 2 — Sprint A §11 Timesheets → Payroll
+-- Pay rate + type on the worker, configurable pay-rule multipliers, a UK
+-- bank-holiday calendar, and holiday accrual. payroll.php turns approved
+-- timesheets into a pay run + payslips from these.
+-- =====================================================================
+
+-- Pay rate + type + accrued holiday on the worker.
+ALTER TABLE workers
+  ADD COLUMN IF NOT EXISTS pay_rate_pence INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS pay_type ENUM('paye','umbrella') NOT NULL DEFAULT 'paye',
+  ADD COLUMN IF NOT EXISTS holiday_hours DECIMAL(8,2) NOT NULL DEFAULT 0;
+
+-- ---- Pay-rule multipliers (uplifts) ----
+-- payroll.php applies the single highest day premium (night/weekend/bank
+-- holiday) per entry, and overtime to hours beyond the weekly threshold.
+-- multiplier is the rate factor: 1.50 = time-and-a-half.
+CREATE TABLE IF NOT EXISTS pay_rules (
+  rule_key ENUM('night','weekend','bank_holiday','overtime') PRIMARY KEY,
+  multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.00,
+  meta VARCHAR(120) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO pay_rules (rule_key, multiplier, meta) VALUES
+  ('night', 1.30, 'Shifts starting 20:00–05:59'),
+  ('weekend', 1.25, 'Saturday & Sunday'),
+  ('bank_holiday', 2.00, 'Listed UK bank holidays'),
+  ('overtime', 1.50, 'Hours beyond 40 in an ISO week');
+
+-- ---- UK bank-holiday calendar (England & Wales) ----
+CREATE TABLE IF NOT EXISTS bank_holidays (
+  holiday_date DATE PRIMARY KEY,
+  name VARCHAR(80) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO bank_holidays (holiday_date, name) VALUES
+  ('2026-01-01', "New Year's Day"),
+  ('2026-04-03', 'Good Friday'),
+  ('2026-04-06', 'Easter Monday'),
+  ('2026-05-04', 'Early May bank holiday'),
+  ('2026-05-25', 'Spring bank holiday'),
+  ('2026-08-31', 'Summer bank holiday'),
+  ('2026-12-25', 'Christmas Day'),
+  ('2026-12-28', 'Boxing Day (substitute)');
+
+-- =====================================================================
+-- Build pass 2 — Sprint A §12 Billing hardening
+-- Invoice due dates (for aged debt), credit notes / refunds.
+-- Margin reconciliation is computed live in margin.php (no new table).
+-- =====================================================================
+
+-- Due date drives the aged-debt buckets. Set on create = invoice date + terms.
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS due_date DATE NULL;
+
+-- ---- Credit notes / refunds against an invoice ----
+CREATE TABLE IF NOT EXISTS credit_notes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  number VARCHAR(32) NOT NULL,
+  invoice_id INT NOT NULL,
+  amount_pence INT NOT NULL DEFAULT 0,
+  reason VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_cn_number (number),
+  KEY idx_cn_invoice (invoice_id),
+  CONSTRAINT fk_cn_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+  CONSTRAINT fk_cn_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Shifts (scheduling & dispatch) ----
+-- worker_id is nullable: an "open" shift has no worker until one accepts a
+-- broadcast offer (see shift_offers).
+CREATE TABLE IF NOT EXISTS shifts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  worker_id INT NULL,
   client_id INT NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
   title VARCHAR(190) NOT NULL,
   site_name VARCHAR(190) NULL,
   starts_at DATETIME NOT NULL,
   ends_at DATETIME NOT NULL,
-  status ENUM('scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+  status ENUM('open','scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY idx_worker_time (worker_id, starts_at),
   KEY idx_time (starts_at),
   CONSTRAINT fk_shifts_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
+-- Build pass 2 — Sprint B: Workforce (§3), Scheduling (§5), Comms (§14)
+-- Skills + availability for smart matching, recurring shift templates, open-
+-- shift broadcast offers, in-app notifications, SMS log.
+-- =====================================================================
+
+-- Open shifts need a nullable worker + the 'open' status (for existing installs).
+ALTER TABLE shifts MODIFY COLUMN worker_id INT NULL;
+ALTER TABLE shifts MODIFY COLUMN status ENUM('open','scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled';
+
+-- ---- Skills catalogue + worker skills (feeds smart matching) ----
+CREATE TABLE IF NOT EXISTS skills (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  category ENUM('care','academy','cleaning','security','general') NOT NULL DEFAULT 'general',
+  UNIQUE KEY uniq_skill (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO skills (name, category) VALUES
+  ('Dementia care', 'care'),
+  ('Medication trained', 'care'),
+  ('Manual handling', 'care'),
+  ('Senior carer', 'care'),
+  ('Door supervision', 'security'),
+  ('CCTV operator', 'security'),
+  ('ACS vetted', 'security'),
+  ('COSHH trained', 'cleaning'),
+  ('Deep cleaning', 'cleaning'),
+  ('First aid', 'general'),
+  ('Driver', 'general');
+
+CREATE TABLE IF NOT EXISTS worker_skills (
+  worker_id INT NOT NULL,
+  skill_id INT NOT NULL,
+  PRIMARY KEY (worker_id, skill_id),
+  CONSTRAINT fk_ws_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ws_skill FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Availability & travel preferences on the worker ----
+ALTER TABLE workers
+  ADD COLUMN IF NOT EXISTS home_postcode VARCHAR(12) NULL,
+  ADD COLUMN IF NOT EXISTS travel_radius_mi INT NOT NULL DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS avail_days TINYINT(1) NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS avail_nights TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS avail_weekends TINYINT(1) NOT NULL DEFAULT 0;
+
+-- ---- Recurring shift templates ----
+CREATE TABLE IF NOT EXISTS shift_templates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(190) NOT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  client_id INT NULL,
+  site_name VARCHAR(190) NULL,
+  weekday TINYINT NOT NULL,            -- 1=Mon .. 7=Sun (ISO)
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_tmpl_active (active),
+  CONSTRAINT fk_tmpl_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Open-shift broadcast offers (first-to-accept) ----
+CREATE TABLE IF NOT EXISTS shift_offers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shift_id INT NOT NULL,
+  worker_id INT NOT NULL,
+  token CHAR(40) NOT NULL,
+  status ENUM('sent','accepted','declined','expired') NOT NULL DEFAULT 'sent',
+  responded_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_offer_token (token),
+  KEY idx_offer_shift (shift_id),
+  KEY idx_offer_worker (worker_id),
+  CONSTRAINT fk_offer_shift FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_offer_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- In-app notifications (the bell) ----
+CREATE TABLE IF NOT EXISTS notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,                    -- null = broadcast to all staff
+  type VARCHAR(40) NOT NULL DEFAULT 'info',
+  title VARCHAR(190) NOT NULL,
+  body VARCHAR(500) NULL,
+  url VARCHAR(190) NULL,
+  read_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_notif_user (user_id, read_at),
+  CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- SMS send log (audit of outbound texts) ----
+CREATE TABLE IF NOT EXISTS sms_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  recipient VARCHAR(40) NOT NULL,
+  body VARCHAR(500) NOT NULL,
+  status ENUM('sent','failed','skipped') NOT NULL DEFAULT 'sent',
+  meta VARCHAR(190) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_sms_time (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

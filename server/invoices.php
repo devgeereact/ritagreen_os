@@ -8,27 +8,60 @@ require __DIR__ . '/lib.php';
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
 
+const PAYMENT_TERMS_DAYS = 30;
+
 if (method() === 'GET') {
+    // Pull invoices with any credit notes netted off, plus an effective due date
+    // (stored due_date, or invoice date + terms for older rows without one).
     $res = $conn->query(
         'SELECT i.id, i.number, i.client_id, c.name AS client, i.division,
-                i.net_pence, i.vat_pence, i.total_pence, i.status, i.created_at
+                i.net_pence, i.vat_pence, i.total_pence, i.status, i.created_at,
+                COALESCE(i.due_date, DATE_ADD(DATE(i.created_at), INTERVAL ' . PAYMENT_TERMS_DAYS . ' DAY)) AS due_date,
+                COALESCE((SELECT SUM(cn.amount_pence) FROM credit_notes cn WHERE cn.invoice_id = i.id), 0) AS credited_pence,
+                DATEDIFF(CURDATE(), COALESCE(i.due_date, DATE_ADD(DATE(i.created_at), INTERVAL ' . PAYMENT_TERMS_DAYS . ' DAY))) AS days_overdue
          FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
          ORDER BY i.created_at DESC'
     );
     $invoices = [];
     $outstanding = 0;
     $paid = 0;
+    // Aged-debt buckets (on the outstanding balance, net of credits).
+    $aged = ['current' => 0, 'd1_30' => 0, 'd31_60' => 0, 'd61_90' => 0, 'd90_plus' => 0];
+    $agedItems = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['client_id'] = $row['client_id'] !== null ? (int) $row['client_id'] : null;
         $row['net_pence'] = (int) $row['net_pence'];
         $row['vat_pence'] = (int) $row['vat_pence'];
         $row['total_pence'] = (int) $row['total_pence'];
-        if (in_array($row['status'], ['sent', 'overdue'], true)) $outstanding += $row['total_pence'];
-        if ($row['status'] === 'paid') $paid += $row['total_pence'];
+        $row['credited_pence'] = (int) $row['credited_pence'];
+        $row['days_overdue'] = (int) $row['days_overdue'];
+        $balance = max(0, $row['total_pence'] - $row['credited_pence']);
+
+        if ($row['status'] === 'paid') {
+            $paid += $balance;
+        } elseif (in_array($row['status'], ['sent', 'overdue'], true)) {
+            $outstanding += $balance;
+            $d = $row['days_overdue'];
+            $bucket = $d <= 0 ? 'current' : ($d <= 30 ? 'd1_30' : ($d <= 60 ? 'd31_60' : ($d <= 90 ? 'd61_90' : 'd90_plus')));
+            $aged[$bucket] += $balance;
+            if ($balance > 0) {
+                $agedItems[] = [
+                    'id' => $row['id'], 'number' => $row['number'], 'client' => $row['client'],
+                    'balance_pence' => $balance, 'days_overdue' => max(0, $d), 'bucket' => $bucket,
+                ];
+            }
+        }
         $invoices[] = $row;
     }
-    json_out(['invoices' => $invoices, 'totals' => ['outstanding_pence' => $outstanding, 'paid_pence' => $paid]]);
+    // Worst (most overdue) first for the chase list.
+    usort($agedItems, fn($a, $b) => $b['days_overdue'] <=> $a['days_overdue']);
+
+    json_out([
+        'invoices' => $invoices,
+        'totals' => ['outstanding_pence' => $outstanding, 'paid_pence' => $paid],
+        'aged' => ['buckets' => $aged, 'items' => $agedItems],
+    ]);
 }
 
 if ($action === 'pay' && method() === 'POST') {
@@ -60,12 +93,13 @@ if (method() === 'POST') {
     $year = date('Y');
     $seq = next_seq($conn, "invoice-$year");
     $number = sprintf('INV-%s-%04d', $year, $seq);
+    $dueDate = date('Y-m-d', strtotime('+' . PAYMENT_TERMS_DAYS . ' days'));
 
     $stmt = $conn->prepare(
-        'INSERT INTO invoices (number, client_id, division, net_pence, vat_pence, total_pence, status)
-         VALUES (?, ?, ?, ?, ?, ?, "sent")'
+        'INSERT INTO invoices (number, client_id, division, net_pence, vat_pence, total_pence, status, due_date)
+         VALUES (?, ?, ?, ?, ?, ?, "sent", ?)'
     );
-    $stmt->bind_param('sisiii', $number, $clientId, $division, $net, $vat, $total);
+    $stmt->bind_param('sisiiis', $number, $clientId, $division, $net, $vat, $total, $dueDate);
     $stmt->execute();
     $id = $conn->insert_id;
 
@@ -74,7 +108,8 @@ if (method() === 'POST') {
         'invoice' => [
             'id' => (int) $id, 'number' => $number, 'client_id' => $clientId, 'client' => null,
             'division' => $division, 'net_pence' => $net, 'vat_pence' => $vat,
-            'total_pence' => $total, 'status' => 'sent',
+            'total_pence' => $total, 'status' => 'sent', 'due_date' => $dueDate,
+            'credited_pence' => 0, 'days_overdue' => -PAYMENT_TERMS_DAYS,
         ],
     ], 201);
 }

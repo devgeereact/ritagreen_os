@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Plus, Search, ShieldAlert, ShieldCheck } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Search, ShieldAlert, ShieldCheck, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,8 +32,9 @@ import {
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
-import type { Worker } from "@/lib/types"
-import { shortDate } from "@/lib/format"
+import { Checkbox } from "@/components/ui/checkbox"
+import type { Worker, Skill } from "@/lib/types"
+import { shortDate, gbp } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const ROLES = [
@@ -48,6 +49,7 @@ export default function Workers() {
   const { data, loading, error, reload } = useApi<{ workers: Worker[] }>("workers.php")
   const [q, setQ] = useState("")
   const [open, setOpen] = useState(false)
+  const [payWorker, setPayWorker] = useState<Worker | null>(null)
 
   const workers = data?.workers ?? []
   const filtered = workers.filter((w) =>
@@ -92,6 +94,7 @@ export default function Workers() {
                 <TableHead>Right to work</TableHead>
                 <TableHead>DBS</TableHead>
                 <TableHead>SIA</TableHead>
+                <TableHead>Pay rate</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -120,6 +123,21 @@ export default function Workers() {
                     {w.sia_number ? <ComplianceCell status="valid" expiry={w.sia_expiry} /> : <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => setPayWorker(w)}
+                      className="inline-flex items-center gap-1 text-sm hover:text-primary"
+                    >
+                      {w.pay_rate_pence ? (
+                        <span>{gbp(w.pay_rate_pence)}/hr</span>
+                      ) : (
+                        <span className="text-muted-foreground">Set rate</span>
+                      )}
+                      <Pencil className="size-3 text-muted-foreground" />
+                    </button>
+                    {w.pay_type && <div className="text-xs uppercase text-muted-foreground">{w.pay_type}</div>}
+                  </TableCell>
+                  <TableCell>
                     <Badge variant={w.status === "active" ? "default" : "secondary"} className="capitalize">
                       {w.status}
                     </Badge>
@@ -128,7 +146,7 @@ export default function Workers() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     No workers match "{q}".
                   </TableCell>
                 </TableRow>
@@ -137,7 +155,158 @@ export default function Workers() {
           </Table>
         </Card>
       )}
+
+      <SetPayDialog worker={payWorker} onOpenChange={(o) => !o && setPayWorker(null)} onSaved={reload} />
     </div>
+  )
+}
+
+// Full worker editor: pay, availability + travel, and skills — all the inputs
+// the scheduler's smart match relies on. Saved in one go.
+function SetPayDialog({
+  worker,
+  onOpenChange,
+  onSaved,
+}: {
+  worker: Worker | null
+  onOpenChange: (o: boolean) => void
+  onSaved: () => void
+}) {
+  const [rate, setRate] = useState("")
+  const [type, setType] = useState("paye")
+  const [days, setDays] = useState(true)
+  const [nights, setNights] = useState(false)
+  const [weekends, setWeekends] = useState(false)
+  const [radius, setRadius] = useState("10")
+  const [postcode, setPostcode] = useState("")
+  const [allSkills, setAllSkills] = useState<Skill[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [submitting, setSubmitting] = useState(false)
+
+  // Seed when a worker opens; pull their skills.
+  useEffect(() => {
+    if (!worker) return
+    setRate(worker.pay_rate_pence ? (worker.pay_rate_pence / 100).toString() : "")
+    setType(worker.pay_type ?? "paye")
+    setDays(worker.avail_days ?? true)
+    setNights(worker.avail_nights ?? false)
+    setWeekends(worker.avail_weekends ?? false)
+    setRadius(String(worker.travel_radius_mi ?? 10))
+    setPostcode(worker.home_postcode ?? "")
+    api<{ skills: Skill[]; assigned: number[] }>(`skills.php?worker_id=${worker.id}`)
+      .then((r) => {
+        setAllSkills(r.skills)
+        setSelected(new Set(r.assigned))
+      })
+      .catch(() => {})
+  }, [worker])
+
+  function toggleSkill(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!worker) return
+    setSubmitting(true)
+    try {
+      await Promise.all([
+        api(`workers.php?action=pay&id=${worker.id}`, {
+          method: "POST",
+          body: { pay_rate_pence: Math.round(Number(rate || 0) * 100), pay_type: type },
+        }),
+        api(`workers.php?action=availability&id=${worker.id}`, {
+          method: "POST",
+          body: {
+            avail_days: days, avail_nights: nights, avail_weekends: weekends,
+            travel_radius_mi: Number(radius || 0), home_postcode: postcode,
+          },
+        }),
+        api(`skills.php?action=set&worker_id=${worker.id}`, {
+          method: "POST",
+          body: { skill_ids: Array.from(selected) },
+        }),
+      ])
+      toast.success("Worker updated.")
+      onOpenChange(false)
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not update worker.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!worker} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit worker — {worker?.name}</DialogTitle>
+          <DialogDescription>Pay, availability and skills. The scheduler matches on all three.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="grid gap-5">
+          <section className="grid gap-3">
+            <h3 className="text-sm font-semibold">Pay</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="pay-rate">Base rate (£/hr)</Label>
+                <Input id="pay-rate" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="13.50" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pay-type">Pay type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger id="pay-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="paye">PAYE</SelectItem>
+                    <SelectItem value="umbrella">Umbrella</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <h3 className="text-sm font-semibold">Availability & travel</h3>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={days} onCheckedChange={(v) => setDays(!!v)} /> Days</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={nights} onCheckedChange={(v) => setNights(!!v)} /> Nights</label>
+              <label className="flex items-center gap-2 text-sm"><Checkbox checked={weekends} onCheckedChange={(v) => setWeekends(!!v)} /> Weekends</label>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="postcode">Home postcode</Label>
+                <Input id="postcode" value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="CR0 1AB" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="radius">Travel radius (miles)</Label>
+                <Input id="radius" type="number" min="0" value={radius} onChange={(e) => setRadius(e.target.value)} />
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <h3 className="text-sm font-semibold">Skills</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {allSkills.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={selected.has(s.id)} onCheckedChange={() => toggleSkill(s.id)} />
+                  {s.name}
+                </label>
+              ))}
+              {allSkills.length === 0 && <p className="text-sm text-muted-foreground">No skills in the catalogue yet.</p>}
+            </div>
+          </section>
+
+          <DialogFooter>
+            <Button type="submit" disabled={submitting}>{submitting ? "Saving…" : "Save worker"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -164,6 +333,7 @@ function NewWorkerDialog({
 }) {
   const [role, setRole] = useState("carer")
   const [rtw, setRtw] = useState(false)
+  const [payType, setPayType] = useState("paye")
   const [submitting, setSubmitting] = useState(false)
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -177,6 +347,8 @@ function NewWorkerDialog({
       role,
       division: roleDef?.division ?? "care",
       right_to_work: rtw,
+      pay_rate_pence: Math.round(Number(data.get("pay_rate") || 0) * 100),
+      pay_type: payType,
     }
     if (!payload.name) {
       toast.error("Add the worker's name.")
@@ -230,6 +402,22 @@ function NewWorkerDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="pay_rate">Base rate (£/hr)</Label>
+              <Input id="pay_rate" name="pay_rate" type="number" min="0" step="0.01" placeholder="13.50" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="onboard-pay-type">Pay type</Label>
+              <Select value={payType} onValueChange={setPayType}>
+                <SelectTrigger id="onboard-pay-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paye">PAYE</SelectItem>
+                  <SelectItem value="umbrella">Umbrella</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input

@@ -47,6 +47,15 @@ define('ALERTS_KEY', 'CHANGE_ME');                       // e.g. 32+ random char
 define('OPENWEATHER_API_KEY', 'CHANGE_ME');
 define('OPENWEATHER_UNITS', 'metric');
 
+// ----- SMS (Twilio) for shift offers & reminders -----
+// Leave as CHANGE_ME to disable SMS (offers still create in-app + log as skipped).
+// Get these at console.twilio.com. TWILIO_FROM is your Twilio number in E.164.
+define('TWILIO_SID', 'CHANGE_ME');                       // ACxxxxxxxx...
+define('TWILIO_TOKEN', 'CHANGE_ME');                     // auth token — server only
+define('TWILIO_FROM', '');                               // e.g. '+447700900123'
+// Public base URL used to build shift-offer accept links sent by SMS.
+define('PUBLIC_BASE_URL', 'https://ritagreenservices.com');
+
 // ----- Email notifications (public enquiries & careers applications) -----
 // When enabled, contact.php emails the office on every submission and sends the
 // sender a confirmation, and the in-app inbox can send replies. MAIL_FROM should

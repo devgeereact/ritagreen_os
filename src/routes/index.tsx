@@ -23,6 +23,8 @@ import Verify from "@/pages/public/Verify"
 import Legal from "@/pages/public/Legal"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
+import Offer from "@/pages/public/Offer"
+
 // Auth
 import Login from "@/pages/auth/Login"
 
@@ -41,6 +43,7 @@ const Quotes = lazy(() => import("@/pages/app/Quotes"))
 const Contracts = lazy(() => import("@/pages/app/Contracts"))
 const Timetable = lazy(() => import("@/pages/app/Timetable"))
 const Timesheets = lazy(() => import("@/pages/app/Timesheets"))
+const Payroll = lazy(() => import("@/pages/app/Payroll"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
@@ -93,6 +96,9 @@ export const router = createBrowserRouter([
   // 🔐 AUTH
   { path: "/login", element: <Login />, errorElement: <ErrorPage /> },
 
+  // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
+  { path: "/offer/:token", element: <Offer />, errorElement: <ErrorPage /> },
+
   // 📊 INTERNAL CMS (behind login)
   {
     path: "/app",
@@ -111,6 +117,7 @@ export const router = createBrowserRouter([
           { path: "scheduling", element: cms(<Scheduling />) },
           { path: "timetable", element: cms(<Timetable />) },
           { path: "timesheets", element: cms(<Timesheets />) },
+          { path: "payroll", element: cms(<Payroll />) },
           { path: "jobs", element: cms(<Jobs />) },
           { path: "compliance", element: cms(<Compliance />) },
           { path: "quotes", element: cms(<Quotes />) },

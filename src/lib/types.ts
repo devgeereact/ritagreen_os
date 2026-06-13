@@ -28,7 +28,112 @@ export type Worker = {
   dbs_expiry: string | null
   sia_number: string | null
   sia_expiry: string | null
+  pay_rate_pence?: number
+  pay_type?: "paye" | "umbrella"
+  holiday_hours?: number
+  home_postcode?: string | null
+  travel_radius_mi?: number
+  avail_days?: boolean
+  avail_nights?: boolean
+  avail_weekends?: boolean
   created_at: string
+}
+
+export type Skill = {
+  id: number
+  name: string
+  category: "care" | "academy" | "cleaning" | "security" | "general"
+}
+
+export type MatchWorker = {
+  id: number
+  name: string
+  role: string
+  home_postcode: string | null
+  travel_radius_mi: number
+  upcoming_shifts: number
+}
+
+export type ShiftTemplate = {
+  id: number
+  title: string
+  division: DivisionId
+  client_id: number | null
+  client: string | null
+  site_name: string | null
+  weekday: number
+  start_time: string
+  end_time: string
+  active: boolean
+}
+
+export type AppNotification = {
+  id: number
+  type: string
+  title: string
+  body: string | null
+  url: string | null
+  read: boolean
+  broadcast: boolean
+  created_at: string
+}
+
+export type PayRunRow = {
+  worker_id: number
+  worker: string
+  division: DivisionId
+  pay_type: "paye" | "umbrella"
+  pay_rate_pence: number
+  hours: number
+  base_pence: number
+  premium_pence: number
+  gross_pence: number
+  holiday_hours: number
+  holiday_pay_pence: number
+}
+
+export type PayRun = {
+  period: { from: string; to: string }
+  rows: PayRunRow[]
+  totals: {
+    hours: number
+    base_pence: number
+    premium_pence: number
+    gross_pence: number
+    holiday_pay_pence: number
+  }
+  rules: Record<string, number>
+}
+
+export type PayslipLine = {
+  work_date: string
+  start_time: string
+  end_time: string
+  hours: number
+  premium: string
+  overtime_hours: number
+  gross_pence: number
+}
+
+export type Payslip = {
+  worker: {
+    id: number
+    name: string
+    division: DivisionId
+    role: string
+    pay_type: "paye" | "umbrella"
+    pay_rate_pence: number
+  }
+  period: { from: string; to: string }
+  lines: PayslipLine[]
+  totals: {
+    hours: number
+    base_pence: number
+    premium_pence: number
+    gross_pence: number
+    holiday_hours: number
+    holiday_pay_pence: number
+  }
 }
 
 export type ComplianceItem = {
@@ -49,10 +154,72 @@ export type ComplianceSummary = {
   unknown: number
 }
 
-export type Shift = {
+export type Insurance = {
+  id: number
+  type: "employers_liability" | "public_liability" | "professional_indemnity" | "other"
+  insurer: string
+  policy_no: string | null
+  cover_pence: number
+  start_date: string | null
+  expiry: string | null
+  notes: string | null
+  status: "valid" | "expiring" | "expired" | "unknown"
+  days: number | null
+}
+
+export type InsuranceSummary = {
+  el_minimum_met: boolean
+  el_minimum_pence: number
+}
+
+export type WorkerReference = {
   id: number
   worker_id: number
-  worker: string
+  referee_name: string
+  referee_org: string | null
+  relationship: string | null
+  email: string | null
+  phone: string | null
+  status: "requested" | "received" | "verified" | "gap_explained"
+  gap_note: string | null
+  created_at: string
+}
+
+export type CompliancePack = {
+  worker: {
+    id: number
+    name: string
+    email: string | null
+    phone: string | null
+    role: string
+    division: DivisionId
+    status: string
+    right_to_work: boolean
+    recheck_due: string | null
+  }
+  credentials: {
+    type: string
+    identifier: string | null
+    expiry: string | null
+    status: "valid" | "expiring" | "expired" | "unknown"
+    days: number | null
+  }[]
+  references: {
+    referee_name: string
+    referee_org: string | null
+    relationship: string | null
+    status: string
+    gap_note: string | null
+  }[]
+  documents: { original_name: string; category: string; created_at: string }[]
+  generated_by: string
+  generated_at: string
+}
+
+export type Shift = {
+  id: number
+  worker_id: number | null
+  worker: string | null
   division: DivisionId
   title: string
   site_name: string | null
@@ -60,7 +227,7 @@ export type Shift = {
   client: string | null
   starts_at: string
   ends_at: string
-  status: "scheduled" | "completed" | "cancelled"
+  status: "open" | "scheduled" | "completed" | "cancelled"
 }
 
 export type Timesheet = {
@@ -200,12 +367,62 @@ export type Invoice = {
   vat_pence: number
   total_pence: number
   status: "draft" | "sent" | "paid" | "overdue" | "void"
+  due_date?: string | null
+  credited_pence?: number
+  days_overdue?: number
   created_at: string
 }
 
 export type InvoiceTotals = {
   outstanding_pence: number
   paid_pence: number
+}
+
+export type AgedDebt = {
+  buckets: {
+    current: number
+    d1_30: number
+    d31_60: number
+    d61_90: number
+    d90_plus: number
+  }
+  items: {
+    id: number
+    number: string
+    client: string | null
+    balance_pence: number
+    days_overdue: number
+    bucket: string
+  }[]
+}
+
+export type CreditNote = {
+  id: number
+  number: string
+  invoice_id: number
+  amount_pence: number
+  reason: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export type MarginRow = {
+  division: DivisionId
+  revenue_pence: number
+  cost_pence: number
+  margin_pence: number
+  margin_pct: number | null
+}
+
+export type MarginData = {
+  period: { from: string; to: string }
+  rows: MarginRow[]
+  totals: {
+    revenue_pence: number
+    cost_pence: number
+    margin_pence: number
+    margin_pct: number | null
+  }
 }
 
 export type AnalyticsData = {

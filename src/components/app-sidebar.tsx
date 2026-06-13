@@ -14,6 +14,7 @@ import {
   CalendarRange,
   Clock,
   Clock4,
+  Banknote,
   ShieldCheck,
   ClipboardList,
   GraduationCap,
@@ -83,6 +84,7 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
       { title: "Timetable", url: "/app/timetable", icon: Clock },
       { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
       { title: "Timesheets", url: "/app/timesheets", icon: Clock4 },
+      { title: "Payroll", url: "/app/payroll", icon: Banknote },
     ],
   },
   {

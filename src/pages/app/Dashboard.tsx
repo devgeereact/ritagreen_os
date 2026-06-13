@@ -148,7 +148,7 @@ function OpsToday() {
     <div className="grid gap-4 lg:grid-cols-3">
       <OpsCard title="Today's cover" icon={CalendarClock} to="/app/scheduling" count={todayShifts.length} empty="No shifts scheduled today.">
         {todayShifts.slice(0, 5).map((s) => (
-          <Row key={s.id} left={s.worker} sub={s.title} right={s.starts_at.slice(11, 16)} />
+          <Row key={s.id} left={s.worker ?? "Unassigned"} sub={s.title} right={s.starts_at.slice(11, 16)} />
         ))}
       </OpsCard>
 

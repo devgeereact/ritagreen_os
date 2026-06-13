@@ -43,6 +43,9 @@ if (method() === 'POST') {
     $stmt->execute();
     $id = $conn->insert_id;
 
+    // Surface the announcement on every user's notification bell.
+    notify($conn, null, $title, mb_substr($text, 0, 160), 'announcement', '/app/comms');
+
     audit($conn, $authorId, 'announcement.create', "$audience: $title");
     json_out([
         'announcement' => [

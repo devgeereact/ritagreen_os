@@ -338,3 +338,78 @@ function encode_mime_word(string $text): string
     }
     return $text;
 }
+
+// ----- SMS (Twilio) -----
+// Optional: only sends when TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM are set in
+// config.php. Used for shift offers and reminders. Every attempt is logged to
+// sms_log so the office has an audit trail even when sending is disabled.
+
+function sms_enabled(): bool
+{
+    return defined('TWILIO_SID') && TWILIO_SID !== '' && TWILIO_SID !== 'CHANGE_ME'
+        && defined('TWILIO_TOKEN') && TWILIO_TOKEN !== '' && TWILIO_TOKEN !== 'CHANGE_ME'
+        && defined('TWILIO_FROM') && TWILIO_FROM !== '';
+}
+
+// Normalise a UK number to E.164 (+44…). Returns null if it doesn't look valid.
+function normalise_phone(?string $phone): ?string
+{
+    if (!$phone) return null;
+    $p = preg_replace('/[^\d+]/', '', $phone);
+    if ($p === '') return null;
+    if (strpos($p, '+') === 0) return $p;
+    if (strpos($p, '0') === 0) return '+44' . substr($p, 1); // UK local -> E.164
+    return '+' . $p;
+}
+
+// Send one SMS via Twilio. Returns true on hand-off. Logs every call.
+function send_sms(mysqli $conn, ?string $to, string $body): bool
+{
+    $num = normalise_phone($to);
+    $body = mb_substr($body, 0, 480);
+
+    if (!$num) {
+        sms_log($conn, (string) $to, $body, 'failed', 'invalid number');
+        return false;
+    }
+    if (!sms_enabled()) {
+        sms_log($conn, $num, $body, 'skipped', 'sms disabled');
+        return false;
+    }
+
+    $url = 'https://api.twilio.com/2010-04-01/Accounts/' . TWILIO_SID . '/Messages.json';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_USERPWD => TWILIO_SID . ':' . TWILIO_TOKEN,
+        CURLOPT_POSTFIELDS => http_build_query(['From' => TWILIO_FROM, 'To' => $num, 'Body' => $body]),
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $ok = $code >= 200 && $code < 300;
+    sms_log($conn, $num, $body, $ok ? 'sent' : 'failed', $ok ? null : ('HTTP ' . $code));
+    return $ok;
+}
+
+function sms_log(mysqli $conn, string $to, string $body, string $status, ?string $meta): void
+{
+    $to = substr($to, 0, 40);
+    $stmt = $conn->prepare('INSERT INTO sms_log (recipient, body, status, meta) VALUES (?, ?, ?, ?)');
+    $stmt->bind_param('ssss', $to, $body, $status, $meta);
+    $stmt->execute();
+}
+
+// ----- In-app notifications (the bell) -----
+// Insert a notification for one user (or null = broadcast to all staff).
+function notify(mysqli $conn, ?int $userId, string $title, string $body = '', string $type = 'info', ?string $url = null): void
+{
+    $title = mb_substr($title, 0, 190);
+    $body = mb_substr($body, 0, 500);
+    $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, body, url) VALUES (?, ?, ?, ?, ?)');
+    $stmt->bind_param('issss', $userId, $type, $title, $body, $url);
+    $stmt->execute();
+}
