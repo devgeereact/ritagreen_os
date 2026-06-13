@@ -225,12 +225,35 @@ export default function Careers() {
           <form onSubmit={onSubmit} className="mt-6 space-y-5" noValidate>
             <div className="grid gap-5 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="name">Full name</Label>
-                <Input id="name" name="name" required autoComplete="name" />
+                <Label htmlFor="name">
+                  Full name <span className="text-destructive" aria-hidden="true">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  name="name"
+                  required
+                  autoComplete="name"
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? "name-error" : undefined}
+                  onChange={() => errors.name && setErrors((p) => ({ ...p, name: undefined }))}
+                />
+                {errors.name && <p id="name-error" className="text-xs text-destructive">{errors.name}</p>}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" required autoComplete="email" />
+                <Label htmlFor="email">
+                  Email <span className="text-destructive" aria-hidden="true">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? "email-error" : undefined}
+                  onChange={() => errors.email && setErrors((p) => ({ ...p, email: undefined }))}
+                />
+                {errors.email && <p id="email-error" className="text-xs text-destructive">{errors.email}</p>}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="phone">Phone (optional)</Label>
@@ -253,14 +276,20 @@ export default function Careers() {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="about">A bit about you</Label>
+              <Label htmlFor="about">
+                A bit about you <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
               <Textarea
                 id="about"
                 name="about"
                 rows={5}
                 required
                 placeholder="Why care work? Any availability, location or experience worth mentioning?"
+                aria-invalid={!!errors.about}
+                aria-describedby={errors.about ? "about-error" : undefined}
+                onChange={() => errors.about && setErrors((p) => ({ ...p, about: undefined }))}
               />
+              {errors.about && <p id="about-error" className="text-xs text-destructive">{errors.about}</p>}
             </div>
             <Button type="submit" size="lg" disabled={submitting}>
               {submitting ? "Sending…" : "Send application"}
