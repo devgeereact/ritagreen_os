@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/collapsible"
 import {
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -27,7 +28,7 @@ type MenuItem = {
   items?: MenuItem[]
 }
 
-export function NavMain({ items }: { items: MenuItem[] }) {
+export function NavMain({ items, label }: { items: MenuItem[]; label?: string }) {
   const location = useLocation()
 
   const toPath = (url: string) => (url.startsWith("/") ? url : `/${url}`)
@@ -156,6 +157,11 @@ export function NavMain({ items }: { items: MenuItem[] }) {
 
   return (
     <SidebarGroup>
+      {label && (
+        <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+          {label}
+        </SidebarGroupLabel>
+      )}
       <SidebarMenu>
         {renderMenuItems(items)}
       </SidebarMenu>

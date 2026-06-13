@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { Link, NavLink } from "react-router-dom"
-import { ChevronDown, Menu } from "lucide-react"
+import { Link, NavLink, useNavigate } from "react-router-dom"
+import { ChevronDown, Menu, LayoutDashboard, LogOut } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +16,15 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useAuth } from "@/providers/auth-provider"
 import { DIVISIONS } from "@/lib/divisions"
 import { cn } from "@/lib/utils"
 
@@ -25,7 +34,12 @@ const NAV = [
   { to: "/accreditations", label: "Accreditations" },
   { to: "/careers", label: "Careers" },
   { to: "/resources", label: "Resources" },
+  { to: "/contact", label: "Contact" },
 ]
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
+}
 
 function linkClass({ isActive }: { isActive: boolean }) {
   return cn(
@@ -38,9 +52,17 @@ function linkClass({ isActive }: { isActive: boolean }) {
 
 export function PublicNav() {
   const [open, setOpen] = useState(false)
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   // Services disclosure: controlled so it works on touch + keyboard, not just hover.
   const [servicesOpen, setServicesOpen] = useState(false)
   const servicesRef = useRef<HTMLDivElement>(null)
+
+  function signOut() {
+    logout()
+    setOpen(false)
+    navigate("/")
+  }
 
   // Close the mega-menu on outside click and on Escape.
   useEffect(() => {
@@ -130,14 +152,41 @@ export function PublicNav() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <Link
-            to="/login"
-            className="hidden text-sm font-medium text-muted-foreground hover:text-foreground sm:inline-block"
-          >
-            Login
-          </Link>
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="hidden items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-2.5 text-sm font-medium shadow-soft transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
+                  aria-label="Account menu"
+                >
+                  <span className="grid size-7 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                    {initials(user.name)}
+                  </span>
+                  <span className="max-w-[8rem] truncate text-foreground">{user.name.split(" ")[0]}</span>
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="text-sm font-medium">{user.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/app"><LayoutDashboard className="mr-2 size-4" /> Open dashboard</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 size-4" /> Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button asChild variant="ghost" className="hidden text-foreground sm:inline-flex">
+              <Link to="/login">Login</Link>
+            </Button>
+          )}
           <Button asChild className="hidden sm:inline-flex">
-            <Link to="/contact">Enquire</Link>
+            <Link to={user ? "/app" : "/contact"}>{user ? "Dashboard" : "Enquire"}</Link>
           </Button>
 
           {/* Mobile menu */}
@@ -185,14 +234,38 @@ export function PublicNav() {
                     {n.label}
                   </MobileLink>
                 ))}
-                <MobileLink to="/login" onClick={() => setOpen(false)}>
-                  Login
-                </MobileLink>
-                <Button asChild className="mt-3">
-                  <Link to="/contact" onClick={() => setOpen(false)}>
-                    Enquire
-                  </Link>
-                </Button>
+                {user ? (
+                  <>
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-accent/60 px-3 py-2">
+                      <span className="grid size-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                        {initials(user.name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{user.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                      </div>
+                    </div>
+                    <Button asChild className="mt-3">
+                      <Link to="/app" onClick={() => setOpen(false)}>
+                        <LayoutDashboard className="mr-2 size-4" /> Open dashboard
+                      </Link>
+                    </Button>
+                    <Button variant="outline" className="mt-2 text-destructive" onClick={signOut}>
+                      <LogOut className="mr-2 size-4" /> Sign out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <MobileLink to="/login" onClick={() => setOpen(false)}>
+                      Login
+                    </MobileLink>
+                    <Button asChild className="mt-3">
+                      <Link to="/contact" onClick={() => setOpen(false)}>
+                        Enquire
+                      </Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </SheetContent>
           </Sheet>

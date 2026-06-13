@@ -22,7 +22,6 @@ import {
   BarChart3,
   TrendingUp,
   Settings2,
-  Activity,
   LogOut,
   ChevronsUpDown,
 } from "lucide-react"
@@ -71,28 +70,58 @@ function useInboxUnread(): number {
   return count
 }
 
-// RitaGreenOS module navigation.
-const navMain = [
-  { title: "Command Centre", url: "/app", icon: Gauge },
-  { title: "Clients", url: "/app/clients", icon: Handshake },
-  { title: "Enquiries", url: "/app/enquiries", icon: Inbox },
-  { title: "Inbox", url: "/app/inbox", icon: Mail },
-  { title: "Workers", url: "/app/workers", icon: Users },
-  { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
-  { title: "Timetable", url: "/app/timetable", icon: Clock },
-  { title: "Timesheets", url: "/app/timesheets", icon: Clock4 },
-  { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
-  { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
-  { title: "Academy", url: "/app/academy", icon: GraduationCap },
-  { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
-  { title: "Contracts", url: "/app/contracts", icon: FileSignature },
-  { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
-  { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
-  { title: "Insights", url: "/app/insights", icon: TrendingUp },
-  { title: "Files", url: "/app/files", icon: FolderOpen },
-  { title: "Comms", url: "/app/comms", icon: Megaphone },
-  { title: "Settings", url: "/app/settings", icon: Settings2 },
-  { title: "Smoke test", url: "/app/smoke-test", icon: Activity },
+// RitaGreenOS module navigation, grouped so the important things are easy to
+// find rather than a flat 20-item wall.
+const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: typeof Gauge }[] }[] = [
+  {
+    items: [{ title: "Command Centre", url: "/app", icon: Gauge }],
+  },
+  {
+    label: "Operations",
+    items: [
+      { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
+      { title: "Timetable", url: "/app/timetable", icon: Clock },
+      { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
+      { title: "Timesheets", url: "/app/timesheets", icon: Clock4 },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      { title: "Workers", url: "/app/workers", icon: Users },
+      { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
+      { title: "Academy", url: "/app/academy", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "Clients & sales",
+    items: [
+      { title: "Clients", url: "/app/clients", icon: Handshake },
+      { title: "Enquiries", url: "/app/enquiries", icon: Inbox },
+      { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
+      { title: "Contracts", url: "/app/contracts", icon: FileSignature },
+      { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Insight",
+    items: [
+      { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
+      { title: "Insights", url: "/app/insights", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Comms & files",
+    items: [
+      { title: "Inbox", url: "/app/inbox", icon: Mail },
+      { title: "Comms", url: "/app/comms", icon: Megaphone },
+      { title: "Files", url: "/app/files", icon: FolderOpen },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [{ title: "Settings", url: "/app/settings", icon: Settings2 }],
+  },
 ]
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
@@ -101,9 +130,12 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 
 export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
   const unread = useInboxUnread()
-  const items = navMain.map((i) =>
-    i.url === "/app/inbox" ? { ...i, badge: unread || undefined } : i,
-  )
+  const groups = NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.map((i) =>
+      i.url === "/app/inbox" ? { ...i, badge: unread || undefined } : i,
+    ),
+  }))
   return (
     <div
       onMouseEnter={() => onHoverChange?.(true)}
@@ -117,7 +149,9 @@ export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
         </SidebarHeader>
 
         <SidebarContent>
-          <NavMain items={items} />
+          {groups.map((g, i) => (
+            <NavMain key={g.label ?? `g${i}`} label={g.label} items={g.items} />
+          ))}
         </SidebarContent>
 
         <SidebarFooter className="h-16 justify-center border-t">
