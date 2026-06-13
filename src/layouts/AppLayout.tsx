@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AiAssistant } from "@/components/app/ai-assistant"
 import { NotificationDropdown } from "@/components/notification-dropdown"
@@ -22,6 +22,7 @@ export default function AppLayout() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(true)
   const [hovered, setHovered] = useState(false)
+  const { pathname } = useLocation()
 
   const isExpanded = open || hovered
 
@@ -91,7 +92,9 @@ export default function AppLayout() {
 
         {/* PAGE CONTENT */}
         <main className="flex-1 p-6">
-          <Outlet />
+          <div key={pathname} className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
 
         <Footer />
