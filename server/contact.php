@@ -5,16 +5,22 @@ require __DIR__ . '/lib.php';
 
 if (method() !== 'POST') fail('Method not allowed.', 405);
 
+// Throttle spam / mail-relay abuse: max 5 submissions per IP per 10 minutes.
+rate_limit($conn, 'contact', 5, 600);
+
 $data = body();
-$name = trim((string) ($data['name'] ?? ''));
+// Strip CR/LF from single-line fields — they're interpolated into mail subjects
+// below, so a newline would otherwise allow email-header injection.
+$name = trim(str_replace(["\r", "\n"], ' ', (string) ($data['name'] ?? '')));
 $email = trim((string) ($data['email'] ?? ''));
-$phone = trim((string) ($data['phone'] ?? ''));
+$phone = trim(str_replace(["\r", "\n"], ' ', (string) ($data['phone'] ?? '')));
 $division = trim((string) ($data['division'] ?? ''));
 $message = trim((string) ($data['message'] ?? ''));
 
 if ($name === '' || $email === '' || $message === '') {
     fail('Please add your name, email and a message.');
 }
+if (mb_strlen($name) > 160) fail('That name is too long.');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
 if (mb_strlen($message) > 5000) fail('That message is too long.');
 

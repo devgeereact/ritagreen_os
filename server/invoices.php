@@ -55,10 +55,10 @@ if (method() === 'POST') {
     $vat = (int) round($net * 0.20);     // UK standard rate
     $total = $net + $vat;
 
-    // Sequential invoice number: INV-<year>-####
+    // Sequential invoice number: INV-<year>-####. Atomic per-year counter so
+    // concurrent creates never collide on the UNIQUE number.
     $year = date('Y');
-    $res = $conn->query('SELECT COUNT(*) FROM invoices');
-    $seq = (int) ($res->fetch_row()[0] ?? 0) + 1;
+    $seq = next_seq($conn, "invoice-$year");
     $number = sprintf('INV-%s-%04d', $year, $seq);
 
     $stmt = $conn->prepare(

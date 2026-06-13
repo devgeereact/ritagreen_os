@@ -47,10 +47,26 @@ if ($action === 'webhook' && method() === 'POST') {
         $invoiceId = (int) ($session['metadata']['invoice_id'] ?? $session['client_reference_id'] ?? 0);
         $paidOk = ($session['payment_status'] ?? '') === 'paid';
         if ($invoiceId > 0 && $paidOk) {
-            $stmt = $conn->prepare('UPDATE invoices SET status = "paid" WHERE id = ? AND status <> "paid"');
+            // Verify the amount actually paid matches the invoice total in GBP
+            // before flipping to paid — never trust the session's metadata id
+            // alone, or a tampered/underpaid session could clear the invoice.
+            $stmt = $conn->prepare('SELECT total_pence FROM invoices WHERE id = ?');
             $stmt->bind_param('i', $invoiceId);
             $stmt->execute();
-            audit($conn, 0, 'invoice.paid.stripe', "#$invoiceId via Stripe Checkout");
+            $row = $stmt->get_result()->fetch_assoc();
+            $expected = $row ? (int) $row['total_pence'] : -1;
+            $amount = (int) ($session['amount_total'] ?? -1);
+            $currency = strtolower((string) ($session['currency'] ?? ''));
+
+            if ($expected >= 0 && $amount === $expected && $currency === 'gbp') {
+                $stmt = $conn->prepare('UPDATE invoices SET status = "paid" WHERE id = ? AND status <> "paid"');
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                audit($conn, 0, 'invoice.paid.stripe', "#$invoiceId via Stripe Checkout");
+            } else {
+                // Amount/currency mismatch — log and leave the invoice unpaid.
+                audit($conn, 0, 'invoice.paid.mismatch', "#$invoiceId paid=$amount $currency expected=$expected gbp");
+            }
         }
     }
     json_out(['ok' => true]);

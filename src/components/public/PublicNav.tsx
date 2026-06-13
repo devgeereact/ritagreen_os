@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { ChevronDown, Menu } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
@@ -29,13 +29,35 @@ const NAV = [
 
 function linkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    "rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
+    "rounded-md px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    isActive
+      ? "font-semibold text-primary underline decoration-2 underline-offset-8"
+      : "font-medium text-muted-foreground hover:text-foreground",
   )
 }
 
 export function PublicNav() {
   const [open, setOpen] = useState(false)
+  // Services disclosure: controlled so it works on touch + keyboard, not just hover.
+  const [servicesOpen, setServicesOpen] = useState(false)
+  const servicesRef = useRef<HTMLDivElement>(null)
+
+  // Close the mega-menu on outside click and on Escape.
+  useEffect(() => {
+    if (!servicesOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (servicesRef.current && !servicesRef.current.contains(e.target as Node)) setServicesOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setServicesOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDown)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [servicesOpen])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -51,17 +73,39 @@ export function PublicNav() {
           </NavLink>
 
           {/* Programmes / Services mega-menu */}
-          <div className="group relative">
-            <button className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-focus-within:text-foreground">
+          <div
+            ref={servicesRef}
+            className="relative"
+            onMouseEnter={() => setServicesOpen(true)}
+            onMouseLeave={() => setServicesOpen(false)}
+          >
+            <button
+              type="button"
+              aria-expanded={servicesOpen}
+              aria-controls="services-menu"
+              aria-haspopup="true"
+              onClick={() => setServicesOpen((v) => !v)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                servicesOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
               Services
-              <ChevronDown className="size-4 transition-transform group-hover:rotate-180 group-focus-within:rotate-180" />
+              <ChevronDown className={cn("size-4 transition-transform", servicesOpen && "rotate-180")} />
             </button>
-            <div className="invisible absolute left-1/2 top-full z-50 w-[680px] -translate-x-1/2 pt-2 opacity-0 transition-all group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+            <div
+              id="services-menu"
+              className={cn(
+                "absolute left-1/2 top-full z-50 w-[680px] -translate-x-1/2 pt-2 transition-all",
+                servicesOpen ? "visible opacity-100" : "invisible opacity-0",
+              )}
+            >
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-popover p-3 shadow-lg">
                 {DIVISIONS.map((d) => (
                   <Link
                     key={d.id}
                     to={`/services#${d.id}`}
+                    onClick={() => setServicesOpen(false)}
                     className="rounded-lg p-3 transition-colors hover:bg-accent"
                   >
                     <div className="flex items-center gap-2">

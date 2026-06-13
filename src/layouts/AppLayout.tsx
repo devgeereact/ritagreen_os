@@ -5,15 +5,6 @@ import { NotificationDropdown } from "@/components/notification-dropdown"
 import { AppLauncherDropdown } from "@/components/appLauncher-dropdown"
 
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
@@ -22,8 +13,6 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { GlobalSearch } from "@/components/global-search"
 
 import Footer from "@/layouts/Footer"
-
-import ThemeCustomizer from "@/components/theme-customizer"
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -35,8 +24,6 @@ export default function AppLayout() {
   const [hovered, setHovered] = useState(false)
 
   const isExpanded = open || hovered
-
-  const [themesopen, themessetOpen] = useState(false)
 
   // Handle header background on scroll
   useEffect(() => {
@@ -68,10 +55,10 @@ export default function AppLayout() {
         {/* HEADER */}
         <header
                 className={cn(
-                    "px-6 sticky top-0 z-40 flex h-16 w-full shrink-0 items-center gap-2 transition-all duration-200 border-b",
+                    "px-6 sticky top-0 z-40 flex h-16 w-full shrink-0 items-center gap-2 transition-all duration-200 border-b bg-background",
                     scrolled
                     ? "bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-md"
-                    : "bg-transparent"
+                    : "border-transparent"
                 )}
               >
               <div className="flex items-center gap-1">
@@ -108,7 +95,6 @@ export default function AppLayout() {
         </main>
 
         <Footer />
-        <ThemeCustomizer />
       </SidebarInset>
     </SidebarProvider>
   )

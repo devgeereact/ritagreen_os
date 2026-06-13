@@ -53,6 +53,11 @@ function pdf_text(string $path): string
 }
 
 $user = require_auth($conn);
+// The document centre holds sensitive HR/compliance files (DBS scans, contracts,
+// IDs). Restrict the whole endpoint — including download/extract/list — to staff
+// roles; 'employee'/'client'/'trainer' have no business browsing it. delete and
+// upload below keep their own stricter role checks.
+require_role($user, 'super_admin', 'admin', 'manager', 'editor');
 $action = $_GET['action'] ?? '';
 
 const UPLOAD_DIR = __DIR__ . '/uploads';

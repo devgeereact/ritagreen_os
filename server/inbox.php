@@ -20,7 +20,10 @@ if (!defined('IMAP_HOST') || IMAP_HOST === '') {
 }
 
 $port = defined('IMAP_PORT') ? (int) IMAP_PORT : 993;
-$ref = '{' . IMAP_HOST . ':' . $port . '/imap/ssl/novalidate-cert}';
+// Validate the mailbox server's TLS cert by default (blocks MITM). A host with a
+// broken/self-signed cert can opt out via IMAP_VALIDATE_CERT=false in config.php.
+$certFlag = (!defined('IMAP_VALIDATE_CERT') || IMAP_VALIDATE_CERT) ? '/validate-cert' : '/novalidate-cert';
+$ref = '{' . IMAP_HOST . ':' . $port . '/imap/ssl' . $certFlag . '}';
 
 function open_inbox(string $ref)
 {

@@ -31,8 +31,14 @@ import type { Shift, Worker, Client } from "@/lib/types"
 import { DIVISION_ACCENTS } from "@/lib/format"
 import { ErrorBlock } from "@/components/app/state-block"
 
+// Format as YYYY-MM-DD in LOCAL time. toISOString() converts to UTC, which
+// shifts the date by a day for users west of UTC and pushes the queried rota
+// range off by one near midnight.
 function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
 }
 
 export default function Scheduling() {

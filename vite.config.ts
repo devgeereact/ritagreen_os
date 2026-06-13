@@ -17,7 +17,7 @@ export default defineConfig({
         // the public site doesn't pay for CMS-only charts/calendar/editor code.
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
-          charts: ["apexcharts", "react-apexcharts", "recharts"],
+          charts: ["apexcharts", "react-apexcharts"],
           calendar: [
             "@fullcalendar/daygrid",
             "@fullcalendar/timegrid",

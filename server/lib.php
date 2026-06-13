@@ -128,6 +128,59 @@ function audit(mysqli $conn, ?int $userId, string $action, string $detail = ''):
     $stmt->execute();
 }
 
+// Best-effort client IP. Cloudflare and generic proxies put the real address in
+// these headers; fall back to the socket peer. Trimmed to fit VARCHAR(45).
+function client_ip(): string
+{
+    $ip = $_SERVER['HTTP_CF_CONNECTING_IP']
+        ?? $_SERVER['HTTP_X_FORWARDED_FOR']
+        ?? $_SERVER['REMOTE_ADDR']
+        ?? '0.0.0.0';
+    if (strpos($ip, ',') !== false) $ip = trim(explode(',', $ip)[0]); // first hop in XFF list
+    return substr($ip, 0, 45);
+}
+
+// Sliding-window rate limit per (bucket, IP). Records one hit per call and
+// fails with 429 once $max hits land inside $windowSec. Throttles public /
+// unauthenticated endpoints (login, contact form) against brute-force and spam.
+// Requires the `rate_limits` table (see schema.sql).
+function rate_limit(mysqli $conn, string $bucket, int $max, int $windowSec): void
+{
+    $ip = client_ip();
+    $stmt = $conn->prepare(
+        'SELECT COUNT(*) FROM rate_limits
+         WHERE bucket = ? AND ip = ? AND created_at > (NOW() - INTERVAL ? SECOND)'
+    );
+    $stmt->bind_param('ssi', $bucket, $ip, $windowSec);
+    $stmt->execute();
+    $count = (int) ($stmt->get_result()->fetch_row()[0] ?? 0);
+    if ($count >= $max) {
+        fail('Too many attempts. Please wait a little and try again.', 429);
+    }
+    $stmt = $conn->prepare('INSERT INTO rate_limits (bucket, ip) VALUES (?, ?)');
+    $stmt->bind_param('ss', $bucket, $ip);
+    $stmt->execute();
+    // Opportunistic cleanup (~1% of calls) so the table never grows unbounded.
+    if (random_int(1, 100) === 1) {
+        $conn->query('DELETE FROM rate_limits WHERE created_at < (NOW() - INTERVAL 1 DAY)');
+    }
+}
+
+// Atomically allocate the next value in a named sequence. Replaces the racy
+// SELECT COUNT(*)+1 pattern for document numbers (invoices/quotes/certs):
+// concurrent callers each get a distinct integer in a single statement.
+// Requires the `counters` table (see schema.sql).
+function next_seq(mysqli $conn, string $key): int
+{
+    $stmt = $conn->prepare(
+        'INSERT INTO counters (name, val) VALUES (?, LAST_INSERT_ID(1))
+         ON DUPLICATE KEY UPDATE val = LAST_INSERT_ID(val + 1)'
+    );
+    $stmt->bind_param('s', $key);
+    $stmt->execute();
+    return (int) $conn->insert_id;
+}
+
 // ----- Email notifications -----
 // Optional: only fires when config.php defines MAIL_ENABLED, MAIL_FROM and
 // MAIL_TO. Used to alert the office the moment a public enquiry or application
@@ -194,6 +247,9 @@ function smtp_send(string $to, string $subject, string $body, string $fromName, 
     $secure = defined('SMTP_SECURE') ? strtolower((string) SMTP_SECURE) : '';
     $from = MAIL_FROM;
 
+    // Verify the server's TLS cert by default (blocks MITM). A host with a
+    // broken/self-signed mail cert can opt out via SMTP_VERIFY_PEER=false.
+    $verify = !defined('SMTP_VERIFY_PEER') || SMTP_VERIFY_PEER;
     $transport = $secure === 'ssl' ? "ssl://$host" : $host;
     $fp = @stream_socket_client(
         "$transport:$port",
@@ -201,7 +257,12 @@ function smtp_send(string $to, string $subject, string $body, string $fromName, 
         $errstr,
         20,
         STREAM_CLIENT_CONNECT,
-        stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]])
+        stream_context_create(['ssl' => [
+            'verify_peer' => $verify,
+            'verify_peer_name' => $verify,
+            'SNI_enabled' => true,
+            'peer_name' => $host,
+        ]])
     );
     if (!$fp) {
         error_log("SMTP connect failed: $errno $errstr");

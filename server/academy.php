@@ -90,9 +90,10 @@ if ($action === 'complete' && method() === 'POST') {
         json_out(['ok' => true, 'public_id' => $enr['certificate_public_id']]);
     }
 
-    // Issue a verifiable certificate. ID format RG-<year>-#####.
+    // Issue a verifiable certificate. ID format RG-<year>-#####. Atomic per-year
+    // counter so concurrent completes never collide on the UNIQUE public_id.
     $year = date('Y');
-    $seq = (int) ($conn->query('SELECT COUNT(*) FROM certificates')->fetch_row()[0] ?? 0) + 1;
+    $seq = next_seq($conn, "certificate-$year");
     $publicId = sprintf('RG-%s-%05d', $year, $seq);
     $today = date('Y-m-d');
 

@@ -36,6 +36,7 @@ export default function Contact() {
 
   const [submitting, setSubmitting] = useState(false)
   const [division, setDivision] = useState("")
+  const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({})
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -48,8 +49,17 @@ export default function Contact() {
       division,
       message: String(data.get("message") || "").trim(),
     }
-    if (!payload.name || !payload.email || !payload.message) {
-      toast.error("Please add your name, email and a message.")
+
+    // Inline per-field validation so the offending field is marked, not just a toast.
+    const next: typeof errors = {}
+    if (!payload.name) next.name = "Please tell us your name."
+    if (!payload.email) next.email = "Please add an email so we can reply."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) next.email = "That email doesn't look right."
+    if (!payload.message) next.message = "Tell us briefly what you need."
+    setErrors(next)
+    if (Object.keys(next).length > 0) {
+      const first = form.querySelector<HTMLElement>("[aria-invalid='true']")
+      first?.focus()
       return
     }
 
@@ -59,6 +69,7 @@ export default function Contact() {
       toast.success("Thanks. We've received your enquiry and will be in touch shortly.")
       form.reset()
       setDivision("")
+      setErrors({})
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
       toast.error(msg)

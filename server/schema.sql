@@ -70,6 +70,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
   KEY idx_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Named counters (atomic document-number sequences) ----
+-- next_seq() in lib.php increments val in one statement, so concurrent invoice/
+-- quote/certificate creates never collide. Key format e.g. 'invoice-2026'.
+CREATE TABLE IF NOT EXISTS counters (
+  name VARCHAR(64) PRIMARY KEY,
+  val INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Rate limiting (brute-force / spam throttle for public endpoints) ----
+-- rate_limit() in lib.php writes one row per hit and counts within a window.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bucket VARCHAR(64) NOT NULL,
+  ip VARCHAR(45) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_bucket_ip_time (bucket, ip, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---- Clients ----
 CREATE TABLE IF NOT EXISTS clients (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -160,7 +178,8 @@ CREATE TABLE IF NOT EXISTS enrolments (
   status ENUM('enrolled','in_progress','completed','withdrawn') NOT NULL DEFAULT 'enrolled',
   certificate_public_id VARCHAR(40) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_programme (programme_id)
+  KEY idx_programme (programme_id),
+  CONSTRAINT fk_enrol_programme FOREIGN KEY (programme_id) REFERENCES programmes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -170,7 +189,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   starts_at DATETIME NOT NULL,
   ends_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_starts (starts_at)
+  KEY idx_starts (starts_at),
+  KEY idx_sess_programme (programme_id),
+  KEY idx_sess_worker (worker_id),
+  CONSTRAINT fk_sess_programme FOREIGN KEY (programme_id) REFERENCES programmes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_sess_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Invoices (money in pence) ----
@@ -186,7 +209,9 @@ CREATE TABLE IF NOT EXISTS invoices (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_number (number),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_inv_client (client_id),
+  CONSTRAINT fk_inv_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Timesheets (time tracking) ----
@@ -201,7 +226,9 @@ CREATE TABLE IF NOT EXISTS timesheets (
   approved_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_worker_date (worker_id, work_date),
-  CONSTRAINT fk_ts_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+  KEY idx_ts_approver (approved_by),
+  CONSTRAINT fk_ts_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ts_approver FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Announcements (communication hub) ----
@@ -212,7 +239,9 @@ CREATE TABLE IF NOT EXISTS announcements (
   title VARCHAR(190) NOT NULL,
   body TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  KEY idx_audience (audience)
+  KEY idx_audience (audience),
+  KEY idx_ann_author (author_id),
+  CONSTRAINT fk_ann_author FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Contracts / recurring services ----
@@ -232,7 +261,9 @@ CREATE TABLE IF NOT EXISTS contracts (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL,
   KEY idx_status (status),
-  KEY idx_end (end_date)
+  KEY idx_end (end_date),
+  KEY idx_contract_client (client_id),
+  CONSTRAINT fk_contract_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Quotes / estimates ----
@@ -250,7 +281,11 @@ CREATE TABLE IF NOT EXISTS quotes (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_quote_number (number),
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_quote_client (client_id),
+  KEY idx_quote_invoice (invoice_id),
+  CONSTRAINT fk_quote_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_quote_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Jobs / work orders ----
@@ -268,7 +303,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL,
   KEY idx_status (status),
-  KEY idx_client (client_id)
+  KEY idx_client (client_id),
+  CONSTRAINT fk_jobs_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Certificates (public verification) ----
@@ -301,7 +337,13 @@ CREATE TABLE IF NOT EXISTS files (
   uploaded_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   deleted_at TIMESTAMP NULL,
-  KEY idx_category (category)
+  KEY idx_category (category),
+  KEY idx_files_client (client_id),
+  KEY idx_files_worker (worker_id),
+  KEY idx_files_uploader (uploaded_by),
+  CONSTRAINT fk_files_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_files_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_files_uploader FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---- Shifts (scheduling & dispatch) ----

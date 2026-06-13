@@ -93,9 +93,24 @@ export async function uploadFile<T = unknown>(endpoint: string, form: FormData):
     throw new ApiError("Cannot reach the server.", 0)
   }
   const text = await res.text()
-  const data = text ? JSON.parse(text) : null
+  let data: unknown = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      // Non-JSON (e.g. an HTML error page or a PHP fatal) — surface a friendly
+      // message instead of letting a raw SyntaxError bubble up.
+      const msg = text.trimStart().startsWith("<")
+        ? `The ${endpoint.split("?")[0]} endpoint is not on the server yet. Upload the server/ PHP files to the document root.`
+        : "The server returned an unexpected response."
+      throw new ApiError(msg, res.status)
+    }
+  }
   if (!res.ok) {
-    const msg = data && typeof data === "object" && "error" in data ? (data as { error: string }).error : `Upload failed (${res.status}).`
+    const msg =
+      data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : `Upload failed (${res.status}).`
     throw new ApiError(msg, res.status)
   }
   return data as T

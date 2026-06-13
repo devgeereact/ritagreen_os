@@ -24,3 +24,12 @@ jobs:
           timeout: 600000         # 10 min, in case the handshake is slow
           local-dir: ./dist/
           server-dir: ./          # FTP account scoped to this site's folder
+          # Defense-in-depth: never touch the hand-placed server files, even if
+          # local-dir/server-dir change later. NEVER add `dangerous-clean-slate`
+          # here — it would delete config.php/api.php/.htaccess on the server.
+          exclude: |
+            **/config.php
+            **/*.php
+            **/.htaccess
+            **/.git*
+            **/node_modules/**

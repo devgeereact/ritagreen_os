@@ -184,7 +184,7 @@ function OpsCard({
   tone?: "primary" | "red" | "amber"
   children: React.ReactNode
 }) {
-  const color = tone === "red" ? "text-destructive" : tone === "amber" ? "text-amber-600" : "text-primary"
+  const color = tone === "red" ? "text-destructive" : tone === "amber" ? "text-warning" : "text-primary"
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -240,13 +240,13 @@ function Kpi({
     tone === "red"
       ? "text-destructive"
       : tone === "amber"
-        ? "text-amber-600"
+        ? "text-warning"
         : "text-primary"
   const chipClass =
     tone === "red"
       ? "bg-destructive/10 text-destructive"
       : tone === "amber"
-        ? "bg-amber-500/10 text-amber-600"
+        ? "bg-warning/10 text-warning"
         : "bg-primary/10 text-primary"
   return (
     <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevate">

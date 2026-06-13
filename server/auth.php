@@ -8,6 +8,9 @@ require __DIR__ . '/lib.php';
 $action = $_GET['action'] ?? '';
 
 if ($action === 'login' && method() === 'POST') {
+    // Throttle brute-force: max 10 attempts per IP per 5 minutes.
+    rate_limit($conn, 'login', 10, 300);
+
     $data = body();
     $email = strtolower(trim((string) ($data['email'] ?? '')));
     $password = (string) ($data['password'] ?? '');

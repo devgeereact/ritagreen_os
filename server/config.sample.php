@@ -66,6 +66,7 @@ define('SMTP_PORT', 465);                                // 465 = SSL, 587 = STA
 define('SMTP_SECURE', 'ssl');                            // 'ssl' | 'tls' | ''  (match the port)
 define('SMTP_USER', 'hello@ritagreenservices.com');
 define('SMTP_PASS', 'CHANGE_ME');                        // mailbox password — server only, never commit
+define('SMTP_VERIFY_PEER', true);                        // verify the SMTP TLS cert (blocks MITM); set false only if the host's cert is broken
 
 // ----- Incoming mail (IMAP) for the in-app inbox -----
 // Requires the PHP imap extension. Leave IMAP_HOST blank to disable the inbox.
@@ -73,6 +74,7 @@ define('IMAP_HOST', '');                                 // e.g. 'mail.ritagreen
 define('IMAP_PORT', 993);                                // 993 = IMAP over SSL
 define('IMAP_USER', 'hello@ritagreenservices.com');
 define('IMAP_PASS', 'CHANGE_ME');                        // mailbox password — server only, never commit
+define('IMAP_VALIDATE_CERT', true);                      // validate the IMAP TLS cert (blocks MITM); set false only if the host's cert is broken
 
 // ----- CORS -----
 // In dev the React app runs on localhost:5173 and calls the live API.

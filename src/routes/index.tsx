@@ -123,7 +123,8 @@ export const router = createBrowserRouter([
           { path: "files", element: cms(<Files />) },
           { path: "comms", element: cms(<Comms />) },
           { path: "settings", element: cms(<Settings />) },
-          { path: "smoke-test", element: cms(<SmokeTest />) },
+          // Dev-only API smoke test — never registered in production builds.
+          ...(import.meta.env.DEV ? [{ path: "smoke-test", element: cms(<SmokeTest />) }] : []),
         ],
       },
     ],

@@ -57,9 +57,9 @@ if ($action === 'accept' && method() === 'POST') {
     if (!$q) fail('Quote not found.', 404);
     if ($q['status'] === 'accepted') fail('That quote has already been accepted.', 409);
 
-    // Create an invoice mirroring the quote totals.
+    // Create an invoice mirroring the quote totals. Atomic per-year counter.
     $year = date('Y');
-    $seq = (int) ($conn->query('SELECT COUNT(*) FROM invoices')->fetch_row()[0] ?? 0) + 1;
+    $seq = next_seq($conn, "invoice-$year");
     $invNumber = sprintf('INV-%s-%04d', $year, $seq);
     $clientId = $q['client_id'] !== null ? (int) $q['client_id'] : null;
     $div = $q['division'];
@@ -98,7 +98,7 @@ if (method() === 'POST') {
     $vat = (int) round($net * 0.20);
     $total = $net + $vat;
     $year = date('Y');
-    $seq = (int) ($conn->query('SELECT COUNT(*) FROM quotes')->fetch_row()[0] ?? 0) + 1;
+    $seq = next_seq($conn, "quote-$year");
     $number = sprintf('QUO-%s-%04d', $year, $seq);
 
     $stmt = $conn->prepare(

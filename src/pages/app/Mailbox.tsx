@@ -130,8 +130,11 @@ export default function Mailbox() {
   const [loadingMsg, setLoadingMsg] = useState(false)
   const [reply, setReply] = useState("")
   const [sending, setSending] = useState(false)
+  // Locally-opened uids. Overlaid on the fetched list so the read state and
+  // unread count update immediately without a server reload.
+  const [seenUids, setSeenUids] = useState<Set<number>>(() => new Set())
 
-  const messages = data?.messages ?? []
+  const messages = (data?.messages ?? []).map((m) => (seenUids.has(m.uid) ? { ...m, seen: true } : m))
   const unread = messages.filter((m) => !m.seen).length
 
   async function open(uid: number) {
@@ -150,10 +153,9 @@ export default function Mailbox() {
     }
   }
 
-  // Optimistically flip the list row to read once opened.
+  // Optimistically flip the list row to read once opened (triggers a re-render).
   function setMessageSeen(uid: number) {
-    const row = messages.find((m) => m.uid === uid)
-    if (row) row.seen = true
+    setSeenUids((prev) => (prev.has(uid) ? prev : new Set(prev).add(uid)))
   }
 
   async function sendReply() {
