@@ -1,13 +1,87 @@
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, Building2, Mail, Phone } from "lucide-react"
+import { ArrowLeft, Building2, Mail, Phone, Briefcase, ReceiptText, FileText, Inbox } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useApi } from "@/hooks/use-api"
-import type { Client } from "@/lib/types"
-import { shortDate, DIVISION_LABELS } from "@/lib/format"
+import type { Client, Job, Quote, Invoice, Enquiry } from "@/lib/types"
+import { shortDate, gbp, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 type Site = { id: number; name: string; address: string | null }
+
+type Event = {
+  date: string
+  kind: "job" | "quote" | "invoice" | "enquiry"
+  title: string
+  sub: string
+  amount?: number
+  status?: string
+}
+
+const EVENT_ICON = {
+  job: Briefcase,
+  quote: FileText,
+  invoice: ReceiptText,
+  enquiry: Inbox,
+} as const
+
+// Activity timeline assembled from the module endpoints filtered to this client.
+function ClientTimeline({ clientId, email }: { clientId: number; email: string | null }) {
+  const jobs = useApi<{ jobs: Job[] }>("jobs.php")
+  const quotes = useApi<{ quotes: Quote[] }>("quotes.php")
+  const invoices = useApi<{ invoices: Invoice[] }>("invoices.php")
+  const enquiries = useApi<{ enquiries: Enquiry[] }>("enquiries.php")
+
+  const events: Event[] = [
+    ...(jobs.data?.jobs ?? [])
+      .filter((j) => j.client_id === clientId)
+      .map((j) => ({ date: j.scheduled_for || j.created_at, kind: "job" as const, title: j.title, sub: DIVISION_LABELS[j.division] ?? j.division, status: j.status })),
+    ...(quotes.data?.quotes ?? [])
+      .filter((q) => q.client_id === clientId)
+      .map((q) => ({ date: q.created_at, kind: "quote" as const, title: `${q.number} — ${q.title}`, sub: DIVISION_LABELS[q.division] ?? q.division, amount: q.total_pence, status: q.status })),
+    ...(invoices.data?.invoices ?? [])
+      .filter((i) => i.client_id === clientId)
+      .map((i) => ({ date: i.created_at, kind: "invoice" as const, title: i.number, sub: DIVISION_LABELS[i.division] ?? i.division, amount: i.total_pence, status: i.status })),
+    ...(enquiries.data?.enquiries ?? [])
+      .filter((e) => email != null && e.email.toLowerCase() === email.toLowerCase())
+      .map((e) => ({ date: e.created_at, kind: "enquiry" as const, title: "Website enquiry", sub: DIVISION_LABELS[e.division] ?? e.division, status: e.status })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1))
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Activity</CardTitle></CardHeader>
+      <CardContent>
+        {events.length === 0 ? (
+          <EmptyBlock title="No activity yet" hint="Jobs, quotes, invoices and enquiries for this client will appear here." />
+        ) : (
+          <ul className="space-y-4">
+            {events.map((e, i) => {
+              const Icon = EVENT_ICON[e.kind]
+              return (
+                <li key={i} className="flex gap-3">
+                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="truncate font-medium">{e.title}</p>
+                      <span className="shrink-0 text-xs text-muted-foreground">{shortDate(e.date)}</span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="capitalize">{e.kind}</span> · <span>{e.sub}</span>
+                      {e.amount != null && <span className="font-medium text-foreground">{gbp(e.amount)}</span>}
+                      {e.status && <Badge variant="secondary" className="capitalize">{e.status}</Badge>}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -84,6 +158,8 @@ export default function ClientDetail() {
               </CardContent>
             </Card>
           </div>
+
+          <ClientTimeline clientId={data.client.id} email={data.client.email} />
         </>
       )}
     </div>
