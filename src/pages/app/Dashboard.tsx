@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import ReactApexChart from "react-apexcharts"
 import type { ApexOptions } from "apexcharts"
 import {
@@ -9,12 +10,14 @@ import {
   Banknote,
   CalendarX,
   AlertTriangle,
+  Inbox,
+  ArrowRight,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/providers/auth-provider"
 import { useApi } from "@/hooks/use-api"
-import type { DashboardSummary } from "@/lib/types"
+import type { DashboardSummary, Shift, Invoice, Enquiry } from "@/lib/types"
 import { gbp, DIVISION_LABELS, DIVISION_ACCENTS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
 import { WeatherWidget } from "@/components/app/weather-widget"
@@ -121,9 +124,104 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+
+          <OpsToday />
         </>
       )}
     </div>
+  )
+}
+
+// Live operational snapshot — today's cover, money to chase, leads to answer.
+// Pulls straight from the module endpoints so it's always current.
+function OpsToday() {
+  const today = new Date().toISOString().slice(0, 10)
+  const shifts = useApi<{ shifts: Shift[] }>(`scheduling.php?from=${today}&to=${today}`)
+  const invoices = useApi<{ invoices: Invoice[] }>("invoices.php")
+  const enquiries = useApi<{ enquiries: Enquiry[] }>("enquiries.php")
+
+  const todayShifts = (shifts.data?.shifts ?? []).filter((s) => s.status === "scheduled")
+  const unpaid = (invoices.data?.invoices ?? []).filter((i) => i.status === "sent" || i.status === "overdue")
+  const newLeads = (enquiries.data?.enquiries ?? []).filter((e) => e.status === "new")
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <OpsCard title="Today's cover" icon={CalendarClock} to="/app/scheduling" count={todayShifts.length} empty="No shifts scheduled today.">
+        {todayShifts.slice(0, 5).map((s) => (
+          <Row key={s.id} left={s.worker} sub={s.title} right={s.starts_at.slice(11, 16)} />
+        ))}
+      </OpsCard>
+
+      <OpsCard title="Money to chase" icon={Banknote} to="/app/invoicing" count={unpaid.length} empty="Nothing outstanding. Nice." tone="red">
+        {unpaid.slice(0, 5).map((i) => (
+          <Row key={i.id} left={i.number} sub={i.client || "—"} right={gbp(i.total_pence)} rightTone={i.status === "overdue" ? "red" : undefined} />
+        ))}
+      </OpsCard>
+
+      <OpsCard title="New enquiries" icon={Inbox} to="/app/enquiries" count={newLeads.length} empty="Inbox clear. No new leads." tone="amber">
+        {newLeads.slice(0, 5).map((e) => (
+          <Row key={e.id} left={e.name} sub={DIVISION_LABELS[e.division] ?? e.division} right={e.created_at.slice(5, 10)} />
+        ))}
+      </OpsCard>
+    </div>
+  )
+}
+
+function OpsCard({
+  title,
+  icon: Icon,
+  to,
+  count,
+  empty,
+  tone = "primary",
+  children,
+}: {
+  title: string
+  icon: React.ComponentType<{ className?: string }>
+  to: string
+  count: number
+  empty: string
+  tone?: "primary" | "red" | "amber"
+  children: React.ReactNode
+}) {
+  const color = tone === "red" ? "text-destructive" : tone === "amber" ? "text-amber-600" : "text-primary"
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon className={`size-4 ${color}`} /> {title}
+          {count > 0 && <Badge variant="secondary">{count}</Badge>}
+        </CardTitle>
+        <Link to={to} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          View all <ArrowRight className="size-3" />
+        </Link>
+      </CardHeader>
+      <CardContent>
+        {count === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p> : <ul className="space-y-2.5">{children}</ul>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function Row({
+  left,
+  sub,
+  right,
+  rightTone,
+}: {
+  left: string
+  sub: string
+  right: string
+  rightTone?: "red"
+}) {
+  return (
+    <li className="flex items-center justify-between gap-2 text-sm">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{left}</p>
+        <p className="truncate text-xs text-muted-foreground">{sub}</p>
+      </div>
+      <span className={`shrink-0 text-sm tabular-nums ${rightTone === "red" ? "text-destructive" : "text-muted-foreground"}`}>{right}</span>
+    </li>
   )
 }
 
