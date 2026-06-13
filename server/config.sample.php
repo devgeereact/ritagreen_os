@@ -38,6 +38,11 @@ define('OR_TITLE', 'RitaGreenOS');
 define('STRIPE_SECRET_KEY', 'CHANGE_ME');                // sk_live_... or sk_test_...
 define('STRIPE_WEBHOOK_SECRET', 'CHANGE_ME');            // whsec_...
 
+// ----- Compliance expiry alerts (expiry-alerts.php, run by cron) -----
+// Secret that guards HTTP triggering of the digest. Use a long random string.
+// Not needed if you only ever run the script via CLI cron.
+define('ALERTS_KEY', 'CHANGE_ME');                       // e.g. 32+ random chars
+
 // ----- OpenWeather (read only by a future weather.php) -----
 define('OPENWEATHER_API_KEY', 'CHANGE_ME');
 define('OPENWEATHER_UNITS', 'metric');
