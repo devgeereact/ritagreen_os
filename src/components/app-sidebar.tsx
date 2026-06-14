@@ -30,6 +30,7 @@ import {
   LogOut,
   LifeBuoy,
   User,
+  Bell,
   ChevronsUpDown,
 } from "lucide-react"
 
@@ -131,6 +132,7 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
     label: "Comms & files",
     items: [
       { title: "Inbox", url: "/app/inbox", icon: Mail },
+      { title: "Notifications", url: "/app/notifications", icon: Bell },
       { title: "Comms", url: "/app/comms", icon: Megaphone },
       { title: "Files", url: "/app/files", icon: FolderOpen },
     ],

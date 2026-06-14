@@ -78,7 +78,7 @@ export function NotificationDropdown() {
         </div>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-80 p-0 rounded-xl border shadow-xl">
+      <DropdownMenuContent align="end" className="w-80 p-0 rounded-lg border shadow-elevate">
         <DropdownMenuLabel className="flex items-center justify-between px-4 py-3">
           <span>Notifications</span>
           {unread > 0 && (
@@ -111,6 +111,14 @@ export function NotificationDropdown() {
             </div>
           )}
         </div>
+
+        <DropdownMenuSeparator />
+        <button
+          onClick={() => navigate("/app/notifications")}
+          className="w-full px-4 py-2.5 text-center text-xs font-medium text-primary transition-colors hover:bg-muted/50"
+        >
+          View all notifications
+        </button>
       </DropdownMenuContent>
     </DropdownMenu>
   )
