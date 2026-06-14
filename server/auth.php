@@ -14,6 +14,23 @@ require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
 
+// Does this user have 2FA enabled?
+function twofa_on(mysqli $conn, int $uid): bool
+{
+    $stmt = $conn->prepare('SELECT 1 FROM user_2fa WHERE user_id = ? AND enabled = 1 LIMIT 1');
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    return (bool) $stmt->get_result()->fetch_row();
+}
+
+// Must this user set up 2FA before using the app? (policy + privileged role + off)
+function needs_2fa_setup(mysqli $conn, string $role, int $uid): bool
+{
+    if (!defined('MANDATORY_2FA') || !MANDATORY_2FA) return false;
+    if (!in_array($role, ['super_admin', 'admin', 'manager'], true)) return false;
+    return !twofa_on($conn, $uid);
+}
+
 // Issue a 30-day token for a user, recording device + IP for the session list.
 function issue_token(mysqli $conn, int $uid): string
 {
@@ -79,6 +96,7 @@ if ($action === 'login' && method() === 'POST') {
             'role' => $user['role'], 'division' => $user['division'],
             'client_id' => $link['client_id'] !== null ? (int) $link['client_id'] : null,
             'worker_id' => $link['worker_id'] !== null ? (int) $link['worker_id'] : null,
+            'must_setup_2fa' => needs_2fa_setup($conn, $user['role'], $uid),
         ],
     ]);
 }
@@ -86,6 +104,7 @@ if ($action === 'login' && method() === 'POST') {
 if ($action === 'me' && method() === 'GET') {
     $user = require_auth($conn);
     $user['id'] = (int) $user['id'];
+    $user['must_setup_2fa'] = needs_2fa_setup($conn, $user['role'], (int) $user['id']);
     json_out(['user' => $user]);
 }
 
@@ -392,6 +411,7 @@ if ($action === 'google_callback' && method() === 'POST') {
             'role' => $user['role'], 'division' => $user['division'],
             'client_id' => $user['client_id'] !== null ? (int) $user['client_id'] : null,
             'worker_id' => $user['worker_id'] !== null ? (int) $user['worker_id'] : null,
+            'must_setup_2fa' => needs_2fa_setup($conn, $user['role'], $uid),
         ],
     ]);
 }

@@ -54,6 +54,7 @@ const Bookings = lazy(() => import("@/pages/app/Bookings"))
 const Incidents = lazy(() => import("@/pages/app/Incidents"))
 const FieldOps = lazy(() => import("@/pages/app/FieldOps"))
 const ATS = lazy(() => import("@/pages/app/ATS"))
+const Reports = lazy(() => import("@/pages/app/Reports"))
 const ClientPortal = lazy(() => import("@/pages/portal/ClientPortal"))
 const WorkerApp = lazy(() => import("@/pages/worker/WorkerApp"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
@@ -153,6 +154,7 @@ export const router = createBrowserRouter([
           { path: "incidents", element: cms(<Incidents />) },
           { path: "field", element: cms(<FieldOps />) },
           { path: "ats", element: cms(<ATS />) },
+          { path: "reports", element: cms(<Reports />) },
           { path: "inbox", element: cms(<Mailbox />) },
           { path: "workers", element: cms(<Workers />) },
           { path: "scheduling", element: cms(<Scheduling />) },

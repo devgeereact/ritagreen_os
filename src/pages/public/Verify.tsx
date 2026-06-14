@@ -5,7 +5,7 @@ import { BadgeCheck, XCircle, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageHeader, Section } from "@/components/public/section"
-import { api, ApiError } from "@/lib/api"
+import { api, API_BASE, ApiError } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
 
 type Certificate = {
@@ -111,6 +111,33 @@ export default function Verify() {
                     <p className="mt-1 text-[10px] text-muted-foreground">Scan to verify</p>
                   </div>
                 )}
+              </div>
+              <div className="flex flex-wrap gap-3 border-t border-primary/10 px-6 py-4 text-sm">
+                <a
+                  className="font-medium text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href={
+                    "https://www.linkedin.com/profile/add?" +
+                    new URLSearchParams({
+                      startTask: "CERTIFICATION_NAME",
+                      name: result.course,
+                      organizationName: "RitaGreen Academy",
+                      certId: result.id,
+                      certUrl: `${window.location.origin}/verify/${result.id}`,
+                    }).toString()
+                  }
+                >
+                  Add to LinkedIn
+                </a>
+                <a
+                  className="font-medium text-primary hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href={`${API_BASE}/certificates.php?action=badge&id=${encodeURIComponent(result.id)}`}
+                >
+                  Open Badge (JSON)
+                </a>
               </div>
             </div>
           )}

@@ -20,6 +20,7 @@ export type User = {
   division: string | null
   client_id?: number | null
   worker_id?: number | null
+  must_setup_2fa?: boolean
 }
 
 // Where a user lands after login / on hitting the app, by account type.

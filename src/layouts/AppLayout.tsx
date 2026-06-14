@@ -13,6 +13,8 @@ import { GlobalSearch } from "@/components/global-search"
 
 import Footer from "@/layouts/Footer"
 import { LockScreen } from "@/components/app/lock-screen"
+import { Force2FA } from "@/components/app/force-2fa"
+import { useAuth } from "@/providers/auth-provider"
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -22,6 +24,7 @@ export default function AppLayout() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(true)
   const [hovered, setHovered] = useState(false)
+  const { user } = useAuth()
   const { pathname } = useLocation()
 
   const isExpanded = open || hovered
@@ -50,6 +53,7 @@ export default function AppLayout() {
 
   return (
     <SidebarProvider open={isExpanded} onOpenChange={setOpen}>
+      {user?.must_setup_2fa && <Force2FA />}
       <LockScreen />
       <AppSidebar onHoverChange={setHovered} />
 

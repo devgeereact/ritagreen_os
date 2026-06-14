@@ -19,6 +19,7 @@ import {
   Radio,
   ShieldAlert,
   UserPlus,
+  FileSpreadsheet,
   ShieldCheck,
   ClipboardList,
   GraduationCap,
@@ -126,6 +127,7 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
     items: [
       { title: "Analytics", url: "/app/analytics", icon: BarChart3 },
       { title: "Insights", url: "/app/insights", icon: TrendingUp },
+      { title: "Reports", url: "/app/reports", icon: FileSpreadsheet },
     ],
   },
   {

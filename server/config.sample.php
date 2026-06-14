@@ -38,6 +38,11 @@ define('OR_TITLE', 'RitaGreenOS');
 define('STRIPE_SECRET_KEY', 'CHANGE_ME');                // sk_live_... or sk_test_...
 define('STRIPE_WEBHOOK_SECRET', 'CHANGE_ME');            // whsec_...
 
+// ----- Security policy -----
+// When true, privileged roles (super_admin/admin/manager) must enrol in 2FA
+// before they can use the app; they're forced into setup at login until they do.
+define('MANDATORY_2FA', false);
+
 // ----- Compliance expiry alerts (expiry-alerts.php, run by cron) -----
 // Secret that guards HTTP triggering of the digest. Use a long random string.
 // Not needed if you only ever run the script via CLI cron.
