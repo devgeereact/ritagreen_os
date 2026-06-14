@@ -73,7 +73,7 @@ export default function Dashboard() {
 
       {data && !loading && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
             <Kpi icon={GraduationCap} label="Active programmes" value={data.active_programmes} />
             <Kpi icon={Users} label="Enrolments" value={data.enrolments} />
             <Kpi icon={CalendarClock} label="Upcoming sessions" value={data.upcoming_sessions} />

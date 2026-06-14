@@ -80,7 +80,7 @@ export default function AppLayout() {
                         <GlobalSearch />
                         <AiAssistant />
                         <ThemeToggle />
-                        <div className="relative hidden md:inline-flex">
+                        <div className="relative inline-flex">
                             <NotificationDropdown />
                         </div>
                          <UserDropdown />
