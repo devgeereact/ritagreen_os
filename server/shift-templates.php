@@ -107,7 +107,7 @@ if (method() === 'POST') {
         'INSERT INTO shift_templates (title, division, client_id, site_name, weekday, start_time, end_time)
          VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
-    $stmt->bind_param('sssiiss', $title, $division, $clientId, $siteVal, $weekday, $start, $end);
+    $stmt->bind_param('ssisiss', $title, $division, $clientId, $siteVal, $weekday, $start, $end);
     $stmt->execute();
     audit($conn, (int) $user['id'], 'template.create', $title);
     json_out(['ok' => true], 201);
