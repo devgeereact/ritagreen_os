@@ -28,7 +28,7 @@ export const DIVISIONS: Division[] = [
     id: "care",
     name: "RitaGreen Care",
     descriptor: "Care",
-    accent: "#2E7D32",
+    accent: "#4D7C0F",
     headline: "Safe hands when you need them.",
     tagline: "Trained, checked carers and nurses, when and where they are needed.",
     blurb:
@@ -86,7 +86,7 @@ export const DIVISIONS: Division[] = [
     id: "academy",
     name: "RitaGreen Academy",
     descriptor: "Academy",
-    accent: "#B7791C",
+    accent: "#B7791F",
     headline: "Start a career in care — and get hired.",
     tagline: "We train the next wave of carers, then help them into work.",
     blurb:
@@ -144,7 +144,7 @@ export const DIVISIONS: Division[] = [
     id: "cleaning",
     name: "RitaGreen Cleaning",
     descriptor: "Cleaning",
-    accent: "#4F8A6B",
+    accent: "#2E6F9E",
     headline: "Clean, safe, presentable — every time.",
     tagline: "Buildings kept clean, safe and inspection-ready.",
     blurb:
@@ -200,7 +200,7 @@ export const DIVISIONS: Division[] = [
     id: "security",
     name: "RitaGreen Security",
     descriptor: "Security",
-    accent: "#2C3A33",
+    accent: "#2E342A",
     headline: "Licensed officers who keep it calm.",
     tagline: "SIA-licensed guards for the places people live, work and gather.",
     blurb:

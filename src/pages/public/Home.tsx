@@ -51,7 +51,7 @@ export default function Home() {
               <span className="inline-block size-1.5 rounded-full bg-primary" />
               {COMPANY.legalName} · {COMPANY.area}
             </p>
-            <h1 className="mt-4 animate-fade-up animation-delay-100 text-[2.6rem] font-bold leading-[1.05] md:text-6xl">
+            <h1 className="mt-4 animate-fade-up animation-delay-100 font-display text-[2.4rem] font-bold leading-[1.06] tracking-tight md:text-[3.4rem]">
               People you can count on, <span className="text-primary">every part of the day</span>.
             </h1>
             <p className="mt-6 max-w-lg animate-fade-up animation-delay-200 text-lg leading-relaxed text-muted-foreground">
