@@ -2,7 +2,6 @@ import { Outlet, useLocation } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AiAssistant } from "@/components/app/ai-assistant"
 import { NotificationDropdown } from "@/components/notification-dropdown"
-import { AppLauncherDropdown } from "@/components/appLauncher-dropdown"
 
 import {
   SidebarInset,
@@ -52,7 +51,7 @@ export default function AppLayout() {
     <SidebarProvider open={isExpanded} onOpenChange={setOpen}>
       <AppSidebar onHoverChange={setHovered} />
 
-      <SidebarInset>
+      <SidebarInset className="flex min-h-svh flex-col">
         {/* HEADER */}
         <header
                 className={cn(
@@ -81,7 +80,6 @@ export default function AppLayout() {
                         <GlobalSearch />
                         <AiAssistant />
                         <ThemeToggle />
-                        <AppLauncherDropdown />
                         <div className="relative hidden md:inline-flex">
                             <NotificationDropdown />
                         </div>

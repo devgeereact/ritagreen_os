@@ -172,9 +172,6 @@ export function PublicNav() {
                   <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/app"><LayoutDashboard className="mr-2 size-4" /> Open dashboard</Link>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
                   <LogOut className="mr-2 size-4" /> Sign out
                 </DropdownMenuItem>
@@ -186,7 +183,7 @@ export function PublicNav() {
             </Button>
           )}
           <Button asChild className="hidden sm:inline-flex">
-            <Link to={user ? "/app" : "/contact"}>{user ? "Dashboard" : "Enquire"}</Link>
+            <Link to={user ? "/app" : "/quote"}>{user ? "Dashboard" : "Get a quote"}</Link>
           </Button>
 
           {/* Mobile menu */}
@@ -260,8 +257,8 @@ export function PublicNav() {
                       Login
                     </MobileLink>
                     <Button asChild className="mt-3">
-                      <Link to="/contact" onClick={() => setOpen(false)}>
-                        Enquire
+                      <Link to="/quote" onClick={() => setOpen(false)}>
+                        Get a quote
                       </Link>
                     </Button>
                   </>
