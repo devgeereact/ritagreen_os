@@ -171,6 +171,68 @@ export type Payslip = {
   }
 }
 
+export type Incident = {
+  id: number
+  ref: string
+  division: DivisionId
+  type: "accident" | "incident" | "near_miss" | "safeguarding" | "complaint"
+  severity: "low" | "medium" | "high" | "critical"
+  title: string
+  detail?: string
+  client?: string | null
+  site_name?: string | null
+  worker?: string | null
+  riddor: number
+  safeguarding: number
+  status: "open" | "investigating" | "actioned" | "closed"
+  reporter?: string | null
+  occurred_at?: string | null
+  created_at: string
+}
+
+export type IncidentAction = { id: number; note: string; done: number; created_at: string }
+
+export type IncidentSummary = { open: number; safeguarding: number; riddor: number; critical: number }
+
+export type FieldShift = {
+  id: number
+  title: string
+  division: DivisionId
+  site_name: string | null
+  client: string | null
+  worker: string | null
+  starts_at: string
+  ends_at: string
+  field_status: "scheduled" | "late" | "on_site" | "overrunning" | "completed" | "no_show" | "unfilled"
+  panic: boolean
+}
+
+export type ShiftEvent = {
+  id: number
+  kind: "clock_in" | "clock_out" | "check_in" | "panic" | "note" | "task" | "signoff"
+  note: string | null
+  lat: string | null
+  lng: string | null
+  signer: string | null
+  worker: string | null
+  created_at: string
+}
+
+export type Applicant = {
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  role_applied: string | null
+  division: DivisionId
+  stage: "applied" | "screened" | "interview" | "vetting" | "offer" | "onboarded" | "rejected"
+  source: string | null
+  worker_id: number | null
+  created_at: string
+}
+
+export type OnboardingTask = { id: number; label: string; done: number }
+
 export type ComplianceItem = {
   worker_id: number
   worker: string

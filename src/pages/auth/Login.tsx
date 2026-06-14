@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuth } from "@/providers/auth-provider"
+import { useAuth, homeFor } from "@/providers/auth-provider"
 import { ApiError } from "@/lib/api"
 
 export default function Login() {
@@ -47,7 +47,9 @@ export default function Login() {
         setError(null)
         return
       }
-      navigate(from, { replace: true })
+      // Route by account type unless a specific protected page was requested.
+      const dest = from && from !== "/app" ? from : res.user ? homeFor(res.user) : "/app"
+      navigate(dest, { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not sign in. Please try again.")
     } finally {

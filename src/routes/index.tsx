@@ -25,6 +25,7 @@ import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
 import Offer from "@/pages/public/Offer"
 import RequestCover from "@/pages/public/RequestCover"
+import Apply from "@/pages/public/Apply"
 
 // Auth
 import Login from "@/pages/auth/Login"
@@ -48,6 +49,11 @@ const Timetable = lazy(() => import("@/pages/app/Timetable"))
 const Timesheets = lazy(() => import("@/pages/app/Timesheets"))
 const Payroll = lazy(() => import("@/pages/app/Payroll"))
 const Bookings = lazy(() => import("@/pages/app/Bookings"))
+const Incidents = lazy(() => import("@/pages/app/Incidents"))
+const FieldOps = lazy(() => import("@/pages/app/FieldOps"))
+const ATS = lazy(() => import("@/pages/app/ATS"))
+const ClientPortal = lazy(() => import("@/pages/portal/ClientPortal"))
+const WorkerApp = lazy(() => import("@/pages/worker/WorkerApp"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
@@ -89,6 +95,7 @@ export const router = createBrowserRouter([
       { path: "contact", element: <Contact /> },
       { path: "quote", element: <Quote /> },
       { path: "request", element: <RequestCover /> },
+      { path: "apply", element: <Apply /> },
       { path: "verify", element: <Verify /> },
       { path: "verify/:id", element: <Verify /> },
       { path: "privacy", element: <Legal kind="privacy" /> },
@@ -106,6 +113,22 @@ export const router = createBrowserRouter([
   // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
   { path: "/offer/:token", element: <Offer />, errorElement: <ErrorPage /> },
 
+  // 🏢 CLIENT PORTAL (client-role accounts)
+  {
+    path: "/portal",
+    element: <RequireAuth />,
+    errorElement: <ErrorPage />,
+    children: [{ index: true, element: cms(<ClientPortal />) }],
+  },
+
+  // 📱 WORKER MOBILE APP (worker-linked accounts)
+  {
+    path: "/m",
+    element: <RequireAuth />,
+    errorElement: <ErrorPage />,
+    children: [{ index: true, element: cms(<WorkerApp />) }],
+  },
+
   // 📊 INTERNAL CMS (behind login)
   {
     path: "/app",
@@ -120,6 +143,9 @@ export const router = createBrowserRouter([
           { path: "clients/:id", element: cms(<ClientDetail />) },
           { path: "enquiries", element: cms(<Enquiries />) },
           { path: "bookings", element: cms(<Bookings />) },
+          { path: "incidents", element: cms(<Incidents />) },
+          { path: "field", element: cms(<FieldOps />) },
+          { path: "ats", element: cms(<ATS />) },
           { path: "inbox", element: cms(<Mailbox />) },
           { path: "workers", element: cms(<Workers />) },
           { path: "scheduling", element: cms(<Scheduling />) },

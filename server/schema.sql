@@ -497,6 +497,100 @@ CREATE TABLE IF NOT EXISTS shifts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
+-- Build pass 3 — Missing sections:
+-- §15 Incidents & Safeguarding, §8 Field Ops, §17 Client Portal,
+-- §18 Worker PWA, §13 Recruitment/ATS.
+-- =====================================================================
+
+-- Link user accounts to a client (portal) or a worker (mobile app).
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS client_id INT NULL,
+  ADD COLUMN IF NOT EXISTS worker_id INT NULL;
+
+-- ---- §15 Incidents, accidents, safeguarding, complaints ----
+CREATE TABLE IF NOT EXISTS incidents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ref VARCHAR(24) NOT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  type ENUM('accident','incident','near_miss','safeguarding','complaint') NOT NULL DEFAULT 'incident',
+  severity ENUM('low','medium','high','critical') NOT NULL DEFAULT 'low',
+  title VARCHAR(190) NOT NULL,
+  detail TEXT NOT NULL,
+  client_id INT NULL,
+  site_name VARCHAR(190) NULL,
+  worker_id INT NULL,
+  riddor TINYINT(1) NOT NULL DEFAULT 0,
+  safeguarding TINYINT(1) NOT NULL DEFAULT 0,
+  status ENUM('open','investigating','actioned','closed') NOT NULL DEFAULT 'open',
+  reported_by INT NULL,
+  occurred_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_inc_ref (ref),
+  KEY idx_inc_status (status),
+  KEY idx_inc_type (type),
+  CONSTRAINT fk_inc_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  CONSTRAINT fk_inc_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_inc_user FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS incident_actions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  incident_id INT NOT NULL,
+  note VARCHAR(500) NOT NULL,
+  done TINYINT(1) NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_ia_incident (incident_id),
+  CONSTRAINT fk_ia_incident FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- §8 Field ops: clock-in/out, check-ins, panic, sign-off, logs ----
+CREATE TABLE IF NOT EXISTS shift_events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shift_id INT NOT NULL,
+  worker_id INT NULL,
+  kind ENUM('clock_in','clock_out','check_in','panic','note','task','signoff') NOT NULL DEFAULT 'note',
+  note VARCHAR(500) NULL,
+  lat DECIMAL(9,6) NULL,
+  lng DECIMAL(9,6) NULL,
+  signer VARCHAR(160) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_se_shift (shift_id),
+  KEY idx_se_kind (kind),
+  CONSTRAINT fk_se_shift FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_se_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- §13 Recruitment / ATS ----
+CREATE TABLE IF NOT EXISTS applicants (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  phone VARCHAR(40) NULL,
+  role_applied VARCHAR(80) NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  stage ENUM('applied','screened','interview','vetting','offer','onboarded','rejected') NOT NULL DEFAULT 'applied',
+  source VARCHAR(80) NULL,
+  notes TEXT NULL,
+  worker_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_app_stage (stage),
+  CONSTRAINT fk_app_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS onboarding_tasks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  applicant_id INT NOT NULL,
+  label VARCHAR(160) NOT NULL,
+  done TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_ot_applicant (applicant_id),
+  CONSTRAINT fk_ot_applicant FOREIGN KEY (applicant_id) REFERENCES applicants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
 -- Build pass 2 — Sprint D: Auth (§1), Certificates (§10)
 -- TOTP 2FA, password resets, CPD hours on programmes.
 -- =====================================================================

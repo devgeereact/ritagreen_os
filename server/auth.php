@@ -56,11 +56,19 @@ if ($action === 'login' && method() === 'POST') {
 
     audit($conn, $uid, 'login', $email);
 
+    // Carry client_id/worker_id so the SPA can route to the portal / worker app.
+    $stmt = $conn->prepare('SELECT client_id, worker_id FROM users WHERE id = ?');
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $link = $stmt->get_result()->fetch_assoc() ?: ['client_id' => null, 'worker_id' => null];
+
     json_out([
         'token' => $token,
         'user' => [
             'id' => $uid, 'name' => $user['name'], 'email' => $user['email'],
             'role' => $user['role'], 'division' => $user['division'],
+            'client_id' => $link['client_id'] !== null ? (int) $link['client_id'] : null,
+            'worker_id' => $link['worker_id'] !== null ? (int) $link['worker_id'] : null,
         ],
     ]);
 }

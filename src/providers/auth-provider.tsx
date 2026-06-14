@@ -18,13 +18,22 @@ export type User = {
   email: string
   role: Role
   division: string | null
+  client_id?: number | null
+  worker_id?: number | null
+}
+
+// Where a user lands after login / on hitting the app, by account type.
+export function homeFor(user: Pick<User, "role" | "client_id" | "worker_id">): string {
+  if (user.role === "client" || user.client_id) return "/portal"
+  if (user.worker_id) return "/m"
+  return "/app"
 }
 
 type AuthContextValue = {
   user: User | null
   loading: boolean
   // Returns { twofaRequired: true } when a 2FA code is needed to complete login.
-  login: (email: string, password: string, code?: string) => Promise<{ twofaRequired: boolean }>
+  login: (email: string, password: string, code?: string) => Promise<{ twofaRequired: boolean; user?: User }>
   logout: () => void
   hasRole: (...roles: Role[]) => boolean
 }
@@ -59,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (res.twofa_required) return { twofaRequired: true }
     setToken(res.token!)
     setUser(res.user!)
-    return { twofaRequired: false }
+    return { twofaRequired: false, user: res.user! }
   }
 
   function logout() {

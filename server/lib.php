@@ -95,7 +95,7 @@ function current_user(mysqli $conn): ?array
     if (!$token) return null;
     $hash = hash('sha256', $token);
     $stmt = $conn->prepare(
-        'SELECT u.id, u.name, u.email, u.role, u.division
+        'SELECT u.id, u.name, u.email, u.role, u.division, u.client_id, u.worker_id
          FROM tokens t JOIN users u ON u.id = t.user_id
          WHERE t.token_hash = ? AND t.expires_at > NOW() AND u.deleted_at IS NULL
          LIMIT 1'

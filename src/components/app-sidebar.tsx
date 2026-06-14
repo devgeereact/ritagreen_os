@@ -16,6 +16,9 @@ import {
   Clock4,
   Banknote,
   CalendarPlus,
+  Radio,
+  ShieldAlert,
+  UserPlus,
   ShieldCheck,
   ClipboardList,
   GraduationCap,
@@ -84,6 +87,7 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
       { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
       { title: "Timetable", url: "/app/timetable", icon: Clock },
       { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
+      { title: "Field ops", url: "/app/field", icon: Radio },
       { title: "Timesheets", url: "/app/timesheets", icon: Clock4 },
       { title: "Payroll", url: "/app/payroll", icon: Banknote },
     ],
@@ -93,7 +97,14 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
     items: [
       { title: "Workers", url: "/app/workers", icon: Users },
       { title: "Compliance", url: "/app/compliance", icon: ShieldCheck },
+      { title: "Recruitment", url: "/app/ats", icon: UserPlus },
       { title: "Academy", url: "/app/academy", icon: GraduationCap },
+    ],
+  },
+  {
+    label: "Quality",
+    items: [
+      { title: "Incidents", url: "/app/incidents", icon: ShieldAlert },
     ],
   },
   {

@@ -24,3 +24,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Toaster position="top-right" richColors closeButton />
   </React.StrictMode>
 )
+
+// Register the worker PWA service worker (production only).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {})
+  })
+}
