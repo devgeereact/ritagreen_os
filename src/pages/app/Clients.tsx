@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Search } from "lucide-react"
+import { Plus, Search, Download } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,7 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import type { Client } from "@/lib/types"
 import { shortDate } from "@/lib/format"
+import { exportCsv } from "@/lib/csv"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const CLIENT_TYPES = [
@@ -51,6 +52,25 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   paused: "outline",
 }
 
+const STAGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  lead: "outline",
+  qualified: "secondary",
+  proposal: "secondary",
+  won: "default",
+  lost: "destructive",
+}
+
+type ClientKpi = {
+  name: string
+  type: string
+  stage: string
+  account_manager: string | null
+  invoiced_pence: number
+  paid_pence: number
+  outstanding_pence: number
+  jobs: number
+}
+
 export default function Clients() {
   const { data, loading, error, reload } = useApi<{ clients: Client[] }>("clients.php")
   const [q, setQ] = useState("")
@@ -61,6 +81,49 @@ export default function Clients() {
     [c.name, c.contact_name, c.email].some((f) => f?.toLowerCase().includes(q.toLowerCase())),
   )
 
+  function exportClients() {
+    if (clients.length === 0) return
+    exportCsv(
+      "ritagreen-clients.csv",
+      clients.map((c) => ({
+        name: c.name,
+        type: c.type,
+        stage: c.stage ?? "",
+        status: c.status,
+        account_manager: c.account_manager ?? "",
+        contact: c.contact_name ?? "",
+        email: c.email ?? "",
+        phone: c.phone ?? "",
+        sites: c.sites_count ?? 0,
+      })),
+    )
+  }
+
+  async function exportKpi() {
+    try {
+      const r = await api<{ clients: ClientKpi[] }>("reports.php?action=client_kpi")
+      if (r.clients.length === 0) {
+        toast("No client data to export.")
+        return
+      }
+      exportCsv(
+        "ritagreen-client-kpi.csv",
+        r.clients.map((c) => ({
+          name: c.name,
+          type: c.type,
+          stage: c.stage,
+          account_manager: c.account_manager ?? "",
+          invoiced: (c.invoiced_pence / 100).toFixed(2),
+          paid: (c.paid_pence / 100).toFixed(2),
+          outstanding: (c.outstanding_pence / 100).toFixed(2),
+          jobs: c.jobs,
+        })),
+      )
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not export KPIs.")
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -70,7 +133,15 @@ export default function Clients() {
             Care homes, landlords, event organisers and more, in one place.
           </p>
         </div>
-        <NewClientDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        <div className="flex gap-2">
+          {clients.length > 0 && (
+            <>
+              <Button variant="outline" onClick={exportClients}><Download className="mr-1 size-4" /> Clients CSV</Button>
+              <Button variant="outline" onClick={exportKpi}><Download className="mr-1 size-4" /> KPI report</Button>
+            </>
+          )}
+          <NewClientDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -104,6 +175,7 @@ export default function Clients() {
               <TableRow>
                 <TableHead>Client</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Stage</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Sites</TableHead>
                 <TableHead>Status</TableHead>
@@ -119,6 +191,9 @@ export default function Clients() {
                     </Link>
                   </TableCell>
                   <TableCell className="capitalize">{c.type.replace("_", " ")}</TableCell>
+                  <TableCell>
+                    {c.stage ? <Badge variant={STAGE_VARIANT[c.stage] ?? "outline"} className="capitalize">{c.stage}</Badge> : "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {c.contact_name || "—"}
                     {c.email && <div className="text-xs">{c.email}</div>}
@@ -134,7 +209,7 @@ export default function Clients() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No clients match "{q}".
                   </TableCell>
                 </TableRow>

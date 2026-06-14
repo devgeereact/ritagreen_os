@@ -497,6 +497,62 @@ CREATE TABLE IF NOT EXISTS shifts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
+-- Build pass 2 — Sprint C: CRM (§6), Bookings (§7), Admin/GDPR (§20)
+-- Pipeline stage + account manager + SLA + rate cards on clients, client
+-- cover-request bookings, and a consent log for GDPR.
+-- =====================================================================
+
+-- Pipeline + account management on clients.
+ALTER TABLE clients
+  ADD COLUMN IF NOT EXISTS stage ENUM('lead','qualified','proposal','won','lost') NOT NULL DEFAULT 'lead',
+  ADD COLUMN IF NOT EXISTS account_manager_id INT NULL,
+  ADD COLUMN IF NOT EXISTS sla_response_hours INT NULL;
+
+-- ---- Rate cards: agreed charge per client / division / role ----
+CREATE TABLE IF NOT EXISTS rate_cards (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NOT NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  role VARCHAR(80) NOT NULL DEFAULT 'standard',
+  charge_pence INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_rc_client (client_id),
+  CONSTRAINT fk_rc_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Service requests / bookings (client-facing front door) ----
+CREATE TABLE IF NOT EXISTS service_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NULL,
+  contact_name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  phone VARCHAR(40) NULL,
+  division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
+  site_name VARCHAR(190) NULL,
+  detail TEXT NOT NULL,
+  preferred_start DATETIME NULL,
+  preferred_end DATETIME NULL,
+  status ENUM('new','quoted','confirmed','declined') NOT NULL DEFAULT 'new',
+  shift_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_sr_status (status),
+  KEY idx_sr_client (client_id),
+  CONSTRAINT fk_sr_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- GDPR consent log (public form opt-ins) ----
+CREATE TABLE IF NOT EXISTS consent_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(190) NOT NULL,
+  kind VARCHAR(40) NOT NULL DEFAULT 'contact',
+  granted TINYINT(1) NOT NULL DEFAULT 1,
+  source VARCHAR(80) NULL,
+  ip VARCHAR(45) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_consent_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
 -- Build pass 2 — Sprint B: Workforce (§3), Scheduling (§5), Comms (§14)
 -- Skills + availability for smart matching, recurring shift templates, open-
 -- shift broadcast offers, in-app notifications, SMS log.

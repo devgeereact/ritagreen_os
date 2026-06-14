@@ -24,6 +24,7 @@ import Legal from "@/pages/public/Legal"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
 import Offer from "@/pages/public/Offer"
+import RequestCover from "@/pages/public/RequestCover"
 
 // Auth
 import Login from "@/pages/auth/Login"
@@ -44,6 +45,7 @@ const Contracts = lazy(() => import("@/pages/app/Contracts"))
 const Timetable = lazy(() => import("@/pages/app/Timetable"))
 const Timesheets = lazy(() => import("@/pages/app/Timesheets"))
 const Payroll = lazy(() => import("@/pages/app/Payroll"))
+const Bookings = lazy(() => import("@/pages/app/Bookings"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
@@ -84,6 +86,7 @@ export const router = createBrowserRouter([
       { path: "resources/:slug", element: <Article /> },
       { path: "contact", element: <Contact /> },
       { path: "quote", element: <Quote /> },
+      { path: "request", element: <RequestCover /> },
       { path: "verify", element: <Verify /> },
       { path: "verify/:id", element: <Verify /> },
       { path: "privacy", element: <Legal kind="privacy" /> },
@@ -112,6 +115,7 @@ export const router = createBrowserRouter([
           { path: "clients", element: cms(<Clients />) },
           { path: "clients/:id", element: cms(<ClientDetail />) },
           { path: "enquiries", element: cms(<Enquiries />) },
+          { path: "bookings", element: cms(<Bookings />) },
           { path: "inbox", element: cms(<Mailbox />) },
           { path: "workers", element: cms(<Workers />) },
           { path: "scheduling", element: cms(<Scheduling />) },

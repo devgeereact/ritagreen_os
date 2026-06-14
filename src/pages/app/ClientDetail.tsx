@@ -1,13 +1,35 @@
+import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, Building2, Mail, Phone, Briefcase, ReceiptText, FileText, Inbox } from "lucide-react"
+import { ArrowLeft, Building2, Mail, Phone, Briefcase, ReceiptText, FileText, Inbox, Pencil, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
-import type { Client, Job, Quote, Invoice, Enquiry } from "@/lib/types"
+import { api, ApiError } from "@/lib/api"
+import type { Client, Job, Quote, Invoice, Enquiry, RateCard, ClientFinancials, AdminUser } from "@/lib/types"
 import { shortDate, gbp, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 type Site = { id: number; name: string; address: string | null }
+type Detail = { client: Client; sites: Site[]; rate_cards: RateCard[]; financials: ClientFinancials }
 
 type Event = {
   date: string
@@ -85,10 +107,11 @@ function ClientTimeline({ clientId, email }: { clientId: number; email: string |
 
 export default function ClientDetail() {
   const { id } = useParams()
-  const { data, loading, error, reload } = useApi<{ client: Client; sites: Site[] }>(
+  const { data, loading, error, reload } = useApi<Detail>(
     id ? `clients.php?id=${id}` : null,
     [id],
   )
+  const [editing, setEditing] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -108,7 +131,13 @@ export default function ClientDetail() {
                 {data.client.type.replace("_", " ")}
               </p>
             </div>
-            <Badge className="capitalize">{data.client.status}</Badge>
+            <div className="flex items-center gap-2">
+              {data.client.stage && <Badge variant="secondary" className="capitalize">{data.client.stage}</Badge>}
+              <Badge className="capitalize">{data.client.status}</Badge>
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="mr-1 size-4" /> Edit
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -159,9 +188,199 @@ export default function ClientDetail() {
             </Card>
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Financials</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4 text-sm">
+                <Fin label="Quoted (open)" value={gbp(data.financials.quoted_pence)} />
+                <Fin label="Invoiced (net)" value={gbp(data.financials.invoiced_pence)} />
+                <Fin label="Paid" value={gbp(data.financials.paid_pence)} tone="primary" />
+                <Fin label="Outstanding" value={gbp(data.financials.outstanding_pence)} tone={data.financials.outstanding_pence > 0 ? "red" : undefined} />
+                <div className="col-span-2 border-t pt-2 text-xs text-muted-foreground">
+                  Account manager: {data.client.account_manager || "Unassigned"}
+                  {data.client.sla_response_hours ? ` · SLA ${data.client.sla_response_hours}h response` : ""}
+                </div>
+              </CardContent>
+            </Card>
+
+            <RateCardsCard clientId={data.client.id} cards={data.rate_cards} onChanged={reload} />
+          </div>
+
           <ClientTimeline clientId={data.client.id} email={data.client.email} />
+
+          <EditClientDialog
+            open={editing}
+            onOpenChange={setEditing}
+            client={data.client}
+            onSaved={reload}
+          />
         </>
       )}
     </div>
+  )
+}
+
+function Fin({ label, value, tone }: { label: string; value: string; tone?: "primary" | "red" }) {
+  const color = tone === "red" ? "text-destructive" : tone === "primary" ? "text-primary" : ""
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-lg font-bold ${color}`}>{value}</p>
+    </div>
+  )
+}
+
+const DIVISIONS = [
+  { value: "care", label: "Care" },
+  { value: "academy", label: "Academy" },
+  { value: "cleaning", label: "Cleaning" },
+  { value: "security", label: "Security" },
+]
+
+function RateCardsCard({ clientId, cards, onChanged }: { clientId: number; cards: RateCard[]; onChanged: () => void }) {
+  const [division, setDivision] = useState("care")
+  const [role, setRole] = useState("")
+  const [charge, setCharge] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  async function add() {
+    if (!charge || Number(charge) <= 0) {
+      toast.error("Enter a charge rate.")
+      return
+    }
+    setBusy(true)
+    try {
+      await api(`clients.php?action=rate_card&id=${clientId}`, {
+        method: "POST",
+        body: { division, role: role.trim() || "standard", charge_pence: Math.round(Number(charge) * 100) },
+      })
+      toast.success("Rate card added.")
+      setRole(""); setCharge("")
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not add rate.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Rate cards</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        {cards.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No agreed rates yet.</p>
+        ) : (
+          <ul className="space-y-1 text-sm">
+            {cards.map((rc) => (
+              <li key={rc.id} className="flex items-center justify-between border-b py-1 last:border-0">
+                <span>{DIVISION_LABELS[rc.division] ?? rc.division} · <span className="text-muted-foreground">{rc.role}</span></span>
+                <span className="font-medium">{gbp(rc.charge_pence)}/hr</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="grid grid-cols-3 gap-2 border-t pt-3">
+          <Select value={division} onValueChange={setDivision}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{DIVISIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input placeholder="Role" value={role} onChange={(e) => setRole(e.target.value)} />
+          <Input type="number" min="0" step="0.01" placeholder="£/hr" value={charge} onChange={(e) => setCharge(e.target.value)} />
+        </div>
+        <Button size="sm" variant="outline" onClick={add} disabled={busy} className="w-full">
+          <Plus className="mr-1 size-4" /> Add rate
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+const STAGES = ["lead", "qualified", "proposal", "won", "lost"]
+const STATUSES = ["prospect", "active", "paused"]
+
+function EditClientDialog({
+  open,
+  onOpenChange,
+  client,
+  onSaved,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  client: Client
+  onSaved: () => void
+}) {
+  const { data: usersData } = useApi<{ users: AdminUser[] }>(open ? "users.php" : null, [open])
+  const [stage, setStage] = useState(client.stage ?? "lead")
+  const [status, setStatus] = useState(client.status)
+  const [amId, setAmId] = useState(client.account_manager_id ? String(client.account_manager_id) : "none")
+  const [sla, setSla] = useState(client.sla_response_hours ? String(client.sla_response_hours) : "")
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    setBusy(true)
+    try {
+      await api(`clients.php?action=update&id=${client.id}`, {
+        method: "POST",
+        body: {
+          stage, status,
+          account_manager_id: amId === "none" ? "" : amId,
+          sla_response_hours: sla === "" ? "" : Number(sla),
+        },
+      })
+      toast.success("Client updated.")
+      onOpenChange(false)
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not update client.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {client.name}</DialogTitle>
+          <DialogDescription>Pipeline stage, account manager and SLA.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label>Pipeline stage</Label>
+              <Select value={stage} onValueChange={(v) => setStage(v as Client["stage"] & string)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{STAGES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>Account manager</Label>
+            <Select value={amId} onValueChange={setAmId}>
+              <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {(usersData?.users ?? []).map((u) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="sla">SLA response (hours)</Label>
+            <Input id="sla" type="number" min="0" value={sla} onChange={(e) => setSla(e.target.value)} placeholder="e.g. 4" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -11,7 +11,42 @@ export type Client = {
   phone: string | null
   divisions: string // comma-separated division ids
   status: string // active | prospect | paused
+  stage?: "lead" | "qualified" | "proposal" | "won" | "lost"
+  account_manager_id?: number | null
+  account_manager?: string | null
+  sla_response_hours?: number | null
   sites_count?: number
+  created_at: string
+}
+
+export type RateCard = {
+  id: number
+  division: DivisionId
+  role: string
+  charge_pence: number
+}
+
+export type ClientFinancials = {
+  quoted_pence: number
+  invoiced_pence: number
+  paid_pence: number
+  outstanding_pence: number
+}
+
+export type ServiceRequest = {
+  id: number
+  client_id: number | null
+  client: string | null
+  contact_name: string
+  email: string
+  phone: string | null
+  division: DivisionId
+  site_name: string | null
+  detail: string
+  preferred_start: string | null
+  preferred_end: string | null
+  status: "new" | "quoted" | "confirmed" | "declined"
+  shift_id: number | null
   created_at: string
 }
 

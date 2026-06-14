@@ -15,6 +15,7 @@ import {
   Clock,
   Clock4,
   Banknote,
+  CalendarPlus,
   ShieldCheck,
   ClipboardList,
   GraduationCap,
@@ -100,6 +101,7 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
     items: [
       { title: "Clients", url: "/app/clients", icon: Handshake },
       { title: "Enquiries", url: "/app/enquiries", icon: Inbox },
+      { title: "Bookings", url: "/app/bookings", icon: CalendarPlus },
       { title: "Quoting", url: "/app/quotes", icon: ReceiptText },
       { title: "Contracts", url: "/app/contracts", icon: FileSignature },
       { title: "Invoicing", url: "/app/invoicing", icon: CreditCard },

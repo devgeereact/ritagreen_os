@@ -67,12 +67,16 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="users">Users & roles</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
+          <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="mt-4">
           <UsersTab />
         </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditTab />
+        </TabsContent>
+        <TabsContent value="gdpr" className="mt-4">
+          <GdprTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -176,6 +180,74 @@ function AuditTab() {
         )
       )}
     </div>
+  )
+}
+
+function GdprTab() {
+  const [email, setEmail] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  async function exportData() {
+    if (!email) {
+      toast.error("Enter an email.")
+      return
+    }
+    setBusy(true)
+    try {
+      const data = await api<Record<string, unknown>>("gdpr.php?action=export", { method: "POST", body: { email } })
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `gdpr-export-${email}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Data export downloaded.")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not export.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function erase() {
+    if (!email) {
+      toast.error("Enter an email.")
+      return
+    }
+    if (!window.confirm(`Erase public-form personal data for ${email}? This cannot be undone.`)) return
+    setBusy(true)
+    try {
+      const r = await api<{ erased: Record<string, number>; needs_manual_review: Record<string, unknown[]> }>(
+        "gdpr.php?action=erase",
+        { method: "POST", body: { email } },
+      )
+      const total = Object.values(r.erased).reduce((a, b) => a + b, 0)
+      const manual = (r.needs_manual_review.clients?.length ?? 0) + (r.needs_manual_review.workers?.length ?? 0)
+      toast.success(`Erased ${total} record(s).${manual ? ` ${manual} employment record(s) flagged for manual review.` : ""}`)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not erase.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="max-w-2xl p-6">
+      <h3 className="text-base font-semibold">Data subject requests</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Export or erase the personal data held for an email address (UK GDPR access &amp; erasure).
+        Employment and contract records are flagged for manual review, not auto-deleted.
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div className="grid flex-1 gap-2">
+          <Label htmlFor="gdpr-email">Email address</Label>
+          <Input id="gdpr-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" />
+        </div>
+        <Button variant="outline" onClick={exportData} disabled={busy}>Export data</Button>
+        <Button variant="destructive" onClick={erase} disabled={busy}>Erase</Button>
+      </div>
+    </Card>
   )
 }
 
