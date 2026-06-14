@@ -10,6 +10,18 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    // Dev-only: forward PHP API calls to the live server so the browser sees
+    // them as same-origin. Sidesteps the missing Access-Control-Allow-Origin
+    // header on the server's CORS config. Prod serves PHP from the same domain.
+    proxy: {
+      "^/.*\\.php": {
+        target: "https://ritagreenservices.com",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {

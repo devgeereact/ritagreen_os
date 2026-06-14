@@ -5,7 +5,10 @@
 // in production the build is served from the same domain, so the base is "".
 import { saveAs } from "file-saver"
 
-export const API_BASE = import.meta.env.DEV ? "https://ritagreenservices.com" : ""
+// Both dev and prod use a relative base. In dev, Vite proxies /*.php to the
+// live server (see vite.config.ts) so the browser treats calls as same-origin
+// and CORS never applies. In prod the build is served from the same domain.
+export const API_BASE = ""
 
 const TOKEN_KEY = "rgos_token"
 
