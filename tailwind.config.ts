@@ -14,9 +14,9 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        // Albert Sans = the workhorse (all app UI + body). Unbounded = display only.
-        sans: ["'Albert Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Unbounded", "'Albert Sans'", "ui-sans-serif", "sans-serif"],
+        // Source Sans 3 = the workhorse (all app UI + body). Plus Jakarta Sans = display.
+        sans: ["'Source Sans 3'", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["'Plus Jakarta Sans'", "'Source Sans 3'", "ui-sans-serif", "sans-serif"],
         mono: ["'Source Code Pro'", "ui-monospace", "monospace"],
       },
       borderRadius: {
@@ -27,12 +27,12 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        // Clean elevation — soft, low-opacity, ink-tinted. Cards float, don't stamp.
+        // Clean elevation — soft, low-opacity, navy-tinted. Cards float, don't stamp.
         // soft = shadow-1 (cards), elevate = shadow-2 (popovers), lift = shadow-3 (modals).
-        soft: "0 1px 2px rgba(0, 30, 0, 0.05), 0 1px 1px rgba(0, 30, 0, 0.04)",
-        elevate: "0 4px 12px rgba(0, 30, 0, 0.08)",
-        lift: "0 12px 32px rgba(0, 30, 0, 0.12)",
-        ring: "0 0 0 1px rgba(0, 30, 0, 0.06), 0 1px 3px rgba(0, 30, 0, 0.08)",
+        soft: "0 1px 2px rgba(12, 30, 60, 0.05), 0 1px 1px rgba(12, 30, 60, 0.04)",
+        elevate: "0 4px 12px rgba(12, 30, 60, 0.08)",
+        lift: "0 12px 32px rgba(12, 30, 60, 0.12)",
+        ring: "0 0 0 1px rgba(12, 30, 60, 0.06), 0 1px 3px rgba(12, 30, 60, 0.08)",
       },
       colors: {
         background: "hsl(var(--background))",

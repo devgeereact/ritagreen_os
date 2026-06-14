@@ -18,10 +18,10 @@ export const DIVISION_LABELS: Record<string, string> = {
 }
 
 // Division accents for data viz — brand-derived categorical palette
-// (olive / amber / muted-blue / dark), restrained per design system v1.
+// (navy / mint / amber / dark), restrained per design system v2.
 export const DIVISION_ACCENTS: Record<string, string> = {
-  care: "#4D7C0F",
+  care: "#0C447C",
   academy: "#B7791F",
-  cleaning: "#2E6F9E",
-  security: "#2E342A",
+  cleaning: "#5DCAA5",
+  security: "#1B2A3C",
 }

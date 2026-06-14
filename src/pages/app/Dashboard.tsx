@@ -280,7 +280,7 @@ function Kpi({
 function RevenueChart({ data }: { data: { division: string; pence: number }[] }) {
   const categories = data.map((d) => DIVISION_LABELS[d.division] ?? d.division)
   const series = [{ name: "Revenue", data: data.map((d) => Math.round(d.pence / 100)) }]
-  const colors = data.map((d) => DIVISION_ACCENTS[d.division] ?? "#4D7C0F")
+  const colors = data.map((d) => DIVISION_ACCENTS[d.division] ?? "#0C447C")
 
   const options: ApexOptions = {
     chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit" },

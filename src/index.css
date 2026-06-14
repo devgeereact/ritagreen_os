@@ -3,91 +3,92 @@
 @tailwind utilities;
 
 @layer base {
-  /* RitaGreen Design System v1 — Clean + trustworthy (Linear/Stripe).
-     Neutral warm-gray spine. Green = surgical accent only. See DESIGN-SYSTEM.md. */
+  /* RitaGreen Design System v2 — Navy + Mint rebrand.
+     Primary #0C447C, Accent #5DCAA5, Surface #E6F1FB, BG #FFFFFF. */
   :root {
-    /* canvas n-50, ink n-900, white surfaces */
-    --background: 100 20% 97%;
-    --foreground: 120 100% 6%;
+    /* white canvas, deep navy ink */
+    --background: 0 0% 100%;
+    --foreground: 213 50% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 120 100% 6%;
+    --card-foreground: 213 50% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 120 100% 6%;
-    /* surgical olive green — primary action only */
-    --primary: 86 78% 27%;
+    --popover-foreground: 213 50% 12%;
+    /* primary navy — #0C447C */
+    --primary: 210 82% 27%;
     --primary-foreground: 0 0% 100%;
-    /* secondary / muted / accent = NEUTRAL (n-100), never green */
-    --secondary: 86 20% 93%;
-    --secondary-foreground: 92 9% 30%;
-    --muted: 86 20% 93%;
-    --muted-foreground: 92 8% 43%;
-    --accent: 86 20% 93%;
-    --accent-foreground: 120 100% 6%;
-    --destructive: 4 76% 40%;
+    /* secondary surface — #E6F1FB tint */
+    --secondary: 209 72% 94%;
+    --secondary-foreground: 210 82% 22%;
+    --muted: 209 50% 96%;
+    --muted-foreground: 213 18% 38%;
+    /* mint accent — #5DCAA5 */
+    --accent: 160 51% 58%;
+    --accent-foreground: 213 60% 10%;
+    --destructive: 4 76% 45%;
     --destructive-foreground: 0 0% 100%;
-    --warning: 35 71% 42%;
+    --warning: 32 92% 42%;
     --warning-foreground: 0 0% 100%;
-    --success: 86 78% 27%;
+    --success: 160 60% 30%;
     --success-foreground: 0 0% 100%;
-    /* hairline neutral borders n-200 */
-    --border: 87 17% 88%;
-    --input: 87 17% 88%;
-    --ring: 86 78% 27%;
-    /* data viz — green ramp + neutrals + one amber for contrast */
-    --chart-1: 86 78% 27%;
-    --chart-2: 100 100% 15%;
-    --chart-3: 92 8% 43%;
-    --chart-4: 90 12% 78%;
-    --chart-5: 35 71% 42%;
+    /* hairline blue-tinted borders */
+    --border: 210 30% 88%;
+    --input: 210 30% 88%;
+    --ring: 210 82% 27%;
+    /* data viz — navy + mint + neutrals + amber */
+    --chart-1: 210 82% 27%;
+    --chart-2: 160 51% 45%;
+    --chart-3: 213 18% 45%;
+    --chart-4: 209 72% 80%;
+    --chart-5: 32 92% 50%;
     --radius: 0.625rem;
-    /* sidebar = white rail, muted nav text, green active */
+    /* sidebar — surface rail, muted nav text, navy active */
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 92 9% 30%;
-    --sidebar-primary: 86 78% 27%;
+    --sidebar-foreground: 213 22% 30%;
+    --sidebar-primary: 210 82% 27%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 86 20% 93%;
-    --sidebar-accent-foreground: 120 100% 6%;
-    --sidebar-border: 87 17% 88%;
-    --sidebar-ring: 86 78% 27%}
+    --sidebar-accent: 209 72% 94%;
+    --sidebar-accent-foreground: 210 82% 22%;
+    --sidebar-border: 210 30% 88%;
+    --sidebar-ring: 210 82% 27%}
 
   .dark {
-    /* warm near-black canvas, light text, brighter olive accent */
-    --background: 120 14% 8%;
-    --foreground: 100 20% 97%;
-    --card: 120 12% 11%;
-    --card-foreground: 100 20% 97%;
-    --popover: 120 12% 11%;
-    --popover-foreground: 100 20% 97%;
-    --primary: 86 60% 45%;
-    --primary-foreground: 120 100% 6%;
-    --secondary: 120 8% 18%;
-    --secondary-foreground: 100 15% 88%;
-    --muted: 120 8% 16%;
-    --muted-foreground: 92 8% 60%;
-    --accent: 120 8% 18%;
-    --accent-foreground: 100 20% 97%;
-    --destructive: 4 70% 50%;
+    /* deep navy canvas, surface-tint text, brighter navy + mint accents */
+    --background: 213 45% 6%;
+    --foreground: 209 30% 95%;
+    --card: 213 38% 10%;
+    --card-foreground: 209 30% 95%;
+    --popover: 213 38% 10%;
+    --popover-foreground: 209 30% 95%;
+    --primary: 210 75% 60%;
+    --primary-foreground: 213 45% 6%;
+    --secondary: 213 28% 20%;
+    --secondary-foreground: 209 30% 92%;
+    --muted: 213 30% 14%;
+    --muted-foreground: 209 22% 68%;
+    --accent: 160 55% 58%;
+    --accent-foreground: 213 45% 6%;
+    --destructive: 4 72% 58%;
     --destructive-foreground: 0 0% 100%;
-    --warning: 35 80% 55%;
-    --warning-foreground: 120 100% 6%;
-    --success: 86 60% 45%;
-    --success-foreground: 120 100% 6%;
-    --border: 120 8% 20%;
-    --input: 120 8% 20%;
-    --ring: 86 60% 45%;
-    --chart-1: 86 60% 45%;
-    --chart-2: 86 50% 60%;
-    --chart-3: 92 8% 60%;
-    --chart-4: 120 8% 32%;
-    --chart-5: 35 80% 55%;
-    --sidebar-background: 120 12% 11%;
-    --sidebar-foreground: 92 8% 60%;
-    --sidebar-primary: 86 60% 45%;
-    --sidebar-primary-foreground: 120 100% 6%;
-    --sidebar-accent: 120 8% 18%;
-    --sidebar-accent-foreground: 100 20% 97%;
-    --sidebar-border: 120 8% 20%;
-    --sidebar-ring: 86 60% 45%}
+    --warning: 32 92% 60%;
+    --warning-foreground: 213 45% 6%;
+    --success: 160 55% 55%;
+    --success-foreground: 213 45% 6%;
+    --border: 213 25% 22%;
+    --input: 213 25% 22%;
+    --ring: 210 75% 60%;
+    --chart-1: 210 75% 60%;
+    --chart-2: 160 55% 58%;
+    --chart-3: 209 22% 68%;
+    --chart-4: 213 28% 35%;
+    --chart-5: 32 92% 62%;
+    --sidebar-background: 213 38% 10%;
+    --sidebar-foreground: 209 22% 68%;
+    --sidebar-primary: 210 75% 60%;
+    --sidebar-primary-foreground: 213 45% 6%;
+    --sidebar-accent: 213 28% 20%;
+    --sidebar-accent-foreground: 209 30% 92%;
+    --sidebar-border: 213 25% 22%;
+    --sidebar-ring: 210 75% 60%}
 }
 
 
@@ -178,20 +179,20 @@
 }
 
 @layer utilities {
-  /* Brand-green radial mesh for hero / feature bands, layered over the warm cream. */
+  /* Brand navy + mint radial mesh for hero / feature bands. */
   .bg-hero-mesh {
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(60% 80% at 85% -10%, hsl(var(--primary) / 0.16), transparent 60%),
-      radial-gradient(50% 70% at 0% 110%, hsl(var(--primary) / 0.10), transparent 55%),
-      radial-gradient(40% 60% at 50% 0%, hsl(123 46% 34% / 0.06), transparent 60%);
+      radial-gradient(60% 80% at 85% -10%, hsl(var(--primary) / 0.18), transparent 60%),
+      radial-gradient(50% 70% at 0% 110%, hsl(var(--primary) / 0.12), transparent 55%),
+      radial-gradient(40% 60% at 50% 0%, hsl(var(--accent) / 0.14), transparent 60%);
   }
   /* Quieter mesh for interior section bands. */
   .bg-soft-mesh {
-    background-color: hsl(var(--secondary) / 0.4);
+    background-color: hsl(var(--secondary) / 0.5);
     background-image:
       radial-gradient(45% 70% at 100% 0%, hsl(var(--primary) / 0.08), transparent 60%),
-      radial-gradient(40% 60% at 0% 100%, hsl(var(--primary) / 0.05), transparent 55%);
+      radial-gradient(40% 60% at 0% 100%, hsl(var(--accent) / 0.10), transparent 55%);
   }
   /* Hairline grid texture — subtle structure on dark CTA bands. */
   .bg-grid-faint {

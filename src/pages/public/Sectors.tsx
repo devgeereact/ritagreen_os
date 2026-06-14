@@ -64,10 +64,10 @@ const SECTORS = [
 ]
 
 const DIVISION_LABEL: Record<string, { label: string; accent: string }> = {
-  care: { label: "Care", accent: "#4D7C0F" },
+  care: { label: "Care", accent: "#0C447C" },
   academy: { label: "Academy", accent: "#B7791F" },
-  cleaning: { label: "Cleaning", accent: "#2E6F9E" },
-  security: { label: "Security", accent: "#2E342A" },
+  cleaning: { label: "Cleaning", accent: "#5DCAA5" },
+  security: { label: "Security", accent: "#1B2A3C" },
 }
 
 export default function Sectors() {

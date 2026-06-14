@@ -91,8 +91,8 @@ export default function Scheduling() {
     title: s.worker ? `${s.title} — ${s.worker}` : `OPEN — ${s.title}`,
     start: s.starts_at.replace(" ", "T"),
     end: s.ends_at.replace(" ", "T"),
-    backgroundColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#4D7C0F",
-    borderColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#4D7C0F",
+    backgroundColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#0C447C",
+    borderColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#0C447C",
   }))
 
   return (
