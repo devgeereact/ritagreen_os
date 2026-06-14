@@ -60,7 +60,7 @@ export default function ServiceDetail() {
             </span>
             <div>
               <p className="eyebrow">{division.name}</p>
-              <h1 className="mt-1.5 text-3xl font-bold leading-tight md:text-5xl">{service.name}</h1>
+              <h1 className="mt-1.5 font-display text-[1.9rem] font-bold leading-tight tracking-tight md:text-[2.7rem]">{service.name}</h1>
             </div>
           </div>
           <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground animate-fade-up animation-delay-100">

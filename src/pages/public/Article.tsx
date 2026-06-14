@@ -54,7 +54,7 @@ export default function Article() {
               <Clock className="size-3" /> {article.readMins} min read
             </span>
           </div>
-          <h1 className="mt-3 text-3xl font-bold leading-tight md:text-5xl animate-fade-up animation-delay-100">{article.title}</h1>
+          <h1 className="mt-3 font-display text-[1.9rem] font-bold leading-tight tracking-tight md:text-[2.7rem] animate-fade-up animation-delay-100">{article.title}</h1>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground animate-fade-up animation-delay-200">{article.excerpt}</p>
         </div>
       </div>

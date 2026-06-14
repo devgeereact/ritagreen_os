@@ -36,7 +36,7 @@ export function PageHeader({
             {eyebrow}
           </p>
         )}
-        <h1 className="mt-3 max-w-3xl animate-fade-up animation-delay-100 text-[2.2rem] font-bold leading-[1.08] md:text-5xl">
+        <h1 className="mt-3 max-w-3xl animate-fade-up animation-delay-100 font-display text-[2rem] font-bold leading-[1.08] tracking-tight md:text-[2.9rem]">
           {title}
         </h1>
         {intro && (
