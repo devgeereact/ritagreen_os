@@ -7,15 +7,16 @@ const config: Config = {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1.5rem",
       screens: {
-        "2xl": "1400px",
+        "2xl": "1200px",
       },
     },
     extend: {
       fontFamily: {
-        sans: ["Montserrat", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["Merriweather", "ui-serif", "Georgia", "serif"],
+        // Albert Sans = the workhorse (all app UI + body). Unbounded = display only.
+        sans: ["'Albert Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Unbounded", "'Albert Sans'", "ui-sans-serif", "sans-serif"],
         mono: ["'Source Code Pro'", "ui-monospace", "monospace"],
       },
       borderRadius: {
@@ -26,12 +27,12 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        // Premium layered elevation — soft, warm-tinted, brand-aware.
-        soft: "0 1px 2px rgba(20, 45, 28, 0.04), 0 2px 8px rgba(20, 45, 28, 0.05)",
-        elevate:
-          "0 1px 2px rgba(20, 45, 28, 0.05), 0 8px 24px -6px rgba(20, 45, 28, 0.10), 0 16px 48px -12px rgba(20, 45, 28, 0.10)",
-        lift: "0 12px 32px -8px rgba(20, 45, 28, 0.16), 0 4px 12px -4px rgba(20, 45, 28, 0.10)",
-        ring: "0 0 0 1px rgba(20, 45, 28, 0.06), 0 1px 3px rgba(20, 45, 28, 0.08)",
+        // Clean elevation — soft, low-opacity, ink-tinted. Cards float, don't stamp.
+        // soft = shadow-1 (cards), elevate = shadow-2 (popovers), lift = shadow-3 (modals).
+        soft: "0 1px 2px rgba(0, 30, 0, 0.05), 0 1px 1px rgba(0, 30, 0, 0.04)",
+        elevate: "0 4px 12px rgba(0, 30, 0, 0.08)",
+        lift: "0 12px 32px rgba(0, 30, 0, 0.12)",
+        ring: "0 0 0 1px rgba(0, 30, 0, 0.06), 0 1px 3px rgba(0, 30, 0, 0.08)",
       },
       colors: {
         background: "hsl(var(--background))",

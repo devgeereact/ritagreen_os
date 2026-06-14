@@ -3,83 +3,91 @@
 @tailwind utilities;
 
 @layer base {
-  /* RitaGreen palette — warm cream + forest green (HSL channels for Tailwind v3) */
+  /* RitaGreen Design System v1 — Clean + trustworthy (Linear/Stripe).
+     Neutral warm-gray spine. Green = surgical accent only. See DESIGN-SYSTEM.md. */
   :root {
-    --background: 38 36% 96%;
-    --foreground: 9 28% 19%;
-    --card: 38 36% 96%;
-    --card-foreground: 9 28% 19%;
-    --popover: 38 36% 96%;
-    --popover-foreground: 9 28% 19%;
-    --primary: 123 46% 34%;
+    /* canvas n-50, ink n-900, white surfaces */
+    --background: 100 20% 97%;
+    --foreground: 120 100% 6%;
+    --card: 0 0% 100%;
+    --card-foreground: 120 100% 6%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 120 100% 6%;
+    /* surgical olive green — primary action only */
+    --primary: 86 78% 27%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 125 39% 94%;
-    --secondary-foreground: 124 55% 24%;
-    --muted: 34 35% 91%;
-    --muted-foreground: 15 25% 34%;
-    --accent: 122 38% 84%;
-    --accent-foreground: 124 55% 24%;
-    --destructive: 0 66% 47%;
+    /* secondary / muted / accent = NEUTRAL (n-100), never green */
+    --secondary: 86 20% 93%;
+    --secondary-foreground: 92 9% 30%;
+    --muted: 86 20% 93%;
+    --muted-foreground: 92 8% 43%;
+    --accent: 86 20% 93%;
+    --accent-foreground: 120 100% 6%;
+    --destructive: 4 76% 40%;
     --destructive-foreground: 0 0% 100%;
-    --warning: 35 92% 42%;
+    --warning: 35 71% 42%;
     --warning-foreground: 0 0% 100%;
-    --success: 123 46% 34%;
+    --success: 86 78% 27%;
     --success-foreground: 0 0% 100%;
-    --border: 34 27% 83%;
-    --input: 34 27% 83%;
-    --ring: 123 46% 34%;
-    --chart-1: 122 39% 49%;
-    --chart-2: 123 43% 39%;
-    --chart-3: 123 46% 34%;
-    --chart-4: 124 55% 24%;
-    --chart-5: 126 51% 8%;
-    --radius: 0.5rem;
-    --sidebar-background: 34 35% 91%;
-    --sidebar-foreground: 9 28% 19%;
-    --sidebar-primary: 123 46% 34%;
+    /* hairline neutral borders n-200 */
+    --border: 87 17% 88%;
+    --input: 87 17% 88%;
+    --ring: 86 78% 27%;
+    /* data viz — green ramp + neutrals + one amber for contrast */
+    --chart-1: 86 78% 27%;
+    --chart-2: 100 100% 15%;
+    --chart-3: 92 8% 43%;
+    --chart-4: 90 12% 78%;
+    --chart-5: 35 71% 42%;
+    --radius: 0.625rem;
+    /* sidebar = white rail, muted nav text, green active */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 92 9% 30%;
+    --sidebar-primary: 86 78% 27%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 122 38% 84%;
-    --sidebar-accent-foreground: 124 55% 24%;
-    --sidebar-border: 34 27% 83%;
-    --sidebar-ring: 123 46% 34%}
+    --sidebar-accent: 86 20% 93%;
+    --sidebar-accent-foreground: 120 100% 6%;
+    --sidebar-border: 87 17% 88%;
+    --sidebar-ring: 86 78% 27%}
 
   .dark {
-    --background: 133 20% 14%;
-    --foreground: 33 27% 92%;
-    --card: 125 13% 20%;
-    --card-foreground: 33 27% 92%;
-    --popover: 125 13% 20%;
-    --popover-foreground: 33 27% 92%;
-    --primary: 122 39% 49%;
-    --primary-foreground: 126 51% 8%;
-    --secondary: 115 10% 26%;
-    --secondary-foreground: 114 14% 86%;
-    --muted: 125 13% 20%;
-    --muted-foreground: 35 19% 81%;
-    --accent: 123 43% 39%;
-    --accent-foreground: 33 27% 92%;
-    --destructive: 0 66% 47%;
-    --destructive-foreground: 33 27% 92%;
-    --warning: 35 90% 55%;
-    --warning-foreground: 126 51% 8%;
-    --success: 122 39% 49%;
-    --success-foreground: 126 51% 8%;
-    --border: 115 10% 26%;
-    --input: 115 10% 26%;
-    --ring: 122 39% 49%;
-    --chart-1: 123 38% 64%;
-    --chart-2: 123 38% 57%;
-    --chart-3: 122 39% 49%;
-    --chart-4: 123 41% 45%;
-    --chart-5: 123 43% 39%;
-    --sidebar-background: 133 20% 14%;
-    --sidebar-foreground: 33 27% 92%;
-    --sidebar-primary: 122 39% 49%;
-    --sidebar-primary-foreground: 126 51% 8%;
-    --sidebar-accent: 123 43% 39%;
-    --sidebar-accent-foreground: 33 27% 92%;
-    --sidebar-border: 115 10% 26%;
-    --sidebar-ring: 122 39% 49%}
+    /* warm near-black canvas, light text, brighter olive accent */
+    --background: 120 14% 8%;
+    --foreground: 100 20% 97%;
+    --card: 120 12% 11%;
+    --card-foreground: 100 20% 97%;
+    --popover: 120 12% 11%;
+    --popover-foreground: 100 20% 97%;
+    --primary: 86 60% 45%;
+    --primary-foreground: 120 100% 6%;
+    --secondary: 120 8% 18%;
+    --secondary-foreground: 100 15% 88%;
+    --muted: 120 8% 16%;
+    --muted-foreground: 92 8% 60%;
+    --accent: 120 8% 18%;
+    --accent-foreground: 100 20% 97%;
+    --destructive: 4 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 35 80% 55%;
+    --warning-foreground: 120 100% 6%;
+    --success: 86 60% 45%;
+    --success-foreground: 120 100% 6%;
+    --border: 120 8% 20%;
+    --input: 120 8% 20%;
+    --ring: 86 60% 45%;
+    --chart-1: 86 60% 45%;
+    --chart-2: 86 50% 60%;
+    --chart-3: 92 8% 60%;
+    --chart-4: 120 8% 32%;
+    --chart-5: 35 80% 55%;
+    --sidebar-background: 120 12% 11%;
+    --sidebar-foreground: 92 8% 60%;
+    --sidebar-primary: 86 60% 45%;
+    --sidebar-primary-foreground: 120 100% 6%;
+    --sidebar-accent: 120 8% 18%;
+    --sidebar-accent-foreground: 100 20% 97%;
+    --sidebar-border: 120 8% 20%;
+    --sidebar-ring: 86 60% 45%}
 }
 
 
@@ -135,7 +143,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
   /* Refined display typography — tighter tracking + balanced wrapping on headings. */
   h1, h2, h3 {
@@ -154,12 +161,12 @@
     @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary;
   }
 
-  /* Premium card surface: soft elevation that lifts on hover. */
+  /* Clean card surface: hairline border first, shadow-1 only to lift off canvas. */
   .surface {
-    @apply rounded-2xl border border-border/70 bg-card shadow-soft;
+    @apply rounded-lg border border-border bg-card shadow-soft;
   }
   .surface-interactive {
-    @apply surface transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/30 hover:shadow-elevate;
+    @apply surface transition-colors duration-150 ease-out hover:border-primary/40;
   }
 }
 
@@ -186,6 +193,8 @@
       linear-gradient(90deg, hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px);
     background-size: 44px 44px;
   }
+  /* Tabular figures for tables / metrics / money — reads as "precise". */
+  .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
   .animation-delay-100 { animation-delay: 0.1s; }
   .animation-delay-200 { animation-delay: 0.2s; }
   .animation-delay-300 { animation-delay: 0.3s; }
