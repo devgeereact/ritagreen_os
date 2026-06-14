@@ -15,7 +15,7 @@ $action = $_GET['action'] ?? '';
 if (method() === 'GET' && isset($_GET['id'])) {
     $id = (int) $_GET['id'];
     $stmt = $conn->prepare(
-        'SELECT id, title, description, division, status, created_at FROM programmes WHERE id = ? LIMIT 1'
+        'SELECT id, title, description, division, status, cpd_hours, created_at FROM programmes WHERE id = ? LIMIT 1'
     );
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -41,13 +41,14 @@ if (method() === 'GET' && isset($_GET['id'])) {
 // Programme list with learner counts.
 if (method() === 'GET') {
     $res = $conn->query(
-        'SELECT p.id, p.title, p.division, p.status, p.created_at,
+        'SELECT p.id, p.title, p.division, p.status, p.cpd_hours, p.created_at,
                 (SELECT COUNT(*) FROM enrolments e WHERE e.programme_id = p.id) AS enrolments
          FROM programmes p ORDER BY p.created_at DESC'
     );
     $programmes = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
+        $row['cpd_hours'] = (int) $row['cpd_hours'];
         $row['enrolments'] = (int) $row['enrolments'];
         $programmes[] = $row;
     }
@@ -131,13 +132,14 @@ if (method() === 'POST') {
     $description = trim((string) ($data['description'] ?? ''));
     $division = trim((string) ($data['division'] ?? 'academy'));
     $status = trim((string) ($data['status'] ?? 'draft'));
+    $cpdHours = max(0, (int) ($data['cpd_hours'] ?? 0));
     if ($title === '') fail('A programme title is required.');
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Invalid division.');
     if (!in_array($status, ['draft', 'published', 'archived'], true)) $status = 'draft';
 
     $descVal = $description !== '' ? $description : null;
-    $stmt = $conn->prepare('INSERT INTO programmes (title, description, division, status) VALUES (?, ?, ?, ?)');
-    $stmt->bind_param('ssss', $title, $descVal, $division, $status);
+    $stmt = $conn->prepare('INSERT INTO programmes (title, description, division, status, cpd_hours) VALUES (?, ?, ?, ?, ?)');
+    $stmt->bind_param('ssssi', $title, $descVal, $division, $status, $cpdHours);
     $stmt->execute();
     $id = $conn->insert_id;
 
@@ -145,7 +147,7 @@ if (method() === 'POST') {
     json_out([
         'programme' => [
             'id' => (int) $id, 'title' => $title, 'description' => $descVal,
-            'division' => $division, 'status' => $status, 'enrolments' => 0,
+            'division' => $division, 'status' => $status, 'cpd_hours' => $cpdHours, 'enrolments' => 0,
         ],
     ], 201);
 }

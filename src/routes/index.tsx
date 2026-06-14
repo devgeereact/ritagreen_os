@@ -28,6 +28,8 @@ import RequestCover from "@/pages/public/RequestCover"
 
 // Auth
 import Login from "@/pages/auth/Login"
+import ForgotPassword from "@/pages/auth/ForgotPassword"
+import ResetPassword from "@/pages/auth/ResetPassword"
 
 // CMS — lazy-loaded so public visitors never download the internal app bundle.
 const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
@@ -98,6 +100,8 @@ export const router = createBrowserRouter([
 
   // 🔐 AUTH
   { path: "/login", element: <Login />, errorElement: <ErrorPage /> },
+  { path: "/forgot", element: <ForgotPassword />, errorElement: <ErrorPage /> },
+  { path: "/reset/:token", element: <ResetPassword />, errorElement: <ErrorPage /> },
 
   // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
   { path: "/offer/:token", element: <Offer />, errorElement: <ErrorPage /> },

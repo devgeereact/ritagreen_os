@@ -497,6 +497,37 @@ CREATE TABLE IF NOT EXISTS shifts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
+-- Build pass 2 — Sprint D: Auth (§1), Certificates (§10)
+-- TOTP 2FA, password resets, CPD hours on programmes.
+-- =====================================================================
+
+-- ---- Per-user TOTP 2FA (RFC 6238) ----
+CREATE TABLE IF NOT EXISTS user_2fa (
+  user_id INT PRIMARY KEY,
+  secret VARCHAR(64) NOT NULL,
+  enabled TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_2fa_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Password reset tokens (single-use, short-lived) ----
+CREATE TABLE IF NOT EXISTS password_resets (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_reset_token (token_hash),
+  KEY idx_reset_user (user_id),
+  CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- CPD / training hours per programme (feeds certificates + CPD tracking).
+ALTER TABLE programmes
+  ADD COLUMN IF NOT EXISTS cpd_hours INT NOT NULL DEFAULT 0;
+
+-- =====================================================================
 -- Build pass 2 — Sprint C: CRM (§6), Bookings (§7), Admin/GDPR (§20)
 -- Pipeline stage + account manager + SLA + rate cards on clients, client
 -- cover-request bookings, and a consent log for GDPR.

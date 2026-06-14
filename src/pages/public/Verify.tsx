@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import QRCode from "qrcode"
 import { BadgeCheck, XCircle, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,17 @@ export default function Verify() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<Certificate | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [qr, setQr] = useState("")
+
+  useEffect(() => {
+    if (!result) {
+      setQr("")
+      return
+    }
+    QRCode.toDataURL(`${window.location.origin}/verify/${result.id}`)
+      .then(setQr)
+      .catch(() => setQr(""))
+  }, [result])
 
   useEffect(() => {
     if (!id) {
@@ -86,12 +98,20 @@ export default function Verify() {
                 <BadgeCheck className="size-6" />
                 <span className="font-semibold">Valid certificate</span>
               </div>
-              <dl className="grid gap-5 p-6 text-sm sm:grid-cols-2">
-                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Certificate ID</dt><dd className="mt-1 font-medium">{result.id}</dd></div>
-                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Learner</dt><dd className="mt-1 font-medium">{result.learner_name}</dd></div>
-                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
-                <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
-              </dl>
+              <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-start sm:justify-between">
+                <dl className="grid flex-1 gap-5 text-sm sm:grid-cols-2">
+                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Certificate ID</dt><dd className="mt-1 font-medium">{result.id}</dd></div>
+                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Learner</dt><dd className="mt-1 font-medium">{result.learner_name}</dd></div>
+                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
+                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
+                </dl>
+                {qr && (
+                  <div className="text-center">
+                    <img src={qr} alt="Verification QR code" className="size-28 rounded-lg border bg-white p-1.5" />
+                    <p className="mt-1 text-[10px] text-muted-foreground">Scan to verify</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

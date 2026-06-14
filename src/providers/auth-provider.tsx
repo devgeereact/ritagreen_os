@@ -23,7 +23,8 @@ export type User = {
 type AuthContextValue = {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  // Returns { twofaRequired: true } when a 2FA code is needed to complete login.
+  login: (email: string, password: string, code?: string) => Promise<{ twofaRequired: boolean }>
   logout: () => void
   hasRole: (...roles: Role[]) => boolean
 }
@@ -50,14 +51,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false))
   }, [])
 
-  async function login(email: string, password: string) {
-    const res = await api<{ token: string; user: User }>("auth.php?action=login", {
-      method: "POST",
-      body: { email, password },
-      auth: false,
-    })
-    setToken(res.token)
-    setUser(res.user)
+  async function login(email: string, password: string, code?: string) {
+    const res = await api<{ token?: string; user?: User; twofa_required?: boolean }>(
+      "auth.php?action=login",
+      { method: "POST", body: { email, password, code }, auth: false },
+    )
+    if (res.twofa_required) return { twofaRequired: true }
+    setToken(res.token!)
+    setUser(res.user!)
+    return { twofaRequired: false }
   }
 
   function logout() {

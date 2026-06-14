@@ -1,5 +1,6 @@
-import { useState } from "react"
-import { Plus, Lock } from "lucide-react"
+import { useEffect, useState } from "react"
+import QRCode from "qrcode"
+import { Plus, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,43 +44,138 @@ const DIVISIONS = ["care", "academy", "cleaning", "security"]
 
 export default function Settings() {
   const { hasRole } = useAuth()
-
-  if (!hasRole("super_admin", "admin")) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
-        <Lock className="size-8 text-muted-foreground" />
-        <p className="mt-3 font-medium">Admins only</p>
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-          User management and the audit log are restricted to admin roles.
-        </p>
-      </div>
-    )
-  }
+  const isAdmin = hasRole("super_admin", "admin")
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings & admin</h1>
-        <p className="text-sm text-muted-foreground">Manage people, roles and review what's happened.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          {isAdmin ? "Manage people, roles, data and your own security." : "Manage your account security."}
+        </p>
       </div>
 
-      <Tabs defaultValue="users">
+      <Tabs defaultValue={isAdmin ? "users" : "security"}>
         <TabsList>
-          <TabsTrigger value="users">Users & roles</TabsTrigger>
-          <TabsTrigger value="audit">Audit log</TabsTrigger>
-          <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+          {isAdmin && <TabsTrigger value="users">Users & roles</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
-        <TabsContent value="users" className="mt-4">
-          <UsersTab />
+        <TabsContent value="security" className="mt-4">
+          <TwoFactorCard />
         </TabsContent>
-        <TabsContent value="audit" className="mt-4">
-          <AuditTab />
-        </TabsContent>
-        <TabsContent value="gdpr" className="mt-4">
-          <GdprTab />
-        </TabsContent>
+        {isAdmin && (
+          <>
+            <TabsContent value="users" className="mt-4"><UsersTab /></TabsContent>
+            <TabsContent value="audit" className="mt-4"><AuditTab /></TabsContent>
+            <TabsContent value="gdpr" className="mt-4"><GdprTab /></TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
+  )
+}
+
+function TwoFactorCard() {
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [secret, setSecret] = useState("")
+  const [qr, setQr] = useState("")
+  const [code, setCode] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    api<{ enabled: boolean }>("auth.php?action=2fa_status").then((r) => setEnabled(r.enabled)).catch(() => setEnabled(false))
+  }, [])
+
+  async function startSetup() {
+    setBusy(true)
+    try {
+      const r = await api<{ secret: string; otpauth: string }>("auth.php?action=2fa_setup", { method: "POST", body: {} })
+      setSecret(r.secret)
+      setQr(await QRCode.toDataURL(r.otpauth))
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not start setup.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function enable() {
+    setBusy(true)
+    try {
+      await api("auth.php?action=2fa_enable", { method: "POST", body: { code } })
+      toast.success("Two-factor authentication enabled.")
+      setEnabled(true); setSecret(""); setQr(""); setCode("")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "That code was not valid.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disable() {
+    if (!code) {
+      toast.error("Enter a current code to turn 2FA off.")
+      return
+    }
+    setBusy(true)
+    try {
+      await api("auth.php?action=2fa_disable", { method: "POST", body: { code } })
+      toast.success("Two-factor authentication disabled.")
+      setEnabled(false); setCode("")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "That code was not valid.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card className="max-w-xl p-6">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className={`size-5 ${enabled ? "text-primary" : "text-muted-foreground"}`} />
+        <h3 className="text-base font-semibold">Two-factor authentication</h3>
+        {enabled !== null && (
+          <Badge variant={enabled ? "default" : "outline"} className="ml-auto">{enabled ? "On" : "Off"}</Badge>
+        )}
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Protect your account with a 6-digit code from an authenticator app. Recommended for everyone — required
+        for staff handling vulnerable people and live sites.
+      </p>
+
+      {enabled === false && !secret && (
+        <Button className="mt-4" onClick={startSetup} disabled={busy}>Set up 2FA</Button>
+      )}
+
+      {enabled === false && secret && (
+        <div className="mt-4 space-y-3">
+          {qr && <img src={qr} alt="2FA QR code" className="size-40 rounded-lg border bg-white p-2" />}
+          <p className="text-xs text-muted-foreground">
+            Scan with Google Authenticator / Authy, or enter the key manually:
+            <code className="ml-1 rounded bg-muted px-1 py-0.5">{secret}</code>
+          </p>
+          <div className="flex items-end gap-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="enable-code">Enter the 6-digit code</Label>
+              <Input id="enable-code" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="w-40" />
+            </div>
+            <Button onClick={enable} disabled={busy || code.length !== 6}>Enable</Button>
+          </div>
+        </div>
+      )}
+
+      {enabled === true && (
+        <div className="mt-4 flex items-end gap-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="disable-code">Current code to disable</Label>
+            <Input id="disable-code" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="w-40" />
+          </div>
+          <Button variant="destructive" onClick={disable} disabled={busy}>Turn off</Button>
+        </div>
+      )}
+    </Card>
   )
 }
 

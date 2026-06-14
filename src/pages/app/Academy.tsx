@@ -117,6 +117,7 @@ function NewProgrammeDialog({
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [division, setDivision] = useState("academy")
+  const [cpdHours, setCpdHours] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [drafting, setDrafting] = useState(false)
 
@@ -149,12 +150,13 @@ function NewProgrammeDialog({
     try {
       await api("academy.php", {
         method: "POST",
-        body: { title: title.trim(), description: description.trim(), division },
+        body: { title: title.trim(), description: description.trim(), division, cpd_hours: Number(cpdHours || 0) },
       })
       toast.success("Programme created.")
       onOpenChange(false)
       setTitle("")
       setDescription("")
+      setCpdHours("")
       onCreated()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not create the programme.")
@@ -178,17 +180,23 @@ function NewProgrammeDialog({
             <Label htmlFor="title">Title</Label>
             <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Health & Social Care (Level 3)" required />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="division">Division</Label>
-            <Select value={division} onValueChange={setDivision}>
-              <SelectTrigger id="division"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="academy">Academy</SelectItem>
-                <SelectItem value="care">Care</SelectItem>
-                <SelectItem value="cleaning">Cleaning</SelectItem>
-                <SelectItem value="security">Security</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="division">Division</Label>
+              <Select value={division} onValueChange={setDivision}>
+                <SelectTrigger id="division"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="academy">Academy</SelectItem>
+                  <SelectItem value="care">Care</SelectItem>
+                  <SelectItem value="cleaning">Cleaning</SelectItem>
+                  <SelectItem value="security">Security</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cpd">CPD hours</Label>
+              <Input id="cpd" type="number" min="0" value={cpdHours} onChange={(e) => setCpdHours(e.target.value)} placeholder="e.g. 6" />
+            </div>
           </div>
           <div className="grid gap-2">
             <div className="flex items-center justify-between">

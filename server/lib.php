@@ -403,6 +403,60 @@ function sms_log(mysqli $conn, string $to, string $body, string $status, ?string
     $stmt->execute();
 }
 
+// ----- TOTP 2FA (RFC 6238, SHA-1, 6 digits, 30s step) -----
+// Pure PHP so it runs on stock shared hosting (no Composer/otplib).
+
+// Generate a base32 secret (A-Z2-7) for a new authenticator enrolment.
+function totp_secret(int $length = 32): string
+{
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $s = '';
+    for ($i = 0; $i < $length; $i++) $s .= $alphabet[random_int(0, 31)];
+    return $s;
+}
+
+// Decode a base32 secret to raw bytes.
+function base32_decode(string $b32): string
+{
+    $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    $b32 = strtoupper(preg_replace('/[^A-Z2-7]/', '', $b32));
+    $bits = '';
+    foreach (str_split($b32) as $c) {
+        $bits .= str_pad(decbin(strpos($alphabet, $c)), 5, '0', STR_PAD_LEFT);
+    }
+    $bytes = '';
+    foreach (str_split($bits, 8) as $chunk) {
+        if (strlen($chunk) === 8) $bytes .= chr(bindec($chunk));
+    }
+    return $bytes;
+}
+
+// The 6-digit TOTP code for a given time counter.
+function totp_code(string $secret, int $counter): string
+{
+    $key = base32_decode($secret);
+    $bin = pack('N*', 0) . pack('N*', $counter); // 8-byte big-endian counter
+    $hash = hash_hmac('sha1', $bin, $key, true);
+    $offset = ord($hash[19]) & 0x0f;
+    $part = (ord($hash[$offset]) & 0x7f) << 24
+        | (ord($hash[$offset + 1]) & 0xff) << 16
+        | (ord($hash[$offset + 2]) & 0xff) << 8
+        | (ord($hash[$offset + 3]) & 0xff);
+    return str_pad((string) ($part % 1000000), 6, '0', STR_PAD_LEFT);
+}
+
+// Verify a submitted code against the current 30s window (±1 step for clock drift).
+function totp_verify(string $secret, string $code): bool
+{
+    $code = preg_replace('/\D/', '', $code);
+    if (strlen($code) !== 6) return false;
+    $counter = (int) floor(time() / 30);
+    for ($w = -1; $w <= 1; $w++) {
+        if (hash_equals(totp_code($secret, $counter + $w), $code)) return true;
+    }
+    return false;
+}
+
 // ----- In-app notifications (the bell) -----
 // Insert a notification for one user (or null = broadcast to all staff).
 function notify(mysqli $conn, ?int $userId, string $title, string $body = '', string $type = 'info', ?string $url = null): void

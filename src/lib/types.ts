@@ -331,6 +331,7 @@ export type Programme = {
   description: string | null
   division: DivisionId
   status: "draft" | "published" | "archived"
+  cpd_hours?: number
   enrolments: number
   created_at: string
 }
