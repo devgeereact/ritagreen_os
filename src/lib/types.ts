@@ -376,6 +376,10 @@ export type AdminUser = {
   role: string
   division: string | null
   active: boolean
+  client_id?: number | null
+  worker_id?: number | null
+  client?: string | null
+  worker?: string | null
   created_at: string
 }
 

@@ -210,6 +210,7 @@ function UsersTab() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Division</TableHead>
+                <TableHead>Access</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead></TableHead>
               </TableRow>
@@ -221,6 +222,9 @@ function UsersTab() {
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell><Badge variant="secondary" className="capitalize">{u.role.replace("_", " ")}</Badge></TableCell>
                   <TableCell className="capitalize text-muted-foreground">{u.division || "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {u.client ? `Portal · ${u.client}` : u.worker ? `App · ${u.worker}` : "Staff"}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={u.active ? "default" : "outline"}>{u.active ? "Active" : "Inactive"}</Badge>
                   </TableCell>
@@ -358,7 +362,12 @@ function NewUserDialog({
 }) {
   const [role, setRole] = useState("employee")
   const [division, setDivision] = useState("none")
+  const [clientId, setClientId] = useState("none")
+  const [workerId, setWorkerId] = useState("none")
   const [submitting, setSubmitting] = useState(false)
+  // Pick-lists for linking a portal (client) or app (worker) login.
+  const clients = useApi<{ clients: { id: number; name: string }[] }>(open ? "clients.php" : null, [open])
+  const workers = useApi<{ workers: { id: number; name: string }[] }>(open ? "workers.php" : null, [open])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -369,6 +378,12 @@ function NewUserDialog({
       password: String(form.get("password") || ""),
       role,
       division: division === "none" ? "" : division,
+      client_id: role === "client" && clientId !== "none" ? clientId : "",
+      worker_id: role === "employee" && workerId !== "none" ? workerId : "",
+    }
+    if (role === "client" && clientId === "none") {
+      toast.error("Pick the client this portal login is for.")
+      return
     }
     if (!payload.name || !payload.email || payload.password.length < 8) {
       toast.error("Name, email and a password of at least 8 characters are required.")
@@ -379,6 +394,7 @@ function NewUserDialog({
       await api("users.php", { method: "POST", body: payload })
       toast.success("User created.")
       onOpenChange(false)
+      setClientId("none"); setWorkerId("none")
       onCreated()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not create the user.")
@@ -431,6 +447,32 @@ function NewUserDialog({
               </Select>
             </div>
           </div>
+          {role === "client" && (
+            <div className="grid gap-2">
+              <Label>Link to client (portal access)</Label>
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger><SelectValue placeholder="Choose a client" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— choose a client —</SelectItem>
+                  {(clients.data?.clients ?? []).map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">This login sees the /portal area for the chosen client.</p>
+            </div>
+          )}
+          {role === "employee" && (
+            <div className="grid gap-2">
+              <Label>Link to worker (mobile app, optional)</Label>
+              <Select value={workerId} onValueChange={setWorkerId}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {(workers.data?.workers ?? []).map((w) => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Linked workers get the /m mobile app (shifts, clock-in, panic).</p>
+            </div>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="password">Initial password</Label>
             <Input id="password" name="password" type="password" minLength={8} required />

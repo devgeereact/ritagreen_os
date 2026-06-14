@@ -14,14 +14,19 @@ const DIVS = ['care', 'academy', 'cleaning', 'security'];
 if (method() === 'GET') {
     require_role($user, 'super_admin', 'admin');
     $res = $conn->query(
-        'SELECT id, name, email, role, division, created_at,
-                (deleted_at IS NULL) AS active
-         FROM users ORDER BY name'
+        'SELECT u.id, u.name, u.email, u.role, u.division, u.client_id, u.worker_id, u.created_at,
+                (u.deleted_at IS NULL) AS active, c.name AS client, w.name AS worker
+         FROM users u
+         LEFT JOIN clients c ON c.id = u.client_id
+         LEFT JOIN workers w ON w.id = u.worker_id
+         ORDER BY u.name'
     );
     $users = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['active'] = (bool) $row['active'];
+        $row['client_id'] = $row['client_id'] !== null ? (int) $row['client_id'] : null;
+        $row['worker_id'] = $row['worker_id'] !== null ? (int) $row['worker_id'] : null;
         $users[] = $row;
     }
     json_out(['users' => $users]);
@@ -66,6 +71,27 @@ if (method() === 'POST') {
 
     $divisionVal = in_array($division, DIVS, true) ? $division : null;
 
+    // Optional account links: a client login (portal) or a worker login (app).
+    $clientId = isset($data['client_id']) && $data['client_id'] !== '' ? (int) $data['client_id'] : null;
+    $workerId = isset($data['worker_id']) && $data['worker_id'] !== '' ? (int) $data['worker_id'] : null;
+    if ($clientId !== null) {
+        $stmt = $conn->prepare('SELECT id FROM clients WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('i', $clientId);
+        $stmt->execute();
+        if (!$stmt->get_result()->fetch_assoc()) fail('That client was not found.', 404);
+    }
+    if ($workerId !== null) {
+        $stmt = $conn->prepare('SELECT id FROM workers WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('i', $workerId);
+        $stmt->execute();
+        if (!$stmt->get_result()->fetch_assoc()) fail('That worker was not found.', 404);
+        // One login per worker.
+        $stmt = $conn->prepare('SELECT id FROM users WHERE worker_id = ? AND deleted_at IS NULL LIMIT 1');
+        $stmt->bind_param('i', $workerId);
+        $stmt->execute();
+        if ($stmt->get_result()->fetch_assoc()) fail('That worker already has a login.', 409);
+    }
+
     // Email must be unique.
     $stmt = $conn->prepare('SELECT id FROM users WHERE email = ?');
     $stmt->bind_param('s', $email);
@@ -73,8 +99,8 @@ if (method() === 'POST') {
     if ($stmt->get_result()->fetch_assoc()) fail('A user with that email already exists.', 409);
 
     $hash = password_hash($password, PASSWORD_BCRYPT);
-    $stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division) VALUES (?, ?, ?, ?, ?)');
-    $stmt->bind_param('sssss', $name, $email, $hash, $role, $divisionVal);
+    $stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, client_id, worker_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    $stmt->bind_param('sssssii', $name, $email, $hash, $role, $divisionVal, $clientId, $workerId);
     $stmt->execute();
     $id = $conn->insert_id;
 
@@ -83,6 +109,7 @@ if (method() === 'POST') {
         'user' => [
             'id' => (int) $id, 'name' => $name, 'email' => $email,
             'role' => $role, 'division' => $divisionVal, 'active' => true,
+            'client_id' => $clientId, 'worker_id' => $workerId,
         ],
     ], 201);
 }
