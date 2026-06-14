@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth, homeFor } from "@/providers/auth-provider"
-import { ApiError } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 
 export default function Login() {
   const { login } = useAuth()
@@ -18,6 +18,23 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+
+  // Show the Google button only when SSO is configured server-side.
+  useEffect(() => {
+    api<{ enabled: boolean }>("auth.php?action=google_config", { auth: false })
+      .then((r) => setGoogleEnabled(r.enabled))
+      .catch(() => {})
+  }, [])
+
+  async function googleSignIn() {
+    try {
+      const r = await api<{ url: string }>("auth.php?action=google_start", { auth: false })
+      window.location.href = r.url
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not start Google sign-in.")
+    }
+  }
   // Two-step: once the server says 2FA is required we keep the credentials and
   // ask for the authenticator code.
   const [twofa, setTwofa] = useState(false)
@@ -131,7 +148,23 @@ export default function Login() {
                 {submitting ? "Signing in…" : twofa ? "Verify & sign in" : "Sign in"}
               </Button>
             </form>
+
+            {!twofa && googleEnabled && (
+              <>
+                <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button type="button" variant="outline" className="w-full" onClick={googleSignIn}>
+                  <svg className="mr-2 size-4" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+                  Continue with Google
+                </Button>
+              </>
+            )}
+
             <p className="mt-6 text-center text-xs text-muted-foreground">
+              New to RitaGreen? <Link to="/register" className="text-primary hover:underline">Register your interest</Link>.
+            </p>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
               Trouble signing in? <Link to="/contact" className="text-primary hover:underline">Contact the office</Link>.
             </p>
           </CardContent>

@@ -497,6 +497,52 @@ CREATE TABLE IF NOT EXISTS shifts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =====================================================================
+-- Build pass 4 — Payments (GoCardless + Stripe polish), Auth (sessions /
+-- lock screen / Google SSO / self-registration), WhatsApp.
+-- =====================================================================
+
+-- Device / session tracking on tokens (for the active-sessions list + lock).
+ALTER TABLE tokens
+  ADD COLUMN IF NOT EXISTS user_agent VARCHAR(255) NULL,
+  ADD COLUMN IF NOT EXISTS ip VARCHAR(45) NULL,
+  ADD COLUMN IF NOT EXISTS last_seen_at DATETIME NULL;
+
+-- Stripe polish: public pay link token + partial-payment tracking on invoices.
+ALTER TABLE invoices
+  ADD COLUMN IF NOT EXISTS pay_token CHAR(40) NULL,
+  ADD COLUMN IF NOT EXISTS amount_paid_pence INT NOT NULL DEFAULT 0;
+
+-- GoCardless Direct Debit mandates (one active per client).
+CREATE TABLE IF NOT EXISTS mandates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  client_id INT NOT NULL,
+  gc_customer_id VARCHAR(64) NULL,
+  gc_mandate_id VARCHAR(64) NULL,
+  status ENUM('pending','active','failed','cancelled') NOT NULL DEFAULT 'pending',
+  reference VARCHAR(40) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_mandate_client (client_id),
+  KEY idx_mandate_ref (reference),
+  CONSTRAINT fk_mandate_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- GoCardless payments raised against a mandate (linked to an invoice).
+CREATE TABLE IF NOT EXISTS dd_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  invoice_id INT NULL,
+  mandate_id INT NULL,
+  gc_payment_id VARCHAR(64) NULL,
+  amount_pence INT NOT NULL DEFAULT 0,
+  status VARCHAR(40) NOT NULL DEFAULT 'pending_submission',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_ddp_invoice (invoice_id),
+  KEY idx_ddp_gc (gc_payment_id),
+  CONSTRAINT fk_ddp_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ddp_mandate FOREIGN KEY (mandate_id) REFERENCES mandates(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- =====================================================================
 -- Build pass 3 — Missing sections:
 -- §15 Incidents & Safeguarding, §8 Field Ops, §17 Client Portal,
 -- §18 Worker PWA, §13 Recruitment/ATS.

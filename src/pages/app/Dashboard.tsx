@@ -48,16 +48,22 @@ export default function Dashboard() {
           </p>
         </div>
         {/* Division switcher */}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border/70 bg-card p-1 shadow-soft">
+        <div
+          role="group"
+          aria-label="Filter dashboard by division"
+          className="flex flex-wrap gap-1 rounded-lg border border-border bg-card p-1 shadow-soft"
+        >
           {DIVISION_TABS.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setDivision(t.id)}
+              aria-pressed={division === t.id}
               className={
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-all " +
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out " +
                 (division === t.id
-                  ? "bg-primary text-primary-foreground shadow-soft"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground")
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground")
               }
             >
               {t.label}
@@ -87,8 +93,8 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
+          <div className="grid items-stretch gap-4 lg:grid-cols-3">
+            <Card className="h-full lg:col-span-2">
               <CardHeader>
                 <CardTitle className="text-base">Revenue by division</CardTitle>
               </CardHeader>
@@ -97,7 +103,7 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <AlertTriangle className="size-4 text-destructive" /> Compliance alerts
@@ -186,18 +192,26 @@ function OpsCard({
 }) {
   const color = tone === "red" ? "text-destructive" : tone === "amber" ? "text-warning" : "text-primary"
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon className={`size-4 ${color}`} /> {title}
           {count > 0 && <Badge variant="secondary">{count}</Badge>}
         </CardTitle>
-        <Link to={to} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        <Link
+          to={to}
+          aria-label={`View all — ${title}`}
+          className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-primary transition-colors hover:underline"
+        >
           View all <ArrowRight className="size-3" />
         </Link>
       </CardHeader>
-      <CardContent>
-        {count === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{empty}</p> : <ul className="space-y-2.5">{children}</ul>}
+      <CardContent className="flex flex-1 flex-col">
+        {count === 0 ? (
+          <p className="flex flex-1 items-center justify-center py-6 text-center text-sm text-muted-foreground">{empty}</p>
+        ) : (
+          <ul className="space-y-2.5">{children}</ul>
+        )}
       </CardContent>
     </Card>
   )
@@ -249,15 +263,15 @@ function Kpi({
         ? "bg-warning/10 text-warning"
         : "bg-primary/10 text-primary"
   return (
-    <Card className="transition-all duration-300 hover:-translate-y-0.5 hover:shadow-elevate">
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className={`grid size-9 place-items-center rounded-lg ${chipClass}`}>
+    <Card className="h-full transition-[transform,box-shadow,border-color] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-elevate">
+      <CardContent className="flex h-full flex-col justify-between gap-3 pt-6">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[13px] font-medium leading-snug text-muted-foreground">{label}</span>
+          <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${chipClass}`}>
             <Icon className="size-4" />
           </span>
         </div>
-        <p className={`mt-3 text-2xl font-bold tabular-nums ${tone !== "primary" ? toneClass : ""}`}>{value}</p>
+        <p className={`text-2xl font-bold tabular-nums ${tone !== "primary" ? toneClass : ""}`}>{value}</p>
       </CardContent>
     </Card>
   )

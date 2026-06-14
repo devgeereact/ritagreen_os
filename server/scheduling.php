@@ -185,7 +185,7 @@ if ($action === 'broadcast' && method() === 'POST') {
 
         $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : '';
         $link = $base . '/offer/' . $token;
-        send_sms($conn, $w['phone'], "RitaGreen shift: {$shift['title']} on $when. First to accept gets it: $link");
+        message_worker($conn, $w['phone'], "RitaGreen shift: {$shift['title']} on $when. First to accept gets it: $link");
         $count++;
     }
     audit($conn, (int) $user['id'], 'shift.broadcast', "shift #$id to $count workers");

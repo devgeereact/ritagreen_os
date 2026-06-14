@@ -403,6 +403,56 @@ function sms_log(mysqli $conn, string $to, string $body, string $status, ?string
     $stmt->execute();
 }
 
+// ----- WhatsApp (Twilio, same account as SMS) -----
+function whatsapp_enabled(): bool
+{
+    return sms_enabled() && defined('TWILIO_WHATSAPP_FROM') && TWILIO_WHATSAPP_FROM !== '';
+}
+
+// Send one WhatsApp message via Twilio. Logged with meta="whatsapp".
+function send_whatsapp(mysqli $conn, ?string $to, string $body): bool
+{
+    $num = normalise_phone($to);
+    $body = mb_substr($body, 0, 1500);
+    if (!$num) {
+        sms_log($conn, (string) $to, $body, 'failed', 'whatsapp: invalid number');
+        return false;
+    }
+    if (!whatsapp_enabled()) {
+        sms_log($conn, $num, $body, 'skipped', 'whatsapp disabled');
+        return false;
+    }
+    $url = 'https://api.twilio.com/2010-04-01/Accounts/' . TWILIO_SID . '/Messages.json';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_USERPWD => TWILIO_SID . ':' . TWILIO_TOKEN,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'From' => 'whatsapp:' . TWILIO_WHATSAPP_FROM,
+            'To' => 'whatsapp:' . $num,
+            'Body' => $body,
+        ]),
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $ok = $code >= 200 && $code < 300;
+    sms_log($conn, $num, $body, $ok ? 'sent' : 'failed', $ok ? 'whatsapp' : ('whatsapp: HTTP ' . $code));
+    return $ok;
+}
+
+// Reach a worker on their preferred channel: WhatsApp if configured, else SMS.
+// Returns true if either hand-off succeeded.
+function message_worker(mysqli $conn, ?string $to, string $body): bool
+{
+    if (whatsapp_enabled()) {
+        if (send_whatsapp($conn, $to, $body)) return true;
+    }
+    return send_sms($conn, $to, $body);
+}
+
 // ----- TOTP 2FA (RFC 6238, SHA-1, 6 digits, 30s step) -----
 // Pure PHP so it runs on stock shared hosting (no Composer/otplib).
 

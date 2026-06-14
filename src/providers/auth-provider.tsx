@@ -34,6 +34,8 @@ type AuthContextValue = {
   loading: boolean
   // Returns { twofaRequired: true } when a 2FA code is needed to complete login.
   login: (email: string, password: string, code?: string) => Promise<{ twofaRequired: boolean; user?: User }>
+  // Adopt a session obtained out-of-band (e.g. Google SSO callback).
+  adoptSession: (token: string, user: User) => void
   logout: () => void
   hasRole: (...roles: Role[]) => boolean
 }
@@ -71,6 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { twofaRequired: false, user: res.user! }
   }
 
+  function adoptSession(token: string, u: User) {
+    setToken(token)
+    setUser(u)
+  }
+
   function logout() {
     const token = getToken()
     if (token) {
@@ -86,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, adoptSession, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   )

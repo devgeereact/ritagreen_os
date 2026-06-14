@@ -31,6 +31,8 @@ import Apply from "@/pages/public/Apply"
 import Login from "@/pages/auth/Login"
 import ForgotPassword from "@/pages/auth/ForgotPassword"
 import ResetPassword from "@/pages/auth/ResetPassword"
+import GoogleCallback from "@/pages/auth/GoogleCallback"
+import Register from "@/pages/auth/Register"
 
 // CMS — lazy-loaded so public visitors never download the internal app bundle.
 const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
@@ -112,6 +114,8 @@ export const router = createBrowserRouter([
   { path: "/login", element: <Login />, errorElement: <ErrorPage /> },
   { path: "/forgot", element: <ForgotPassword />, errorElement: <ErrorPage /> },
   { path: "/reset/:token", element: <ResetPassword />, errorElement: <ErrorPage /> },
+  { path: "/register", element: <Register />, errorElement: <ErrorPage /> },
+  { path: "/auth/google/callback", element: <GoogleCallback />, errorElement: <ErrorPage /> },
 
   // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
   { path: "/offer/:token", element: <Offer />, errorElement: <ErrorPage /> },

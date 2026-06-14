@@ -56,6 +56,26 @@ define('TWILIO_FROM', '');                               // e.g. '+447700900123'
 // Public base URL used to build shift-offer accept links sent by SMS.
 define('PUBLIC_BASE_URL', 'https://ritagreenservices.com');
 
+// WhatsApp via Twilio (uses the same TWILIO_SID/TWILIO_TOKEN above).
+// Your Twilio WhatsApp sender in E.164 WITHOUT the "whatsapp:" prefix; leave
+// blank to disable WhatsApp (offers/reminders fall back to SMS).
+define('TWILIO_WHATSAPP_FROM', '');                      // e.g. '+14155238886' (sandbox) or your approved number
+
+// ----- GoCardless Direct Debit (recurring B2B collection) -----
+// Leave GC_ACCESS_TOKEN as CHANGE_ME to disable. Token from manage.gocardless.com
+// (or sandbox). Register the webhook at gocardless.php?action=webhook and put its
+// secret in GC_WEBHOOK_SECRET.
+define('GC_ACCESS_TOKEN', 'CHANGE_ME');                  // live_... or sandbox_...
+define('GC_ENVIRONMENT', 'sandbox');                     // 'sandbox' | 'live'
+define('GC_WEBHOOK_SECRET', 'CHANGE_ME');
+
+// ----- Google SSO (staff sign-in with Google; matches existing users only) -----
+// Create an OAuth client at console.cloud.google.com. Authorised redirect URI must
+// equal GOOGLE_REDIRECT_URI exactly. Leave CLIENT_ID CHANGE_ME to hide the button.
+define('GOOGLE_CLIENT_ID', 'CHANGE_ME');                 // xxxx.apps.googleusercontent.com
+define('GOOGLE_CLIENT_SECRET', 'CHANGE_ME');
+define('GOOGLE_REDIRECT_URI', 'https://ritagreenservices.com/auth/google/callback');
+
 // ----- Email notifications (public enquiries & careers applications) -----
 // When enabled, contact.php emails the office on every submission and sends the
 // sender a confirmation, and the in-app inbox can send replies. MAIL_FROM should

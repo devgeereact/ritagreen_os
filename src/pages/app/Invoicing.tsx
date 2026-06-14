@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Plus, Banknote, CheckCircle2, CreditCard, Loader2, FileDown, Download, Undo2 } from "lucide-react"
+import { Plus, Banknote, CheckCircle2, CreditCard, Loader2, FileDown, Download, Undo2, Link2 as LinkIcon, Repeat } from "lucide-react"
 import { invoicePdf } from "@/lib/pdf"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -119,7 +119,31 @@ function InvoicesTab({
 }) {
   const [open, setOpen] = useState(false)
   const [paying, setPaying] = useState<number | null>(null)
+  const [charging, setCharging] = useState<number | null>(null)
   const [creditFor, setCreditFor] = useState<Invoice | null>(null)
+
+  async function copyPayLink(id: number) {
+    try {
+      const res = await api<{ url: string }>(`payments.php?action=paylink&id=${id}`, { method: "POST", body: {} })
+      await navigator.clipboard.writeText(res.url).catch(() => {})
+      toast.success("Pay link copied to clipboard.")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not create the pay link.")
+    }
+  }
+
+  async function chargeDD(id: number) {
+    setCharging(id)
+    try {
+      const res = await api<{ status: string }>("gocardless.php?action=charge", { method: "POST", body: { invoice_id: id } })
+      toast.success(`Direct Debit submitted (${res.status.replace(/_/g, " ")}). Marks paid when collected.`)
+      reload()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not charge by Direct Debit.")
+    } finally {
+      setCharging(null)
+    }
+  }
 
   async function markPaid(id: number) {
     try {
@@ -246,6 +270,12 @@ function InvoicesTab({
                             <>
                               <Button size="sm" variant="ghost" onClick={() => setCreditFor(inv)} aria-label="Credit note">
                                 <Undo2 className="size-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => copyPayLink(inv.id)} aria-label="Copy pay link">
+                                <LinkIcon className="size-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => chargeDD(inv.id)} disabled={charging === inv.id} aria-label="Charge by Direct Debit">
+                                {charging === inv.id ? <Loader2 className="size-4 animate-spin" /> : <Repeat className="size-4" />}
                               </Button>
                               <Button size="sm" onClick={() => payByCard(inv.id)} disabled={paying === inv.id}>
                                 {paying === inv.id ? <Loader2 className="mr-1 size-4 animate-spin" /> : <CreditCard className="mr-1 size-4" />}

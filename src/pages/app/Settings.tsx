@@ -62,8 +62,9 @@ export default function Settings() {
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
-        <TabsContent value="security" className="mt-4">
+        <TabsContent value="security" className="mt-4 space-y-6">
           <TwoFactorCard />
+          <SessionsCard />
         </TabsContent>
         {isAdmin && (
           <>
@@ -280,6 +281,51 @@ function AuditTab() {
         )
       )}
     </div>
+  )
+}
+
+type Session = { id: number; user_agent: string | null; ip: string | null; created_at: string; last_seen_at: string | null; current: boolean }
+
+function deviceLabel(ua: string | null): string {
+  if (!ua) return "Unknown device"
+  const browser = /Edg/.test(ua) ? "Edge" : /Chrome/.test(ua) ? "Chrome" : /Firefox/.test(ua) ? "Firefox" : /Safari/.test(ua) ? "Safari" : "Browser"
+  const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : ""
+  return os ? `${browser} · ${os}` : browser
+}
+
+function SessionsCard() {
+  const { data, loading, error, reload } = useApi<{ sessions: Session[] }>("auth.php?action=sessions")
+
+  async function revoke(id: number) {
+    try {
+      await api("auth.php?action=revoke_session", { method: "POST", body: { id } })
+      toast.success("Session signed out.")
+      reload()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not revoke.")
+    }
+  }
+
+  return (
+    <Card className="max-w-2xl p-6">
+      <h3 className="text-base font-semibold">Active sessions</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Devices currently signed in to your account. Revoke any you don't recognise.</p>
+      {loading && <div className="mt-4"><LoadingBlock rows={2} /></div>}
+      {error && <div className="mt-4"><ErrorBlock message={error} onRetry={reload} /></div>}
+      {data && (
+        <ul className="mt-4 divide-y text-sm">
+          {data.sessions.map((s) => (
+            <li key={s.id} className="flex items-center justify-between gap-3 py-3">
+              <div>
+                <p className="font-medium">{deviceLabel(s.user_agent)} {s.current && <Badge variant="default" className="ml-1">This device</Badge>}</p>
+                <p className="text-xs text-muted-foreground">{s.ip || "—"} · since {shortDate(s.created_at)}</p>
+              </div>
+              {!s.current && <Button size="sm" variant="outline" onClick={() => revoke(s.id)}>Sign out</Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
 }
 

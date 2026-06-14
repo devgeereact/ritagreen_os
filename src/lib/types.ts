@@ -471,6 +471,8 @@ export type Invoice = {
   status: "draft" | "sent" | "paid" | "overdue" | "void"
   due_date?: string | null
   credited_pence?: number
+  amount_paid_pence?: number
+  has_pay_link?: boolean
   days_overdue?: number
   created_at: string
 }

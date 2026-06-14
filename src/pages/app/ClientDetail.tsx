@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Building2, Mail, Phone, Briefcase, ReceiptText, FileText, Inbox, Pencil, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -206,6 +206,8 @@ export default function ClientDetail() {
             <RateCardsCard clientId={data.client.id} cards={data.rate_cards} onChanged={reload} />
           </div>
 
+          <DirectDebitCard clientId={data.client.id} />
+
           <ClientTimeline clientId={data.client.id} email={data.client.email} />
 
           <EditClientDialog
@@ -217,6 +219,68 @@ export default function ClientDetail() {
         </>
       )}
     </div>
+  )
+}
+
+function DirectDebitCard({ clientId }: { clientId: number }) {
+  const [params, setParams] = useSearchParams()
+  const { data, reload } = useApi<{ mandate: { id: number; status: string; gc_mandate_id: string | null } | null }>(
+    `gocardless.php?action=status&client_id=${clientId}`,
+    [clientId],
+  )
+  const [busy, setBusy] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+
+  // Returning from the GoCardless hosted flow → finalise the mandate.
+  useEffect(() => {
+    if (params.get("dd") === "done" && params.get("m")) {
+      const m = params.get("m")
+      api("gocardless.php?action=complete", { method: "POST", body: { mandate: Number(m) } })
+        .then(() => { toast.success("Direct Debit mandate set up."); reload() })
+        .catch(() => {})
+        .finally(() => { params.delete("dd"); params.delete("m"); setParams(params, { replace: true }) })
+    } else if (params.get("dd") === "cancelled") {
+      toast("Direct Debit setup cancelled.")
+      params.delete("dd"); setParams(params, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function setup() {
+    setBusy(true)
+    try {
+      const res = await api<{ url: string }>("gocardless.php?action=setup", { method: "POST", body: { client_id: clientId } })
+      window.location.href = res.url
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) setUnavailable(true)
+      else toast.error(err instanceof ApiError ? err.message : "Could not start setup.")
+      setBusy(false)
+    }
+  }
+
+  const m = data?.mandate
+  const active = m?.status === "active"
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Direct Debit</CardTitle></CardHeader>
+      <CardContent className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          {unavailable ? (
+            <span className="text-muted-foreground">Direct Debit isn't configured yet (add GoCardless keys).</span>
+          ) : active ? (
+            <span className="inline-flex items-center gap-2"><Badge variant="default">Active</Badge> Recurring collection enabled — charge invoices by DD.</span>
+          ) : m ? (
+            <span className="inline-flex items-center gap-2"><Badge variant="secondary" className="capitalize">{m.status}</Badge> Setup not finished.</span>
+          ) : (
+            <span className="text-muted-foreground">No mandate yet. Set one up to collect by Direct Debit.</span>
+          )}
+        </div>
+        {!unavailable && !active && (
+          <Button size="sm" onClick={setup} disabled={busy}>{busy ? "Starting…" : m ? "Resume setup" : "Set up Direct Debit"}</Button>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

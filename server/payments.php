@@ -59,10 +59,20 @@ if ($action === 'webhook' && method() === 'POST') {
             $currency = strtolower((string) ($session['currency'] ?? ''));
 
             if ($expected >= 0 && $amount === $expected && $currency === 'gbp') {
-                $stmt = $conn->prepare('UPDATE invoices SET status = "paid" WHERE id = ? AND status <> "paid"');
+                $stmt = $conn->prepare('UPDATE invoices SET status = "paid", amount_paid_pence = total_pence WHERE id = ? AND status <> "paid"');
                 $stmt->bind_param('i', $invoiceId);
                 $stmt->execute();
                 audit($conn, 0, 'invoice.paid.stripe', "#$invoiceId via Stripe Checkout");
+                // Emailed receipt to the client.
+                $stmt = $conn->prepare('SELECT i.number, i.total_pence, c.email, c.name FROM invoices i LEFT JOIN clients c ON c.id = i.client_id WHERE i.id = ?');
+                $stmt->bind_param('i', $invoiceId);
+                $stmt->execute();
+                $r = $stmt->get_result()->fetch_assoc();
+                if ($r && $r['email'] && function_exists('mail_enabled') && mail_enabled()) {
+                    $amt = '£' . number_format(((int) $r['total_pence']) / 100, 2);
+                    send_mail($r['email'], 'Payment received — ' . $r['number'],
+                        "Hi {$r['name']},\n\nThank you — we've received your payment of $amt for invoice {$r['number']}.\nThis email is your receipt.\n\nRitaGreen Services");
+                }
             } else {
                 // Amount/currency mismatch — log and leave the invoice unpaid.
                 audit($conn, 0, 'invoice.paid.mismatch', "#$invoiceId paid=$amount $currency expected=$expected gbp");
@@ -72,8 +82,87 @@ if ($action === 'webhook' && method() === 'POST') {
     json_out(['ok' => true]);
 }
 
+// Build a Stripe Checkout Session for an invoice row; returns the hosted URL.
+function stripe_create_session(array $inv, string $base): string
+{
+    $label = 'Invoice ' . $inv['number'] . ($inv['client'] ? ' — ' . $inv['client'] : '');
+    $params = [
+        'mode' => 'payment',
+        'success_url' => $base . '/app/invoicing?paid=' . $inv['id'],
+        'cancel_url' => $base . '/app/invoicing?cancelled=' . $inv['id'],
+        'client_reference_id' => (string) $inv['id'],
+        'metadata[invoice_id]' => (string) $inv['id'],
+        'line_items[0][quantity]' => '1',
+        'line_items[0][price_data][currency]' => 'gbp',
+        'line_items[0][price_data][unit_amount]' => (string) (int) $inv['total_pence'],
+        'line_items[0][price_data][product_data][name]' => $label,
+    ];
+    $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query($params),
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . STRIPE_SECRET_KEY],
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $response = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+    if ($response === false) fail('Could not reach Stripe: ' . $curlErr, 502);
+    $json = json_decode($response, true);
+    if ($status >= 400) fail($json['error']['message'] ?? 'Stripe rejected the request.', 502);
+    if (empty($json['url'])) fail('Stripe did not return a checkout URL.', 502);
+    return $json['url'];
+}
+
+// --- Public pay link: a client pays an invoice from an emailed link, no login.
+//     GET /payments.php?action=public_checkout&token=XXXX -> 302 to Stripe ---
+if ($action === 'public_checkout' && method() === 'GET') {
+    if (!stripe_configured()) fail('Card payments are not set up yet.', 503);
+    $token = trim((string) ($_GET['token'] ?? ''));
+    if (!preg_match('/^[a-f0-9]{40}$/', $token)) fail('Invalid payment link.', 404);
+    $stmt = $conn->prepare(
+        'SELECT i.id, i.number, i.total_pence, i.status, c.name AS client
+         FROM invoices i LEFT JOIN clients c ON c.id = i.client_id WHERE i.pay_token = ? LIMIT 1'
+    );
+    $stmt->bind_param('s', $token);
+    $stmt->execute();
+    $inv = $stmt->get_result()->fetch_assoc();
+    if (!$inv) fail('Invoice not found.', 404);
+    if ($inv['status'] === 'paid') fail('That invoice is already paid.', 409);
+    if ($inv['status'] === 'void') fail('That invoice has been cancelled.', 409);
+    if ((int) $inv['total_pence'] <= 0) fail('That invoice has no amount to charge.');
+
+    $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : (defined('OR_REFERER') ? OR_REFERER : 'https://ritagreenservices.com');
+    $url = stripe_create_session($inv, $base);
+    header('Location: ' . $url, true, 302);
+    exit;
+}
+
 // --- Everything below is staff-only. ---
 $user = require_auth($conn);
+
+// Return the public pay link for an invoice (creates a token if missing).
+if ($action === 'paylink' && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $invoiceId = (int) ($_GET['id'] ?? 0);
+    if ($invoiceId <= 0) fail('An invoice is required.');
+    $stmt = $conn->prepare('SELECT pay_token FROM invoices WHERE id = ?');
+    $stmt->bind_param('i', $invoiceId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if (!$row) fail('Invoice not found.', 404);
+    $tok = $row['pay_token'];
+    if (!$tok) {
+        $tok = bin2hex(random_bytes(20));
+        $stmt = $conn->prepare('UPDATE invoices SET pay_token = ? WHERE id = ?');
+        $stmt->bind_param('si', $tok, $invoiceId);
+        $stmt->execute();
+    }
+    $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : 'https://ritagreenservices.com';
+    json_out(['url' => $base . '/payments.php?action=public_checkout&token=' . $tok]);
+}
 
 if ($action === 'checkout' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
@@ -95,44 +184,10 @@ if ($action === 'checkout' && method() === 'POST') {
     if ((int) $inv['total_pence'] <= 0) fail('That invoice has no amount to charge.');
 
     $base = defined('OR_REFERER') ? OR_REFERER : 'https://ritagreenservices.com';
-    $label = 'Invoice ' . $inv['number'] . ($inv['client'] ? ' — ' . $inv['client'] : '');
-
-    // Create a Checkout Session (form-encoded, raw HTTP — no SDK on shared host).
-    $params = [
-        'mode' => 'payment',
-        'success_url' => $base . '/app/invoicing?paid=' . $invoiceId,
-        'cancel_url' => $base . '/app/invoicing?cancelled=' . $invoiceId,
-        'client_reference_id' => (string) $invoiceId,
-        'metadata[invoice_id]' => (string) $invoiceId,
-        'line_items[0][quantity]' => '1',
-        'line_items[0][price_data][currency]' => 'gbp',
-        'line_items[0][price_data][unit_amount]' => (string) (int) $inv['total_pence'],
-        'line_items[0][price_data][product_data][name]' => $label,
-    ];
-
-    $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($params),
-        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . STRIPE_SECRET_KEY],
-        CURLOPT_TIMEOUT => 30,
-    ]);
-    $response = curl_exec($ch);
-    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false) fail('Could not reach Stripe: ' . $curlErr, 502);
-    $json = json_decode($response, true);
-    if ($status >= 400) {
-        $msg = $json['error']['message'] ?? 'Stripe rejected the request.';
-        fail($msg, 502);
-    }
-    if (empty($json['url'])) fail('Stripe did not return a checkout URL.', 502);
+    $url = stripe_create_session($inv, $base);
 
     audit($conn, (int) $user['id'], 'invoice.checkout', $inv['number']);
-    json_out(['url' => $json['url']]);
+    json_out(['url' => $url]);
 }
 
 fail('Method not allowed.', 405);

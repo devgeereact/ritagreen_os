@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { GlobalSearch } from "@/components/global-search"
 
 import Footer from "@/layouts/Footer"
+import { LockScreen } from "@/components/app/lock-screen"
 
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -49,9 +50,17 @@ export default function AppLayout() {
 
   return (
     <SidebarProvider open={isExpanded} onOpenChange={setOpen}>
+      <LockScreen />
       <AppSidebar onHoverChange={setHovered} />
 
       <SidebarInset className="flex min-h-svh flex-col">
+        {/* Skip link — first focusable element for keyboard / screen-reader users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-elevate"
+        >
+          Skip to content
+        </a>
         {/* HEADER */}
         <header
                 className={cn(
@@ -89,7 +98,7 @@ export default function AppLayout() {
               </header>
 
         {/* PAGE CONTENT */}
-        <main className="flex-1 p-6">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-6 focus:outline-none">
           <div key={pathname} className="animate-fade-in">
             <Outlet />
           </div>

@@ -153,6 +153,13 @@
     background-color: hsl(var(--primary) / 0.18);
     color: hsl(var(--foreground));
   }
+  /* A11y: consistent, visible keyboard focus on every interactive element.
+     Mouse clicks stay clean (:focus-visible only fires for keyboard/AT). */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
 
 @layer components {

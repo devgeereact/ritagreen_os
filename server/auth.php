@@ -14,6 +14,22 @@ require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
 
+// Issue a 30-day token for a user, recording device + IP for the session list.
+function issue_token(mysqli $conn, int $uid): string
+{
+    $token = bin2hex(random_bytes(32));
+    $hash = hash('sha256', $token);
+    $ua = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255);
+    $ip = client_ip();
+    $stmt = $conn->prepare(
+        'INSERT INTO tokens (user_id, token_hash, expires_at, user_agent, ip, last_seen_at)
+         VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY), ?, ?, NOW())'
+    );
+    $stmt->bind_param('isss', $uid, $hash, $ua, $ip);
+    $stmt->execute();
+    return $token;
+}
+
 if ($action === 'login' && method() === 'POST') {
     rate_limit($conn, 'login', 10, 300);
 
@@ -46,13 +62,7 @@ if ($action === 'login' && method() === 'POST') {
         if (!totp_verify($twofa['secret'], $code)) fail('That authentication code is not valid.', 401);
     }
 
-    $token = bin2hex(random_bytes(32));
-    $hash = hash('sha256', $token);
-    $stmt = $conn->prepare(
-        'INSERT INTO tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))'
-    );
-    $stmt->bind_param('is', $uid, $hash);
-    $stmt->execute();
+    $token = issue_token($conn, $uid);
 
     audit($conn, $uid, 'login', $email);
 
@@ -216,6 +226,174 @@ if ($action === '2fa_disable' && method() === 'POST') {
     $conn->query('DELETE FROM user_2fa WHERE user_id = ' . $uid);
     audit($conn, $uid, '2fa.disable', '');
     json_out(['ok' => true]);
+}
+
+// ----- Active sessions / devices -----
+if ($action === 'sessions' && method() === 'GET') {
+    $user = require_auth($conn);
+    $uid = (int) $user['id'];
+    $current = bearer_token();
+    $currentHash = $current ? hash('sha256', $current) : '';
+    $stmt = $conn->prepare(
+        'SELECT id, token_hash, user_agent, ip, created_at, last_seen_at, expires_at
+         FROM tokens WHERE user_id = ? AND expires_at > NOW() ORDER BY created_at DESC'
+    );
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $sessions = [];
+    while ($r = $res->fetch_assoc()) {
+        $sessions[] = [
+            'id' => (int) $r['id'],
+            'user_agent' => $r['user_agent'],
+            'ip' => $r['ip'],
+            'created_at' => $r['created_at'],
+            'last_seen_at' => $r['last_seen_at'],
+            'current' => hash_equals($currentHash, $r['token_hash']),
+        ];
+    }
+    json_out(['sessions' => $sessions]);
+}
+
+if ($action === 'revoke_session' && method() === 'POST') {
+    $user = require_auth($conn);
+    $uid = (int) $user['id'];
+    $id = (int) (body()['id'] ?? 0);
+    if ($id <= 0) fail('A session is required.');
+    $stmt = $conn->prepare('DELETE FROM tokens WHERE id = ? AND user_id = ?');
+    $stmt->bind_param('ii', $id, $uid);
+    $stmt->execute();
+    audit($conn, $uid, 'session.revoke', "#$id");
+    json_out(['ok' => true]);
+}
+
+// Lock screen: re-verify the current user's password (no new token issued).
+if ($action === 'unlock' && method() === 'POST') {
+    $user = require_auth($conn);
+    rate_limit($conn, 'unlock', 10, 300);
+    $password = (string) (body()['password'] ?? '');
+    $stmt = $conn->prepare('SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL');
+    $uid = (int) $user['id'];
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if (!$row || !password_verify($password, $row['password_hash'])) fail('Incorrect password.', 401);
+    json_out(['ok' => true]);
+}
+
+// ----- Worker self-registration (creates an ATS applicant) -----
+if ($action === 'register' && method() === 'POST') {
+    rate_limit($conn, 'register', 6, 600);
+    $data = body();
+    $name = trim((string) ($data['name'] ?? ''));
+    $email = strtolower(trim((string) ($data['email'] ?? '')));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    $division = trim((string) ($data['division'] ?? 'care'));
+    $role = trim((string) ($data['role_applied'] ?? ''));
+    $consent = !empty($data['consent']);
+    if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('A name and valid email are required.');
+    if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Choose a division.');
+    if (!$consent) fail('Please agree to be contacted.');
+
+    $roleVal = $role !== '' ? $role : null;
+    $phoneVal = $phone !== '' ? $phone : null;
+    $stmt = $conn->prepare(
+        'INSERT INTO applicants (name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, "self-registration")'
+    );
+    $stmt->bind_param('sssss', $name, $email, $phoneVal, $roleVal, $division);
+    $stmt->execute();
+    $ip = client_ip();
+    $stmt = $conn->prepare('INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "registration", 1, "self-registration", ?)');
+    $stmt->bind_param('ss', $email, $ip);
+    $stmt->execute();
+    notify($conn, null, 'New worker registration', "$name — " . ucfirst($division), 'ats', '/app/ats');
+    if (function_exists('mail_enabled') && mail_enabled()) {
+        send_mail(MAIL_TO, "Worker registration — $division", "$name <$email> ($phone)\nRole: $role");
+    }
+    json_out(['ok' => true], 201);
+}
+
+// ----- Google SSO (staff sign-in; matches existing users only) -----
+function google_configured(): bool
+{
+    return defined('GOOGLE_CLIENT_ID') && GOOGLE_CLIENT_ID !== '' && GOOGLE_CLIENT_ID !== 'CHANGE_ME'
+        && defined('GOOGLE_CLIENT_SECRET') && GOOGLE_CLIENT_SECRET !== '' && GOOGLE_CLIENT_SECRET !== 'CHANGE_ME';
+}
+
+if ($action === 'google_config' && method() === 'GET') {
+    json_out(['enabled' => google_configured()]);
+}
+
+if ($action === 'google_start' && method() === 'GET') {
+    if (!google_configured()) fail('Google sign-in is not configured.', 503);
+    $params = http_build_query([
+        'client_id' => GOOGLE_CLIENT_ID,
+        'redirect_uri' => GOOGLE_REDIRECT_URI,
+        'response_type' => 'code',
+        'scope' => 'openid email profile',
+        'access_type' => 'online',
+        'prompt' => 'select_account',
+    ]);
+    json_out(['url' => 'https://accounts.google.com/o/oauth2/v2/auth?' . $params]);
+}
+
+if ($action === 'google_callback' && method() === 'POST') {
+    if (!google_configured()) fail('Google sign-in is not configured.', 503);
+    rate_limit($conn, 'google', 20, 300);
+    $code = trim((string) (body()['code'] ?? ''));
+    if ($code === '') fail('Missing authorization code.', 400);
+
+    // Exchange the code for tokens.
+    $ch = curl_init('https://oauth2.googleapis.com/token');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'code' => $code,
+            'client_id' => GOOGLE_CLIENT_ID,
+            'client_secret' => GOOGLE_CLIENT_SECRET,
+            'redirect_uri' => GOOGLE_REDIRECT_URI,
+            'grant_type' => 'authorization_code',
+        ]),
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $tokRes = json_decode((string) curl_exec($ch), true);
+    curl_close($ch);
+    $accessToken = $tokRes['access_token'] ?? '';
+    if ($accessToken === '') fail('Google sign-in failed (token exchange).', 401);
+
+    // Fetch the verified email.
+    $ch = curl_init('https://www.googleapis.com/oauth2/v3/userinfo');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken],
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    $info = json_decode((string) curl_exec($ch), true);
+    curl_close($ch);
+    $email = strtolower(trim((string) ($info['email'] ?? '')));
+    $verified = !empty($info['email_verified']);
+    if ($email === '' || !$verified) fail('Could not verify your Google email.', 401);
+
+    // Match an existing, active staff user — never auto-create (staff access only).
+    $stmt = $conn->prepare('SELECT id, name, email, role, division, client_id, worker_id FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    if (!$user) fail('No RitaGreen account for that Google email. Ask an administrator to add you.', 403);
+    $uid = (int) $user['id'];
+
+    $token = issue_token($conn, $uid);
+    audit($conn, $uid, 'login.google', $email);
+    json_out([
+        'token' => $token,
+        'user' => [
+            'id' => $uid, 'name' => $user['name'], 'email' => $user['email'],
+            'role' => $user['role'], 'division' => $user['division'],
+            'client_id' => $user['client_id'] !== null ? (int) $user['client_id'] : null,
+            'worker_id' => $user['worker_id'] !== null ? (int) $user['worker_id'] : null,
+        ],
+    ]);
 }
 
 fail('Unknown action.', 404);

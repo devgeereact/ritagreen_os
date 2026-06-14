@@ -15,7 +15,7 @@ if (method() === 'GET') {
     // (stored due_date, or invoice date + terms for older rows without one).
     $res = $conn->query(
         'SELECT i.id, i.number, i.client_id, c.name AS client, i.division,
-                i.net_pence, i.vat_pence, i.total_pence, i.status, i.created_at,
+                i.net_pence, i.vat_pence, i.total_pence, i.amount_paid_pence, i.pay_token, i.status, i.created_at,
                 COALESCE(i.due_date, DATE_ADD(DATE(i.created_at), INTERVAL ' . PAYMENT_TERMS_DAYS . ' DAY)) AS due_date,
                 COALESCE((SELECT SUM(cn.amount_pence) FROM credit_notes cn WHERE cn.invoice_id = i.id), 0) AS credited_pence,
                 DATEDIFF(CURDATE(), COALESCE(i.due_date, DATE_ADD(DATE(i.created_at), INTERVAL ' . PAYMENT_TERMS_DAYS . ' DAY))) AS days_overdue
@@ -34,6 +34,9 @@ if (method() === 'GET') {
         $row['net_pence'] = (int) $row['net_pence'];
         $row['vat_pence'] = (int) $row['vat_pence'];
         $row['total_pence'] = (int) $row['total_pence'];
+        $row['amount_paid_pence'] = (int) $row['amount_paid_pence'];
+        $row['has_pay_link'] = $row['pay_token'] !== null;
+        unset($row['pay_token']);
         $row['credited_pence'] = (int) $row['credited_pence'];
         $row['days_overdue'] = (int) $row['days_overdue'];
         $balance = max(0, $row['total_pence'] - $row['credited_pence']);
