@@ -185,7 +185,7 @@ function InvoicesTab({
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Outstanding</p>
-                  <p className="mt-1 text-2xl font-bold">{gbp(data.totals.outstanding_pence)}</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">{gbp(data.totals.outstanding_pence)}</p>
                 </div>
                 <Banknote className="size-7 text-destructive" />
               </CardContent>
@@ -194,7 +194,7 @@ function InvoicesTab({
               <CardContent className="flex items-center justify-between pt-6">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Paid</p>
-                  <p className="mt-1 text-2xl font-bold">{gbp(data.totals.paid_pence)}</p>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">{gbp(data.totals.paid_pence)}</p>
                 </div>
                 <CheckCircle2 className="size-7 text-primary" />
               </CardContent>
@@ -450,9 +450,9 @@ function MarginTab() {
       {data && !loading && (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Revenue (net)</p><p className="mt-1 text-2xl font-bold">{gbp(data.totals.revenue_pence)}</p></CardContent></Card>
-            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Labour cost</p><p className="mt-1 text-2xl font-bold">{gbp(data.totals.cost_pence)}</p></CardContent></Card>
-            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Margin</p><p className={`mt-1 text-2xl font-bold ${data.totals.margin_pence < 0 ? "text-destructive" : "text-primary"}`}>{gbp(data.totals.margin_pence)}{data.totals.margin_pct !== null ? ` · ${data.totals.margin_pct}%` : ""}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Revenue (net)</p><p className="mt-1 text-2xl font-bold tabular-nums">{gbp(data.totals.revenue_pence)}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Labour cost</p><p className="mt-1 text-2xl font-bold tabular-nums">{gbp(data.totals.cost_pence)}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Margin</p><p className={`mt-1 text-2xl font-bold tabular-nums ${data.totals.margin_pence < 0 ? "text-destructive" : "text-primary"}`}>{gbp(data.totals.margin_pence)}{data.totals.margin_pct !== null ? ` · ${data.totals.margin_pct}%` : ""}</p></CardContent></Card>
           </div>
 
           <Card>

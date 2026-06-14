@@ -195,6 +195,8 @@
   }
   /* Tabular figures for tables / metrics / money — reads as "precise". */
   .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  /* Every data table gets aligned figures automatically. */
+  table { font-variant-numeric: tabular-nums; }
   .animation-delay-100 { animation-delay: 0.1s; }
   .animation-delay-200 { animation-delay: 0.2s; }
   .animation-delay-300 { animation-delay: 0.3s; }

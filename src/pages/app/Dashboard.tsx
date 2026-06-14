@@ -253,11 +253,11 @@ function Kpi({
       <CardContent className="pt-6">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className={`grid size-9 place-items-center rounded-xl ${chipClass}`}>
+          <span className={`grid size-9 place-items-center rounded-lg ${chipClass}`}>
             <Icon className="size-4" />
           </span>
         </div>
-        <p className={`mt-3 text-2xl font-bold ${tone !== "primary" ? toneClass : ""}`}>{value}</p>
+        <p className={`mt-3 text-2xl font-bold tabular-nums ${tone !== "primary" ? toneClass : ""}`}>{value}</p>
       </CardContent>
     </Card>
   )
