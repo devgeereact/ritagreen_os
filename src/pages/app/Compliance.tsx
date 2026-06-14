@@ -213,7 +213,7 @@ function RagCard({
   value: number
 }) {
   const color =
-    tone === "red" ? "text-destructive" : tone === "amber" ? "text-amber-600" : tone === "green" ? "text-primary" : "text-muted-foreground"
+    tone === "red" ? "text-destructive" : tone === "amber" ? "text-warning" : tone === "green" ? "text-primary" : "text-muted-foreground"
   return (
     <Card>
       <CardContent className="flex items-center justify-between pt-6">

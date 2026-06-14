@@ -122,7 +122,7 @@ export function AppLauncherDropdown() {
 
       <DropdownMenuContent
         align="end"
-        className="w-[300px] p-0 rounded-xl overflow-hidden shadow-xl"
+        className="w-[300px] p-0 rounded-lg overflow-hidden shadow-elevate"
       >
         <ScrollArea className="h-[420px]">
           <div className="grid grid-cols-2">
@@ -133,18 +133,13 @@ export function AppLauncherDropdown() {
                 <div
                   key={item.label}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-2 p-4",
+                    "group flex flex-col items-center justify-center gap-2 p-4",
                     "border-border border-b border-r",
-                    "hover:bg-muted/50 transition-all duration-200 cursor-pointer",
+                    "hover:bg-muted/50 transition-colors duration-150 cursor-pointer",
                     (index + 1) % 2 === 0 && "border-r-0"
                   )}
                 >
-                  <div
-                    className={cn(
-                      "h-12 w-12 flex items-center justify-center rounded-full",
-                      item.color
-                    )}
-                  >
+                  <div className="h-12 w-12 flex items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors duration-150 group-hover:bg-primary/10 group-hover:text-primary">
                     <Icon className="h-5 w-5" />
                   </div>
 

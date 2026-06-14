@@ -91,8 +91,8 @@ export default function Scheduling() {
     title: s.worker ? `${s.title} — ${s.worker}` : `OPEN — ${s.title}`,
     start: s.starts_at.replace(" ", "T"),
     end: s.ends_at.replace(" ", "T"),
-    backgroundColor: s.status === "open" ? "#d97706" : DIVISION_ACCENTS[s.division] ?? "#2e7d32",
-    borderColor: s.status === "open" ? "#d97706" : DIVISION_ACCENTS[s.division] ?? "#2e7d32",
+    backgroundColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#4D7C0F",
+    borderColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#4D7C0F",
   }))
 
   return (
@@ -116,7 +116,7 @@ export default function Scheduling() {
         <Card>
           <CardContent className="pt-6">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Radio className="size-4 text-amber-600" /> Open shifts needing cover ({openShifts.length})
+              <Radio className="size-4 text-warning" /> Open shifts needing cover ({openShifts.length})
             </div>
             <div className="space-y-2">
               {openShifts.map((s) => (
@@ -152,7 +152,7 @@ export default function Scheduling() {
       </Card>
 
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#d97706" }} /> open</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#B7791F" }} /> open</span>
         {Object.entries(DIVISION_ACCENTS).map(([id, color]) => (
           <span key={id} className="flex items-center gap-1.5 capitalize">
             <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />

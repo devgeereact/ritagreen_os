@@ -112,7 +112,7 @@ export default function Timesheets() {
                   <p className="text-xs font-medium text-muted-foreground">Pending approval</p>
                   <p className="mt-1 text-2xl font-bold">{hm(data.totals.pending_minutes)}</p>
                 </div>
-                <Clock className="size-7 text-amber-500" />
+                <Clock className="size-7 text-warning" />
               </CardContent>
             </Card>
             <Card>

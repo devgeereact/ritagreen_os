@@ -244,7 +244,7 @@ export default function Mailbox() {
           <Card className="flex min-h-[70vh] flex-col p-0">
             {!activeUid && (
               <div className="flex flex-1 flex-col items-center justify-center p-10 text-center">
-                <span className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <span className="grid size-12 place-items-center rounded-lg bg-primary/10 text-primary">
                   <Mail className="size-6" />
                 </span>
                 <p className="mt-4 font-semibold">Select a message</p>

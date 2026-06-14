@@ -85,7 +85,7 @@ export default function Timetable() {
                   <p className="text-xs font-medium text-muted-foreground">Pending approval</p>
                   <p className="mt-1 text-2xl font-bold">{hours(data.totals.pending_minutes)}</p>
                 </div>
-                <Clock className="size-7 text-amber-600" />
+                <Clock className="size-7 text-warning" />
               </CardContent>
             </Card>
             <Card>

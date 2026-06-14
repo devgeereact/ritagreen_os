@@ -108,7 +108,7 @@ export default function WorkerApp() {
                   {data.compliance.map((c, i) => (
                     <li key={i} className="flex justify-between">
                       <span>{c.type}</span>
-                      <span className={c.status === "expired" ? "text-destructive" : c.status === "expiring" ? "text-amber-600" : ""}>
+                      <span className={c.status === "expired" ? "text-destructive" : c.status === "expiring" ? "text-warning" : ""}>
                         {c.expiry ? c.expiry : "—"}{c.status === "expiring" && c.days !== null ? ` (${c.days}d)` : ""}
                       </span>
                     </li>

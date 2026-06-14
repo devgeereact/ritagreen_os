@@ -133,7 +133,7 @@ export default function Incidents() {
 }
 
 function Stat({ icon: Icon, tone, label, value }: { icon: React.ComponentType<{ className?: string }>; tone: "amber" | "red"; label: string; value: number }) {
-  const color = tone === "red" ? "text-destructive" : "text-amber-600"
+  const color = tone === "red" ? "text-destructive" : "text-warning"
   return (
     <Card><CardContent className="flex items-center justify-between pt-6">
       <div><p className="text-xs font-medium text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>

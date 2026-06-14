@@ -17,9 +17,11 @@ export const DIVISION_LABELS: Record<string, string> = {
   security: "Security Services",
 }
 
+// Division accents for data viz — brand-derived categorical palette
+// (olive / amber / muted-blue / dark), restrained per design system v1.
 export const DIVISION_ACCENTS: Record<string, string> = {
-  care: "#0EA5E9",
-  academy: "#7C3AED",
-  cleaning: "#0891B2",
-  security: "#334155",
+  care: "#4D7C0F",
+  academy: "#B7791F",
+  cleaning: "#2E6F9E",
+  security: "#2E342A",
 }

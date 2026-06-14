@@ -49,7 +49,7 @@ function iconFor(main: string) {
 
 const TONE: Record<Advisory["level"], { dot: string; text: string; bg: string }> = {
   ok: { dot: "bg-primary", text: "text-primary", bg: "bg-secondary/50" },
-  watch: { dot: "bg-amber-500", text: "text-amber-700", bg: "bg-amber-50" },
+  watch: { dot: "bg-warning", text: "text-warning", bg: "bg-warning/10" },
   alert: { dot: "bg-destructive", text: "text-destructive", bg: "bg-destructive/5" },
 }
 

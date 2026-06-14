@@ -213,7 +213,7 @@ export default function Insights() {
 
 const TONE_DOT: Record<Tone, string> = {
   red: "bg-destructive",
-  amber: "bg-amber-500",
+  amber: "bg-warning",
   green: "bg-primary",
 }
 
@@ -248,7 +248,7 @@ function Kpi({
   tone?: "primary" | "red" | "amber" | "green"
 }) {
   const color =
-    tone === "red" ? "text-destructive" : tone === "amber" ? "text-amber-500" : "text-primary"
+    tone === "red" ? "text-destructive" : tone === "amber" ? "text-warning" : "text-primary"
   return (
     <Card>
       <CardContent className="pt-6">

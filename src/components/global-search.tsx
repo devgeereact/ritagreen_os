@@ -85,7 +85,7 @@ export function GlobalSearch() {
               onSelect={() => runCommand(() => navigate("/"))}
               className="group cursor-pointer"
             >
-              <LayoutDashboard className="mr-3 h-4 w-4 text-sky-500" />
+              <LayoutDashboard className="mr-3 h-4 w-4 text-muted-foreground" />
               <span>Dashboard</span>
               <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
             </CommandItem>
@@ -94,7 +94,7 @@ export function GlobalSearch() {
               onSelect={() => runCommand(() => navigate("/analytics"))}
               className="group cursor-pointer"
             >
-              <BarChart3 className="mr-3 h-4 w-4 text-violet-500" />
+              <BarChart3 className="mr-3 h-4 w-4 text-muted-foreground" />
               <span>Analytics</span>
               <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
             </CommandItem>
@@ -103,7 +103,7 @@ export function GlobalSearch() {
               onSelect={() => runCommand(() => navigate("/crm"))}
               className="group cursor-pointer"
             >
-              <BriefcaseBusiness className="mr-3 h-4 w-4 text-emerald-500" />
+              <BriefcaseBusiness className="mr-3 h-4 w-4 text-muted-foreground" />
               <span>CRM</span>
               <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
             </CommandItem>
@@ -117,7 +117,7 @@ export function GlobalSearch() {
               onSelect={() => runCommand(() => navigate("/profile"))}
               className="group cursor-pointer"
             >
-              <User className="mr-3 h-4 w-4 text-orange-500" />
+              <User className="mr-3 h-4 w-4 text-muted-foreground" />
               <span>Profile</span>
               <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
             </CommandItem>
@@ -126,7 +126,7 @@ export function GlobalSearch() {
               onSelect={() => runCommand(() => navigate("/billing"))}
               className="group cursor-pointer"
             >
-              <CreditCard className="mr-3 h-4 w-4 text-pink-500" />
+              <CreditCard className="mr-3 h-4 w-4 text-muted-foreground" />
               <span>Billing</span>
               <ChevronRight className="ml-auto h-4 w-4 opacity-0 transition-opacity group-data-[selected=true]:opacity-100" />
             </CommandItem>
