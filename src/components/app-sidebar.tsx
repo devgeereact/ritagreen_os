@@ -28,6 +28,8 @@ import {
   TrendingUp,
   Settings2,
   LogOut,
+  LifeBuoy,
+  User,
   ChevronsUpDown,
 } from "lucide-react"
 
@@ -135,7 +137,10 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
   },
   {
     label: "Admin",
-    items: [{ title: "Settings", url: "/app/settings", icon: Settings2 }],
+    items: [
+      { title: "Settings", url: "/app/settings", icon: Settings2 },
+      { title: "Help & support", url: "/app/help", icon: LifeBuoy },
+    ],
   },
 ]
 
@@ -206,14 +211,24 @@ function SidebarUser() {
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 rounded-xl" side="right" align="end" sideOffset={4}>
+          <DropdownMenuContent className="w-56 rounded-lg shadow-elevate" side="right" align="end" sideOffset={4}>
             <DropdownMenuLabel className="font-normal">
               <p className="text-sm font-medium">{user?.name}</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2" onClick={() => navigate("/app/profile")}>
+              <User className="size-4" /> Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onClick={() => navigate("/app/settings")}>
+              <Settings2 className="size-4" /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem className="gap-2" onClick={() => navigate("/app/help")}>
+              <LifeBuoy className="size-4" /> Help &amp; support
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="gap-2"
+              className="gap-2 text-destructive focus:text-destructive"
               onClick={() => {
                 logout()
                 navigate("/login", { replace: true })

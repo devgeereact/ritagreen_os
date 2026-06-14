@@ -61,6 +61,8 @@ const Analytics = lazy(() => import("@/pages/app/Analytics"))
 const Insights = lazy(() => import("@/pages/app/Insights"))
 const Files = lazy(() => import("@/pages/app/Files"))
 const Settings = lazy(() => import("@/pages/app/Settings"))
+const Profile = lazy(() => import("@/pages/app/Profile"))
+const Help = lazy(() => import("@/pages/app/Help"))
 const SmokeTest = lazy(() => import("@/pages/app/SmokeTest"))
 
 // Suspense fallback while a lazy CMS chunk loads.
@@ -163,6 +165,8 @@ export const router = createBrowserRouter([
           { path: "insights", element: cms(<Insights />) },
           { path: "files", element: cms(<Files />) },
           { path: "comms", element: cms(<Comms />) },
+          { path: "profile", element: cms(<Profile />) },
+          { path: "help", element: cms(<Help />) },
           { path: "settings", element: cms(<Settings />) },
           // Dev-only API smoke test — never registered in production builds.
           ...(import.meta.env.DEV ? [{ path: "smoke-test", element: cms(<SmokeTest />) }] : []),
