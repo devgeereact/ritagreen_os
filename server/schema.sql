@@ -826,3 +826,39 @@ CREATE TABLE IF NOT EXISTS sms_log (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   KEY idx_sms_time (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Blog / resources (public-facing posts, managed in the CMS) ----
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  slug VARCHAR(190) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  excerpt VARCHAR(500) NOT NULL DEFAULT '',
+  category VARCHAR(64) NOT NULL DEFAULT 'Company',
+  image VARCHAR(500) NOT NULL DEFAULT '',
+  body MEDIUMTEXT NOT NULL,
+  read_mins INT NOT NULL DEFAULT 3,
+  status ENUM('draft','published') NOT NULL DEFAULT 'draft',
+  published_at DATE NULL,
+  author_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  UNIQUE KEY uniq_blog_slug (slug),
+  KEY idx_blog_pub (status, published_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Testimonials (curated client reviews, managed in the CMS) ----
+CREATE TABLE IF NOT EXISTS testimonials (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  author VARCHAR(160) NOT NULL,
+  role VARCHAR(190) NOT NULL DEFAULT '',
+  rating TINYINT NOT NULL DEFAULT 5,
+  body VARCHAR(1000) NOT NULL,
+  status ENUM('draft','published') NOT NULL DEFAULT 'published',
+  sort_order INT NOT NULL DEFAULT 0,
+  author_id INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  KEY idx_testi_pub (status, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -43,8 +43,9 @@ export default function ServiceDetail() {
   return (
     <>
       {/* Hero */}
-      <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
-        <div className="mx-auto max-w-6xl px-4 py-14 md:py-20">
+      <div className="bg-hero-pro relative overflow-hidden border-b border-border">
+        <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
+        <div className="relative mx-auto max-w-6xl px-4 py-14 md:py-20">
           <Link
             to={`/services#${division.id}`}
             className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

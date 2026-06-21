@@ -20,8 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { PageHeader, Section, SectionAlt, CtaBand } from "@/components/public/section"
+import { CounterBand } from "@/components/public/marketing"
 import { Faqs } from "@/components/public/Faqs"
+
+const ACADEMY_STATS = [
+  { n: "16", l: "Care Certificate standards" },
+  { n: "12wk", l: "Recommended induction window" },
+  { n: "100%", l: "DBS-checked before first shift" },
+  { n: "1", l: "Guaranteed interview route" },
+] as const
 import { api, ApiError } from "@/lib/api"
 import { COMPANY } from "@/lib/company"
 import { useSeo } from "@/hooks/use-seo"
@@ -185,8 +193,7 @@ export default function Careers() {
       </Section>
 
       {/* What you learn + why */}
-      <section className="border-y border-border bg-soft-mesh">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
+      <SectionAlt className="grid gap-10 md:grid-cols-2">
           <div>
             <h2 className="text-2xl font-bold">What you'll learn</h2>
             <p className="mt-3 text-muted-foreground">
@@ -211,8 +218,10 @@ export default function Careers() {
               ))}
             </ul>
           </div>
-        </div>
-      </section>
+      </SectionAlt>
+
+      {/* Academy counter band */}
+      <CounterBand stats={ACADEMY_STATS} />
 
       {/* Apply form */}
       <Section id="apply" className="scroll-mt-24 grid gap-12 md:grid-cols-3">
@@ -322,13 +331,11 @@ export default function Careers() {
       </Section>
 
       {/* FAQ */}
-      <section className="border-t border-border bg-soft-mesh">
-        <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
-          <p className="eyebrow">FAQ</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">Questions about training</h2>
-          <Faqs items={FAQS_CAREERS} className="mt-8" />
-        </div>
-      </section>
+      <SectionAlt className="max-w-3xl">
+        <p className="eyebrow">FAQ</p>
+        <h2 className="mt-3 text-2xl font-bold md:text-3xl">Questions about training</h2>
+        <Faqs items={FAQS_CAREERS} className="mt-8" />
+      </SectionAlt>
 
       <CtaBand
         title="Ready to start?"

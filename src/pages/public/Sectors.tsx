@@ -10,6 +10,7 @@ import {
   HardHat,
 } from "lucide-react"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { SectionHeading } from "@/components/public/marketing"
 import { useSeo } from "@/hooks/use-seo"
 
 const SECTORS = [
@@ -86,7 +87,13 @@ export default function Sectors() {
         intro="We work across care, healthcare, housing, events, commercial property, construction and training. Whatever the setting, the standard is the same — qualified, checked and ready."
       />
       <Section>
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+        <SectionHeading
+          eyebrow="Sectors"
+          title="Whatever the setting, the standard is the same"
+          intro="We tailor the right mix of care, training, cleaning and security to each kind of client — but the vetting, the licensing and the named contact never change."
+          className="mb-10"
+        />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {SECTORS.map((s) => (
             <div key={s.name} className="surface-interactive flex flex-col p-7">
               <span className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
@@ -113,6 +120,7 @@ export default function Sectors() {
           ))}
         </div>
       </Section>
+
       <CtaBand
         title="Don't see your sector?"
         body="If you look after people or premises, we can probably help. Tell us the setting and we'll point you to the right team."

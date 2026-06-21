@@ -1,8 +1,8 @@
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, ArrowRight, Clock } from "lucide-react"
+import { ArrowLeft, ArrowRight, Clock, Loader2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Section, CtaBand } from "@/components/public/section"
-import { ARTICLES, findArticle } from "@/lib/resources"
+import { useBlogPosts } from "@/lib/resources"
 import { useSeo } from "@/hooks/use-seo"
 import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
@@ -12,11 +12,12 @@ function fmt(date: string) {
 
 export default function Article() {
   const { slug } = useParams()
-  const article = slug ? findArticle(slug) : null
+  const { posts, loading } = useBlogPosts()
+  const article = posts.find((p) => p.slug === slug) ?? null
 
   useSeo({
-    title: article ? article.title : "Article not found",
-    description: article ? article.excerpt : "We couldn't find that article.",
+    title: article ? article.title : "Article",
+    description: article ? article.excerpt : "Reading from RitaGreen.",
     path: `/resources/${slug ?? ""}`,
     ogType: "article",
     jsonLd: article
@@ -32,18 +33,28 @@ export default function Article() {
       : undefined,
   })
 
-  if (!article) return <NotFoundPublic />
+  if (!article) {
+    if (loading) {
+      return (
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      )
+    }
+    return <NotFoundPublic />
+  }
 
-  const related = ARTICLES.filter(
-    (a) => a.slug !== article.slug && a.category === article.category,
-  ).slice(0, 3)
-  const fallback = ARTICLES.filter((a) => a.slug !== article.slug).slice(0, 3)
+  const related = posts
+    .filter((a) => a.slug !== article.slug && a.category === article.category)
+    .slice(0, 3)
+  const fallback = posts.filter((a) => a.slug !== article.slug).slice(0, 3)
   const more = related.length ? related : fallback
 
   return (
     <>
-      <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
-        <div className="mx-auto max-w-3xl px-4 py-14 md:py-20">
+      <div className="bg-hero-pro relative overflow-hidden border-b border-border">
+        <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
+        <div className="relative mx-auto max-w-3xl px-4 py-14 md:py-20">
           <Link to="/resources" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
             <ArrowLeft className="size-4" /> All resources
           </Link>
@@ -59,6 +70,17 @@ export default function Article() {
         </div>
       </div>
 
+      {/* Cover */}
+      {article.image && (
+        <Section className="max-w-3xl !pb-0">
+          <img
+            src={article.image}
+            alt=""
+            className="aspect-[16/9] w-full rounded-2xl border border-border object-cover shadow-elevate"
+          />
+        </Section>
+      )}
+
       <Section className="max-w-3xl">
         <div className="space-y-5 text-lg leading-relaxed text-muted-foreground">
           {article.body.map((p, i) => (
@@ -70,24 +92,36 @@ export default function Article() {
       </Section>
 
       {/* Related */}
-      <Section className="max-w-3xl !pt-0">
-        <h2 className="text-xl font-semibold">More reading</h2>
-        <div className="mt-5 grid gap-4 sm:grid-cols-3">
-          {more.map((a) => (
-            <Link
-              key={a.slug}
-              to={`/resources/${a.slug}`}
-              className="group surface-interactive p-5"
-            >
-              <Badge variant="secondary">{a.category}</Badge>
-              <h3 className="mt-3 text-sm font-semibold">{a.title}</h3>
-              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                Read <ArrowRight className="size-3 transition-transform group-hover:translate-x-1" />
-              </span>
-            </Link>
-          ))}
-        </div>
-      </Section>
+      {more.length > 0 && (
+        <Section className="max-w-3xl !pt-0">
+          <h2 className="text-xl font-semibold">More reading</h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {more.map((a) => (
+              <Link
+                key={a.slug}
+                to={`/resources/${a.slug}`}
+                className="group surface-interactive flex flex-col overflow-hidden"
+              >
+                <div className="relative aspect-[16/10] overflow-hidden">
+                  <img
+                    src={a.image}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+                <div className="flex flex-1 flex-col p-5">
+                  <Badge variant="secondary" className="self-start">{a.category}</Badge>
+                  <h3 className="mt-3 text-sm font-semibold">{a.title}</h3>
+                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                    Read <ArrowRight className="size-3 transition-transform group-hover:translate-x-1" />
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <CtaBand />
     </>

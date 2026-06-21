@@ -179,13 +179,23 @@
 }
 
 @layer utilities {
-  /* Brand navy + mint radial mesh for hero / feature bands. */
-  .bg-hero-mesh {
+  /* Professional hero base — clean canvas, a faint cool tint sweeping down from
+     the top, and one restrained brand wash in the top corner. No blobs. */
+  .bg-hero-pro {
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(60% 80% at 85% -10%, hsl(var(--primary) / 0.18), transparent 60%),
-      radial-gradient(50% 70% at 0% 110%, hsl(var(--primary) / 0.12), transparent 55%),
-      radial-gradient(40% 60% at 50% 0%, hsl(var(--accent) / 0.14), transparent 60%);
+      radial-gradient(55% 55% at 82% -5%, hsl(var(--primary) / 0.10), transparent 70%),
+      linear-gradient(to bottom, hsl(var(--secondary) / 0.55), transparent 38%);
+  }
+  /* Fine engineering grid for the hero — crisp lines that fade out toward the
+     content with a radial mask, so text stays clean. Reads precise, not busy. */
+  .bg-hero-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--primary) / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--primary) / 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
+    mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
   }
   /* Quieter mesh for interior section bands. */
   .bg-soft-mesh {
@@ -208,6 +218,23 @@
   .animation-delay-100 { animation-delay: 0.1s; }
   .animation-delay-200 { animation-delay: 0.2s; }
   .animation-delay-300 { animation-delay: 0.3s; }
+  .animation-delay-400 { animation-delay: 0.4s; }
+  .animation-delay-500 { animation-delay: 0.5s; }
+  /* Gentle continuous float for hero cards. Duration/delay varied per card via
+     inline style so they drift independently, not in lockstep. */
+  .animate-float { animation: float 7s ease-in-out infinite; }
+  /* Soft, slow opacity pulse for the decorative hero glow. */
+  .animate-glow { animation: glow 8s ease-in-out infinite; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
