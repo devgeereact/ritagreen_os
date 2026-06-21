@@ -11,6 +11,24 @@
 //   POST /testimonials.php?action=delete&id=5      -> { ok }
 require __DIR__ . '/lib.php';
 
+// First-run migration: ensure the table exists (idempotent).
+$conn->query(
+    "CREATE TABLE IF NOT EXISTS testimonials (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      author VARCHAR(160) NOT NULL,
+      role VARCHAR(190) NOT NULL DEFAULT '',
+      rating TINYINT NOT NULL DEFAULT 5,
+      body VARCHAR(1000) NOT NULL,
+      status ENUM('draft','published') NOT NULL DEFAULT 'published',
+      sort_order INT NOT NULL DEFAULT 0,
+      author_id INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at TIMESTAMP NULL,
+      KEY idx_testi_pub (status, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+);
+
 $action = $_GET['action'] ?? '';
 $m = method();
 

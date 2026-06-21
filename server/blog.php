@@ -12,6 +12,29 @@
 //   POST /blog.php?action=delete&id=5         -> { ok }
 require __DIR__ . '/lib.php';
 
+// First-run migration: ensure the table exists (idempotent). Lets the endpoint
+// be deployed without a manual schema step.
+$conn->query(
+    "CREATE TABLE IF NOT EXISTS blog_posts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      slug VARCHAR(190) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      excerpt VARCHAR(500) NOT NULL DEFAULT '',
+      category VARCHAR(64) NOT NULL DEFAULT 'Company',
+      image VARCHAR(500) NOT NULL DEFAULT '',
+      body MEDIUMTEXT NOT NULL,
+      read_mins INT NOT NULL DEFAULT 3,
+      status ENUM('draft','published') NOT NULL DEFAULT 'draft',
+      published_at DATE NULL,
+      author_id INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at TIMESTAMP NULL,
+      UNIQUE KEY uniq_blog_slug (slug),
+      KEY idx_blog_pub (status, published_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+);
+
 function blog_slugify(string $s): string {
     $s = strtolower(trim($s));
     $s = preg_replace('/[^a-z0-9]+/', '-', $s);
