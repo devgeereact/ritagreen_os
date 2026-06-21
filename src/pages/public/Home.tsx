@@ -5,16 +5,39 @@ import {
   ShieldCheck,
   Clock,
   Phone,
-  Check,
-  Quote,
+  Zap,
+  Layers,
+  GraduationCap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Section, CtaBand } from "@/components/public/section"
+import { Badge } from "@/components/ui/badge"
+import { Section, SectionAlt, CtaBand } from "@/components/public/section"
 import { Faqs } from "@/components/public/Faqs"
+import {
+  SectionHeading,
+  BannerCards,
+  CounterBand,
+  FeatureSplit,
+  Testimonials,
+} from "@/components/public/marketing"
 import { DIVISIONS } from "@/lib/divisions"
 import { divisionIcon, accentTint } from "@/lib/division-icons"
-import { COMPANY, WHY, HOW_WE_WORK, STATS, FAQS, ASSURANCE } from "@/lib/company"
+import { COMPANY, HOW_WE_WORK, STATS, FAQS } from "@/lib/company"
+import { useBlogPosts } from "@/lib/resources"
 import { useSeo } from "@/hooks/use-seo"
+
+const TRUST = [
+  "CQC-aligned care",
+  "SIA-licensed officers",
+  "Enhanced DBS checked",
+  "COSHH-controlled cleaning",
+  "£5m insurance",
+  "UK GDPR compliant",
+]
+
+function fmt(date: string) {
+  return new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+}
 
 export default function Home() {
   useSeo({
@@ -41,11 +64,16 @@ export default function Home() {
     },
   })
 
+  const { posts } = useBlogPosts()
+  const latest = [...posts].sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 3)
+
   return (
     <>
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border bg-hero-mesh">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:py-28">
+      <section className="bg-hero-pro relative overflow-hidden border-b border-border">
+        {/* Crisp engineering grid, masked so it fades behind the copy. */}
+        <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 md:grid-cols-2 md:py-28">
           <div className="flex flex-col justify-center">
             <p className="eyebrow animate-fade-up">
               <span className="inline-block size-1.5 rounded-full bg-primary" />
@@ -77,30 +105,52 @@ export default function Home() {
           </div>
 
           <div className="relative hidden md:block">
-            <div className="grid grid-cols-2 gap-4">
+            {/* Soft, slowly pulsing brand glow behind the cards. */}
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              <div className="animate-glow absolute -right-8 top-0 size-60 rounded-full bg-primary/25 blur-3xl" />
+              <div
+                className="animate-glow absolute -bottom-8 left-0 size-52 rounded-full bg-accent/30 blur-3xl"
+                style={{ animationDelay: "2.5s" }}
+              />
+            </div>
+
+            <div className="relative grid grid-cols-2 gap-4">
               {DIVISIONS.map((d, i) => {
                 const Icon = divisionIcon(d.id)
                 return (
-                  <Link
+                  <div
                     key={d.id}
-                    to={`/services#${d.id}`}
-                    style={{ animationDelay: `${0.15 + i * 0.08}s` }}
-                    className="group surface-interactive animate-fade-up flex flex-col justify-between p-6 [&:nth-child(even)]:mt-6"
+                    style={{ animationDelay: `${0.2 + i * 0.1}s` }}
+                    className="animate-fade-up [&:nth-child(even)]:mt-8"
                   >
-                    <span
-                      className="grid size-12 place-items-center rounded-xl ring-1 ring-inset ring-black/5"
-                      style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
+                    <Link
+                      to={`/services#${d.id}`}
+                      style={{ animationDelay: `${i * 0.7}s`, animationDuration: `${6.5 + i * 0.6}s` }}
+                      className="animate-float group relative flex h-full flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card/80 p-6 shadow-soft backdrop-blur-sm transition-[box-shadow,border-color] duration-300 hover:border-primary/30 hover:shadow-lift"
                     >
-                      <Icon className="size-6" strokeWidth={1.75} />
-                    </span>
-                    <div className="mt-6">
-                      <p className="font-semibold text-foreground">{d.name}</p>
-                      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{d.tagline}</p>
-                      <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                        Learn more <ArrowRight className="size-3.5" />
+                      {/* Accent wash fades in on hover, tinted to the division. */}
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                        style={{
+                          background: `radial-gradient(120% 80% at 100% 0%, ${accentTint(d.accent, 0.16)}, transparent 70%)`,
+                        }}
+                      />
+                      <span
+                        className="relative grid size-12 place-items-center rounded-xl ring-1 ring-inset ring-black/5 transition-transform duration-300 group-hover:scale-110"
+                        style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
+                      >
+                        <Icon className="size-6" strokeWidth={1.75} />
                       </span>
-                    </div>
-                  </Link>
+                      <div className="relative mt-6">
+                        <p className="font-semibold text-foreground">{d.name}</p>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{d.tagline}</p>
+                        <span className="mt-3 inline-flex -translate-x-1 items-center gap-1 text-sm font-medium text-primary opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+                          Learn more <ArrowRight className="size-3.5" />
+                        </span>
+                      </div>
+                    </Link>
+                  </div>
                 )
               })}
             </div>
@@ -108,51 +158,56 @@ export default function Home() {
         </div>
       </section>
 
-      {/* The 6am problem */}
-      <Section className="!py-14">
-        <div className="surface p-8 shadow-elevate md:p-12">
-          <div className="grid items-center gap-8 md:grid-cols-2">
-            <div>
-              <p className="eyebrow">The problem we solve</p>
-              <h2 className="mt-3 text-2xl font-bold md:text-3xl">
-                Most homes juggle four or five suppliers
-              </h2>
-              <p className="mt-4 leading-relaxed text-muted-foreground">
-                One agency for carers, another for training, a cleaning contractor, a security firm.
-                Different invoices, different standards, different levels of trust. {COMPANY.shortName}{" "}
-                exists to be the one name you can call instead.
-              </p>
-            </div>
-            <div className="rounded-2xl border-l-2 border-primary bg-soft-mesh p-7">
-              <p className="font-serif text-lg italic leading-relaxed text-foreground">
-                "If you've ever had a carer call in sick at 6am, you know the scramble that follows.
-                RitaGreen covers it — a safe pair of hands the same day, not a stranger."
-              </p>
-              <Button asChild variant="link" className="mt-2 h-auto p-0 text-primary">
-                <Link to="/contact">
-                  Short-staffed this week? Talk to us <ArrowRight className="ml-1 size-4" />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
+      {/* Banner cards — three promises directly under the hero */}
+      <Section className="!py-12">
+        <BannerCards
+          items={[
+            {
+              title: "Same-day cover",
+              body: "A carer calls in sick at 6am? We can often confirm a checked replacement the same day — not a stranger.",
+              icon: <Zap className="size-5" />,
+            },
+            {
+              title: "One trusted name",
+              body: "Care, training, cleaning and security from one contact, one invoice and one standard — instead of four suppliers.",
+              icon: <Layers className="size-5" />,
+              to: "/about",
+            },
+            {
+              title: "We train our own",
+              body: "Our academy trains the carers we place, so we know exactly who we send and how they were taught.",
+              icon: <GraduationCap className="size-5" />,
+              to: "/careers",
+            },
+          ]}
+        />
+      </Section>
+
+      {/* About split — the problem we solve, with an experience sticker */}
+      <Section className="!pt-4">
+        <FeatureSplit
+          eyebrow="The problem we solve"
+          title="Most homes juggle four or five suppliers"
+          body={`One agency for carers, another for training, a cleaning contractor, a security firm — different invoices, different standards, different levels of trust. ${COMPANY.shortName} exists to be the one name you can call instead.`}
+          points={[
+            "One contact across the whole day",
+            "One invoice, one standard",
+            "DBS-checked, qualified people",
+            "A named manager who stays with you",
+          ]}
+          cta={{ to: "/about", label: "How we work" }}
+          sticker={{ value: "4-in-1", label: "Divisions, one name" }}
+          image={{ src: "/images/divisions/care.jpg", alt: "A RitaGreen carer supporting two older people with an activity at home" }}
+        />
       </Section>
 
       {/* Four divisions */}
-      <Section className="!pt-4">
-        <div className="max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            Four divisions, one standard
-          </p>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
-            One purpose, four divisions
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            {COMPANY.shortName} looks after people through every part of their day. Each division
-            stands on its own, and together they let one client call a single trusted name for staff,
-            training, cleaning or security.
-          </p>
-        </div>
+      <Section>
+        <SectionHeading
+          eyebrow="Four divisions, one standard"
+          title="One purpose, four divisions"
+          intro={`${COMPANY.shortName} looks after people through every part of their day. Each division stands on its own, and together they let one client call a single trusted name for staff, training, cleaning or security.`}
+        />
         <div className="mt-10 grid gap-5 md:grid-cols-2">
           {DIVISIONS.map((d) => {
             const Icon = divisionIcon(d.id)
@@ -181,49 +236,35 @@ export default function Home() {
         </div>
       </Section>
 
-      {/* Why RitaGreen */}
-      <section className="border-y border-border bg-soft-mesh">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
-          <p className="eyebrow">Why RitaGreen</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">A single standard behind every name</h2>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {WHY.map((w) => (
-              <div key={w.title} className="surface p-7">
-                <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <Check className="size-5" />
-                </span>
-                <h3 className="mt-4 font-semibold">{w.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Proof band — trust marks + animated stats, one combined section */}
+      <CounterBand stats={STATS} trust={TRUST} />
 
-      {/* Stats */}
-      <section className="border-b border-border">
-        <div className="mx-auto grid max-w-6xl gap-px overflow-hidden px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
-          {STATS.map((s) => (
-            <div key={s.l} className="px-4 text-center">
-              <div className="font-bold text-primary text-4xl md:text-5xl">{s.n}</div>
-              <div className="mt-2 text-sm font-medium text-muted-foreground">{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Academy feature split (reversed) */}
+      <Section>
+        <FeatureSplit
+          reverse
+          eyebrow="RitaGreen Academy"
+          title="We don't just hire carers — we make them"
+          body="Our academy runs the Care Certificate and mandatory training, then gives strong learners a guaranteed interview with RitaGreen Care. Real training, a real job at the end."
+          points={[
+            "All 16 Care Certificate standards",
+            "Moving & handling, first aid, safeguarding",
+            "Guaranteed interview for strong learners",
+            "Verifiable certificates employers can check",
+          ]}
+          cta={{ to: "/careers", label: "Train with us" }}
+          sticker={{ value: "12 wk", label: "Care Certificate" }}
+          image={{ src: "/images/divisions/training.jpg", alt: "Adult learners in a bright classroom during RitaGreen Academy training" }}
+        />
+      </Section>
 
       {/* How we work */}
-      <Section>
-        <div className="max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">How we work</p>
-          <h2 className="mt-3 text-2xl font-bold tracking-tight md:text-3xl">
-            One enquiry, then a team that stays with you
-          </h2>
-          <p className="mt-3 text-muted-foreground">
-            Every engagement starts with a short conversation and ends with steady, reliable cover and
-            a named contact who knows your account.
-          </p>
-        </div>
+      <SectionAlt>
+        <SectionHeading
+          eyebrow="How we work"
+          title="One enquiry, then a team that stays with you"
+          intro="Every engagement starts with a short conversation and ends with steady, reliable cover and a named contact who knows your account."
+        />
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {HOW_WE_WORK.map((s) => (
             <div key={s.step} className="surface relative p-7">
@@ -235,72 +276,87 @@ export default function Home() {
             </div>
           ))}
         </div>
-      </Section>
+      </SectionAlt>
 
-      {/* Assurance strip */}
-      <section className="border-y border-border bg-soft-mesh">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
-          <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
-            <div className="max-w-2xl">
-              <p className="eyebrow">The standards behind every shift</p>
-              <h2 className="mt-3 text-2xl font-bold md:text-3xl">
-                Compliance, checked before staff are dispatched
-              </h2>
-            </div>
-            <Button asChild variant="outline" className="bg-background/60 backdrop-blur">
-              <Link to="/accreditations">See our accreditations</Link>
-            </Button>
-          </div>
-          <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {ASSURANCE.map((a) => (
-              <div key={a.title} className="surface flex gap-4 p-6">
-                <BadgeCheck className="mt-0.5 size-5 shrink-0 text-primary" />
-                <div>
-                  <h3 className="font-semibold text-foreground">{a.title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonial / voice */}
+      {/* Client testimonials */}
       <Section>
-        <figure className="mx-auto max-w-3xl text-center">
-          <Quote className="mx-auto size-8 text-primary" />
-          <blockquote className="mt-4 font-serif text-2xl font-medium leading-relaxed text-foreground md:text-3xl">
-            Four jobs, one name. Care at dawn, a spotless building by noon, a calm guard overnight —
-            all from people we've checked and trained ourselves.
-          </blockquote>
-          <figcaption className="mt-4 text-sm text-muted-foreground">
-            — {COMPANY.legalName}
-          </figcaption>
-        </figure>
+        <SectionHeading
+          align="center"
+          eyebrow="What clients say"
+          title="Trusted by the people who rely on us"
+          className="mb-10"
+        />
+        <Testimonials />
       </Section>
+
+      {/* Latest resources */}
+      <SectionAlt>
+        <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+          <SectionHeading
+            eyebrow="From the blog"
+            title="Guides & articles"
+            intro="Practical reading for the people who hire us — care managers, landlords, agents and event organisers."
+          />
+          <Button asChild variant="outline" className="bg-background/60 backdrop-blur">
+            <Link to="/resources">View all</Link>
+          </Button>
+        </div>
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
+          {latest.map((a) => (
+            <Link
+              key={a.slug}
+              to={`/resources/${a.slug}`}
+              className="group surface-interactive flex flex-col overflow-hidden bg-card"
+            >
+              <div className="relative aspect-[16/10] overflow-hidden">
+                <img
+                  src={a.image}
+                  alt=""
+                  loading="lazy"
+                  className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <Badge variant="secondary" className="absolute left-3 top-3 shadow-soft">
+                  {a.category}
+                </Badge>
+              </div>
+              <div className="flex flex-1 flex-col p-6">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>{fmt(a.date)}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3" /> {a.readMins} min
+                  </span>
+                </div>
+                <h3 className="mt-3 font-semibold">{a.title}</h3>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{a.excerpt}</p>
+                <span className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-primary">
+                  Read <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-1" />
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </SectionAlt>
 
       {/* FAQ */}
-      <section className="border-t border-border bg-soft-mesh">
-        <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
-          <p className="eyebrow">FAQ</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">Common questions</h2>
-          <p className="mt-3 text-muted-foreground">
-            The things care managers, landlords and event organisers ask us most.
-          </p>
-          <Faqs items={FAQS} className="mt-8" />
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Button asChild>
-              <Link to="/contact">Ask us anything</Link>
-            </Button>
-            <a
-              href={COMPANY.phoneHref}
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-            >
-              <Phone className="size-4" /> {COMPANY.phone}
-            </a>
-          </div>
+      <Section>
+        <SectionHeading
+          eyebrow="FAQ"
+          title="Common questions"
+          intro="The things care managers, landlords and event organisers ask us most."
+        />
+        <Faqs items={FAQS} className="mt-8" />
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Button asChild>
+            <Link to="/contact">Ask us anything</Link>
+          </Button>
+          <a
+            href={COMPANY.phoneHref}
+            className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          >
+            <Phone className="size-4" /> {COMPANY.phone}
+          </a>
         </div>
-      </section>
+      </Section>
 
       <CtaBand />
     </>

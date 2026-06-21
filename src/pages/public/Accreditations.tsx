@@ -12,8 +12,19 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { PageHeader, Section, SectionAlt, CtaBand } from "@/components/public/section"
+import { TrustStrip } from "@/components/public/marketing"
 import { useSeo } from "@/hooks/use-seo"
+
+const TRUST = [
+  "CQC-aligned",
+  "SIA-licensed",
+  "Enhanced DBS",
+  "BS 7858 vetting",
+  "COSHH-controlled",
+  "£5m insurance",
+  "UK GDPR",
+]
 
 const ITEMS = [
   {
@@ -97,6 +108,13 @@ export default function Accreditations() {
         intro="Compliance is not a badge we point to once a year. It is checked before staff are dispatched and tracked to renewal — the whole model rests on 'qualified, checked and ready'."
       />
 
+      {/* Trust strip */}
+      <section className="border-b border-border bg-soft-mesh">
+        <div className="mx-auto max-w-6xl px-4 py-10">
+          <TrustStrip items={TRUST} />
+        </div>
+      </section>
+
       {/* Standards grid */}
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
@@ -115,28 +133,26 @@ export default function Accreditations() {
       </Section>
 
       {/* Vetting process */}
-      <section className="border-y border-border bg-soft-mesh">
-        <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
-          <p className="eyebrow">How we vet</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">
-            Every worker, checked before they start
-          </h2>
-          <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
-            We never let vetting or licensing slip to win a job. Here's the order we do it in.
-          </p>
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {VETTING.map((v) => (
-              <div key={v.step} className="surface relative p-7">
-                <span className="grid size-10 place-items-center rounded-full bg-primary font-mono text-sm font-bold text-primary-foreground shadow-soft">
-                  {v.step}
-                </span>
-                <h3 className="mt-4 font-semibold">{v.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{v.body}</p>
-              </div>
-            ))}
-          </div>
+      <SectionAlt>
+        <p className="eyebrow">How we vet</p>
+        <h2 className="mt-3 text-2xl font-bold md:text-3xl">
+          Every worker, checked before they start
+        </h2>
+        <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+          We never let vetting or licensing slip to win a job. Here's the order we do it in.
+        </p>
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {VETTING.map((v) => (
+            <div key={v.step} className="surface relative p-7">
+              <span className="grid size-10 place-items-center rounded-full bg-primary font-mono text-sm font-bold text-primary-foreground shadow-soft">
+                {v.step}
+              </span>
+              <h3 className="mt-4 font-semibold">{v.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{v.body}</p>
+            </div>
+          ))}
         </div>
-      </section>
+      </SectionAlt>
 
       {/* Verify certificate */}
       <Section>

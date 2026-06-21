@@ -1,9 +1,55 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { ArrowUp, Instagram, Linkedin, Facebook, Mail, Phone } from "lucide-react"
+import { toast } from "sonner"
 import { Logo } from "@/components/brand/Logo"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, SOCIALS } from "@/lib/company"
+
+// Compact, single-instance newsletter signup. Lives in the footer so the public
+// site has exactly one subscribe field site-wide, not a band repeated per page.
+function FooterSubscribe() {
+  const [email, setEmail] = useState("")
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("That email doesn't look right.")
+      return
+    }
+    toast.success("Thanks — we'll keep you posted on RitaGreen news.")
+    setEmail("")
+  }
+
+  return (
+    <div className="border-b border-border">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="font-display text-lg font-bold tracking-tight">Stay in the loop</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Occasional updates on care, training, cleaning and security across London. No spam.
+          </p>
+        </div>
+        <form onSubmit={onSubmit} className="flex w-full gap-2 sm:max-w-sm">
+          <Input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter your email"
+            aria-label="Email address"
+            className="bg-background"
+          />
+          <Button type="submit" className="shrink-0">
+            Subscribe
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 const SOCIAL_ICON: Record<string, ReactNode> = {
   instagram: <Instagram className="size-4" />,
@@ -15,6 +61,7 @@ const SOCIAL_ICON: Record<string, ReactNode> = {
 export function PublicFooter() {
   return (
     <footer className="mt-20 border-t border-border bg-soft-mesh">
+      <FooterSubscribe />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
@@ -25,20 +72,29 @@ export function PublicFooter() {
             Care, training, cleaning and security across London. Trained, checked and trusted staff,
             from one name.
           </p>
-          <div className="mt-4 space-y-1 text-sm text-muted-foreground">
-            <a href={COMPANY.phoneHref} className="flex items-center gap-2 hover:text-foreground">
-              <Phone className="size-4" /> {COMPANY.phone}
-            </a>
-            <a href={COMPANY.emergencyPhoneHref} className="flex items-center gap-2 hover:text-foreground">
-              <Phone className="size-4" /> {COMPANY.emergencyPhone}
-              <span className="text-xs font-medium text-primary">24hr</span>
-            </a>
+          {/* For any enquiry — Oxybuild's prominent footer call-to-action. */}
+          <div className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              For any enquiry
+            </p>
             <a
-              href={`mailto:${COMPANY.email}`}
-              className="flex items-center gap-2 hover:text-foreground"
+              href={COMPANY.phoneHref}
+              className="mt-1 block font-display text-2xl font-bold tracking-tight text-primary hover:underline"
             >
-              <Mail className="size-4" /> {COMPANY.email}
+              {COMPANY.phone}
             </a>
+            <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+              <a href={COMPANY.emergencyPhoneHref} className="flex items-center gap-2 hover:text-foreground">
+                <Phone className="size-4" /> {COMPANY.emergencyPhone}
+                <span className="text-xs font-medium text-primary">24hr</span>
+              </a>
+              <a
+                href={`mailto:${COMPANY.email}`}
+                className="flex items-center gap-2 hover:text-foreground"
+              >
+                <Mail className="size-4" /> {COMPANY.email}
+              </a>
+            </div>
           </div>
         </div>
 

@@ -18,20 +18,62 @@ export function Section({
   )
 }
 
+// Tinted interior band — the single source of truth for "alternate" sections.
+// Same width + padding as Section so the whole site shares one vertical rhythm.
+export function SectionAlt({
+  className,
+  children,
+  id,
+}: {
+  className?: string
+  children: React.ReactNode
+  id?: string
+}) {
+  return (
+    <section id={id} className="border-y border-border bg-soft-mesh">
+      <div className={cn("mx-auto max-w-6xl px-4 py-14 md:py-20", className)}>{children}</div>
+    </section>
+  )
+}
+
 export function PageHeader({
   eyebrow,
   title,
   intro,
+  breadcrumb,
 }: {
   eyebrow?: string
   title: string
   intro?: string
+  /** Current-page label for the breadcrumb trail. Falls back to the eyebrow. */
+  breadcrumb?: string
 }) {
+  const here = breadcrumb ?? eyebrow
   return (
-    <div className="relative overflow-hidden border-b border-border bg-hero-mesh">
-      <div className="mx-auto max-w-6xl px-4 py-16 md:py-24">
+    <div className="bg-hero-pro relative overflow-hidden border-b border-border">
+      {/* Crisp engineering grid, masked to fade behind the copy — matches the
+          home hero so every page opens with the same professional surface. */}
+      <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto max-w-6xl px-4 py-16 md:py-24">
+        <nav aria-label="Breadcrumb" className="animate-fade-up">
+          <ol className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <li>
+              <Link to="/" className="transition-colors hover:text-primary">
+                Home
+              </Link>
+            </li>
+            {here && (
+              <>
+                <li aria-hidden="true" className="text-border">
+                  /
+                </li>
+                <li className="text-foreground">{here}</li>
+              </>
+            )}
+          </ol>
+        </nav>
         {eyebrow && (
-          <p className="eyebrow animate-fade-up">
+          <p className="eyebrow mt-5 animate-fade-up animation-delay-100">
             <span className="inline-block size-1.5 rounded-full bg-primary" />
             {eyebrow}
           </p>

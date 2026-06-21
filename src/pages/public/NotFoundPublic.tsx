@@ -9,8 +9,9 @@ export default function NotFoundPublic() {
   })
 
   return (
-    <div className="relative flex min-h-[70vh] items-center justify-center overflow-hidden bg-hero-mesh px-4 py-28">
-      <div className="flex max-w-md flex-col items-center text-center animate-fade-up">
+    <div className="bg-hero-pro relative flex min-h-[70vh] items-center justify-center overflow-hidden px-4 py-28">
+      <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
+      <div className="relative flex max-w-md flex-col items-center text-center animate-fade-up">
         <p className="font-bold leading-none text-primary text-7xl md:text-8xl">404</p>
         <h1 className="mt-6 text-2xl font-bold">We can't find that page</h1>
         <p className="mt-3 leading-relaxed text-muted-foreground">

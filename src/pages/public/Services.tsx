@@ -2,9 +2,26 @@ import { Link } from "react-router-dom"
 import { ArrowRight, Check, Users, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
+import { SectionHeading, TrustStrip } from "@/components/public/marketing"
 import { DIVISIONS } from "@/lib/divisions"
 import { divisionIcon, accentTint } from "@/lib/division-icons"
 import { ENGAGEMENTS } from "@/lib/company"
+
+const TRUST = [
+  "CQC-aligned care",
+  "SIA-licensed officers",
+  "Enhanced DBS checked",
+  "COSHH-controlled cleaning",
+  "£5m insurance",
+]
+
+// Division → on-brand photo (Unsplash, licensed for commercial use).
+const DIVISION_IMG: Record<string, { src: string; alt: string }> = {
+  care: { src: "/images/divisions/care.jpg", alt: "A carer supporting older people with an activity at home" },
+  academy: { src: "/images/divisions/training.jpg", alt: "Adult learners in a classroom during academy training" },
+  cleaning: { src: "/images/divisions/cleaning.jpg", alt: "A cleaning operative mopping a clean commercial interior" },
+  security: { src: "/images/divisions/security.jpg", alt: "A uniformed security officer in a building lobby" },
+}
 import { useSeo } from "@/hooks/use-seo"
 
 export default function Services() {
@@ -22,6 +39,13 @@ export default function Services() {
         title="Services across care, training, cleaning and security"
         intro="Four divisions, one standard. Every service is delivered by checked, qualified people under one account. Browse what each division does, or send a single enquiry and we'll point you to the right team."
       />
+
+      {/* Trust strip */}
+      <section className="border-b border-border bg-soft-mesh">
+        <div className="mx-auto max-w-6xl px-4 py-10">
+          <TrustStrip items={TRUST} />
+        </div>
+      </section>
 
       {/* Quick nav */}
       <div className="sticky top-16 z-30 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -42,23 +66,50 @@ export default function Services() {
         </div>
       </div>
 
-      {DIVISIONS.map((d) => {
+      {DIVISIONS.map((d, idx) => {
         const Icon = divisionIcon(d.id)
+        const img = DIVISION_IMG[d.id]
         return (
         <Section key={d.id} id={d.id} className="scroll-mt-28 border-b border-border last:border-0">
-          <div className="flex items-center gap-4">
-            <span
-              className="grid size-14 place-items-center rounded-2xl ring-1 ring-inset ring-black/5"
-              style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
-            >
-              <Icon className="size-7" strokeWidth={1.75} />
-            </span>
-            <div>
-              <h2 className="text-2xl font-bold md:text-3xl">{d.name}</h2>
-              <p className="mt-1 font-serif text-lg italic text-foreground">{d.headline}</p>
+          {/* Division header — content + photo, alternating sides */}
+          <div className="grid gap-8 md:grid-cols-2 md:items-center md:gap-12">
+            <div className={idx % 2 === 1 ? "md:order-2" : undefined}>
+              <div className="flex items-center gap-4">
+                <span
+                  className="grid size-14 place-items-center rounded-2xl ring-1 ring-inset ring-black/5"
+                  style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
+                >
+                  <Icon className="size-7" strokeWidth={1.75} />
+                </span>
+                <div>
+                  <h2 className="text-2xl font-bold md:text-3xl">{d.name}</h2>
+                  <p className="mt-1 font-serif text-lg italic text-foreground">{d.headline}</p>
+                </div>
+              </div>
+              <p className="mt-5 leading-relaxed text-muted-foreground">{d.intro}</p>
             </div>
+            {img && (
+              <div
+                className={
+                  "relative aspect-[4/3] overflow-hidden rounded-3xl border border-border shadow-elevate " +
+                  (idx % 2 === 1 ? "md:order-1" : "")
+                }
+              >
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  loading="lazy"
+                  className="absolute inset-0 size-full object-cover"
+                />
+                <span
+                  className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full bg-background/90 px-3 py-1 text-xs font-semibold text-foreground shadow-soft backdrop-blur"
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: d.accent }} />
+                  {d.descriptor}
+                </span>
+              </div>
+            )}
           </div>
-          <p className="mt-5 max-w-3xl leading-relaxed text-muted-foreground">{d.intro}</p>
 
           {/* Service cards */}
           <div className="mt-8 grid gap-5 md:grid-cols-3">
@@ -125,14 +176,11 @@ export default function Services() {
 
       {/* Engagement models */}
       <Section>
-        <p className="eyebrow">Buying from RitaGreen</p>
-        <h2 className="mt-3 text-2xl font-bold md:text-3xl">
-          Ways to work with us
-        </h2>
-        <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
-          From one-off emergency cover to a managed contract across a portfolio — pick the engagement
-          that fits, and we'll confirm scope and rates in writing.
-        </p>
+        <SectionHeading
+          eyebrow="Buying from RitaGreen"
+          title="Ways to work with us"
+          intro="From one-off emergency cover to a managed contract across a portfolio — pick the engagement that fits, and we'll confirm scope and rates in writing."
+        />
         <div className="surface mt-8 overflow-hidden p-0">
           <table className="w-full text-left text-sm">
             <thead className="bg-soft-mesh text-foreground">

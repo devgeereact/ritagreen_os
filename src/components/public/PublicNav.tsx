@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, NavLink, useNavigate } from "react-router-dom"
-import { ChevronDown, Menu, LayoutDashboard, LogOut } from "lucide-react"
+import { ChevronDown, Menu, LayoutDashboard, LogOut, Phone, Clock, ShieldAlert, ArrowRight } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
+import { COMPANY } from "@/lib/company"
+import { divisionIcon, accentTint } from "@/lib/division-icons"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -82,8 +84,35 @@ export function PublicNav() {
   }, [servicesOpen])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4">
+    <>
+      {/* Utility top bar — Oxybuild's two-row header. Scrolls away; the nav below
+          stays sticky so /services' `top-16` offsets remain accurate. */}
+      <div className="hidden border-b border-primary-foreground/10 bg-primary text-primary-foreground md:block">
+        <div className="mx-auto flex h-10 max-w-6xl items-center justify-between gap-4 px-4 text-xs font-medium">
+          <div className="flex items-center gap-5 text-primary-foreground/85">
+            <a href={COMPANY.phoneHref} className="flex items-center gap-1.5 hover:text-primary-foreground">
+              <Phone className="size-3.5" /> {COMPANY.phone}
+            </a>
+            <span className="hidden items-center gap-1.5 lg:flex">
+              <Clock className="size-3.5" /> {COMPANY.hours}
+            </span>
+          </div>
+          <div className="flex items-center gap-5">
+            <a
+              href={COMPANY.emergencyPhoneHref}
+              className="flex items-center gap-1.5 text-primary-foreground/85 hover:text-primary-foreground"
+            >
+              <ShieldAlert className="size-3.5 text-accent" /> 24hr cover {COMPANY.emergencyPhone}
+            </a>
+            <Link to="/login" className="text-primary-foreground/85 hover:text-primary-foreground">
+              Member login
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4">
         <Link to="/" className="mr-2 shrink-0" aria-label="RitaGreen home">
           <Logo />
         </Link>
@@ -118,28 +147,54 @@ export function PublicNav() {
             <div
               id="services-menu"
               className={cn(
-                "absolute left-1/2 top-full z-50 w-[680px] -translate-x-1/2 pt-2 transition-all",
-                servicesOpen ? "visible opacity-100" : "invisible opacity-0",
+                "absolute left-0 top-full z-50 w-[34rem] pt-3 transition-[opacity,transform] duration-200 ease-out",
+                servicesOpen
+                  ? "visible translate-y-0 opacity-100"
+                  : "pointer-events-none invisible -translate-y-1 opacity-0",
               )}
             >
-              <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-popover p-3 shadow-lg">
-                {DIVISIONS.map((d) => (
+              <div className="overflow-hidden rounded-2xl border border-border bg-popover shadow-lift">
+                <div className="grid grid-cols-2 gap-1 p-2">
+                  {DIVISIONS.map((d) => {
+                    const Icon = divisionIcon(d.id)
+                    return (
+                      <Link
+                        key={d.id}
+                        to={`/services#${d.id}`}
+                        onClick={() => setServicesOpen(false)}
+                        className="group/item flex items-start gap-3 rounded-xl p-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                      >
+                        <span
+                          className="grid size-10 shrink-0 place-items-center rounded-lg ring-1 ring-inset ring-black/5"
+                          style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
+                        >
+                          <Icon className="size-5" strokeWidth={1.75} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                            {d.name}
+                            <ArrowRight className="size-3.5 -translate-x-1 text-primary opacity-0 transition-all group-hover/item:translate-x-0 group-hover/item:opacity-100" />
+                          </span>
+                          <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-muted-foreground">
+                            {d.tagline}
+                          </span>
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-border bg-soft-mesh px-4 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    One supplier for the whole day — care, training, cleaning &amp; security.
+                  </p>
                   <Link
-                    key={d.id}
-                    to={`/services#${d.id}`}
+                    to="/services"
                     onClick={() => setServicesOpen(false)}
-                    className="rounded-lg p-3 transition-colors hover:bg-accent"
+                    className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary hover:underline"
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="size-2.5 rounded-full"
-                        style={{ backgroundColor: d.accent }}
-                      />
-                      <span className="text-sm font-semibold text-foreground">{d.name}</span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{d.tagline}</p>
+                    All services <ArrowRight className="size-3.5" />
                   </Link>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -209,20 +264,32 @@ export function PublicNav() {
                       Services
                     </AccordionTrigger>
                     <AccordionContent className="pb-1">
-                      {DIVISIONS.map((d) => (
-                        <Link
-                          key={d.id}
-                          to={`/services#${d.id}`}
-                          onClick={() => setOpen(false)}
-                          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-                        >
-                          <span
-                            className="size-2 rounded-full"
-                            style={{ backgroundColor: d.accent }}
-                          />
-                          {d.name}
-                        </Link>
-                      ))}
+                      {DIVISIONS.map((d) => {
+                        const Icon = divisionIcon(d.id)
+                        return (
+                          <Link
+                            key={d.id}
+                            to={`/services#${d.id}`}
+                            onClick={() => setOpen(false)}
+                            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                          >
+                            <span
+                              className="grid size-8 shrink-0 place-items-center rounded-lg ring-1 ring-inset ring-black/5"
+                              style={{ backgroundColor: accentTint(d.accent, 0.14), color: d.accent }}
+                            >
+                              <Icon className="size-4" strokeWidth={1.75} />
+                            </span>
+                            {d.name}
+                          </Link>
+                        )
+                      })}
+                      <Link
+                        to="/services"
+                        onClick={() => setOpen(false)}
+                        className="mt-1 flex items-center gap-1 rounded-md px-3 py-2 text-sm font-semibold text-primary hover:bg-accent"
+                      >
+                        All services <ArrowRight className="size-3.5" />
+                      </Link>
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -268,7 +335,8 @@ export function PublicNav() {
           </Sheet>
         </div>
       </div>
-    </header>
+      </header>
+    </>
   )
 }
 

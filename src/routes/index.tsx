@@ -41,6 +41,9 @@ const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
 const Enquiries = lazy(() => import("@/pages/app/Enquiries"))
 const Mailbox = lazy(() => import("@/pages/app/Mailbox"))
 const Comms = lazy(() => import("@/pages/app/Comms"))
+const Blog = lazy(() => import("@/pages/app/Blog"))
+const TestimonialsAdmin = lazy(() => import("@/pages/app/Testimonials"))
+const ContentStudio = lazy(() => import("@/pages/app/ContentStudio"))
 const Workers = lazy(() => import("@/pages/app/Workers"))
 const Compliance = lazy(() => import("@/pages/app/Compliance"))
 const Scheduling = lazy(() => import("@/pages/app/Scheduling"))
@@ -172,6 +175,9 @@ export const router = createBrowserRouter([
           { path: "insights", element: cms(<Insights />) },
           { path: "files", element: cms(<Files />) },
           { path: "comms", element: cms(<Comms />) },
+          { path: "blog", element: cms(<Blog />) },
+          { path: "testimonials", element: cms(<TestimonialsAdmin />) },
+          { path: "content-studio", element: cms(<ContentStudio />) },
           { path: "profile", element: cms(<Profile />) },
           { path: "notifications", element: cms(<Notifications />) },
           { path: "help", element: cms(<Help />) },
