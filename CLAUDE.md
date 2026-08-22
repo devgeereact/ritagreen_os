@@ -113,7 +113,7 @@ Deploys upload **only the `dist/` build**, so the three server files are never d
 
 ```bash
 npm install      # first time only
-npm run dev      # http://localhost:5173, hot reload
+npm run dev      # http://localhost:5122, hot reload (strictPort — fails loudly if taken)
 ```
 `fetch` calls hit the live API at the project's domain (no PHP/MySQL on the laptop). Edit components in `src/`.
 

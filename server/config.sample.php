@@ -111,13 +111,14 @@ define('IMAP_PASS', 'CHANGE_ME');                        // mailbox password —
 define('IMAP_VALIDATE_CERT', true);                      // validate the IMAP TLS cert (blocks MITM); set false only if the host's cert is broken
 
 // ----- CORS -----
-// In dev the React app runs on localhost:5173 and calls the live API.
-// Lock this to the dev origins you actually use.
+// In dev the React app runs on localhost:5122 (project block 12 in the
+// workspace port scheme, ~/.claude/CLAUDE.md "Dev-server ports") and reaches the live API through
+// Vite's *.php proxy, so it arrives same-origin and never hits this list.
+// The entries below are the direct-fetch fallback; keep them in step with
+// the pinned dev port. Lock this to the dev origins you actually use.
 define('ALLOWED_ORIGINS', [
-    'http://localhost:5178',
-    'http://127.0.0.1:5178',
-    'http://localhost:5180',
-    'http://127.0.0.1:5180',
+    'http://localhost:5122',
+    'http://127.0.0.1:5122',
     'https://ritagreenservices.com',
     'https://www.ritagreenservices.com',
 ]);

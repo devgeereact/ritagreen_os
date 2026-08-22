@@ -19,7 +19,7 @@ on one domain.
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173 (fetches the live API at ritagreenservices.com)
+npm run dev      # http://localhost:5122 (Vite proxies *.php to the live ritagreenservices.com API)
 npm run build    # -> dist/  (this is what deploy.yml ships)
 ```
 

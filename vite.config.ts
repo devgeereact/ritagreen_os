@@ -10,7 +10,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Project block 12 in the workspace port scheme (see ~/.claude/CLAUDE.md, "Dev-server ports").
+  // strictPort so a clash fails loudly instead of drifting to a random port.
+  // Previously unpinned, so this fell back to Vite's shared 5173.
   server: {
+    port: 5122,
+    strictPort: true,
     // Dev-only: forward PHP API calls to the live server so the browser sees
     // them as same-origin. Sidesteps the missing Access-Control-Allow-Origin
     // header on the server's CORS config. Prod serves PHP from the same domain.
@@ -21,6 +26,10 @@ export default defineConfig({
         secure: true,
       },
     },
+  },
+  preview: {
+    port: 5122,
+    strictPort: true,
   },
   build: {
     rollupOptions: {
