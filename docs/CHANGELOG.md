@@ -377,6 +377,34 @@ POST scheduling.php  worker: Dmitri Volkov, same shift
 201  shift created
 ```
 
+### Added — right to work becomes evidence
+
+It was `workers.right_to_work TINYINT(1)`: no method, no date, no verifier, no evidence, no
+expiry, no audit trail. The one field that most needed a trail had none, and it was the weakest
+point in the system in legal terms.
+
+- **Migration 006** adds `right_to_work_checks` — method, method note, reference, check date,
+  outcome, follow-up flag, recheck date, evidence file, verifier, verified-at, notes. The old
+  boolean is kept and synchronised, so nothing that still reads it regresses
+- **`server/right-to-work.php`** records a check, lists a person's history, reports what needs
+  attention, and verifies a check. **Recording and verifying are separate actions**, because
+  the person who collects a document is often not the person who signs it off, and "verified"
+  with nobody's name against it is not verification. A check whose outcome is still `pending`
+  cannot be verified — signing that off would be signing off nothing
+- The engine now reads the check record rather than the boolean: the most recent check wins,
+  its `recheck_due` is the expiry, and `verified` reflects whether a named person signed it
+
+**The legacy flag was carried over honestly.** Migration 006 imports each existing
+`right_to_work = 1` as an *unverified* historical assertion, with a note recording that no
+method, verifier or date was captured at the time. Presenting it as a completed check would
+have been inventing evidence.
+
+**Migration 007 stages the consequence.** With verification enforced, every migrated check is
+unverified, so the engine correctly blocks the entire workforce. Correct, and unusable. The
+requirement is recorded but not enforced until the office has worked through the backlog;
+turning it on is a one-row `UPDATE`, and the migration carries both that statement and the
+query to count who it would stand down first.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

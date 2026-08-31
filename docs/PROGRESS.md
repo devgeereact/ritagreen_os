@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`################........`  85 done · 12 partial · 40 to do · 137 tracked
+`################........`  87 done · 13 partial · 38 to do · 138 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -19,7 +19,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `########....` | 7 | 3 | 3 |
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
-| COMPLIANCE — Compliance engine and verification | 2 | `########....` | 11 | 2 | 4 |
+| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 13 | 3 | 2 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
@@ -75,7 +75,7 @@ Milestone 1 · 13 done, 1 partial, 3 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 11 done, 2 partial, 4 to do
+Milestone 2 · 13 done, 3 partial, 2 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
@@ -83,17 +83,18 @@ Milestone 2 · 11 done, 2 partial, 4 to do
 - [x] Credential expiry alert engine — _90/60/30/expired tiers, deduplicated, cron-driven_
 - [x] Eligibility evaluation logic — _rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come_
 - [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
+- [x] Legacy right-to-work carried over honestly — _Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence_
 - [x] Mandatory / recommended / optional weighting — _RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests_
 - [x] Per-service eligibility, demonstrated — _Verified: Esi Mensah is eligible for care and cleaning but blocked for security on a lapsed SIA licence. One credential, one service, exactly as intended_
 - [x] Per-worker evidence pack — _compliance.php?action=pack_
 - [x] Reference checks with gap explanation — _worker_references_
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
+- [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
 - [~] DBS verification workflow — _status, expiry and update-service flag stored; no verification record_
+- [~] Right to work as a dated, verified check — _The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision_
 - [~] SIA verification workflow — _number and expiry stored; no verification record_
 - [ ] Compliance status read-only in the UI
 - [ ] Generalised verification lifecycle
-- [ ] Right to work as a dated, verified check — _Migration 005 marks the requirement non-expiring, because the evidence is still a TINYINT(1) with no date. The engine correctly blocked everyone as 'undated' until it did. Flip expires back to 1 in Milestone 3_
-- [ ] Right to work check record — _currently workers.right_to_work TINYINT(1)_
 
 ### DOCUMENTS — Document management
 

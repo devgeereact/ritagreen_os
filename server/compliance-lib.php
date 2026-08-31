@@ -70,19 +70,37 @@ function rg_load_evidence(mysqli $conn, int $personId): array
     $w = $stmt->get_result()->fetch_assoc();
 
     if ($w) {
-        // Right to work is still a boolean here. Until Milestone 3 gives it a
-        // check record there is no date to expire and no verifier to name, so it
-        // is reported as non-expiring and self-verified. That is a known
-        // overstatement of the evidence, recorded rather than hidden.
-        if ($w['right_to_work']) {
-            $evidence['right_to_work'] = ['expiry' => null, 'verified' => true, 'provisional' => true];
-        }
         if ($w['dbs_status'] || $w['dbs_expiry']) {
             $evidence['dbs'] = ['expiry' => $w['dbs_expiry'], 'verified' => $w['dbs_status'] === 'valid'];
         }
         if ($w['sia_number'] || $w['sia_expiry']) {
             $evidence['sia_licence'] = ['expiry' => $w['sia_expiry'], 'verified' => (bool) $w['sia_number']];
         }
+    }
+
+    // Right to work comes from its check record, not the legacy boolean. The most
+    // recent check wins; its recheck_due is the expiry, and `verified` reflects
+    // whether a named person actually signed it off. A check carried over from
+    // the old boolean has no verifier, so it reports as unverified -- which is
+    // the truth, not a defect.
+    $stmt = $conn->prepare(
+        'SELECT outcome, recheck_due, verified_at
+         FROM right_to_work_checks
+         WHERE person_id = ? ORDER BY checked_on DESC, id DESC LIMIT 1'
+    );
+    $stmt->bind_param('i', $personId);
+    $stmt->execute();
+    if ($rtw = $stmt->get_result()->fetch_assoc()) {
+        if ($rtw['outcome'] !== 'invalid') {
+            $evidence['right_to_work'] = [
+                'expiry' => $rtw['recheck_due'],
+                'verified' => $rtw['verified_at'] !== null,
+            ];
+        }
+    } elseif ($w && $w['right_to_work']) {
+        // No check record yet: fall back to the legacy flag so nothing regresses
+        // before migration 006 has run everywhere.
+        $evidence['right_to_work'] = ['expiry' => null, 'verified' => false];
     }
 
     // Certifications are matched to requirements by label, case-insensitively.

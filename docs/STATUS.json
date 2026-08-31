@@ -298,8 +298,8 @@
         },
         {
           "name": "Right to work check record",
-          "status": "todo",
-          "note": "currently workers.right_to_work TINYINT(1)"
+          "status": "done",
+          "note": "right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose"
         },
         {
           "name": "SIA verification workflow",
@@ -327,8 +327,13 @@
         },
         {
           "name": "Right to work as a dated, verified check",
-          "status": "todo",
-          "note": "Migration 005 marks the requirement non-expiring, because the evidence is still a TINYINT(1) with no date. The engine correctly blocked everyone as 'undated' until it did. Flip expires back to 1 in Milestone 3"
+          "status": "partial",
+          "note": "The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision"
+        },
+        {
+          "name": "Legacy right-to-work carried over honestly",
+          "status": "done",
+          "note": "Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence"
         }
       ]
     },
