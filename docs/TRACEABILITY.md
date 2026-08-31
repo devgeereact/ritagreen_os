@@ -93,7 +93,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Employment contracts have a lifecycle | `employment_contracts` | planned endpoint | planned | none |
 | Written-statement particulars are structured | `employment_contracts` fields | planned endpoint | planned | none |
 | Leave and absence are recorded | `leave_records` | `server/leave.php` | planned | `server/tests/run.php` (balance) |
-| Worker status follows workflow events | `workers.status` (set by hand) | `server/workers.php` | `src/pages/app/Workers.tsx` | none |
+| Worker status follows workflow events | `workers.derived_status` | `rg_derive_worker_status()` in `server/pure.php` | `src/pages/app/Workers.tsx` | `server/tests/run.php` |
 
 ## Training
 
@@ -103,7 +103,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Learners are enrolled | `enrolments` | `server/academy.php` | `src/pages/app/AcademyDetail.tsx` | none |
 | Certificates are issued | `certificates` | `server/certificates.php` | `src/pages/app/AcademyDetail.tsx` | none |
 | Certificates are publicly verifiable | `certificates.public_id` | `server/certificates.php` | `src/pages/public/Verify.tsx` | none |
-| External training can be recorded | planned | planned | planned | none |
+| External training can be recorded | `training_providers`, `enrolments.external_course` | `server/academy.php` | planned | none |
 | Training links to the person | `enrolments.person_id` | `server/academy.php` | `src/pages/app/Academy.tsx` | none |
 
 ## Documents

@@ -374,6 +374,11 @@
           "name": "Eligibility recalculated daily",
           "status": "done",
           "note": "Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners"
+        },
+        {
+          "name": "Reassessment runs on quiet days too",
+          "status": "done",
+          "note": "It sat after an early exit taken when no reminder was due, so on a quiet day nothing was recalculated and eligibility went stale on exactly the days nobody was watching. It now runs first, and unconditionally"
         }
       ]
     },
@@ -462,8 +467,8 @@
         },
         {
           "name": "Worker status derived from workflow events",
-          "status": "todo",
-          "note": "workers.status is set by hand"
+          "status": "done",
+          "note": "rg_derive_worker_status() in pure.php, recomputed by the daily cron into workers.derived_status. The manual column stays as the INTENT; the derived one is what is actually true. Verified: all 10 fixtures read 'active' manually, only 4 genuinely are"
         },
         {
           "name": "Records have a retention policy",
@@ -515,7 +520,8 @@
         },
         {
           "name": "External training providers",
-          "status": "todo"
+          "status": "done",
+          "note": "training_providers, with provider_id on programmes and enrolments, an external_course name, and completion and expiry dates. programme_id is now nullable, because training done elsewhere has no programme of ours"
         },
         {
           "name": "Training records linked to the person",

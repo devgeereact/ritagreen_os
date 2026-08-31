@@ -759,6 +759,39 @@ not a backup.
 exists so work can be moved before somebody quietly drowns in it, which is only possible if it
 is visible.
 
+### Added — worker status is derived, and training can come from anywhere
+
+`workers.status` was active/onboarding/inactive, **set by hand**. A status somebody has to
+remember to change is a status that is wrong, and this one decides whether a person appears in
+the workforce the office schedules from.
+
+`workers.derived_status` is now computed daily from the evidence: leave, onboarding tasks, a
+signed contract, and how many services the person is actually eligible for. The manual column
+stays as the **intent** — what the business means to do with this person — and the derived one
+is what is true. Keeping them apart matters: "we intend to employ them and they are not yet
+cleared" is a real and common state, and collapsing it into one field loses exactly the
+information the office needs.
+
+The fixtures make the point: **all ten workers read `active` manually; four genuinely are.** The
+other six have no signed contract on file.
+
+Order is the whole design, and most of the 16 tests cover which rule wins rather than any rule
+alone. Having left outranks everything — a leaver is not a compliance problem. A suspension is a
+decision, not a derivation. Approved leave outranks ineligibility, because somebody on holiday
+has not *become* non-compliant.
+
+**Training providers:** `programmes` were implicitly RitaGreen Academy's, so a worker who did
+their first aid with St John Ambulance had training the system could not record. `enrolments`
+now carries a provider, an external course name, and completion and expiry dates, and
+`programme_id` is nullable because training done elsewhere has no programme of ours.
+
+### Fixed — reassessment was skipped on quiet days
+
+The eligibility and status recalculation sat at the end of `expiry-alerts.php`, **after an
+`exit` taken when no reminder was due**. On a quiet day nothing was recalculated at all, so
+eligibility went stale on exactly the days nobody was watching. It now runs first and
+unconditionally, which also means the reminders are composed from a fresh assessment.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

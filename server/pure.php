@@ -674,3 +674,67 @@ function rg_parse_yes_no(?string $value): ?bool
     if (in_array($v, ['no', 'n', 'false', '0', 'not yet'], true)) return false;
     return null;
 }
+
+// ------------------------------------------------------------- worker status
+
+/**
+ * Derive a worker's real status from the evidence, rather than reading a field
+ * somebody had to remember to change.
+ *
+ * The manual `status` column stays as the INTENT -- what the business means to
+ * do with this person. This is what is actually true. Keeping them apart
+ * matters: "we intend to employ them and they are not yet cleared" is a real and
+ * common state, and collapsing it into one field loses exactly the information
+ * the office needs.
+ *
+ * Order is the whole design. A person who has left is not "not compliant"; a
+ * suspended person is not "on leave"; and someone with no eligible service is
+ * not active however many boxes are ticked elsewhere.
+ *
+ * @param array{status?:string,left_on?:?string} $worker
+ * @param array{eligible_services?:int,on_leave_today?:bool,onboarding_outstanding?:int,has_contract?:bool} $facts
+ * @return array{status:string,reason:string}
+ */
+function rg_derive_worker_status(array $worker, array $facts, ?string $today = null): array
+{
+    $today ??= date('Y-m-d');
+    $manual = $worker['status'] ?? 'onboarding';
+
+    // Having left outranks everything. A leaver is not a compliance problem.
+    $leftOn = $worker['left_on'] ?? null;
+    if ($leftOn !== null && $leftOn !== '' && strtotime($leftOn) <= strtotime($today)) {
+        return ['status' => 'left', 'reason' => 'Left on ' . $leftOn];
+    }
+
+    // A deliberate suspension is a decision, not a derivation, so it stands.
+    if ($manual === 'suspended') {
+        return ['status' => 'suspended', 'reason' => 'Suspended'];
+    }
+    if ($manual === 'inactive') {
+        return ['status' => 'inactive', 'reason' => 'Marked inactive'];
+    }
+
+    // Approved leave today, before compliance: somebody on holiday has not
+    // become non-compliant, they are simply away.
+    if (!empty($facts['on_leave_today'])) {
+        return ['status' => 'on_leave', 'reason' => 'On approved leave today'];
+    }
+
+    $outstanding = (int) ($facts['onboarding_outstanding'] ?? 0);
+    $eligible = (int) ($facts['eligible_services'] ?? 0);
+    $hasContract = !empty($facts['has_contract']);
+
+    if ($outstanding > 0) {
+        return ['status' => 'onboarding',
+                'reason' => $outstanding . ' onboarding ' . ($outstanding === 1 ? 'task' : 'tasks') . ' outstanding'];
+    }
+    if (!$hasContract) {
+        return ['status' => 'pre_employment', 'reason' => 'No signed contract on file'];
+    }
+    if ($eligible === 0) {
+        return ['status' => 'pre_employment', 'reason' => 'Not eligible for any service'];
+    }
+
+    return ['status' => 'active',
+            'reason' => 'Cleared for ' . $eligible . ' ' . ($eligible === 1 ? 'service' : 'services')];
+}

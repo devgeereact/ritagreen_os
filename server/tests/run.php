@@ -603,6 +603,45 @@ check('a hedge is unknown', rg_parse_yes_no('I have a share code'), null);
 check('maybe is unknown', rg_parse_yes_no('maybe'), null);
 
 // ---------------------------------------------------------------------------
+// Derived worker status. Order is the whole design here, so most of these test
+// which rule wins rather than any rule in isolation.
+group('rg_derive_worker_status');
+
+$ready = ['eligible_services' => 2, 'on_leave_today' => false, 'onboarding_outstanding' => 0, 'has_contract' => true];
+
+check('cleared and contracted is active', rg_derive_worker_status(['status' => 'active'], $ready)['status'], 'active');
+check('and says how many services', rg_derive_worker_status(['status' => 'active'], $ready)['reason'], 'Cleared for 2 services');
+check('singular reads correctly', rg_derive_worker_status(['status' => 'active'], ['eligible_services' => 1, 'has_contract' => true])['reason'], 'Cleared for 1 service');
+
+// Outstanding onboarding beats everything else that is fine.
+$mid = $ready; $mid['onboarding_outstanding'] = 3;
+check('onboarding tasks hold it back', rg_derive_worker_status(['status' => 'active'], $mid)['status'], 'onboarding');
+check('and are counted', rg_derive_worker_status(['status' => 'active'], $mid)['reason'], '3 onboarding tasks outstanding');
+
+$noContract = $ready; $noContract['has_contract'] = false;
+check('no contract is pre-employment', rg_derive_worker_status(['status' => 'active'], $noContract)['status'], 'pre_employment');
+
+$notEligible = $ready; $notEligible['eligible_services'] = 0;
+check('eligible for nothing is not active', rg_derive_worker_status(['status' => 'active'], $notEligible)['status'], 'pre_employment');
+check('and says why', rg_derive_worker_status(['status' => 'active'], $notEligible)['reason'], 'Not eligible for any service');
+
+// Leave outranks compliance: somebody on holiday has not become non-compliant.
+$onLeave = $notEligible; $onLeave['on_leave_today'] = true;
+check('leave outranks ineligibility', rg_derive_worker_status(['status' => 'active'], $onLeave)['status'], 'on_leave');
+
+// A suspension is a decision, not a derivation.
+check('suspension stands', rg_derive_worker_status(['status' => 'suspended'], $ready)['status'], 'suspended');
+check('inactive stands', rg_derive_worker_status(['status' => 'inactive'], $ready)['status'], 'inactive');
+
+// Having left outranks everything. A leaver is not a compliance problem.
+check('a leaver is a leaver', rg_derive_worker_status(['status' => 'active', 'left_on' => '2026-01-01'], $notEligible, '2026-06-01')['status'], 'left');
+check('even if suspended', rg_derive_worker_status(['status' => 'suspended', 'left_on' => '2026-01-01'], $ready, '2026-06-01')['status'], 'left');
+check('leaving today counts', rg_derive_worker_status(['status' => 'active', 'left_on' => '2026-06-01'], $ready, '2026-06-01')['status'], 'left');
+// A future leaving date has not happened yet.
+check('a future leaving date does not', rg_derive_worker_status(['status' => 'active', 'left_on' => '2026-12-01'], $ready, '2026-06-01')['status'], 'active');
+check('an empty leaving date is ignored', rg_derive_worker_status(['status' => 'active', 'left_on' => ''], $ready, '2026-06-01')['status'], 'active');
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

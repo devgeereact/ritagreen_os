@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`######################..`  141 done · 16 partial · 5 to do · 162 tracked
+`######################..`  144 done · 16 partial · 3 to do · 163 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -19,14 +19,14 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `##########..` | 10 | 3 | 1 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
-| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
+| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 16 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
-| EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
+| EMPLOYMENT — Employment records, contracts and leave | 6 | `##########..` | 7 | 3 | 0 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
-| TRAINING — Training records and certificates | 8 | `##########..` | 6 | 0 | 1 |
+| TRAINING — Training records and certificates | 8 | `############` | 7 | 0 | 0 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `##########..` | 13 | 4 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
@@ -76,7 +76,7 @@ Milestone 1 · 16 done, 1 partial, 0 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 15 done, 4 partial, 1 to do
+Milestone 2 · 16 done, 4 partial, 1 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
@@ -90,6 +90,7 @@ Milestone 2 · 15 done, 4 partial, 1 to do
 - [x] Mandatory / recommended / optional weighting — _RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests_
 - [x] Per-service eligibility, demonstrated — _Verified: Esi Mensah is eligible for care and cleaning but blocked for security on a lapsed SIA licence. One credential, one service, exactly as intended_
 - [x] Per-worker evidence pack — _compliance.php?action=pack_
+- [x] Reassessment runs on quiet days too — _It sat after an early exit taken when no reminder was due, so on a quiet day nothing was recalculated and eligibility went stale on exactly the days nobody was watching. It now runs first, and unconditionally_
 - [x] Reference checks with gap explanation — _worker_references_
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
 - [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
@@ -154,7 +155,7 @@ Milestone 5 · 21 done, 1 partial, 0 to do
 
 ### EMPLOYMENT — Employment records, contracts and leave
 
-Milestone 6 · 6 done, 3 partial, 1 to do
+Milestone 6 · 7 done, 3 partial, 0 to do
 
 - [x] Contract versioning — _version plus supersedes_id. A signed contract is evidence of what was agreed at a point in time, so it is superseded rather than edited_
 - [x] Holiday balance distinguishes unset from overdrawn — _No entitlement recorded returns null rather than a large negative number, which would read as 'overdrawn' when it means 'nobody set this up'_
@@ -162,10 +163,10 @@ Milestone 6 · 6 done, 3 partial, 1 to do
 - [x] Leave and absence records — _leave_records plus server/leave.php. Counted in hours, not days, because shift work is not made of whole days. Records holiday taken, carried over, holiday pay and payments in lieu, and return-to-work discussions_
 - [x] Overlapping leave is refused — _Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash_
 - [x] Structured written-statement particulars — _employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF_
+- [x] Worker status derived from workflow events — _rg_derive_worker_status() in pure.php, recomputed by the daily cron into workers.derived_status. The manual column stays as the INTENT; the derived one is what is actually true. Verified: all 10 fixtures read 'active' manually, only 4 genuinely are_
 - [~] Employment contract lifecycle — _employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not_
 - [~] Records have a retention policy — _retention_policies is editable through governance.php with the periods left NULL until the business sets them. The sweep that acts on them is still to build_
 - [~] Worker employment fields — _pay rate, pay type, holiday hours present; Acas particulars not structured_
-- [ ] Worker status derived from workflow events — _workers.status is set by hand_
 
 ### COMMUNICATIONS — Email, SMS and notifications
 
@@ -200,15 +201,15 @@ Milestone 8 · 10 done, 0 partial, 0 to do
 
 ### TRAINING — Training records and certificates
 
-Milestone 8 · 6 done, 0 partial, 1 to do
+Milestone 8 · 7 done, 0 partial, 0 to do
 
 - [x] CPD hours
 - [x] Certificate issue
+- [x] External training providers — _training_providers, with provider_id on programmes and enrolments, an external_course name, and completion and expiry dates. programme_id is now nullable, because training done elsewhere has no programme of ours_
 - [x] Open Badges 3.0 assertion
 - [x] Programmes and enrolments
 - [x] Public certificate verification — _/verify/:id_
 - [x] Training records linked to the person — _academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith_
-- [ ] External training providers
 
 ### GOVERNANCE — Audit, retention and data protection
 
