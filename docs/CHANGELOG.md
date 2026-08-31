@@ -279,6 +279,44 @@ unverifiable migration defensible:
 - Records with neither email nor phone each become their own person — that can leave a
   duplicate, which is the safe direction to be wrong in
 
+### Fixed — the identity defect itself
+
+`ats.php` no longer copies. `find_or_create_person()` in `server/lib.php` now sits in front of
+**every** path that can create a human record — the public application, self-registration, the
+Academy learner handoff, direct worker creation and user creation — matching on the same rules
+as the backfill. A login linked to a worker inherits that worker's person rather than resolving
+its own, so the login and the employment record can never describe two different people.
+
+`onboard` reads identity back from `people` instead of copying it off the applicant, and
+assigns a payroll number: `RG-000001`, from `next_seq()`, unique and never reused. It also
+records the person as intended for that service in `person_services`.
+
+Verified end to end against a real database. Two applications for one human (the second with
+the phone number written differently), then an onboarding, then a login creation:
+
+```
+person  full_name     match_key                        apps  workers  logins  payroll
+23      Jordan Blake  e:jordan.blake@example.com       2     1        1       RG-000001
+```
+
+**One person.** Before this, that sequence produced three or four separate identities.
+
+A second employment record created for the same person attaches to the same identity, which is
+the multi-service capability `workers.division` could never express: one human, two roles, one
+record of who they are.
+
+### Fixed — failed queries no longer pass silently
+
+`server/lib.php` set `mysqli_report(MYSQLI_REPORT_OFF)`, and almost no call site checks the
+return value of `execute()`. A failed INSERT was therefore ignored and the endpoint went on to
+report success — `workers.php` returned HTTP 200 with a complete worker object, `id: 0`, for a
+row that was never written. Found because the new NOT NULL constraint made an insert fail.
+
+Reporting is now `MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT`, set *after* the connection is
+established so `config.php` keeps its own readable connection-failure message. Anything thrown
+reaches the exception handler, which logs the detail and returns a reference. That single
+change protects every one of the 47 endpoints, not just the ones touched here.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

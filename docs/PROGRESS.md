@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`###############.........`  75 done · 15 partial · 42 to do · 132 tracked
+`################........`  80 done · 14 partial · 40 to do · 134 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,15 +17,15 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `########....` | 6 | 3 | 3 |
-| FOUNDATION — Foundation and person spine | 1 | `########....` | 10 | 1 | 5 |
+| PLATFORM — Engineering platform | 0 | `########....` | 7 | 3 | 3 |
+| FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
 | COMPLIANCE — Compliance engine and verification | 2 | `########....` | 9 | 3 | 3 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `#########...` | 6 | 1 | 2 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `########....` | 5 | 0 | 3 |
-| RECRUITMENT — Recruitment and intake | 8 | `######......` | 3 | 1 | 3 |
+| RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `#####.......` | 4 | 2 | 5 |
 | PWA — Progressive web app | 9 | `###.........` | 1 | 2 | 4 |
@@ -35,12 +35,13 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 6 done, 3 partial, 3 to do
+Milestone 0 · 7 done, 3 partial, 3 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
+- [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
@@ -52,7 +53,7 @@ Milestone 0 · 6 done, 3 partial, 3 to do
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 10 done, 1 partial, 5 to do
+Milestone 1 · 13 done, 1 partial, 3 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
 - [x] Local development environment — _npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database_
@@ -60,16 +61,17 @@ Milestone 1 · 10 done, 1 partial, 5 to do
 - [x] Migration preconditions — _A migration can declare a query that must return 0 before it applies. The runner stops with the count and the remedy rather than failing mid-chain. Needed because a foreign key does not force linkage -- only NOT NULL does_
 - [x] Migrations verified against a database — _Full chain run from scratch against MariaDB 12.3. Migration 004's precondition verified to block on an unlinked row and report the count_
 - [x] Numbered migrations (server/migrations/) — _server/migrate.php with a dry run by default, checksum drift detection, and a typed-name confirmation for any non-local database. schema.sql remains the from-scratch baseline_
+- [x] One person across every creation path — _find_or_create_person() in lib.php is used by the public application, self-registration, the learner handoff, worker creation and user creation. A login linked to a worker inherits that worker's person_
+- [x] Payroll number generator — _next_payroll_no() on next_seq(), format RG-000001. Assigned on worker creation, unique, never reused_
 - [x] Person de-duplication migration — _server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)_
 - [x] Person matching logic — _rg_person_match_key/rg_group_people/rg_group_is_ambiguous in server/pure.php. Matches on email then phone, never on a name, and refuses to merge a group whose names disagree. 34 assertions_
+- [x] ats.php onboard links instead of copying — _Rewritten. Verified end to end: two applications, an onboarding and a login for one human produce exactly one person record_
 - [x] people table as the single identity — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
 - [x] person_services (person x service) — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
 - [~] Soft delete on records that must not be lost — _present on most, missing on shifts, timesheets, incidents_
 - [ ] Constrain columns added by later ALTER passes — _ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php_
 - [ ] Extend soft delete to records that cascade — _11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at_
-- [ ] Payroll number generator — _next_seq() at server/lib.php:173 is the primitive to build on_
 - [ ] Replace the divisions CSV with a junction table — _clients.divisions is a comma-separated VARCHAR(120), so it cannot be joined, indexed or constrained. worker_skills already demonstrates the correct pattern in this schema_
-- [ ] ats.php onboard links instead of copying — _server/ats.php:145-151 copies identity fields_
 
 ### COMPLIANCE — Compliance engine and verification
 
@@ -167,12 +169,12 @@ Milestone 7 · 5 done, 0 partial, 3 to do
 
 ### RECRUITMENT — Recruitment and intake
 
-Milestone 8 · 3 done, 1 partial, 3 to do
+Milestone 8 · 4 done, 0 partial, 3 to do
 
+- [x] Academy to recruitment handoff — _from_learner resolves a person. The fabricated @learner.invalid address is kept only to satisfy a NOT NULL column and is explicitly not treated as an identity_
 - [x] Application pipeline, 7 stages — _applicants.stage_
 - [x] Onboarding task checklist — _onboarding_tasks, seeded on onboard_
 - [x] Public application page — _/apply, rate-limited_
-- [~] Academy to recruitment handoff — _ats.php from_learner creates a duplicate person with a synthetic email_
 - [ ] Configurable field mapping
 - [ ] Google Forms intake webhook
 - [ ] Integration health monitoring

@@ -35,13 +35,13 @@
         },
         {
           "name": "Payroll number generator",
-          "status": "todo",
-          "note": "next_seq() at server/lib.php:173 is the primitive to build on"
+          "status": "done",
+          "note": "next_payroll_no() on next_seq(), format RG-000001. Assigned on worker creation, unique, never reused"
         },
         {
           "name": "ats.php onboard links instead of copying",
-          "status": "todo",
-          "note": "server/ats.php:145-151 copies identity fields"
+          "status": "done",
+          "note": "Rewritten. Verified end to end: two applications, an onboarding and a login for one human produce exactly one person record"
         },
         {
           "name": "Local development environment",
@@ -92,6 +92,11 @@
           "name": "Migration preconditions",
           "status": "done",
           "note": "A migration can declare a query that must return 0 before it applies. The runner stops with the count and the remedy rather than failing mid-chain. Needed because a foreign key does not force linkage -- only NOT NULL does"
+        },
+        {
+          "name": "One person across every creation path",
+          "status": "done",
+          "note": "find_or_create_person() in lib.php is used by the public application, self-registration, the learner handoff, worker creation and user creation. A login linked to a worker inherits that worker's person"
         }
       ]
     },
@@ -221,8 +226,8 @@
         },
         {
           "name": "Academy to recruitment handoff",
-          "status": "partial",
-          "note": "ats.php from_learner creates a duplicate person with a synthetic email"
+          "status": "done",
+          "note": "from_learner resolves a person. The fabricated @learner.invalid address is kept only to satisfy a NOT NULL column and is explicitly not treated as an identity"
         },
         {
           "name": "Google Forms intake webhook",
@@ -709,6 +714,11 @@
           "name": "Pure logic separated from the kernel",
           "status": "done",
           "note": "server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation"
+        },
+        {
+          "name": "Failed queries no longer pass silently",
+          "status": "done",
+          "note": "lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message"
         }
       ]
     }

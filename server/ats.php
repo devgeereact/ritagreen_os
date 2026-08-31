@@ -36,10 +36,13 @@ if (method() === 'POST' && $action === '') {
 
     $roleVal = $role !== '' ? $role : null;
     $phoneVal = $phone !== '' ? $phone : null;
+    // Resolve the person BEFORE the application, so a returning applicant lands
+    // on the record they already have rather than becoming a second copy.
+    $personId = find_or_create_person($conn, $name, $email, $phoneVal);
     $stmt = $conn->prepare(
-        'INSERT INTO applicants (name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, "careers")'
+        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, ?, "careers")'
     );
-    $stmt->bind_param('sssss', $name, $email, $phoneVal, $roleVal, $division);
+    $stmt->bind_param('isssss', $personId, $name, $email, $phoneVal, $roleVal, $division);
     $stmt->execute();
 
     $ip = client_ip();
@@ -144,12 +147,34 @@ if ($action === 'onboard' && method() === 'POST') {
     // Map division -> a sensible default worker role.
     $roleMap = ['care' => 'carer', 'cleaning' => 'cleaner', 'security' => 'guard', 'academy' => 'trainer'];
     $wrole = $roleMap[$app['division']] ?? 'carer';
+
+    // LINK, do not copy. This previously read name, email and phone off the
+    // applicant and wrote them into a new workers row, so one human became two
+    // records that drifted apart from that moment on. The employment record now
+    // points at the same person as the application, and the identity fields are
+    // read back from people rather than duplicated from the applicant.
+    $personId = (int) $app['person_id'];
+    $stmt = $conn->prepare('SELECT full_name, email, phone FROM people WHERE id = ? LIMIT 1');
+    $stmt->bind_param('i', $personId);
+    $stmt->execute();
+    $person = $stmt->get_result()->fetch_assoc();
+    if (!$person) fail('This application is not linked to a person record.', 409);
+
+    // A payroll number is assigned once, here, and never reused.
+    $payrollNo = next_payroll_no($conn);
+
     $stmt = $conn->prepare(
-        'INSERT INTO workers (name, email, phone, role, division, status) VALUES (?, ?, ?, ?, ?, "onboarding")'
+        'INSERT INTO workers (person_id, payroll_no, name, email, phone, role, division, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, "onboarding")'
     );
-    $stmt->bind_param('sssss', $app['name'], $app['email'], $app['phone'], $wrole, $app['division']);
+    $stmt->bind_param('issssss', $personId, $payrollNo, $person['full_name'], $person['email'], $person['phone'], $wrole, $app['division']);
     $stmt->execute();
     $workerId = $conn->insert_id;
+
+    // The person is now intended for this service.
+    $stmt = $conn->prepare('INSERT IGNORE INTO person_services (person_id, service) VALUES (?, ?)');
+    $stmt->bind_param('is', $personId, $app['division']);
+    $stmt->execute();
 
     $stmt = $conn->prepare('UPDATE applicants SET stage = "onboarded", worker_id = ? WHERE id = ?');
     $stmt->bind_param('ii', $workerId, $id);
@@ -164,8 +189,8 @@ if ($action === 'onboard' && method() === 'POST') {
             $ins->execute();
         }
     }
-    audit($conn, (int) $user['id'], 'ats.onboard', "applicant #$id -> worker #$workerId");
-    json_out(['ok' => true, 'worker_id' => (int) $workerId], 201);
+    audit($conn, (int) $user['id'], 'ats.onboard', "applicant #$id -> worker #$workerId (person #$personId, $payrollNo)");
+    json_out(['ok' => true, 'worker_id' => (int) $workerId, 'person_id' => $personId, 'payroll_no' => $payrollNo], 201);
 }
 
 // Academy → ATS handoff: a strong learner becomes an applicant.
@@ -177,11 +202,16 @@ if ($action === 'from_learner' && method() === 'POST') {
     $division = trim((string) ($data['division'] ?? 'care'));
     if ($name === '') fail('A learner name is required.');
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) $division = 'care';
+    // The fabricated '<name>@learner.invalid' address is kept only to satisfy the
+    // NOT NULL column on applicants. It is NOT an identity: rg_normalise_email()
+    // discards that domain, so a learner with no real address gets their own
+    // person rather than colliding with every other addressless learner.
     $emailVal = filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : ($name . '@learner.invalid');
+    $personId = find_or_create_person($conn, $name, $email ?: null, null);
     $stmt = $conn->prepare(
-        'INSERT INTO applicants (name, email, division, stage, source) VALUES (?, ?, ?, "screened", "academy")'
+        'INSERT INTO applicants (person_id, name, email, division, stage, source) VALUES (?, ?, ?, ?, "screened", "academy")'
     );
-    $stmt->bind_param('sss', $name, $emailVal, $division);
+    $stmt->bind_param('isss', $personId, $name, $emailVal, $division);
     $stmt->execute();
     audit($conn, (int) $user['id'], 'ats.from_learner', $name);
     json_out(['ok' => true, 'id' => (int) $conn->insert_id], 201);

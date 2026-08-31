@@ -317,9 +317,13 @@ if ($action === 'register' && method() === 'POST') {
     $roleVal = $role !== '' ? $role : null;
     $phoneVal = $phone !== '' ? $phone : null;
     $stmt = $conn->prepare(
-        'INSERT INTO applicants (name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, "self-registration")'
+        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, ?, "self-registration")'
     );
-    $stmt->bind_param('sssss', $name, $email, $phoneVal, $roleVal, $division);
+    // Self-registration creates an application, not a login -- but it still
+    // resolves to a person, so someone who later applies through the site does
+    // not become a second identity.
+    $personId = find_or_create_person($conn, $name, $email, $phoneVal);
+    $stmt->bind_param('isssss', $personId, $name, $email, $phoneVal, $roleVal, $division);
     $stmt->execute();
     $ip = client_ip();
     $stmt = $conn->prepare('INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "registration", 1, "self-registration", ?)');

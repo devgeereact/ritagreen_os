@@ -154,9 +154,9 @@ The blueprint's assumption that these need building is wrong. The work is elsewh
 
 ### Tier 1 — architectural. These block everything downstream.
 
-#### The identity defect
+#### The identity defect — FIXED
 
-**A person can exist three times in this database.**
+**A person could exist three times in this database.**
 
 `server/ats.php` `?action=onboard` reads the applicant row and **copies** the fields into a
 new `workers` row:
@@ -182,8 +182,15 @@ the worker record does not reach the applicant record.
 Consequence: compliance, documents and training attach to whichever copy happened to be in
 front of the person entering them.
 
-**Fix:** Milestone 1. A `people` table becomes the identity; `candidates`, `workers`, `users`
-and `enrolments` carry `person_id`. `onboard` links, never copies.
+**Fixed in Milestone 1.** A `people` table is now the identity, and `workers`, `applicants`,
+`users` and `enrolments` carry `person_id`. `find_or_create_person()` sits in front of every
+creation path — the public application, self-registration, the learner handoff, worker creation
+and user creation — and `people.match_key` is UNIQUE, so the database itself refuses a second
+person with the same identity.
+
+Verified against a real database: two applications, an onboarding and a login creation for one
+human produce **one** person record, carrying two applications, one employment record and one
+login. Before the fix that was three or four separate identities.
 
 #### One person, one service
 

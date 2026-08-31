@@ -4,6 +4,8 @@
 // which pulls in config.php ($conn) and sets up CORS + JSON helpers.
 
 // Surface fatals / mysqli exceptions as JSON instead of a blank 500 HTML page.
+// Reporting is switched to throw once the connection exists -- see below, after
+// config.php is loaded.
 mysqli_report(MYSQLI_REPORT_OFF);
 set_exception_handler(function (Throwable $e) {
     // The full detail always goes to the server log; what goes back to the caller
@@ -55,6 +57,18 @@ if (!file_exists(__DIR__ . '/config.php')) {
     exit;
 }
 require __DIR__ . '/config.php';
+
+// From here on a failed query THROWS instead of returning false.
+//
+// It was MYSQLI_REPORT_OFF throughout, and almost no call site checks the return
+// value of execute(), so a failed INSERT was silently ignored and the endpoint
+// went on to report success. workers.php returned HTTP 200 with a complete
+// worker object, id 0, for a row that was never written.
+//
+// Set after the connection is established so config.php keeps its own readable
+// message for a connection failure. Anything thrown from here reaches the
+// exception handler above, which logs the detail and returns a reference.
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
     if (!defined($_required)) {
@@ -169,6 +183,57 @@ function require_role(array $user, string ...$roles): void
 function require_staff(array $user): void
 {
     if (!is_staff($user)) fail('You do not have access to this.', 403);
+}
+
+/**
+ * Find the person these details describe, or create them.
+ *
+ * Every path that creates a candidate, worker or login goes through here, which
+ * is what stops the system growing a second copy of somebody. Matching uses the
+ * same rules as the backfill (rg_person_match_key in pure.php): email first,
+ * then phone, never a name.
+ *
+ * A person with neither a usable email nor a usable phone gets a NULL match_key
+ * and is therefore always created fresh. That can leave a duplicate, which is
+ * the safe direction to be wrong in -- merging two people is far harder to undo.
+ */
+function find_or_create_person(mysqli $conn, string $name, ?string $email = null, ?string $phone = null): int
+{
+    $match = rg_person_match_key(['email' => $email, 'phone' => $phone]);
+
+    if ($match['key'] !== null) {
+        $stmt = $conn->prepare('SELECT id FROM people WHERE match_key = ? LIMIT 1');
+        $stmt->bind_param('s', $match['key']);
+        $stmt->execute();
+        if ($row = $stmt->get_result()->fetch_assoc()) {
+            // Fill in anything we did not have before, without overwriting what
+            // is already recorded.
+            $stmt = $conn->prepare(
+                'UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?) WHERE id = ?'
+            );
+            $normalised = rg_normalise_email($email);
+            $stmt->bind_param('ssi', $normalised, $phone, $row['id']);
+            $stmt->execute();
+            return (int) $row['id'];
+        }
+    }
+
+    $normalised = rg_normalise_email($email);
+    $stmt = $conn->prepare('INSERT INTO people (full_name, email, phone, match_key) VALUES (?, ?, ?, ?)');
+    $stmt->bind_param('ssss', $name, $normalised, $phone, $match['key']);
+    $stmt->execute();
+    return (int) $conn->insert_id;
+}
+
+/**
+ * The next payroll number. Unique, permanent, never reused.
+ *
+ * Deliberately not derived from the service: a person's service can change, and
+ * a payroll number that implies one would then be wrong forever.
+ */
+function next_payroll_no(mysqli $conn): string
+{
+    return sprintf('RG-%06d', next_seq($conn, 'payroll'));
 }
 
 // Write an audit log row for sensitive actions.

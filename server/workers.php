@@ -98,11 +98,15 @@ if (method() === 'POST') {
     if (!in_array($payType, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
 
+    // One person, one record: a worker created here for somebody already known
+    // attaches to their existing person rather than starting a second identity.
+    $personId = find_or_create_person($conn, $name, $email ?: null, $phone ?: null);
+    $payrollNo = next_payroll_no($conn);
     $stmt = $conn->prepare(
-        'INSERT INTO workers (name, email, phone, role, division, right_to_work, pay_rate_pence, pay_type, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, "onboarding")'
+        'INSERT INTO workers (person_id, payroll_no, name, email, phone, role, division, right_to_work, pay_rate_pence, pay_type, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "onboarding")'
     );
-    $stmt->bind_param('sssssiis', $name, $email, $phone, $role, $division, $rtw, $payRate, $payType);
+    $stmt->bind_param('issssssiis', $personId, $payrollNo, $name, $email, $phone, $role, $division, $rtw, $payRate, $payType);
     $stmt->execute();
     $id = $conn->insert_id;
 
