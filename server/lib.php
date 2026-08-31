@@ -139,7 +139,7 @@ function current_user(mysqli $conn): ?array
     if (!$token) return null;
     $hash = hash('sha256', $token);
     $stmt = $conn->prepare(
-        'SELECT u.id, u.name, u.email, u.role, u.division, u.client_id, u.worker_id
+        'SELECT u.id, u.name, u.email, u.role, u.division, u.scope_to_division, u.client_id, u.worker_id
          FROM tokens t JOIN users u ON u.id = t.user_id
          WHERE t.token_hash = ? AND t.expires_at > NOW() AND u.deleted_at IS NULL
          LIMIT 1'
@@ -183,6 +183,61 @@ function require_role(array $user, string ...$roles): void
 function require_staff(array $user): void
 {
     if (!is_staff($user)) fail('You do not have access to this.', 403);
+}
+
+/**
+ * May this account see a category of information?
+ *
+ * Zones exist because a worker profile is not one undifferentiated record.
+ * Health information, disciplinary matters and payroll are not ordinary fields,
+ * and "can open the profile" must not mean "can see all of it".
+ *
+ * Cached per request: a profile touches several zones and this would otherwise
+ * run the same query five times.
+ */
+function can_view_zone(mysqli $conn, array $user, string $zone): bool
+{
+    static $cache = [];
+    $role = (string) ($user['role'] ?? '');
+    $key = $role . '|' . $zone;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $stmt = $conn->prepare('SELECT can_view FROM zone_permissions WHERE role_key = ? AND zone = ? LIMIT 1');
+    $stmt->bind_param('ss', $role, $zone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    // No row means no permission. A zone nobody has configured must not be
+    // readable by default.
+    return $cache[$key] = (bool) ($row['can_view'] ?? false);
+}
+
+/** As above, for changing rather than reading. */
+function can_edit_zone(mysqli $conn, array $user, string $zone): bool
+{
+    $stmt = $conn->prepare('SELECT can_edit FROM zone_permissions WHERE role_key = ? AND zone = ? LIMIT 1');
+    $role = (string) ($user['role'] ?? '');
+    $stmt->bind_param('ss', $role, $zone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return (bool) ($row['can_edit'] ?? false);
+}
+
+/**
+ * The service this account is limited to, or null for no limit.
+ *
+ * users.division has always been recorded but never enforced, so a Care
+ * recruiter saw Security candidates -- which is not what "scoped to a division"
+ * means. Enforcement is opt-in per account via scope_to_division, so switching
+ * it on narrows nobody's access by surprise.
+ *
+ * super_admin and admin are never scoped: somebody has to see the whole picture.
+ */
+function service_scope(array $user): ?string
+{
+    if (in_array($user['role'] ?? '', ['super_admin', 'admin'], true)) return null;
+    if (empty($user['scope_to_division'])) return null;
+    $division = $user['division'] ?? null;
+    return $division !== null && $division !== '' ? (string) $division : null;
 }
 
 /**

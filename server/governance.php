@@ -257,4 +257,59 @@ if (method() === 'POST' && $action === 'set_retention') {
     json_out(['ok' => true]);
 }
 
+// ---- Sensitive zones -------------------------------------------------------
+// The matrix of which role may see which category of information. Configuration,
+// so the business can widen or narrow access without a deployment.
+if (method() === 'GET' && $action === 'zones') {
+    require_role($user, 'super_admin', 'admin');
+    $res = $conn->query(
+        'SELECT z.role_key, z.zone, z.can_view, z.can_edit, z.updated_at, u.name AS updated_by
+         FROM zone_permissions z LEFT JOIN users u ON u.id = z.updated_by
+         ORDER BY FIELD(z.role_key,"super_admin","admin","manager","trainer","editor","employee","client"),
+                  FIELD(z.zone,"general","employment","compliance","health","payroll","disciplinary","legal")'
+    );
+    $matrix = [];
+    while ($row = $res->fetch_assoc()) {
+        $matrix[$row['role_key']][$row['zone']] = [
+            'can_view' => (bool) $row['can_view'],
+            'can_edit' => (bool) $row['can_edit'],
+        ];
+    }
+    json_out(['zones' => ['general','employment','compliance','health','payroll','disciplinary','legal'],
+              'matrix' => $matrix]);
+}
+
+if (method() === 'POST' && $action === 'set_zone') {
+    require_role($user, 'super_admin');
+    $data = body();
+    $role = trim((string) ($data['role_key'] ?? ''));
+    $zone = trim((string) ($data['zone'] ?? ''));
+    $view = !empty($data['can_view']) ? 1 : 0;
+    $edit = !empty($data['can_edit']) ? 1 : 0;
+
+    $zones = ['general','employment','compliance','health','payroll','disciplinary','legal'];
+    if (!in_array($zone, $zones, true)) fail('Unknown zone.');
+    // Editing without viewing is not a coherent permission.
+    if ($edit && !$view) fail('A role that cannot view a zone cannot edit it.');
+
+    $stmt = $conn->prepare('SELECT can_view, can_edit FROM zone_permissions WHERE role_key = ? AND zone = ?');
+    $stmt->bind_param('ss', $role, $zone);
+    $stmt->execute();
+    $was = $stmt->get_result()->fetch_assoc();
+    if (!$was) fail('Unknown role.', 404);
+
+    // super_admin must keep every zone, or the account that fixes a mistake here
+    // can lock itself out of the screen that fixes it.
+    if ($role === 'super_admin' && !$view) fail('A super admin cannot be denied a zone.', 409);
+
+    $uid = (int) $user['id'];
+    $stmt = $conn->prepare('UPDATE zone_permissions SET can_view = ?, can_edit = ?, updated_by = ? WHERE role_key = ? AND zone = ?');
+    $stmt->bind_param('iiiss', $view, $edit, $uid, $role, $zone);
+    $stmt->execute();
+
+    [$before, $after] = audit_diff($was, ['can_view' => $view, 'can_edit' => $edit], ['can_view', 'can_edit']);
+    audit($conn, $uid, 'zone.set', "$role / $zone", 'zone_permission', null, $before, $after);
+    json_out(['ok' => true]);
+}
+
 fail('Method not allowed.', 405);

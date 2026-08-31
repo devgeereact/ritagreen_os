@@ -155,12 +155,13 @@
         },
         {
           "name": "Per-service permission scoping",
-          "status": "todo",
-          "note": "users.division is stored but not enforced as a query filter"
+          "status": "done",
+          "note": "service_scope() in lib.php, applied to the workforce and candidate lists. Opt-in per account via users.scope_to_division, so switching it on narrows nobody's access by surprise. super_admin and admin are never scoped"
         },
         {
           "name": "Sensitive zones (health, payroll, disciplinary, legal)",
-          "status": "todo"
+          "status": "done",
+          "note": "zone_permissions, a role x zone matrix editable by a super admin. can_view_zone() replaces the hard-coded role list that gated pay. No row means no permission, so an unconfigured zone is not readable by default"
         },
         {
           "name": "Close the unauthenticated write on api.php",
@@ -201,6 +202,16 @@
           "name": "Role-filtered navigation",
           "status": "done",
           "note": "app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse"
+        },
+        {
+          "name": "Per-service scoping is enforced",
+          "status": "done",
+          "note": "As a query filter, not just a stored preference"
+        },
+        {
+          "name": "A super admin cannot lock themselves out",
+          "status": "done",
+          "note": "Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it"
         }
       ]
     },

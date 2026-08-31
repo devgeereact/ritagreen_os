@@ -34,8 +34,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx` | none |
 | A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | `src/lib/__tests__/access.test.ts` |
-| Per-service scoping is enforced | `users.division` | planned query filter | planned | none |
-| Sensitive zones are separately permissioned | planned | planned | planned | none |
+| Per-service scoping is enforced | `users.scope_to_division` | `service_scope()` in `server/lib.php` | `src/lib/access.ts` | none |
+| Sensitive zones are separately permissioned | `zone_permissions` | `can_view_zone()` in `server/lib.php` | planned settings screen | none |
 
 ## Recruitment
 

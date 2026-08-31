@@ -12,14 +12,19 @@ if (method() === 'GET') {
     // before this check any authenticated account could read it — including a
     // client portal login, which is an external party.
     require_staff($user);
-    // Pay is narrower still: only the roles that run payroll see it.
-    $seesPay = in_array($user['role'], ['super_admin', 'admin', 'manager'], true);
+    // Pay is its own zone, not a hard-coded role list. The business can widen or
+    // narrow who sees it without a deployment.
+    $seesPay = can_view_zone($conn, $user, 'payroll');
+    // A division-scoped account sees only its own division's workforce.
+    $scope = service_scope($user);
     $res = $conn->query(
         'SELECT id, name, email, phone, role, division, status, right_to_work,
                 dbs_status, dbs_expiry, sia_number, sia_expiry,
                 pay_rate_pence, pay_type, holiday_hours,
                 home_postcode, travel_radius_mi, avail_days, avail_nights, avail_weekends, created_at
-         FROM workers WHERE deleted_at IS NULL ORDER BY name'
+         FROM workers WHERE deleted_at IS NULL'
+        . ($scope !== null ? " AND division = '" . $conn->real_escape_string($scope) . "'" : '')
+        . ' ORDER BY name'
     );
     $workers = [];
     while ($row = $res->fetch_assoc()) {

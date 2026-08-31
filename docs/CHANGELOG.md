@@ -708,6 +708,33 @@ That completes the spine. Every entry point now resolves to one person: the publ
 self-registration, the Academy learner handoff, worker creation, user creation, the Google Forms
 webhook, and training enrolment.
 
+### Added — per-service scope and sensitive zones
+
+Two problems with the same root: a permission that was recorded but never enforced.
+
+**`users.division` was set and ignored.** A Care recruiter saw Security candidates, which is not
+what "scoped to a division" means. `service_scope()` now filters the workforce and candidate
+lists. It is **opt-in per account** via `users.scope_to_division`, defaulting off, so this
+migration narrows nobody's access on the day it runs — silently narrowing access is how a Monday
+morning becomes "the system is broken". `super_admin` and `admin` are never scoped: somebody has
+to be able to see the whole picture.
+
+**A worker profile was one undifferentiated record.** Health information, disciplinary matters
+and payroll are not ordinary fields, and "can open the profile" must not mean "can see all of
+it". `zone_permissions` is a role × zone matrix — general, employment, compliance, health,
+payroll, disciplinary, legal — editable by a super admin without a deployment.
+
+`can_view_zone()` replaces the hard-coded role list that gated pay on the workforce list. **No
+row means no permission**, so a zone nobody has configured is not readable by default.
+
+Two guards on the matrix itself: a super admin cannot be denied a zone, because the account that
+fixes a mistake must not be able to lose the screen that fixes it; and edit-without-view is
+refused as incoherent.
+
+Verified: a manager scoped to Care sees 3 workers, all Care, with pay. A trainer sees all 10
+workers across every division and **no pay at all**, because the trainer role has no payroll
+zone. Both from the same endpoint, with no role check in it.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

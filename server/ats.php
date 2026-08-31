@@ -87,9 +87,13 @@ if (method() === 'GET' && isset($_GET['id'])) {
 }
 
 if (method() === 'GET') {
+    // A division-scoped account sees only its own division's candidates.
+    $scope = service_scope($user);
     $res = $conn->query(
         'SELECT id, name, email, phone, role_applied, division, stage, source, worker_id, created_at
-         FROM applicants WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500'
+         FROM applicants WHERE deleted_at IS NULL'
+        . ($scope !== null ? " AND division = '" . $conn->real_escape_string($scope) . "'" : '')
+        . ' ORDER BY created_at DESC LIMIT 500'
     );
     $items = [];
     while ($row = $res->fetch_assoc()) {

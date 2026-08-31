@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#####################...`  134 done · 14 partial · 10 to do · 158 tracked
+`######################..`  138 done · 14 partial · 8 to do · 160 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -22,7 +22,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
-| IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
+| IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
@@ -127,8 +127,9 @@ Milestone 4 · 10 done, 0 partial, 0 to do
 
 ### IAM — Identity, access and permissions
 
-Milestone 5 · 17 done, 1 partial, 2 to do
+Milestone 5 · 21 done, 1 partial, 0 to do
 
+- [x] A super admin cannot lock themselves out — _Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it_
 - [x] Authentication (opaque bearer tokens) — _SHA-256 hashed, 30-day expiry, server/auth.php:35_
 - [x] Client-side route role gating — _Fixed. src/lib/access.ts maps route to roles and is read by both RequireAuth and the sidebar, so a visible link always leads somewhere the user may go_
 - [x] Close the unauthenticated write on api.php — _Fixed. Both verbs now require auth; POST throttled 30/5 min_
@@ -137,18 +138,19 @@ Milestone 5 · 17 done, 1 partial, 2 to do
 - [x] Idle lock screen
 - [x] Mandatory 2FA for privileged roles — _MANDATORY_2FA config flag_
 - [x] Password hashing — _bcrypt cost 12_
+- [x] Per-service permission scoping — _service_scope() in lib.php, applied to the workforce and candidate lists. Opt-in per account via users.scope_to_division, so switching it on narrows nobody's access by surprise. super_admin and admin are never scoped_
+- [x] Per-service scoping is enforced — _As a query filter, not just a stored preference_
 - [x] Portal and worker app gated to their linked accounts — _/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side_
 - [x] Rate limiting — _rate_limits table + rate_limit()_
 - [x] Role-filtered navigation — _app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse_
 - [x] Role-restrict field event logging — _Fixed. Board is staff-only; a worker may post only against a shift assigned to them_
 - [x] Role-restrict the shared mailbox — _Fixed. server/inbox.php now requires super_admin/admin/manager_
 - [x] Role-restrict worker reads — _Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager_
+- [x] Sensitive zones (health, payroll, disciplinary, legal) — _zone_permissions, a role x zone matrix editable by a super admin. can_view_zone() replaces the hard-coded role list that gated pay. No row means no permission, so an unconfigured zone is not readable by default_
 - [x] Staff-vs-worker-vs-client account discrimination — _is_staff(), require_staff(), linked_worker_id() in server/lib.php. Role alone cannot express this: a worker login is an ordinary account with users.worker_id set_
 - [x] TOTP two-factor authentication — _hand-rolled RFC 6238, user_2fa_
 - [x] Update last_seen_at on token use — _Fixed. Refreshed in current_user(), throttled to one write a minute per token_
 - [~] Server-side role checks on mutations — _several read endpoints have require_auth with no require_role_
-- [ ] Per-service permission scoping — _users.division is stored but not enforced as a query filter_
-- [ ] Sensitive zones (health, payroll, disciplinary, legal)
 
 ### EMPLOYMENT — Employment records, contracts and leave
 
