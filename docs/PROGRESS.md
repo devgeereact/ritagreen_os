@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#################.......`  93 done · 13 partial · 35 to do · 141 tracked
+`#################.......`  95 done · 12 partial · 35 to do · 142 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -27,7 +27,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `#####.......` | 4 | 2 | 5 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `######......` | 6 | 1 | 5 |
 | PWA — Progressive web app | 9 | `###.........` | 1 | 2 | 4 |
 | REPORTING — Reporting and insight | 9 | `########....` | 5 | 0 | 3 |
 
@@ -200,13 +200,14 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 4 done, 2 partial, 5 to do
+Milestone 9 · 6 done, 1 partial, 5 to do
 
+- [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
+- [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
 - [x] Consent log
 - [x] Database backup with rotation — _above the document root, 14-day prune_
 - [x] Incidents with RIDDOR and safeguarding flags
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
-- [~] Audit log — _action plus a 255-char detail string; no before/after, entity reference or IP_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
 - [ ] Deletion approval workflow
 - [ ] Restore testing

@@ -130,7 +130,8 @@ if (method() === 'POST' && $action === '') {
     $id = (int) $conn->insert_id;
 
     sync_legacy_rtw_flag($conn, $personId);
-    audit($conn, (int) $user['id'], 'rtw.record', "person #$personId, $method, $outcome");
+    audit($conn, (int) $user['id'], 'rtw.record', "person #$personId", 'person', $personId,
+        null, ['method' => $method, 'outcome' => $outcome, 'checked_on' => $checkedOn, 'recheck_due' => $recheckVal]);
     json_out(['ok' => true, 'id' => $id], 201);
 }
 
@@ -156,7 +157,9 @@ if (method() === 'POST' && $action === 'verify') {
     $stmt->execute();
 
     sync_legacy_rtw_flag($conn, (int) $check['person_id']);
-    audit($conn, $uid, 'rtw.verify', "check #$id for person #{$check['person_id']}");
+    // The question this exists to answer: who signed this off, and when?
+    audit($conn, $uid, 'rtw.verify', "check #$id", 'right_to_work_check', $id,
+        ['verified' => false], ['verified' => true, 'outcome' => $check['outcome']]);
     json_out(['ok' => true]);
 }
 

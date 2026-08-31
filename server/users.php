@@ -46,7 +46,8 @@ if ($action === 'deactivate' && method() === 'POST') {
     $del->bind_param('i', $id);
     $del->execute();
 
-    audit($conn, (int) $user['id'], 'user.deactivate', "#$id");
+    audit($conn, (int) $user['id'], 'user.deactivate', "#$id", 'user', $id,
+        ['active' => true], ['active' => false]);
     json_out(['ok' => true]);
 }
 

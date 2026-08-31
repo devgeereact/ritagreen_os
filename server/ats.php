@@ -106,10 +106,18 @@ if ($action === 'stage' && method() === 'POST') {
     $stage = trim((string) (body()['stage'] ?? ''));
     $valid = ['applied', 'screened', 'interview', 'vetting', 'offer', 'onboarded', 'rejected'];
     if ($id <= 0 || !in_array($stage, $valid, true)) fail('Valid applicant and stage required.');
+    $prev = $conn->prepare('SELECT stage FROM applicants WHERE id = ?');
+    $prev->bind_param('i', $id);
+    $prev->execute();
+    $was = $prev->get_result()->fetch_assoc()['stage'] ?? null;
+
     $stmt = $conn->prepare('UPDATE applicants SET stage = ? WHERE id = ?');
     $stmt->bind_param('si', $stage, $id);
     $stmt->execute();
-    audit($conn, (int) $user['id'], 'ats.stage', "#$id -> $stage");
+
+    // A rejection is the entry somebody will ask about later.
+    audit($conn, (int) $user['id'], 'ats.stage', "#$id", 'applicant', $id,
+        ['stage' => $was], ['stage' => $stage]);
     json_out(['ok' => true]);
 }
 

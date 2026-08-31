@@ -602,8 +602,8 @@
       "items": [
         {
           "name": "Audit log",
-          "status": "partial",
-          "note": "action plus a 255-char detail string; no before/after, entity reference or IP"
+          "status": "done",
+          "note": "Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically"
         },
         {
           "name": "Consent log",
@@ -647,6 +647,11 @@
           "name": "Reconcile part-paid Direct Debit collections",
           "status": "done",
           "note": "Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery"
+        },
+        {
+          "name": "A record's own history is retrievable",
+          "status": "done",
+          "note": "audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log"
         }
       ]
     },

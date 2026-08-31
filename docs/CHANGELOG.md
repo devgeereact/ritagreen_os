@@ -436,6 +436,34 @@ happening at all.
 looks like a mistake to the recipient; "Hi {{first_name}}," looks like a mistake to whoever sent
 it, and they are the person who can fix it.
 
+### Added — an audit log that can answer a question
+
+`audit_log` held a user, an action, a 255-character string and a timestamp. That records *that*
+something happened, but not what changed, to which record, or from where. "Who marked this SIA
+licence verified, and what did it say before?" was unanswerable.
+
+Migration 009 adds `entity_type`, `entity_id`, `before_json`, `after_json`, `reason`, `ip` and
+`user_agent`, plus indexes on entity, user and time — finding everything that happened to one
+record is the commonest audit question, and there was no index for it.
+
+`audit()` keeps its existing signature, so all ~90 call sites carry on working unchanged and
+pick up IP and user agent automatically. The high-value ones now pass the rest:
+
+```
+action      entity    id  before                     after                      ip
+ats.stage   applicant 1   {"stage":"applied"}        {"stage":"rejected"}       127.0.0.1
+worker.pay  worker    1   {"pay_rate_pence":1350}    {"pay_rate_pence":1450}    127.0.0.1
+```
+
+`audit_diff()` records **only what changed** — `pay_type` is absent above because it did not.
+An entry holding a copy of every field is a second copy of the data, which is its own retention
+problem.
+
+`audit.php` gains filters: `?entity_type=worker&entity_id=12` for one record's whole history,
+`?action=` for one kind of event, `?user_id=` for one person's activity. Reading the log **with
+a filter** is itself audited; the routine full listing is not, or the log fills with entries
+about reading the log.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

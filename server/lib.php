@@ -300,12 +300,66 @@ function queue_templated_mail(
     return queue_mail($conn, $to, $subject, $body, null, $templateKey, $relatedType, $relatedId, $queuedBy);
 }
 
-// Write an audit log row for sensitive actions.
-function audit(mysqli $conn, ?int $userId, string $action, string $detail = ''): void
-{
-    $stmt = $conn->prepare('INSERT INTO audit_log (user_id, action, detail) VALUES (?, ?, ?)');
-    $stmt->bind_param('iss', $userId, $action, $detail);
+/**
+ * Write an audit log row for a sensitive action.
+ *
+ * The signature is unchanged, so every existing call site keeps working. The
+ * optional arguments are what make an entry answerable months later: which
+ * record it touched, what the values were before and after, why, and from where.
+ *
+ * $before and $after are arrays of the fields that changed -- pass only those,
+ * not the whole row. An audit entry holding a copy of every field is a second
+ * copy of the data, which is its own retention problem.
+ */
+function audit(
+    mysqli $conn,
+    ?int $userId,
+    string $action,
+    string $detail = '',
+    ?string $entityType = null,
+    ?int $entityId = null,
+    ?array $before = null,
+    ?array $after = null,
+    ?string $reason = null
+): void {
+    $beforeJson = $before !== null ? json_encode($before, JSON_UNESCAPED_UNICODE) : null;
+    $afterJson = $after !== null ? json_encode($after, JSON_UNESCAPED_UNICODE) : null;
+    $ip = client_ip();
+    $agent = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255) ?: null;
+
+    $stmt = $conn->prepare(
+        'INSERT INTO audit_log (user_id, action, entity_type, entity_id, detail, before_json, after_json, reason, ip, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    // user_id i | action s | entity_type s | entity_id i | detail s
+    // before s | after s | reason s | ip s | user_agent s
+    $stmt->bind_param(
+        'ississssss',
+        $userId, $action, $entityType, $entityId, $detail, $beforeJson, $afterJson, $reason, $ip, $agent
+    );
     $stmt->execute();
+}
+
+/**
+ * Only the fields that actually changed, as [before, after].
+ *
+ * Keeps an audit entry to the difference rather than a copy of the record.
+ * Values are compared loosely as strings, because a column read back from MySQL
+ * is a string and the value written was often an int.
+ */
+function audit_diff(array $before, array $after, array $fields): array
+{
+    $b = [];
+    $a = [];
+    foreach ($fields as $field) {
+        $old = $before[$field] ?? null;
+        $new = $after[$field] ?? null;
+        if ((string) $old !== (string) $new) {
+            $b[$field] = $old;
+            $a[$field] = $new;
+        }
+    }
+    return [$b, $a];
 }
 
 // Best-effort client IP. Cloudflare and generic proxies put the real address in

@@ -131,7 +131,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
 | Sensitive actions are audited | `audit_log` | `audit()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
-| Audit records before and after values | not captured | — | — | none |
+| Audit records before and after values | `audit_log.before_json`, `after_json` | `audit_diff()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
+| A record's own history is retrievable | `audit_log.entity_type`, `entity_id` | `server/audit.php` | planned | none |
 | Consent is recorded | `consent_log` | `server/contact.php` | — | none |
 | Subject data can be exported | — | `server/gdpr.php` | `src/pages/app/Settings.tsx` | none |
 | Deletion requires approval | planned | planned | planned | none |

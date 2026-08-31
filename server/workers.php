@@ -70,10 +70,19 @@ if ($action === 'pay' && method() === 'POST') {
     if ($id <= 0) fail('A worker is required.');
     if ($rate < 0) fail('Pay rate cannot be negative.');
     if (!in_array($type, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
+    // Read the current values first: an audit entry that cannot say what the pay
+    // rate was before is not much of an audit entry.
+    $prev = $conn->prepare('SELECT pay_rate_pence, pay_type FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $prev->bind_param('i', $id);
+    $prev->execute();
+    $was = $prev->get_result()->fetch_assoc() ?: [];
+
     $stmt = $conn->prepare('UPDATE workers SET pay_rate_pence = ?, pay_type = ? WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('isi', $rate, $type, $id);
     $stmt->execute();
-    audit($conn, (int) $user['id'], 'worker.pay', "worker #$id rate=$rate type=$type");
+
+    [$before, $after] = audit_diff($was, ['pay_rate_pence' => $rate, 'pay_type' => $type], ['pay_rate_pence', 'pay_type']);
+    audit($conn, (int) $user['id'], 'worker.pay', "worker #$id", 'worker', $id, $before, $after);
     json_out(['ok' => true]);
 }
 
@@ -110,7 +119,8 @@ if (method() === 'POST') {
     $stmt->execute();
     $id = $conn->insert_id;
 
-    audit($conn, (int) $user['id'], 'worker.create', $name);
+    audit($conn, (int) $user['id'], 'worker.create', $name, 'worker', (int) $id,
+        null, ['person_id' => $personId, 'payroll_no' => $payrollNo, 'role' => $role, 'division' => $division]);
 
     json_out([
         'worker' => [
