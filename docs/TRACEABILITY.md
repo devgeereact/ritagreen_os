@@ -45,8 +45,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Applications move through stages | `applicants.stage` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Onboarding generates tasks | `onboarding_tasks` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | A learner can become a candidate | `applicants.source` | `server/ats.php` | `src/pages/app/Academy.tsx` | none |
-| Google Forms submissions reach the system | planned | planned webhook | planned settings mapping | none |
-| A stalled integration raises an alert | planned | planned | planned | none |
+| Google Forms submissions reach the system | `integration_submissions` | `server/forms-intake.php` | planned settings screen | `server/tests/run.php` (mapping) |
+| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php` | planned | none |
 
 ## Compliance
 
@@ -90,9 +90,9 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
 | Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied) | planned, on `next_seq()` in `server/lib.php` | planned | none |
-| Employment contracts have a lifecycle | planned | planned | planned | none |
-| Written-statement particulars are structured | planned | planned | planned | none |
-| Leave and absence are recorded | planned | planned | planned | none |
+| Employment contracts have a lifecycle | `employment_contracts` | planned endpoint | planned | none |
+| Written-statement particulars are structured | `employment_contracts` fields | planned endpoint | planned | none |
+| Leave and absence are recorded | `leave_records` | `server/leave.php` | planned | `server/tests/run.php` (balance) |
 | Worker status follows workflow events | `workers.status` (set by hand) | `server/workers.php` | `src/pages/app/Workers.tsx` | none |
 
 ## Training
@@ -113,7 +113,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Documents are stored safely | `files` | `server/files.php` | `src/pages/app/Files.tsx` | none |
 | Documents are not publicly reachable | — | `public/.htaccess` blocks the uploads path | — | none |
 | Only permitted roles browse documents | — | `server/files.php` | `src/pages/app/Files.tsx` | none |
-| Documents carry expiry and verification | planned columns | planned | planned | none |
+| Documents carry expiry and verification | `files.expires_on`, `verification_status` | `server/files.php` | `src/pages/app/Files.tsx` | none |
 
 ## Communications
 

@@ -601,6 +601,38 @@ verifier cannot be evidence of anything.
 this schema, and NULL is distinct from zero so a dashboard can say "no policy set" rather than
 implying immediate deletion.
 
+### Added — Google Forms intake
+
+The office already runs recruitment through Google Forms. The decision taken was to keep that
+**and** the native `/apply` page, with Forms as an *integration* rather than the database — so
+the CMS owns the record and Forms can be replaced later without rebuilding anything.
+
+- **`server/forms-intake.php`** — a webhook for an Apps Script on the form's submit trigger.
+  Authenticated by a shared secret compared with `hash_equals` (Apps Script has no login), rate
+  limited because the endpoint is necessarily public, and **redelivery-safe** via the form's own
+  response id
+- **The mapping is configuration.** `integration_field_maps` holds question → CMS field, with
+  optional value translation so the form can say "Security Officer" and the CMS store
+  `security`. A form that gains a question, or has one reworded, must not need a code change
+- **Matching is deliberately forgiving** — case, surrounding whitespace and the trailing
+  asterisk Google adds to required questions. An exact-string join breaks *silently*:
+  submissions arrive and map to nothing
+- **The raw payload is stored first** and kept whether or not it maps. A submission that fails
+  to map is a person who applied and would otherwise vanish; the payload is what makes them
+  recoverable once the mapping is fixed. `?action=retry` re-maps one
+- **Nothing is discarded.** Answers the mapping could not place are written onto the applicant
+  as `[unmapped] <question>: <answer>`, so a new question on the form shows up as something to
+  configure rather than disappearing
+
+**Silence is the failure that matters.** A form that stops feeding the system looks exactly
+like a quiet week. Each integration carries `expect_within_hours`, and the Action Centre reports
+anything past its window — along with any submission that could not be mapped.
+
+Verified end to end: a missing or wrong secret is refused with 401; a real submission creates
+one person and one applicant and reports the unmapped question; the same response redelivered
+returns `duplicate: true` without creating a second application; a submission missing a required
+answer fails with the question named, and its payload is retained.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

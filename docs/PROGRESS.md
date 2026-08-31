@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`###################.....`  115 done · 15 partial · 22 to do · 152 tracked
+`####################....`  122 done · 14 partial · 19 to do · 155 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -25,9 +25,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
-| RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
+| RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `#######.....` | 6 | 3 | 4 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `#######.....` | 7 | 2 | 4 |
 | PWA — Progressive web app | 9 | `###########.` | 8 | 0 | 1 |
 | REPORTING — Reporting and insight | 9 | `#########...` | 6 | 0 | 2 |
 
@@ -183,15 +183,18 @@ Milestone 7 · 11 done, 0 partial, 0 to do
 
 ### RECRUITMENT — Recruitment and intake
 
-Milestone 8 · 4 done, 0 partial, 3 to do
+Milestone 8 · 10 done, 0 partial, 0 to do
 
+- [x] A stalled integration raises an alert — _expect_within_hours per integration; the Action Centre reports anything past its window_
 - [x] Academy to recruitment handoff — _from_learner resolves a person. The fabricated @learner.invalid address is kept only to satisfy a NOT NULL column and is explicitly not treated as an identity_
 - [x] Application pipeline, 7 stages — _applicants.stage_
+- [x] Configurable field mapping — _integration_field_maps. Matching tolerates case, spacing and the asterisk Google adds to required questions, because an exact-string join breaks silently_
+- [x] Google Forms intake webhook — _server/forms-intake.php. Shared secret compared with hash_equals, rate limited, and redelivery-safe via the form's own response id_
+- [x] Google Forms submissions reach the system — _Verified end to end, including secret enforcement and redelivery_
+- [x] Integration health monitoring — _?action=health plus an Action Centre item. Silence is the failure that matters: a form that stops feeding the system looks exactly like a quiet week_
 - [x] Onboarding task checklist — _onboarding_tasks, seeded on onboard_
 - [x] Public application page — _/apply, rate-limited_
-- [ ] Configurable field mapping
-- [ ] Google Forms intake webhook
-- [ ] Integration health monitoring
+- [x] Raw submissions retained — _The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed_
 
 ### TRAINING — Training records and certificates
 
@@ -207,16 +210,16 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 6 done, 3 partial, 4 to do
+Milestone 9 · 7 done, 2 partial, 4 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
 - [x] Consent log
 - [x] Database backup with rotation — _above the document root, 14-day prune_
 - [x] Incidents with RIDDOR and safeguarding flags
+- [x] Integration failure surfaced — _Silent integrations and unmappable submissions both reach the Action Centre_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
-- [~] Integration failure surfaced — _The Action Centre flags failed emails and a queue not being drained for over two hours -- the first symptom of a broken cron would otherwise be somebody saying they never heard from us. Google Forms monitoring still to come_
 - [~] Retention engine — _retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built_
 - [ ] Deletion approval workflow
 - [ ] Restore testing

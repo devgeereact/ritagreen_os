@@ -231,15 +231,33 @@
         },
         {
           "name": "Google Forms intake webhook",
-          "status": "todo"
+          "status": "done",
+          "note": "server/forms-intake.php. Shared secret compared with hash_equals, rate limited, and redelivery-safe via the form's own response id"
         },
         {
           "name": "Configurable field mapping",
-          "status": "todo"
+          "status": "done",
+          "note": "integration_field_maps. Matching tolerates case, spacing and the asterisk Google adds to required questions, because an exact-string join breaks silently"
         },
         {
           "name": "Integration health monitoring",
-          "status": "todo"
+          "status": "done",
+          "note": "?action=health plus an Action Centre item. Silence is the failure that matters: a form that stops feeding the system looks exactly like a quiet week"
+        },
+        {
+          "name": "Google Forms submissions reach the system",
+          "status": "done",
+          "note": "Verified end to end, including secret enforcement and redelivery"
+        },
+        {
+          "name": "A stalled integration raises an alert",
+          "status": "done",
+          "note": "expect_within_hours per integration; the Action Centre reports anything past its window"
+        },
+        {
+          "name": "Raw submissions retained",
+          "status": "done",
+          "note": "The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed"
         }
       ]
     },
@@ -692,8 +710,8 @@
         },
         {
           "name": "Integration failure surfaced",
-          "status": "partial",
-          "note": "The Action Centre flags failed emails and a queue not being drained for over two hours -- the first symptom of a broken cron would otherwise be somebody saying they never heard from us. Google Forms monitoring still to come"
+          "status": "done",
+          "note": "Silent integrations and unmappable submissions both reach the Action Centre"
         }
       ]
     },

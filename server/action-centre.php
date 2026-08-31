@@ -149,6 +149,29 @@ $stuckMail = $scalar($conn,
 if ($stuckMail) $add(URGENT, 'system', "$stuckMail " . ($stuckMail === 1 ? 'email has' : 'emails have') . ' been queued over 2 hours',
     'The queue is not being drained. Check the send-queued-mail cron.', '/app/settings', $stuckMail);
 
+// An integration that has gone quiet looks exactly like a quiet week. This is
+// the difference between noticing in a day and noticing when a candidate rings
+// up asking why nobody replied.
+$silent = $conn->query(
+    'SELECT name, TIMESTAMPDIFF(HOUR, last_success_at, NOW()) AS hours
+     FROM integrations
+     WHERE active = 1 AND secret_hash IS NOT NULL AND expect_within_hours IS NOT NULL
+       AND (last_success_at IS NULL OR TIMESTAMPDIFF(HOUR, last_success_at, NOW()) > expect_within_hours)'
+);
+$silentList = [];
+while ($row = $silent->fetch_assoc()) {
+    $silentList[] = $row['name'] . ($row['hours'] === null ? ' (nothing ever received)' : " ({$row['hours']}h ago)");
+}
+if ($silentList) $add(URGENT, 'system',
+    count($silentList) . ' ' . (count($silentList) === 1 ? 'integration has' : 'integrations have') . ' gone quiet',
+    'Nothing received within the expected window: ' . implode('; ', $silentList),
+    '/app/settings', count($silentList));
+
+$failedIntake = $scalar($conn, 'SELECT COUNT(*) FROM integration_submissions WHERE status = "failed"');
+if ($failedIntake) $add(TODAY, 'system', "$failedIntake form " . ($failedIntake === 1 ? 'submission' : 'submissions') . ' could not be mapped',
+    'Somebody applied and is not in the pipeline. The raw answers are kept, so fixing the mapping recovers them.',
+    '/app/settings', $failedIntake);
+
 $unlinked = $scalar($conn, 'SELECT COUNT(*) FROM enrolments WHERE person_id IS NULL');
 if ($unlinked) $add(SOON, 'system', "$unlinked training " . ($unlinked === 1 ? 'record is' : 'records are') . ' not linked to a person',
     'Enrolments carry only a learner name, so these are linked by hand.', '/app/academy', $unlinked);

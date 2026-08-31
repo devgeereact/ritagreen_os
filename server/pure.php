@@ -586,3 +586,91 @@ function rg_leave_overlaps(string $aStart, string $aEnd, string $bStart, string 
 {
     return strtotime($aStart) <= strtotime($bEnd) && strtotime($bStart) <= strtotime($aEnd);
 }
+
+// -------------------------------------------------------------- form intake
+
+/**
+ * Map a form submission onto CMS fields using a configured mapping.
+ *
+ * Matching is case-insensitive and ignores surrounding whitespace and a trailing
+ * asterisk, because Google marks required questions with one and people rename
+ * questions with stray spaces. An exact-string join would break on any of that,
+ * and a broken mapping is silent: submissions arrive and map to nothing.
+ *
+ * @param array<string,mixed> $payload question title => answer
+ * @param array<int,array{source_field:string,target_field:string,required?:int|bool,value_map?:?string}> $maps
+ * @return array{fields:array<string,string>,missing:array<int,string>,unmapped:array<int,string>}
+ */
+function rg_map_submission(array $payload, array $maps): array
+{
+    $normalise = static fn(string $s): string => strtolower(trim(rtrim(trim($s), '*')));
+
+    $byQuestion = [];
+    foreach ($payload as $question => $answer) {
+        $byQuestion[$normalise((string) $question)] = $answer;
+    }
+
+    $fields = [];
+    $missing = [];
+    $used = [];
+
+    foreach ($maps as $map) {
+        $target = $map['target_field'] ?? 'ignore';
+        $key = $normalise($map['source_field']);
+        // Marked used even when ignored: a question somebody deliberately chose
+        // not to map is configured, and reporting it as unmapped would train
+        // people to ignore the list that exists to catch real gaps.
+        $used[$key] = true;
+        if ($target === 'ignore') continue;
+        $raw = $byQuestion[$key] ?? null;
+
+        // Google sends checkbox answers as arrays.
+        if (is_array($raw)) $raw = implode(', ', array_map('strval', $raw));
+        $value = $raw === null ? '' : trim((string) $raw);
+
+        if ($value === '') {
+            if (!empty($map['required'])) $missing[] = $map['source_field'];
+            continue;
+        }
+
+        // Optional value translation, e.g. "Security Officer" -> "security".
+        if (!empty($map['value_map'])) {
+            $translations = json_decode((string) $map['value_map'], true);
+            if (is_array($translations)) {
+                foreach ($translations as $from => $to) {
+                    if ($normalise((string) $from) === $normalise($value)) {
+                        $value = (string) $to;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $fields[$target] = $value;
+    }
+
+    // Questions nobody mapped. Reported rather than dropped: a form that gains a
+    // question should show up as something to configure, not vanish.
+    $unmapped = [];
+    foreach ($byQuestion as $question => $answer) {
+        if (!isset($used[$question]) && trim((string) (is_array($answer) ? implode(',', $answer) : $answer)) !== '') {
+            $unmapped[] = $question;
+        }
+    }
+
+    return ['fields' => $fields, 'missing' => $missing, 'unmapped' => $unmapped];
+}
+
+/**
+ * Read a yes/no answer as written by a human.
+ * Returns null for anything that is not clearly one or the other, rather than
+ * guessing -- "I have a share code" is not a yes.
+ */
+function rg_parse_yes_no(?string $value): ?bool
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === '') return null;
+    if (in_array($v, ['yes', 'y', 'true', '1', 'yes - uk citizen', 'yes, i do'], true)) return true;
+    if (in_array($v, ['no', 'n', 'false', '0', 'not yet'], true)) return false;
+    return null;
+}

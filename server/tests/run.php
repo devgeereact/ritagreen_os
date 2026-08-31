@@ -528,6 +528,81 @@ check('far apart', rg_leave_overlaps('2026-06-01', '2026-06-05', '2026-08-01', '
 check('order does not matter', rg_leave_overlaps('2026-08-01', '2026-08-05', '2026-06-01', '2026-06-05'), false);
 
 // ---------------------------------------------------------------------------
+// Form intake. A broken mapping is SILENT -- submissions arrive and map to
+// nothing -- so the matching is deliberately forgiving and everything it cannot
+// place is reported rather than dropped.
+group('rg_map_submission');
+
+$maps = [
+    ['source_field' => 'Full name',     'target_field' => 'name',  'required' => 1],
+    ['source_field' => 'Email address', 'target_field' => 'email', 'required' => 1],
+    ['source_field' => 'Phone number',  'target_field' => 'phone', 'required' => 0],
+    ['source_field' => 'Notes',         'target_field' => 'ignore', 'required' => 0],
+];
+
+$r = rg_map_submission(['Full name' => 'Amara Chen', 'Email address' => 'a@example.com'], $maps);
+check('maps what it finds', $r['fields']['name'], 'Amara Chen');
+check('and the rest', $r['fields']['email'], 'a@example.com');
+check('nothing missing', $r['missing'], []);
+
+// Google marks required questions with an asterisk, and people rename questions
+// with stray spaces. An exact-string join breaks on both.
+$loose = rg_map_submission(['  full NAME *' => 'Amara Chen', 'Email Address' => 'a@example.com'], $maps);
+check('tolerates case, spacing and asterisks', $loose['fields']['name'], 'Amara Chen');
+check('and on the second field too', $loose['fields']['email'], 'a@example.com');
+
+// A required answer left blank is reported, not silently defaulted.
+$incomplete = rg_map_submission(['Full name' => 'Amara Chen'], $maps);
+check('reports a missing required field', $incomplete['missing'], ['Email address']);
+$blank = rg_map_submission(['Full name' => 'Amara Chen', 'Email address' => '   '], $maps);
+check('whitespace counts as missing', $blank['missing'], ['Email address']);
+
+// Optional fields simply do not appear.
+check('absent optional field is not reported', $r['missing'], []);
+check('and is not invented', isset($r['fields']['phone']), false);
+
+// Checkbox answers arrive as arrays.
+$multi = rg_map_submission(['Full name' => ['Amara', 'Chen'], 'Email address' => 'a@example.com'], $maps);
+check('array answers are joined', $multi['fields']['name'], 'Amara, Chen');
+
+// A question nobody mapped must SHOW UP, not vanish. A form that gains a
+// question should read as something to configure.
+$extra = rg_map_submission(
+    ['Full name' => 'A', 'Email address' => 'a@example.com', 'What shifts can you work?' => 'Nights'],
+    $maps
+);
+check('unmapped questions are reported', $extra['unmapped'], ['what shifts can you work?']);
+// An explicitly ignored question is not reported as unmapped.
+$ignored = rg_map_submission(['Full name' => 'A', 'Email address' => 'a@example.com', 'Notes' => 'hello'], $maps);
+check('an ignored question is not flagged', $ignored['unmapped'], []);
+check('and is not mapped either', isset($ignored['fields']['notes']), false);
+// A blank unmapped answer is not worth flagging.
+$blankExtra = rg_map_submission(['Full name' => 'A', 'Email address' => 'a@example.com', 'Spare' => ''], $maps);
+check('a blank unmapped answer is ignored', $blankExtra['unmapped'], []);
+
+// Value translation, so the form can say "Security Officer" and the CMS store
+// "security".
+$svcMap = [['source_field' => 'Service', 'target_field' => 'service',
+            'value_map' => '{"Security Officer":"security","Care Assistant":"care"}']];
+check('translates a value', rg_map_submission(['Service' => 'Security Officer'], $svcMap)['fields']['service'], 'security');
+check('translation is case-insensitive', rg_map_submission(['Service' => 'care assistant'], $svcMap)['fields']['service'], 'care');
+check('an untranslated value passes through', rg_map_submission(['Service' => 'Cleaner'], $svcMap)['fields']['service'], 'Cleaner');
+
+// ---------------------------------------------------------------------------
+group('rg_parse_yes_no');
+
+check('yes', rg_parse_yes_no('Yes'), true);
+check('y', rg_parse_yes_no('y'), true);
+check('no', rg_parse_yes_no('NO'), false);
+check('padded', rg_parse_yes_no('  yes  '), true);
+check('empty is unknown', rg_parse_yes_no(''), null);
+check('null is unknown', rg_parse_yes_no(null), null);
+// Anything ambiguous stays unknown rather than being guessed at. On a
+// right-to-work question, guessing is the worst possible behaviour.
+check('a hedge is unknown', rg_parse_yes_no('I have a share code'), null);
+check('maybe is unknown', rg_parse_yes_no('maybe'), null);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {
