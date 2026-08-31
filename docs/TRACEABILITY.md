@@ -67,7 +67,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | A check records who verified it, and when | `right_to_work_checks.verified_by` | `server/right-to-work.php` | planned | none |
 | SIA licences are verified, not just recorded | `workers.sia_number` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | DBS is verified, not just recorded | `workers.dbs_status` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
-| Verification is a workflow | `worker_references.status` only | `server/references.php` | `src/pages/app/Workers.tsx` | none |
+| Verification is a workflow | `verifications` | `server/verifications.php` | planned | none |
+| Only legal state transitions are allowed | `verifications.status` | `server/verifications.php` | planned | none |
 
 ## Operations
 

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`######################..`  144 done · 16 partial · 3 to do · 163 tracked
+`#######################.`  149 done · 14 partial · 2 to do · 165 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -19,7 +19,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `##########..` | 10 | 3 | 1 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
-| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 16 | 4 | 1 |
+| COMPLIANCE — Compliance engine and verification | 2 | `###########.` | 21 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
@@ -76,16 +76,18 @@ Milestone 1 · 16 done, 1 partial, 0 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 16 done, 4 partial, 1 to do
+Milestone 2 · 21 done, 2 partial, 0 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
 - [x] Configurable rules (service x role x requirement) — _migrations/003 seeds 26 rules across the four services, reproducing what scheduling.php enforces in code. Applied and verified_
 - [x] Credential expiry alert engine — _90/60/30/expired tiers, deduplicated, cron-driven_
+- [x] DBS verification workflow — _Same, and for the same reason_
 - [x] Eligibility evaluation logic — _rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come_
 - [x] Eligibility recalculated daily — _Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners_
 - [x] Eligibility visible in the interface — _src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first_
 - [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
+- [x] Generalised verification lifecycle — _verifications table plus server/verifications.php: requested / received / under_review / verified / rejected / expired, with only legal transitions permitted and the refusal naming what IS possible_
 - [x] Legacy right-to-work carried over honestly — _Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence_
 - [x] Mandatory / recommended / optional weighting — _RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests_
 - [x] Per-service eligibility, demonstrated — _Verified: Esi Mensah is eligible for care and cleaning but blocked for security on a lapsed SIA licence. One credential, one service, exactly as intended_
@@ -94,11 +96,11 @@ Milestone 2 · 16 done, 4 partial, 1 to do
 - [x] Reference checks with gap explanation — _worker_references_
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
 - [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
+- [x] SIA verification workflow — _Carried over as 'received', not 'verified' -- a number was recorded, no register check was captured_
+- [x] Verification is a workflow — _One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked_
+- [x] Verifying records what was checked — _A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later_
 - [~] Compliance status read-only in the UI — _The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields_
-- [~] DBS verification workflow — _status, expiry and update-service flag stored; no verification record_
 - [~] Right to work as a dated, verified check — _The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision_
-- [~] SIA verification workflow — _number and expiry stored; no verification record_
-- [ ] Generalised verification lifecycle
 
 ### DOCUMENTS — Document management
 

@@ -103,6 +103,43 @@ function rg_load_evidence(mysqli $conn, int $personId): array
         $evidence['right_to_work'] = ['expiry' => null, 'verified' => false];
     }
 
+    // A completed verification is stronger evidence than a field somebody typed
+    // in, so where one exists it wins.
+    //
+    // It AUGMENTS rather than replaces: a check still sitting at 'received' does
+    // not downgrade the underlying record, because every migrated SIA and DBS
+    // entry starts there. Downgrading them all at once would block the whole
+    // workforce on the day this shipped -- the same trap right to work hit, and
+    // the same answer: the evidence model improves, and enforcement follows once
+    // the backlog is worked through.
+    $stmt = $conn->prepare(
+        'SELECT requirement_key, status, expires_on, verified_at
+         FROM verifications
+         WHERE person_id = ? AND status IN ("verified", "rejected")
+         ORDER BY id DESC'
+    );
+    $stmt->bind_param('i', $personId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $key = $row['requirement_key'];
+        // The newest terminal verification for a requirement wins; later rows
+        // for the same key are older.
+        if (array_key_exists($key, $evidence) && ($evidence[$key]['from_verification'] ?? false)) continue;
+
+        if ($row['status'] === 'rejected') {
+            // A rejected check is worse than no evidence: somebody looked and
+            // said no. Remove whatever the field-based guess had put here.
+            unset($evidence[$key]);
+            continue;
+        }
+        $evidence[$key] = [
+            'expiry' => $row['expires_on'] ?? ($evidence[$key]['expiry'] ?? null),
+            'verified' => true,
+            'from_verification' => true,
+        ];
+    }
+
     // Certifications are matched to requirements by label, case-insensitively.
     // Free text is a poor join key; a certification_requirement_id belongs on the
     // table, and is deliberately left for the milestone that rebuilds training.

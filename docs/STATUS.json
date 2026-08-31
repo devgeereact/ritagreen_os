@@ -333,17 +333,18 @@
         },
         {
           "name": "SIA verification workflow",
-          "status": "partial",
-          "note": "number and expiry stored; no verification record"
+          "status": "done",
+          "note": "Carried over as 'received', not 'verified' -- a number was recorded, no register check was captured"
         },
         {
           "name": "DBS verification workflow",
-          "status": "partial",
-          "note": "status, expiry and update-service flag stored; no verification record"
+          "status": "done",
+          "note": "Same, and for the same reason"
         },
         {
           "name": "Generalised verification lifecycle",
-          "status": "todo"
+          "status": "done",
+          "note": "verifications table plus server/verifications.php: requested / received / under_review / verified / rejected / expired, with only legal transitions permitted and the refusal naming what IS possible"
         },
         {
           "name": "Eligibility evaluation logic",
@@ -379,6 +380,16 @@
           "name": "Reassessment runs on quiet days too",
           "status": "done",
           "note": "It sat after an early exit taken when no reminder was due, so on a quiet day nothing was recalculated and eligibility went stale on exactly the days nobody was watching. It now runs first, and unconditionally"
+        },
+        {
+          "name": "Verification is a workflow",
+          "status": "done",
+          "note": "One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked"
+        },
+        {
+          "name": "Verifying records what was checked",
+          "status": "done",
+          "note": "A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later"
         }
       ]
     },

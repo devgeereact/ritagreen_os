@@ -792,6 +792,44 @@ The eligibility and status recalculation sat at the end of `expiry-alerts.php`, 
 eligibility went stale on exactly the days nobody was watching. It now runs first and
 unconditionally, which also means the reminders are composed from a fresh assessment.
 
+### Added — one verification lifecycle for everything
+
+Verification was three different shapes. `worker_references` had a status. `right_to_work_checks`
+had its own `verified_by`/`verified_at`. Everything else — an SIA licence, a DBS certificate, a
+qualification, a document — had **nothing**: a number typed into a field, with no record of
+whether anybody looked at the register, who, or when.
+
+`verifications` gives them one shape: requested → received → under review → verified / rejected
+/ expired. **Only legal transitions are permitted**, and a refusal names what *is* possible:
+
+```
+POST verify   (no method)   -> Record what you checked, so the entry means something later.
+POST received (on verified) -> A verification cannot go from 'verified' to 'received'.
+                               From here it can only become: expired.
+```
+
+`received` and `under_review` are separate on purpose. A document arriving and somebody actually
+checking it are different events with different people behind them, and collapsing them is how
+"we have it" quietly becomes "we checked it".
+
+**Signing one off requires recording what was checked.** "Checked the SIA public register
+against the licence number" and "saw a photocopy" are not the same assurance, and only that
+field can tell them apart later.
+
+**The existing data came across honestly.** An SIA number or DBS status against a worker means
+somebody typed it in; it does not mean anybody checked a register. They import as `received`,
+not `verified`, each carrying a note saying exactly that. Marking them verified would have been
+inventing an assurance nobody gave.
+
+`right_to_work_checks` is deliberately **not** folded in — it carries methods, share codes and
+recheck rules that belong to it alone, and flattening those into a generic table would lose them.
+
+The compliance engine reads a completed verification in preference to a typed field, but
+**augments rather than replaces**: a check still at `received` does not downgrade the underlying
+record, because every migrated entry starts there and downgrading them at once would block the
+entire workforce on the day this shipped. Same trap right to work hit, same answer — the
+evidence model improves now, enforcement follows once the backlog is worked through.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook
