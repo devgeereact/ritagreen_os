@@ -340,6 +340,11 @@
           "name": "Eligibility visible in the interface",
           "status": "done",
           "note": "src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first"
+        },
+        {
+          "name": "Eligibility recalculated daily",
+          "status": "done",
+          "note": "Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners"
         }
       ]
     },
@@ -584,7 +589,8 @@
         },
         {
           "name": "Action Centre",
-          "status": "todo"
+          "status": "done",
+          "note": "server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed"
         },
         {
           "name": "Staff workload view",
@@ -658,6 +664,11 @@
           "name": "A record's own history is retrievable",
           "status": "done",
           "note": "audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log"
+        },
+        {
+          "name": "Integration failure surfaced",
+          "status": "partial",
+          "note": "The Action Centre flags failed emails and a queue not being drained for over two hours -- the first symptom of a broken cron would otherwise be somebody saying they never heard from us. Google Forms monitoring still to come"
         }
       ]
     },

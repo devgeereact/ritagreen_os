@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#################.......`  97 done · 13 partial · 34 to do · 144 tracked
+`#################.......`  99 done · 14 partial · 33 to do · 146 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -19,7 +19,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `########....` | 8 | 3 | 3 |
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
-| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 14 | 4 | 1 |
+| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
@@ -27,9 +27,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `######......` | 6 | 1 | 5 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `######......` | 6 | 2 | 5 |
 | PWA — Progressive web app | 9 | `###.........` | 1 | 2 | 4 |
-| REPORTING — Reporting and insight | 9 | `########....` | 5 | 0 | 3 |
+| REPORTING — Reporting and insight | 9 | `#########...` | 6 | 0 | 2 |
 
 ## Detail
 
@@ -76,13 +76,14 @@ Milestone 1 · 13 done, 1 partial, 3 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 14 done, 4 partial, 1 to do
+Milestone 2 · 15 done, 4 partial, 1 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
 - [x] Configurable rules (service x role x requirement) — _migrations/003 seeds 26 rules across the four services, reproducing what scheduling.php enforces in code. Applied and verified_
 - [x] Credential expiry alert engine — _90/60/30/expired tiers, deduplicated, cron-driven_
 - [x] Eligibility evaluation logic — _rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come_
+- [x] Eligibility recalculated daily — _Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners_
 - [x] Eligibility visible in the interface — _src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first_
 - [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
 - [x] Legacy right-to-work carried over honestly — _Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence_
@@ -202,7 +203,7 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 6 done, 1 partial, 5 to do
+Milestone 9 · 6 done, 2 partial, 5 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
@@ -211,6 +212,7 @@ Milestone 9 · 6 done, 1 partial, 5 to do
 - [x] Incidents with RIDDOR and safeguarding flags
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
+- [~] Integration failure surfaced — _The Action Centre flags failed emails and a queue not being drained for over two hours -- the first symptom of a broken cron would otherwise be somebody saying they never heard from us. Google Forms monitoring still to come_
 - [ ] Deletion approval workflow
 - [ ] Restore testing
 - [ ] Retention engine
@@ -231,13 +233,13 @@ Milestone 9 · 1 done, 2 partial, 4 to do
 
 ### REPORTING — Reporting and insight
 
-Milestone 9 · 5 done, 0 partial, 3 to do
+Milestone 9 · 6 done, 0 partial, 2 to do
 
+- [x] Action Centre — _server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed_
 - [x] Analytics and margin reconciliation
 - [x] CSV and PDF export
 - [x] Command centre dashboard — _filterable by division_
 - [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
 - [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care_
-- [ ] Action Centre
 - [ ] Export logging with user and purpose
 - [ ] Staff workload view

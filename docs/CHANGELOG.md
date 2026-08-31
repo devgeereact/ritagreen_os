@@ -482,6 +482,45 @@ object carrying the worker it belongs to, rather than set at the top of the effe
 makes a stale response impossible to render — a reply for a worker who is no longer selected
 simply never matches.
 
+### Added — the Action Centre
+
+`server/action-centre.php` answers one question: what needs attention today? The office should
+not have to visit fifteen screens to find out, and an owner should not have to know which
+screen a problem would appear on.
+
+Grouped by **urgency, not category** — a list sorted by which module a problem belongs to
+answers a question nobody asked. Everything is **derived**: there is no action table to fall
+out of step with reality, so an item cannot linger after the thing it describes is fixed.
+
+```
+counts: urgent 5, today 4, soon 2
+
+[urgent] 7 people cannot be deployed
+         Audit Probe (cleaning): Signed contract: no evidence on file; Identity: ...
+[urgent] 1 SIA licence has expired
+[urgent] 2 unfilled shifts start within 3 days
+         Nobody is assigned. These are the ones that become a phone call at 6am.
+[today ] 8 right-to-work checks need verifying
+[soon  ] 1 credential expires within 30 days
+         Still valid today. Chase now and nobody is stood down later.
+```
+
+It also watches **itself**: failed emails, and a queue not drained for over two hours. If the
+mail cron stops, the first symptom is otherwise somebody saying they never heard from us.
+
+Staff-only. A worker account gets 403.
+
+### Changed — eligibility is recalculated daily
+
+Eligibility is a calculated value, so it goes stale the moment a credential lapses, not when
+somebody next opens a page. Reassessment is folded into the **existing** `expiry-alerts` cron
+rather than adding another one to configure, so the Action Centre and the dashboards are true
+without anyone having looked.
+
+Only the services a person is actually intended for are assessed. Scoring everyone against
+everything would produce a wall of "not eligible for Security" for cleaners who were never
+going to work security.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

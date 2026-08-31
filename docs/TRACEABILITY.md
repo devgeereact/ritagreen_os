@@ -79,7 +79,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Workers are matched on skills | `skills`, `worker_skills` | `server/skills.php` | `src/pages/app/Scheduling.tsx` | none |
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
-| No path can assign an ineligible worker | planned shared gate | planned | planned | none |
+| No path can assign an ineligible worker | — | `rg_deployment_check()` in `server/compliance-lib.php` | `server/scheduling.php` | none |
+| The office is shown what needs attention | — | `server/action-centre.php` | planned | none |
 | Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
 | Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` (premium selection) |

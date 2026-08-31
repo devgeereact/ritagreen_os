@@ -16,6 +16,7 @@
 // HTTP access is refused unless ?key matches ALERTS_KEY in config.php, so the
 // digest can't be triggered (or scraped) by the public.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $isCli = PHP_SAPI === 'cli';
 if (!$isCli) {
@@ -200,3 +201,42 @@ if (function_exists('mail_enabled') && mail_enabled()) {
     // Mail disabled — print so cron output/logs still show the digest.
     echo "[mail disabled] $subject\n\n$body";
 }
+
+// ----- Reassess eligibility -------------------------------------------------
+//
+// Eligibility is calculated, which means it goes stale the moment a credential
+// lapses -- not when somebody next opens a page. Recomputing it here, on the
+// same daily run that chases expiries, is what makes the Action Centre and the
+// dashboards true without anyone having looked.
+//
+// Only people the business actually intends for a service are assessed. Scoring
+// every person against every service would produce a wall of "not eligible for
+// Security" for cleaners who were never going to work security.
+$assessed = 0;
+$blocked = 0;
+
+$res = $conn->query(
+    'SELECT DISTINCT w.person_id, w.role, w.division
+     FROM workers w
+     WHERE w.deleted_at IS NULL AND w.person_id IS NOT NULL AND w.status IN ("active", "onboarding")'
+);
+while ($row = $res->fetch_assoc()) {
+    $personId = (int) $row['person_id'];
+
+    // The person is intended for the service their employment record names, plus
+    // anything already recorded against them in person_services.
+    $services = [$row['division']];
+    $extra = $conn->prepare('SELECT service FROM person_services WHERE person_id = ? AND active = 1');
+    $extra->bind_param('i', $personId);
+    $extra->execute();
+    $eres = $extra->get_result();
+    while ($e = $eres->fetch_assoc()) $services[] = $e['service'];
+
+    foreach (array_unique($services) as $service) {
+        $verdict = rg_assess_person($conn, $personId, $service, $row['role']);
+        $assessed++;
+        if (!$verdict['eligible']) $blocked++;
+    }
+}
+
+echo "\nEligibility reassessed: $assessed person-service pairs, $blocked not eligible.\n";
