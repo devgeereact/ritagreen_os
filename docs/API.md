@@ -4,7 +4,7 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- **48 HTTP endpoint files.** Verified against the tree at `server/`.
+- **55 HTTP endpoint files.** Verified against the tree at `server/`.
 - Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
   database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
 - Three command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`
@@ -1238,6 +1238,31 @@ stored flag, and no endpoint accepts one. Each call also records the result in
 `scheduling.php` POST calls the same check and refuses the assignment with HTTP 409 when
 anything mandatory is unmet, naming every blocking requirement rather than one at a time.
 
+## 54b. Endpoints added after the baseline audit
+
+Documented here rather than renumbered into the list above, so the original audit numbering
+stays stable and comparable.
+
+| Endpoint | Purpose | Auth |
+|---|---|---|
+| `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff to read; office to write. See §54a |
+| `verifications.php` | The generalised verification lifecycle for every other credential | Staff to read; office to write |
+| `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own; staff see all |
+| `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
+| `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
+| `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
+| `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
+| `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `?key=ALERTS_KEY` |
+| `migrate.php`, `seed.php`, `backfill-people.php` | Schema and fixtures | **CLI only.** Refuse to run over HTTP at all |
+
+Two auth mechanisms here are neither a bearer token nor a role, and are worth stating plainly:
+
+- **`forms-intake.php` POST** authenticates with a shared secret in the `X-RitaGreen-Secret`
+  header, compared using `hash_equals`, because Google Apps Script has no login. It is rate
+  limited, and an integration with no secret configured refuses every submission.
+- **`send-queued-mail.php`** follows `expiry-alerts.php` and `backup.php`: CLI, or HTTP with
+  `?key=` matching `ALERTS_KEY`.
+
 ## 55. Public / unauthenticated surface
 
 Every route below is reachable with **no bearer token**. This is the full list.
@@ -1264,6 +1289,13 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/auth.php?action=google_callback` | POST | `google` 20/5 min | Issues a real token; matches existing users only |
 | `/auth.php?action=logout` | POST | none | No `require_auth`; a no-op without a token |
 | **`OPTIONS` on every endpoint** | OPTIONS | none | `lib.php:50` returns 204 before any auth or dispatch |
+
+### Open but secured by a shared secret
+
+| Route | Method | Throttle | Secret |
+|---|---|---|---|
+| `/forms-intake.php?key=<integration>` | POST | `intake` 120/5 min | `X-RitaGreen-Secret` header, SHA-256 compared with `hash_equals`. An integration with no secret refuses everything |
+| `/send-queued-mail.php?key=` | GET | none | `hash_equals` against `ALERTS_KEY`; also runs from CLI with no key |
 
 ### Open but secured by an unguessable token in the URL
 

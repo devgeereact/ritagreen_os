@@ -315,7 +315,7 @@ row that was never written. Found because the new NOT NULL constraint made an in
 Reporting is now `MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT`, set *after* the connection is
 established so `config.php` keeps its own readable connection-failure message. Anything thrown
 reaches the exception handler, which logs the detail and returns a reference. That single
-change protects every one of the 47 endpoints, not just the ones touched here.
+change protects every endpoint, not just the ones touched here.
 
 ### Added — the compliance engine, wired to real data
 

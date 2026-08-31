@@ -849,7 +849,7 @@
         {
           "name": "Automated tests",
           "status": "partial",
-          "note": "Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
+          "note": "Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
         },
         {
           "name": "Exception messages withheld from callers",

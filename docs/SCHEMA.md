@@ -1,6 +1,10 @@
 # Database schema reference
 
-Source of truth: [`server/schema.sql`](../server/schema.sql) (864 lines, 50 tables).
+Source of truth: [`server/schema.sql`](../server/schema.sql) (864 lines, 50 tables) **plus**
+`server/migrations/` (17 migrations). A freshly built database has **71 tables**: the 50 in the
+baseline and 21 added by migration. `schema.sql` is the from-scratch baseline and is not
+edited to reflect migrations — `php server/migrate.php --status` is what tells you where a
+database actually is.
 Every line citation below is of the form `schema.sql:LINE`.
 
 ## 1. Overview
