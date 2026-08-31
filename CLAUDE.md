@@ -70,9 +70,11 @@ comment, a document or a commit message.
 **Nothing secret reaches the client bundle.** There is no `.env` and there are no `VITE_*`
 variables; all third-party calls are proxied server-side. Keep it that way.
 
-**Client-side role gating is currently dead code.** `RequireAuth` accepts a `roles` prop that
-no route passes. Do not assume a route is protected by role. The server is the only enforced
-boundary, and several read endpoints call `require_auth()` without `require_role()`.
+**Client-side gating lives in one file.** `src/lib/access.ts` maps route to permitted roles and
+is read by both `RequireAuth` and the sidebar, so a visible link always leads somewhere the user
+may go. Add a route there when you add a route, or it will be visible to everyone. It mirrors
+the `require_role()` calls in `server/` — and it is a user-experience guard only. **The server
+is the enforced boundary.**
 
 **Cloudflare records for this domain stay grey-cloud (DNS only)** so cPanel can issue SSL.
 This differs from other projects on the account — do not "fix" it to match them.

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { MapPin, AlertOctagon, Clock, CheckCircle2, CircleDashed } from "lucide-react"
+import { MapPin, AlertOctagon, CheckCircle2, CircleDashed } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {

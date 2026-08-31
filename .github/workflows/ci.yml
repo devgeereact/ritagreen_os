@@ -42,9 +42,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Reports but does not block. There are 33 pre-existing ESLint errors in
-      # application code, most of them React 19 hook rules whose fixes change
-      # runtime behaviour, so clearing them is real work rather than a tidy-up.
+      # Reports but does not block. 27 pre-existing errors remain in application
+      # code, all of them React 19 hook rules, react-refresh, or explicit `any` --
+      # fixes that change runtime behaviour, so clearing them is real work rather
+      # than a tidy-up. Everything mechanically fixable has already been fixed.
       # The baseline is tracked as "ESLint baseline clean" in docs/STATUS.json.
       # Flip continue-on-error to false, and add --max-warnings 0, once it is zero.
       - name: Lint

@@ -45,7 +45,7 @@ function build(meta: DocMeta): jsPDF {
   doc.text(meta.number, W - M, 64, { align: "right" })
 
   // From / meta
-  let y = 124
+  const y = 124
   doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(10)
   doc.text(COMPANY.legalName, M, y)
   doc.setFont("helvetica", "normal").setTextColor(...MUTED).setFontSize(9)
@@ -168,7 +168,7 @@ export function compliancePackPdf(pack: CompliancePack): void {
   doc.text("COMPLIANCE PACK", W - M, 48, { align: "right" })
 
   // Worker identity
-  let y = 124
+  const y = 124
   doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(13)
   doc.text(pack.worker.name, M, y)
   doc.setFont("helvetica", "normal").setTextColor(...MUTED).setFontSize(9)
@@ -277,7 +277,7 @@ export function payslipPdf(slip: Payslip): void {
   doc.setFont("helvetica", "normal").setFontSize(10)
   doc.text(`${slip.period.from} → ${slip.period.to}`, W - M, 66, { align: "right" })
 
-  let y = 124
+  const y = 124
   doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(13)
   doc.text(slip.worker.name, M, y)
   doc.setFont("helvetica", "normal").setTextColor(...MUTED).setFontSize(9)

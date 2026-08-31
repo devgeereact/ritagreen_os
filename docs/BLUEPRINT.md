@@ -254,21 +254,20 @@ file reference, outcome, expiry and follow-up flag.
 
 ### Tier 3 — permissions and data protection
 
-#### Client-side role gating is dead code
+#### Client-side role gating was dead code — FIXED
 
-`src/auth/RequireAuth.tsx` accepts a `roles` prop:
+`src/auth/RequireAuth.tsx` accepted a `roles` prop that **no route ever passed**, so `/app`,
+`/portal` and `/m` were gated identically on "is logged in" and a `client`-role account could
+load `/app/payroll`.
 
-```tsx
-export default function RequireAuth({ roles }: { roles?: Role[] }) {
-```
+Now `src/lib/access.ts` holds one path-to-roles map, read by **both** the router guard and the
+sidebar, so a visible link always leads somewhere the user may go. It also gates `/portal` to
+accounts with a `client_id` and `/m` to accounts with a `worker_id`, because those surfaces
+scope every query to that link and would otherwise render an empty or erroring page.
 
-**No route in `src/routes/index.tsx` ever passes it.** `/app`, `/portal` and `/m` are gated
-identically on "is logged in". A `client`-role account can load `/app/payroll`.
-
-The component's own comment says role gating there is "a UX convenience only; every mutating
-endpoint re-checks the role server-side". That is the correct posture — but it is only half
-true, because several read endpoints carry `require_auth` with no `require_role` at all,
-including `dashboard.php`, `field.php`, `notifications.php`, `ai.php` and `weather.php`.
+The posture is unchanged and correct: this is a user-experience boundary, and the server
+re-checks everything. What made the old comment only half true was that several read endpoints
+carried `require_auth` with no `require_role`; the worst of those are now fixed above.
 
 #### Three read endpoints leaked across account types — FIXED
 

@@ -1,9 +1,17 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
-import { useAuth, type Role } from "@/providers/auth-provider"
+import { useAuth, homeFor, type Role } from "@/providers/auth-provider"
+import { canAccess } from "@/lib/access"
 
-// Gate for /app/*. Redirects unauthenticated users to /login (preserving the
-// intended destination). Role gating here is a UX convenience only; every
-// mutating endpoint re-checks the role server-side.
+// Gate for the authenticated surfaces.
+//
+// Redirects anonymous visitors to /login, preserving where they were going. For
+// a signed-in user it checks src/lib/access.ts — the same map the sidebar reads,
+// so a link is never shown to someone who would be bounced off the page behind
+// it. Someone who does not belong on a surface is sent to their own home rather
+// than to a dead end: a client lands on /portal, a worker on /m.
+//
+// This is a user-experience boundary, not a security one. Every endpoint
+// re-checks server-side; see docs/ARCHITECTURE.md.
 export default function RequireAuth({ roles }: { roles?: Role[] }) {
   const { user, loading } = useAuth()
   const location = useLocation()
@@ -20,8 +28,15 @@ export default function RequireAuth({ roles }: { roles?: Role[] }) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }
 
-  if (roles && roles.length > 0 && !roles.includes(user.role)) {
-    return <Navigate to="/app" replace />
+  // An explicit roles prop wins; otherwise fall back to the shared route map.
+  const permitted = roles && roles.length > 0
+    ? roles.includes(user.role)
+    : canAccess(user, location.pathname)
+
+  if (!permitted) {
+    const home = homeFor(user)
+    // Never bounce someone to the page they are already on.
+    return <Navigate to={home === location.pathname ? "/" : home} replace />
   }
 
   return <Outlet />

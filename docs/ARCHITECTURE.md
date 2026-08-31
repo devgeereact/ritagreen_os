@@ -141,9 +141,17 @@ They are declared in three places that must be kept in sync:
 - `src/providers/auth-provider.tsx` — the `Role` union type
 - `server/*.php` — `require_role()` call sites
 
-**The server is the only enforced boundary.** `RequireAuth` accepts a `roles` prop that the
-router never passes, so all three authenticated surfaces are gated identically on "logged in".
-Milestone 5 addresses that.
+**The server is the only enforced boundary**, and always will be — the client layer is a
+user-experience guard, not a security one.
+
+`src/lib/access.ts` is the single source of truth for that guard: a path-prefix map of route to
+permitted roles, plus `isStaff()`, `isClientAccount()` and `isWorkerAccount()`. Both
+`RequireAuth` and the sidebar read it, so a link is never shown to someone who would be bounced
+off the page behind it. Someone who does not belong on a surface is redirected to their own
+home rather than to a dead end. The map mirrors the `require_role()` calls in `server/`.
+
+Until this landed, `RequireAuth` accepted a `roles` prop that no route ever passed, so all
+three authenticated surfaces were gated identically on "logged in".
 
 **Role is not sufficient on its own.** A worker's login is an ordinary account with
 `users.worker_id` set, and a client portal login has `users.client_id` set, so either may hold

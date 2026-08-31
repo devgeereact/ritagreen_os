@@ -35,7 +35,7 @@ function when(dt: string) {
 }
 
 export default function WorkerApp() {
-  const { user, logout } = useAuth()
+  const { logout } = useAuth()
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApi<MeData>("me.php")
   const [busy, setBusy] = useState<string | null>(null)

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`############............`  55 done · 13 partial · 54 to do · 122 tracked
+`#############...........`  60 done · 13 partial · 53 to do · 126 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,12 +17,12 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `####........` | 2 | 2 | 5 |
+| PLATFORM — Engineering platform | 0 | `#####.......` | 4 | 2 | 5 |
 | FOUNDATION — Foundation and person spine | 1 | `##..........` | 1 | 1 | 10 |
 | COMPLIANCE — Compliance engine and verification | 2 | `#####.......` | 5 | 2 | 7 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `#########...` | 6 | 1 | 2 |
-| IAM — Identity, access and permissions | 5 | `##########..` | 14 | 1 | 3 |
+| IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `########....` | 5 | 0 | 3 |
 | RECRUITMENT — Recruitment and intake | 8 | `######......` | 3 | 1 | 3 |
@@ -35,14 +35,16 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 2 done, 2 partial, 5 to do
+Milestone 0 · 4 done, 2 partial, 5 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
+- [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
+- [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
 - [~] Documentation pack — _Milestone 0, in progress_
 - [ ] Automated tests — _no test file exists in the repository_
-- [ ] ESLint baseline clean — _33 errors at baseline: 14 react-hooks, 7 react-refresh, 6 unused-imports, 3 typescript-eslint_
+- [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
 - [ ] Exception messages withheld from callers — _server/lib.php returns the exception message in JSON_
 - [ ] Prepared statements in dashboard.php — _division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way_
 - [ ] Unused dependencies removed
@@ -110,16 +112,19 @@ Milestone 4 · 6 done, 1 partial, 2 to do
 
 ### IAM — Identity, access and permissions
 
-Milestone 5 · 14 done, 1 partial, 3 to do
+Milestone 5 · 17 done, 1 partial, 2 to do
 
 - [x] Authentication (opaque bearer tokens) — _SHA-256 hashed, 30-day expiry, server/auth.php:35_
+- [x] Client-side route role gating — _Fixed. src/lib/access.ts maps route to roles and is read by both RequireAuth and the sidebar, so a visible link always leads somewhere the user may go_
 - [x] Close the unauthenticated write on api.php — _Fixed. Both verbs now require auth; POST throttled 30/5 min_
 - [x] Device and session list with revoke
 - [x] Google SSO — _matches existing users by verified email only_
 - [x] Idle lock screen
 - [x] Mandatory 2FA for privileged roles — _MANDATORY_2FA config flag_
 - [x] Password hashing — _bcrypt cost 12_
+- [x] Portal and worker app gated to their linked accounts — _/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side_
 - [x] Rate limiting — _rate_limits table + rate_limit()_
+- [x] Role-filtered navigation — _app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse_
 - [x] Role-restrict field event logging — _Fixed. Board is staff-only; a worker may post only against a shift assigned to them_
 - [x] Role-restrict the shared mailbox — _Fixed. server/inbox.php now requires super_admin/admin/manager_
 - [x] Role-restrict worker reads — _Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager_
@@ -127,7 +132,6 @@ Milestone 5 · 14 done, 1 partial, 3 to do
 - [x] TOTP two-factor authentication — _hand-rolled RFC 6238, user_2fa_
 - [x] Update last_seen_at on token use — _Fixed. Refreshed in current_user(), throttled to one write a minute per token_
 - [~] Server-side role checks on mutations — _several read endpoints have require_auth with no require_role_
-- [ ] Client-side route role gating — _RequireAuth roles prop is never passed by any route_
 - [ ] Per-service permission scoping — _users.division is stored but not enforced as a query filter_
 - [ ] Sensitive zones (health, payroll, disciplinary, legal)
 

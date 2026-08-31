@@ -79,6 +79,43 @@ also holds a worker record does not lock themselves out.
   Settings showed each session's creation time under a heading that reads as last activity. It
   is now refreshed per request, throttled to one write a minute per token
 
+### Fixed — client-side access control
+
+- **`src/lib/access.ts`** is new: one path-prefix map of route to permitted roles, plus
+  `isStaff()`, `isClientAccount()` and `isWorkerAccount()`. Both `RequireAuth` and the sidebar
+  read it, so a link can never be shown to someone who would be bounced off the page behind it
+- `RequireAuth` accepted a `roles` prop that **no route ever passed**, so `/app`, `/portal` and
+  `/m` were gated identically on "is logged in" and a client account could load `/app/payroll`.
+  It now consults the map, and redirects to the user's own home rather than a dead end
+- `/portal` now requires a `client_id` and `/m` a `worker_id`, because those surfaces scope
+  every query to that link and would otherwise render an empty or erroring page
+- The sidebar filters its groups through the same map, dropping any group left empty
+
+### Fixed — the typecheck was not running
+
+- **`tsconfig.json` had no `references` array**, so `tsc -b` built a root config that lacks
+  `noUnusedLocals` and `noUnusedParameters`, and `tsconfig.app.json` — where those settings
+  live — was orphaned. The strict configuration had never been enforced. Wiring the references
+  surfaced seven genuine errors, all now fixed
+- The `typecheck` script is now `tsc -b --force`, so a warm incremental cache cannot make the
+  gate a silent no-op
+- **`tsconfig.tsbuildinfo` was tracked in git** despite `*.tsbuildinfo` being gitignored — a
+  file added before the ignore rule stays tracked. Untracked, and both projects now write their
+  build info under `node_modules/.tmp`
+- Of the seven errors this exposed, one was a real bug: `SidebarMenuSub` in
+  `src/components/ui/sidebar.tsx` declared `React.forwardRef` and destructured `ref`, but never
+  applied it, so the forwarded ref was silently dropped. The rest were unused imports and a
+  dead `STATUS_VARIANT` constant left behind when job status became an editable Select
+
+### Changed — lint baseline
+
+Down from 33 errors and 3 warnings to 27 errors and no warnings, by removing the unused
+imports the typecheck surfaced and applying the auto-fixable `prefer-const`. What remains is
+8 `react-hooks/set-state-in-effect`, 7 `react-refresh/only-export-components`, 4
+`react-hooks/refs`, 3 `react-hooks/static-components`, 2 `no-explicit-any`, 2
+`react-hooks/purity` and 1 `no-unused-expressions` — all of which change runtime behaviour to
+fix. Everything mechanical is done.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

@@ -27,7 +27,10 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 | A session can be revoked | `tokens` | `server/auth.php` | `src/pages/app/Settings.tsx` | none |
 | Idle sessions lock | — | `server/auth.php` | `src/components/app/lock-screen.tsx` | none |
 | Roles restrict what staff can do | `roles`, `users.role` | `require_role()` in `server/lib.php` | `src/auth/RequireAuth.tsx` | none |
-| Routes are role-gated in the client | — | — | not wired: no route passes `roles` | none |
+| Staff, worker and client accounts are distinguished | `users.worker_id`, `users.client_id` | `is_staff()` in `server/lib.php` | `src/lib/access.ts` | none |
+| Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx` | none |
+| A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
+| Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | none |
 | Per-service scoping is enforced | `users.division` | planned query filter | planned | none |
 | Sensitive zones are separately permissioned | planned | planned | planned | none |
 

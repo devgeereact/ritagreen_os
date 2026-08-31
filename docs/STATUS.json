@@ -123,8 +123,8 @@
         },
         {
           "name": "Client-side route role gating",
-          "status": "todo",
-          "note": "RequireAuth roles prop is never passed by any route"
+          "status": "done",
+          "note": "Fixed. src/lib/access.ts maps route to roles and is read by both RequireAuth and the sidebar, so a visible link always leads somewhere the user may go"
         },
         {
           "name": "Per-service permission scoping",
@@ -164,6 +164,16 @@
           "name": "Staff-vs-worker-vs-client account discrimination",
           "status": "done",
           "note": "is_staff(), require_staff(), linked_worker_id() in server/lib.php. Role alone cannot express this: a worker login is an ordinary account with users.worker_id set"
+        },
+        {
+          "name": "Portal and worker app gated to their linked accounts",
+          "status": "done",
+          "note": "/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side"
+        },
+        {
+          "name": "Role-filtered navigation",
+          "status": "done",
+          "note": "app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse"
         }
       ]
     },
@@ -643,7 +653,7 @@
         {
           "name": "ESLint baseline clean",
           "status": "todo",
-          "note": "33 errors at baseline: 14 react-hooks, 7 react-refresh, 6 unused-imports, 3 typescript-eslint"
+          "note": "27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done"
         },
         {
           "name": "Documentation consistency enforced in CI",
@@ -654,6 +664,16 @@
           "name": "Prepared statements in dashboard.php",
           "status": "todo",
           "note": "division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way"
+        },
+        {
+          "name": "Typecheck actually enforces the strict config",
+          "status": "done",
+          "note": "tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op"
+        },
+        {
+          "name": "Build artefacts out of version control",
+          "status": "done",
+          "note": "tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp"
         }
       ]
     }

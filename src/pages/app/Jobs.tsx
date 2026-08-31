@@ -51,13 +51,6 @@ const PRIORITY_VARIANT: Record<Job["priority"], "destructive" | "secondary" | "o
   high: "secondary",
   standard: "outline",
 }
-const STATUS_VARIANT: Record<Job["status"], "default" | "secondary" | "destructive" | "outline"> = {
-  booked: "outline",
-  assigned: "secondary",
-  in_progress: "secondary",
-  done: "default",
-  cancelled: "destructive",
-}
 
 export default function Jobs() {
   const { data, loading, error, reload } = useApi<{ jobs: Job[] }>("jobs.php")
