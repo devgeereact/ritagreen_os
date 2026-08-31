@@ -150,12 +150,23 @@ Rules:
 
 `public/manifest.webmanifest` describes the installable worker app, entering at `/m`.
 
-**Known defects, fixed in Milestone 9** (`docs/ROADMAP.md`):
+The manifest is **generated** by `vite-plugin-pwa` from the config in `vite.config.ts`, so it
+cannot drift from the build.
 
-- No 192 px or 512 px PNG icons. A single SVG entry is not sufficient for Android
-  installability, and iOS ignores an SVG apple-touch-icon.
-- The manifest `theme_color` was `#2e7d32` — a green from a retired palette — while
-  `index.html` correctly declared navy `#0C447C`. Corrected to navy as part of Milestone 0.
+Icons: 192 px, 512 px, a separate 512 px **maskable** variant, and a 180 px
+`apple-touch-icon.png`. The maskable one is drawn inset into the middle 80% and bleeds to the
+edges, because Android crops it to whatever shape the launcher uses. iOS ignores an SVG touch
+icon, which is why there is a PNG.
+
+Icons are generated from `public/favicon.svg` — see the script in the Milestone 9 changelog
+entry. Regenerate them if the mark changes.
+
+**Two brand defects fixed here:**
+
+- `public/favicon.svg` was still the retired green (`#15803D` / `#22C55E`). Redrawn in navy and
+  mint, and the PNGs generated from it.
+- The manifest `theme_color` was `#2e7d32`, a green from the same retired palette, while
+  `index.html` correctly declared navy. Now navy in both, and generated from one source.
 
 ## 10. Retired artefacts
 

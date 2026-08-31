@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#################.......`  99 done · 14 partial · 33 to do · 146 tracked
+`##################......`  107 done · 12 partial · 29 to do · 148 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `########....` | 8 | 3 | 3 |
+| PLATFORM — Engineering platform | 0 | `#########...` | 9 | 3 | 2 |
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
 | COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
@@ -28,14 +28,14 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `######......` | 6 | 2 | 5 |
-| PWA — Progressive web app | 9 | `###.........` | 1 | 2 | 4 |
+| PWA — Progressive web app | 9 | `###########.` | 8 | 0 | 1 |
 | REPORTING — Reporting and insight | 9 | `#########...` | 6 | 0 | 2 |
 
 ## Detail
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 8 done, 3 partial, 3 to do
+Milestone 0 · 9 done, 3 partial, 2 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -45,12 +45,12 @@ Milestone 0 · 8 done, 3 partial, 3 to do
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
+- [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
 - [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
 - [~] Documentation pack — _Milestone 0, in progress_
 - [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
 - [ ] Prepared statements in dashboard.php — _division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way_
-- [ ] Unused dependencies removed
 
 ### FOUNDATION — Foundation and person spine
 
@@ -221,15 +221,17 @@ Milestone 9 · 6 done, 2 partial, 5 to do
 
 ### PWA — Progressive web app
 
-Milestone 9 · 1 done, 2 partial, 4 to do
+Milestone 9 · 8 done, 0 partial, 1 to do
 
-- [x] Registration — _production only, src/main.tsx_
-- [~] Service worker — _hand-written, no build-hash precache manifest, so offline breaks after a deploy_
-- [~] Web app manifest — _no 192/512 PNG icons; theme colour disagrees with the app_
-- [ ] Cached read-only worker data
-- [ ] Offline banner
+- [x] Brand-correct app icon — _favicon.svg was still the retired green #15803D. Redrawn navy and mint, with PNGs generated for 192, 512, maskable and the iOS touch icon, which ignores SVG_
+- [x] Cached read-only worker data — _NetworkFirst on me.php and notifications.php with a 5-second timeout. The rest of the PHP API is never cached: stale compliance data would mean showing an eligibility answer that is no longer true_
+- [x] Install payload trimmed — _37 MB of orphaned Pulse-UI template assets removed (cards, products, illustrations, carousels, countries) -- shipped on every deploy and precached into the app. Precache 14.5 MB across 115 entries down to 1.15 MB across 67. The office-only chunks are excluded too: a field worker should not download a charts library, a calendar and a PDF engine_
+- [x] Offline banner — _Says what still works, not just that something is wrong_
+- [x] Registration — _Owned by PwaStatus, which also owns the update prompt. Registering in main.tsx as well would race it_
+- [x] Service worker — _vite-plugin-pwa with a build-hash precache manifest, so a deploy invalidates exactly what changed and offline survives it_
+- [x] Update-available prompt — _src/components/pwa-status.tsx, registerType 'prompt'. Never automatic: swapping the app out from under someone part-way through clocking in is its own failure_
+- [x] Web app manifest — _Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, and the navy theme colour_
 - [ ] Offline write queue — _OUT OF SCOPE by decision. Writes require connectivity_
-- [ ] Update-available prompt
 
 ### REPORTING — Reporting and insight
 

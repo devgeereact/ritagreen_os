@@ -521,6 +521,43 @@ Only the services a person is actually intended for are assessed. Scoring everyo
 everything would produce a wall of "not eligible for Security" for cleaners who were never
 going to work security.
 
+### Added — a PWA that actually works offline, and 37 MB less of it
+
+`public/sw.js` was hand-written. It precached four fixed paths and knew nothing about hashed
+asset names, so assets were cached only opportunistically after a first fetch and **offline
+broke after every deploy** — the one moment it most needed to work.
+
+- `vite-plugin-pwa` replaces it, with a **build-hash precache manifest**: a deploy invalidates
+  exactly what changed
+- Manifest generated from the config, so it cannot drift. 192, 512 and a separate **maskable**
+  icon, drawn inset into the middle 80% because Android crops it to the launcher's shape
+- `src/components/pwa-status.tsx` — an update prompt and an offline banner. `registerType:
+  "prompt"`, never automatic: swapping the app out from under somebody part-way through
+  clocking in is its own kind of failure. The banner says what still works, not just that
+  something is wrong
+- Read-only worker data (`me.php`, `notifications.php`) is `NetworkFirst` with a 5-second
+  timeout. **The rest of the PHP API is never cached** — stale compliance data would mean
+  showing an eligibility answer that is no longer true, which is worse than showing nothing
+
+**37 MB of orphaned assets deleted.** `public/cards`, `public/products`,
+`public/illustrations`, `public/images/carousels`, `public/images/countries` and
+`public/images/cards` were Pulse-UI template leftovers with **zero references** anywhere in the
+source. They were shipped on every deploy and precached into the installable app.
+
+The office-only chunks are excluded from the install too: the app starts at `/m`, and a field
+worker should not download a charts library, a calendar and a PDF engine they will never open.
+
+```
+public/    37 MB  ->  756 KB
+precache   14.5 MB across 115 entries  ->  1.15 MB across 67
+```
+
+### Fixed — the app icon was still the old brand
+
+`public/favicon.svg` was green `#15803D` / `#22C55E`, from the palette retired in the v2
+rebrand. Redrawn in navy and mint, with PNGs generated from it for every size the manifest and
+iOS need.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

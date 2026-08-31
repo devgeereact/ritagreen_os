@@ -2,6 +2,7 @@ import React from "react"
 import ReactDOM from "react-dom/client"
 import { RouterProvider } from "react-router-dom"
 import { ThemeProvider } from "next-themes"
+import { PwaStatus } from "@/components/pwa-status"
 import { Toaster } from "sonner"
 
 import { AuthProvider } from "@/providers/auth-provider"
@@ -22,12 +23,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       </AuthProvider>
     </ThemeProvider>
     <Toaster position="top-right" richColors closeButton />
+    <PwaStatus />
   </React.StrictMode>
 )
 
-// Register the worker PWA service worker (production only).
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {})
-  })
-}
+// Service worker registration lives in <PwaStatus/>, which also owns the
+// update prompt and the offline banner. Registering here as well would race it.
