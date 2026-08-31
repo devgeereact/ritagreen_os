@@ -440,3 +440,51 @@ function rg_group_is_ambiguous(array $group): bool
     }
     return count($names) > 1;
 }
+
+// ------------------------------------------------------------------- email
+
+/**
+ * Substitute {{placeholders}} in a template.
+ *
+ * An unknown placeholder is left in place rather than silently emptied. An email
+ * that goes out reading "Hi ," looks like a mistake to the recipient; one
+ * reading "Hi {{first_name}}," looks like a mistake to whoever sent it, which is
+ * the person who can fix it.
+ *
+ * @param array<string,string|int|null> $values
+ */
+function rg_render_template(string $text, array $values): string
+{
+    return preg_replace_callback(
+        '/\{\{\s*([a-z0-9_]+)\s*\}\}/i',
+        static function (array $m) use ($values): string {
+            $key = strtolower($m[1]);
+            foreach ($values as $k => $v) {
+                if (strtolower((string) $k) === $key && $v !== null && $v !== '') {
+                    return (string) $v;
+                }
+            }
+            return $m[0];
+        },
+        $text
+    ) ?? $text;
+}
+
+/** Which placeholders a rendered string still has unfilled. */
+function rg_unfilled_placeholders(string $text): array
+{
+    preg_match_all('/\{\{\s*([a-z0-9_]+)\s*\}\}/i', $text, $m);
+    return array_values(array_unique(array_map('strtolower', $m[1] ?? [])));
+}
+
+/**
+ * A usable first name from a full name, for addressing somebody.
+ * Falls back to the whole string rather than to nothing.
+ */
+function rg_first_name(?string $fullName): string
+{
+    $name = trim((string) $fullName);
+    if ($name === '') return 'there';
+    $parts = preg_split('/\s+/', $name);
+    return $parts[0] !== '' ? $parts[0] : $name;
+}

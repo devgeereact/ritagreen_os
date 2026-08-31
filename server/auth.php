@@ -143,7 +143,10 @@ if ($action === 'forgot' && method() === 'POST') {
 
         $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : '';
         $link = $base . '/reset/' . $token;
-        if (function_exists('mail_enabled') && mail_enabled()) {
+        // Queued regardless of whether mail is on -- see server/send-queued-mail.php.
+    {
+            // Synchronous on purpose: somebody is sitting on the reset screen
+            // waiting for this. Queue latency here reads as a broken feature.
             send_mail($email, 'Reset your RitaGreen password',
                 "Hi {$user['name']},\n\nReset your password using this link (valid for 1 hour):\n$link\n\n"
                 . "If you didn't request this, ignore this email.\n\nRitaGreen Services");
@@ -331,7 +334,7 @@ if ($action === 'register' && method() === 'POST') {
     $stmt->execute();
     notify($conn, null, 'New worker registration', "$name — " . ucfirst($division), 'ats', '/app/ats');
     if (function_exists('mail_enabled') && mail_enabled()) {
-        send_mail(MAIL_TO, "Worker registration — $division", "$name <$email> ($phone)\nRole: $role");
+        queue_mail($conn, MAIL_TO, "Worker registration — $division", "$name <$email> ($phone)\nRole: $role", $email);
     }
     json_out(['ok' => true], 201);
 }

@@ -523,16 +523,33 @@
         },
         {
           "name": "Email templates",
-          "status": "todo"
+          "status": "done",
+          "note": "email_templates, seeded with 7: application received/unsuccessful, document request, credential expiring/expired, right-to-work recheck, worker approved. Wording is editable without a deployment"
         },
         {
           "name": "Email queue drained out of the request path",
-          "status": "todo",
-          "note": "send_mail() opens an SMTP socket inside the web request"
+          "status": "done",
+          "note": "queue_mail() and queue_templated_mail() in lib.php; server/send-queued-mail.php drains by cron with claim-before-send, capped retries and a batch limit"
         },
         {
           "name": "Email delivery log",
-          "status": "todo"
+          "status": "done",
+          "note": "email_log records every attempt including skips, and is kept after the queue row is pruned"
+        },
+        {
+          "name": "Delivery failures are visible",
+          "status": "done",
+          "note": "email_queue.last_error plus an email_log row on terminal failure"
+        },
+        {
+          "name": "Mail leaves the request path",
+          "status": "done",
+          "note": "Nine senders converted. Three stay synchronous on purpose: the lone-worker panic alert, password reset, and interactive mailbox replies"
+        },
+        {
+          "name": "Queued regardless of whether mail is enabled",
+          "status": "done",
+          "note": "The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted"
         }
       ]
     },

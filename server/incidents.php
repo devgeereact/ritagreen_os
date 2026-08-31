@@ -142,8 +142,9 @@ if (method() === 'POST') {
     if ($safeguarding || $severity === 'critical' || $riddor) {
         $flag = $safeguarding ? 'SAFEGUARDING' : ($riddor ? 'RIDDOR' : 'CRITICAL');
         notify($conn, null, "$flag incident: $title", "$ref · " . ucfirst($division), 'incident', '/app/incidents');
-        if (function_exists('mail_enabled') && mail_enabled()) {
-            send_mail(MAIL_TO, "[$flag] Incident $ref", "$title\n\n$detail\n\nLog in to action this immediately.");
+        // Queued regardless of whether mail is on -- see server/send-queued-mail.php.
+        {
+            queue_mail($conn, MAIL_TO, "[$flag] Incident $ref", "$title\n\n$detail\n\nLog in to action this immediately.");
         }
     }
     audit($conn, $uid, 'incident.create', "$ref ($type/$severity)");

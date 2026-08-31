@@ -34,9 +34,16 @@ $stmt = $conn->prepare(
 $stmt->bind_param('sssss', $name, $email, $phone, $division, $message);
 $stmt->execute();
 
-// Notify the office and confirm to the sender. Non-fatal: the lead is already
-// saved, so any mail failure must not turn a successful submission into an error.
-if (mail_enabled()) {
+// Notify the office and confirm to the sender.
+//
+// Queued unconditionally, NOT gated on mail_enabled(). The queue is the record
+// of what the system intended to send; the drainer decides what can actually go
+// out and records "skipped" when mail is off. Gating here instead would mean a
+// disabled mailer leaves no trace that anybody should have been contacted.
+//
+// Queueing also means a mail failure can no longer turn a successful submission
+// into an error: the lead is already saved and the request is already over.
+{
     $isCareers = strpos($message, 'CAREERS APPLICATION') === 0;
     $kind = $isCareers ? 'careers application' : 'enquiry';
     $phoneLine = $phone !== '' ? $phone : '—';
@@ -52,7 +59,7 @@ if (mail_enabled()) {
         . "About:    $division\n\n"
         . "Message:\n$message\n\n"
         . "— Reply to this email to respond to $name directly.";
-    send_mail(MAIL_TO, $officeSubject, $officeBody, $email);
+    queue_mail($conn, MAIL_TO, $officeSubject, $officeBody, $email);
 
     // 2) Autoresponder to the sender — reply goes to the office.
     $senderSubject = $isCareers
@@ -66,7 +73,7 @@ if (mail_enabled()) {
               . "will reply shortly — usually the same working day.\n\n")
         . "If it's urgent, call us and we'll get the right people ready.\n\n"
         . "— RitaGreen Services\nQualified. Checked. Ready.";
-    send_mail($email, $senderSubject, $senderBody, MAIL_TO);
+    queue_mail($conn, $email, $senderSubject, $senderBody, MAIL_TO);
 }
 
 json_out(['ok' => true], 201);

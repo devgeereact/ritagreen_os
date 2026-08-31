@@ -51,8 +51,11 @@ if (method() === 'POST' && $action === '') {
     $stmt->execute();
 
     notify($conn, null, 'New job application', "$name — " . ucfirst($division), 'ats', '/app/ats');
-    if (function_exists('mail_enabled') && mail_enabled()) {
-        send_mail(MAIL_TO, "New application — $division", "$name <$email> ($phone)\nRole: $role");
+    // Queued regardless of whether mail is switched on: the queue is the record
+    // of intent, and the drainer records 'skipped' when it cannot send.
+    {
+        queue_mail($conn, MAIL_TO, "New application — $division", "$name <$email> ($phone)\nRole: $role",
+            $email, null, 'applicant', (int) $conn->insert_id);
     }
     json_out(['ok' => true], 201);
 }

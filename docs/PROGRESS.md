@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`################........`  87 done · 13 partial · 38 to do · 138 tracked
+`#################.......`  93 done · 13 partial · 35 to do · 141 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -24,7 +24,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
-| COMMUNICATIONS — Email, SMS and notifications | 7 | `########....` | 5 | 0 | 3 |
+| COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `#####.......` | 4 | 2 | 5 |
@@ -160,16 +160,19 @@ Milestone 6 · 0 done, 1 partial, 5 to do
 
 ### COMMUNICATIONS — Email, SMS and notifications
 
-Milestone 7 · 5 done, 0 partial, 3 to do
+Milestone 7 · 11 done, 0 partial, 0 to do
 
 - [x] Announcements by division
+- [x] Delivery failures are visible — _email_queue.last_error plus an email_log row on terminal failure_
+- [x] Email delivery log — _email_log records every attempt including skips, and is kept after the queue row is pruned_
+- [x] Email queue drained out of the request path — _queue_mail() and queue_templated_mail() in lib.php; server/send-queued-mail.php drains by cron with claim-before-send, capped retries and a batch limit_
+- [x] Email templates — _email_templates, seeded with 7: application received/unsuccessful, document request, credential expiring/expired, right-to-work recheck, worker approved. Wording is editable without a deployment_
 - [x] IMAP inbox with threaded reply
 - [x] In-app notification centre
+- [x] Mail leaves the request path — _Nine senders converted. Three stay synchronous on purpose: the lone-worker panic alert, password reset, and interactive mailbox replies_
+- [x] Queued regardless of whether mail is enabled — _The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted_
 - [x] SMS and WhatsApp via Twilio — _every attempt logged, including skips_
 - [x] SMTP client — _hand-rolled over fsockopen, no vendor dependency_
-- [ ] Email delivery log
-- [ ] Email queue drained out of the request path — _send_mail() opens an SMTP socket inside the web request_
-- [ ] Email templates
 
 ### RECRUITMENT — Recruitment and intake
 

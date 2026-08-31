@@ -114,10 +114,28 @@ be, because its output decides whether a person may work.
 vendor directory. `totp_verify()` is a hand-rolled RFC 6238 implementation. Both exist because
 the host cannot install packages.
 
-**Two cron-only scripts**, refused over HTTP unless `?key=` matches `ALERTS_KEY`:
+**Three cron-only scripts**, refused over HTTP unless `?key=` matches `ALERTS_KEY`:
 
 - `server/expiry-alerts.php` — the credential renewal engine
+- `server/send-queued-mail.php` — drains `email_queue`; the only place SMTP is spoken
 - `server/backup.php` — gzipped mysqldump above the document root, pruned to 14 days
+
+**Three CLI-only tools**, which refuse to run over HTTP at all: `server/migrate.php`,
+`server/seed.php`, `server/backfill-people.php`.
+
+## 3b. Mail
+
+Nothing in a web request opens an SMTP socket. `queue_mail()` writes to `email_queue`;
+`send-queued-mail.php` drains it on a cron, claiming each row before attempting it so
+overlapping runs cannot double-send, and recording every attempt in `email_log` — including
+skips, because "did we tell them" is a question asked months later.
+
+Queueing is **not** gated on `mail_enabled()`. The queue records what the system intended to
+send; the drainer decides what can actually go out. Gating at the call site would mean a
+disabled mailer leaves no trace that somebody should have been contacted.
+
+Three sends stay synchronous, deliberately and with the reason in the code: the lone-worker
+panic alert, password reset, and interactive mailbox replies.
 
 ## 4. Authentication
 

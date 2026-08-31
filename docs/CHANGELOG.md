@@ -405,6 +405,37 @@ requirement is recorded but not enforced until the office has worked through the
 turning it on is a one-row `UPDATE`, and the migration carries both that statement and the
 query to count who it would stand down first.
 
+### Added — templated, queued, logged email
+
+`send_mail()` opened a socket and spoke SMTP **inside the web request**. A slow mail server
+therefore slowed the application, and a failed send was lost: nothing recorded that it had been
+attempted, so nobody found out an applicant never got their confirmation.
+
+- **Migration 008** adds `email_templates` (7 seeded, with `{{placeholders}}`), `email_queue`
+  and `email_log`
+- **`queue_mail()` and `queue_templated_mail()`** in `server/lib.php`. The templated form
+  **refuses to send a half-filled message** — an email that goes out reading "Hi {{first_name}},"
+  has already reached the recipient by the time anyone notices
+- **`server/send-queued-mail.php`** drains by cron. It claims a row before attempting it, so two
+  overlapping cron runs cannot send the same message twice; caps retries at five, so a message
+  that will never succeed stops churning and stays visible as failed; and batches at 50, because
+  pushing a thousand emails through one SMTP connection gets throttled
+- **Nine senders converted.** Three stay synchronous *on purpose*, and now say why in the code:
+  the **lone-worker panic alert** (an alert waiting for the next cron run is not an alert),
+  **password reset** (somebody is sitting on the screen waiting for it), and interactive
+  **mailbox replies**
+
+**Queued regardless of whether mail is enabled.** The `mail_enabled()` gate was removed from the
+call sites: the queue is the record of what the system intended to send, and the drainer decides
+what can actually go out. Gating at the call site meant a disabled mailer left no trace that
+anybody should have been contacted. Verified — with mail off locally, a public enquiry queues
+two messages and the drainer records both as `skipped` with the reason, rather than nothing
+happening at all.
+
+`rg_render_template()` leaves an unknown placeholder **in place** rather than emptying it. "Hi ,"
+looks like a mistake to the recipient; "Hi {{first_name}}," looks like a mistake to whoever sent
+it, and they are the person who can fix it.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

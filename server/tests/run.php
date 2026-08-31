@@ -420,6 +420,37 @@ check('different names is ambiguous', rg_group_is_ambiguous([['name' => 'Amara C
 check('a blank name does not create ambiguity', rg_group_is_ambiguous([['name' => 'Amara Chen'], ['name' => '']]), false);
 
 // ---------------------------------------------------------------------------
+group('rg_render_template');
+
+check('substitutes', rg_render_template('Hi {{name}}', ['name' => 'Amara']), 'Hi Amara');
+check('substitutes repeatedly', rg_render_template('{{a}} and {{a}}', ['a' => 'x']), 'x and x');
+check('tolerates spacing', rg_render_template('Hi {{ name }}', ['name' => 'Amara']), 'Hi Amara');
+check('is case-insensitive', rg_render_template('Hi {{Name}}', ['name' => 'Amara']), 'Hi Amara');
+check('accepts numbers', rg_render_template('No {{n}}', ['n' => 42]), 'No 42');
+
+// An unknown placeholder is LEFT IN. "Hi ," looks like a mistake to the
+// recipient; "Hi {{first_name}}," looks like a mistake to whoever sent it, and
+// they are the person who can fix it.
+check('unknown placeholder survives', rg_render_template('Hi {{missing}}', []), 'Hi {{missing}}');
+check('empty value survives', rg_render_template('Hi {{n}}', ['n' => '']), 'Hi {{n}}');
+check('null value survives', rg_render_template('Hi {{n}}', ['n' => null]), 'Hi {{n}}');
+check('no placeholders is untouched', rg_render_template('Plain text', ['a' => 'b']), 'Plain text');
+
+check('reports what is unfilled', rg_unfilled_placeholders('Hi {{a}}, see {{b}}'), ['a', 'b']);
+check('reports nothing when filled', rg_unfilled_placeholders(rg_render_template('Hi {{a}}', ['a' => 'x'])), []);
+check('deduplicates', rg_unfilled_placeholders('{{a}} {{a}}'), ['a']);
+
+// ---------------------------------------------------------------------------
+group('rg_first_name');
+
+check('takes the first word', rg_first_name('Amara Chen'), 'Amara');
+check('handles a single name', rg_first_name('Amara'), 'Amara');
+check('collapses extra spacing', rg_first_name('  Amara   Chen '), 'Amara');
+// Never returns an empty greeting.
+check('falls back for empty', rg_first_name(''), 'there');
+check('falls back for null', rg_first_name(null), 'there');
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

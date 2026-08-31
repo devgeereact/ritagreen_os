@@ -236,6 +236,70 @@ function next_payroll_no(mysqli $conn): string
     return sprintf('RG-%06d', next_seq($conn, 'payroll'));
 }
 
+/**
+ * Queue an email instead of sending it now.
+ *
+ * Nothing in a web request should open an SMTP socket. send_mail() does, so a
+ * slow mail server slows the application, and a failure is lost -- nobody finds
+ * out that an applicant never got their confirmation.
+ *
+ * Returns the queue id. Draining is server/send-queued-mail.php, run by cron.
+ */
+function queue_mail(
+    mysqli $conn,
+    string $to,
+    string $subject,
+    string $body,
+    ?string $replyTo = null,
+    ?string $templateKey = null,
+    ?string $relatedType = null,
+    ?int $relatedId = null,
+    ?int $queuedBy = null,
+    ?string $sendAfter = null
+): int {
+    $stmt = $conn->prepare(
+        'INSERT INTO email_queue
+           (recipient, subject, body, reply_to, template_key, related_type, related_id, queued_by, send_after)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->bind_param('ssssssiis', $to, $subject, $body, $replyTo, $templateKey, $relatedType, $relatedId, $queuedBy, $sendAfter);
+    $stmt->execute();
+    return (int) $conn->insert_id;
+}
+
+/**
+ * Queue an email built from a stored template.
+ *
+ * Refuses rather than sending a half-filled message: an email that goes out
+ * reading "Hi {{first_name}}," has already reached the recipient by the time
+ * anybody notices. Returns the queue id, or throws with what was missing.
+ */
+function queue_templated_mail(
+    mysqli $conn,
+    string $templateKey,
+    string $to,
+    array $values,
+    ?string $relatedType = null,
+    ?int $relatedId = null,
+    ?int $queuedBy = null
+): int {
+    $stmt = $conn->prepare('SELECT subject, body FROM email_templates WHERE template_key = ? AND active = 1 LIMIT 1');
+    $stmt->bind_param('s', $templateKey);
+    $stmt->execute();
+    $tpl = $stmt->get_result()->fetch_assoc();
+    if (!$tpl) fail("No active email template '$templateKey'.", 500);
+
+    $subject = rg_render_template($tpl['subject'], $values);
+    $body = rg_render_template($tpl['body'], $values);
+
+    $missing = array_merge(rg_unfilled_placeholders($subject), rg_unfilled_placeholders($body));
+    if ($missing) {
+        fail("Cannot send '$templateKey': missing " . implode(', ', array_unique($missing)) . '.', 422);
+    }
+
+    return queue_mail($conn, $to, $subject, $body, null, $templateKey, $relatedType, $relatedId, $queuedBy);
+}
+
 // Write an audit log row for sensitive actions.
 function audit(mysqli $conn, ?int $userId, string $action, string $detail = ''): void
 {

@@ -129,6 +129,9 @@ if (method() === 'POST') {
     if ($kind === 'panic') {
         $who = $user['name'] ?? 'A worker';
         notify($conn, null, 'PANIC ALERT', "$who on shift \"{$shift['title']}\"" . ($note ? " — $note" : ''), 'panic', '/app/field');
+        // Sent synchronously ON PURPOSE. A lone-worker panic alert waiting in a
+        // queue for the next cron run is not an alert. This is the one place
+        // where blocking the request is the right trade.
         if (function_exists('mail_enabled') && mail_enabled()) {
             send_mail(MAIL_TO, '[PANIC] Lone-worker alert', "$who triggered a panic alert on shift #$shiftId ({$shift['title']}).\n$note");
         }

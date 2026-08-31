@@ -122,9 +122,9 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Staff can reply from the app | — | `server/inbox.php` | `src/pages/app/Mailbox.tsx` | none |
 | Workers are reachable by SMS or WhatsApp | `sms_log` | `send_sms()` in `server/lib.php` | `src/pages/app/Comms.tsx` | none |
 | Staff see in-app notifications | `notifications` | `server/notifications.php` | `src/components/notification-dropdown.tsx` | none |
-| Mail is templated | planned | planned | planned | none |
-| Mail leaves the request path | — | currently synchronous in `server/lib.php` | — | none |
-| Delivery failures are visible | planned | planned | planned | none |
+| Mail is templated | `email_templates` | `queue_templated_mail()` in `server/lib.php` | planned editor | `server/tests/run.php` (rendering) |
+| Mail leaves the request path | `email_queue` | `server/send-queued-mail.php` | — | none |
+| Delivery failures are visible | `email_log` | `server/send-queued-mail.php` | planned | none |
 
 ## Governance
 
