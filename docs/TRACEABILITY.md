@@ -104,7 +104,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Certificates are issued | `certificates` | `server/certificates.php` | `src/pages/app/AcademyDetail.tsx` | none |
 | Certificates are publicly verifiable | `certificates.public_id` | `server/certificates.php` | `src/pages/public/Verify.tsx` | none |
 | External training can be recorded | planned | planned | planned | none |
-| Training links to the person | `enrolments.learner_name` (a string) | `server/academy.php` | `src/pages/app/Academy.tsx` | none |
+| Training links to the person | `enrolments.person_id` | `server/academy.php` | `src/pages/app/Academy.tsx` | none |
 
 ## Documents
 
@@ -136,8 +136,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | A record's own history is retrievable | `audit_log.entity_type`, `entity_id` | `server/audit.php` | planned | none |
 | Consent is recorded | `consent_log` | `server/contact.php` | — | none |
 | Subject data can be exported | — | `server/gdpr.php` | `src/pages/app/Settings.tsx` | none |
-| Deletion requires approval | planned | planned | planned | none |
-| Records have a retention policy | planned | planned | planned | none |
+| Deletion requires approval | `deletion_requests` | `server/governance.php` | planned | none |
+| Records have a retention policy | `retention_policies` | `server/governance.php` | planned | none |
 | Incidents are logged and actioned | `incidents`, `incident_actions` | `server/incidents.php` | `src/pages/app/Incidents.tsx` | none |
 | The database is backed up | — | `server/backup.php` | cron | none |
 | Backups are restore-tested | — | planned procedure | — | none |

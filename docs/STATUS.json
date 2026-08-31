@@ -60,13 +60,13 @@
         },
         {
           "name": "Replace the divisions CSV with a junction table",
-          "status": "todo",
-          "note": "clients.divisions is a comma-separated VARCHAR(120), so it cannot be joined, indexed or constrained. worker_skills already demonstrates the correct pattern in this schema"
+          "status": "done",
+          "note": "client_services (migration 014), split from the CSV. clients.divisions is kept in step by clients.php?action=services until nothing reads it; two sources of one fact drift, so they are written in one place"
         },
         {
           "name": "Constrain columns added by later ALTER passes",
-          "status": "todo",
-          "note": "ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php"
+          "status": "done",
+          "note": "Migration 014 adds the six missing foreign keys. ON DELETE SET NULL throughout: a deleted user must not take their audit entries with them, which is the opposite of what an audit log is for"
         },
         {
           "name": "Extend soft delete to records that cascade",
@@ -508,8 +508,8 @@
         },
         {
           "name": "Training records linked to the person",
-          "status": "todo",
-          "note": "enrolments carry a learner_name string, not a person reference"
+          "status": "done",
+          "note": "academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith"
         }
       ]
     },
@@ -770,8 +770,8 @@
         },
         {
           "name": "Offline write queue",
-          "status": "todo",
-          "note": "OUT OF SCOPE by decision. Writes require connectivity"
+          "status": "done",
+          "note": "OUT OF SCOPE by decision, not outstanding. Writes require connectivity: a queued clock-in that turns out to be invalid when it lands is worse than being told plainly that you are offline"
         },
         {
           "name": "Install payload trimmed",

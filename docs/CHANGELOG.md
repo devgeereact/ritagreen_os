@@ -677,6 +677,37 @@ already checked against an allowlist so it was not injectable — but the guaran
 remembering that check, and the next person adding a filter had a pattern to copy that did not
 carry it. Every division filter is now bound. Verified across all four divisions.
 
+### Fixed — the constraints the build passes could not add
+
+Every column added by a later `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` in `schema.sql` is
+unconstrained, because that syntax cannot carry a constraint. That is the mechanical cause of
+the foreign-key gaps rather than an oversight by anyone. Migration 014 adds the six that were
+missing: `users.client_id`, `users.worker_id`, `clients.account_manager_id`,
+`shifts.client_id`, `service_requests.shift_id` and `audit_log.user_id` — the last of which was
+joined in `audit.php` with neither a key nor an index, making every audit query a full scan.
+
+`ON DELETE SET NULL` throughout rather than CASCADE. A deleted user must not take their audit
+entries with them — that is the opposite of what an audit log is for.
+
+**`clients.divisions` was a comma-separated string.** It cannot be joined, indexed or
+constrained, and "care" matches "healthcare" under `LIKE`. `client_services` is the same pattern
+the schema already contains as `worker_skills`, applied to the one place it was solved a second,
+worse way. The CSV is kept in step by `clients.php?action=services` until nothing reads it —
+two sources of one fact drift, so they are written in one place.
+
+### Added — training records join the person spine
+
+`academy.php?action=enrol` resolved nothing: `enrolments` carried a `learner_name` string, so a
+person's training history was disconnected from the person.
+
+It now resolves a person from an explicit id, or from an email or phone. With only a name it
+records the enrolment **unlinked** rather than guessing — matching on a name would merge every
+John Smith — and the Action Centre lists those to be linked by hand.
+
+That completes the spine. Every entry point now resolves to one person: the public application,
+self-registration, the Academy learner handoff, worker creation, user creation, the Google Forms
+webhook, and training enrolment.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

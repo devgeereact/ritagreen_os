@@ -135,6 +135,53 @@ if ($action === 'rate_card' && method() === 'POST') {
 }
 
 // Create a client (office roles only).
+// Which services this client buys.
+// POST /clients.php?action=services&id=N {services: ["care","cleaning"]}
+//
+// Writes the junction table AND keeps the legacy clients.divisions CSV in step.
+// The CSV cannot be joined, indexed or constrained -- "care" matches "healthcare"
+// under LIKE -- but endpoints still read it, so the two are kept identical until
+// nothing does. Two sources of one fact drift; keeping them in one place is the
+// only version of this that is safe.
+if ($action === 'services' && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A client is required.');
+
+    $valid = ['care', 'academy', 'cleaning', 'security'];
+    $requested = body()['services'] ?? [];
+    if (!is_array($requested)) fail('services must be a list.');
+    $services = array_values(array_unique(array_filter(
+        array_map(static fn($s): string => strtolower(trim((string) $s)), $requested),
+        static fn(string $s): bool => in_array($s, ['care', 'academy', 'cleaning', 'security'], true)
+    )));
+
+    $stmt = $conn->prepare('SELECT divisions FROM clients WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $client = $stmt->get_result()->fetch_assoc();
+    if (!$client) fail('Client not found.', 404);
+
+    $stmt = $conn->prepare('DELETE FROM client_services WHERE client_id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+
+    $ins = $conn->prepare('INSERT INTO client_services (client_id, service) VALUES (?, ?)');
+    foreach ($services as $service) {
+        $ins->bind_param('is', $id, $service);
+        $ins->execute();
+    }
+
+    $csv = implode(',', $services);
+    $stmt = $conn->prepare('UPDATE clients SET divisions = ? WHERE id = ?');
+    $stmt->bind_param('si', $csv, $id);
+    $stmt->execute();
+
+    audit($conn, (int) $user['id'], 'client.services', "#$id", 'client', $id,
+        ['divisions' => $client['divisions']], ['divisions' => $csv]);
+    json_out(['ok' => true, 'services' => $services]);
+}
+
 if (method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $data = body();
@@ -156,7 +203,7 @@ if (method() === 'POST') {
     $stmt->execute();
     $id = $conn->insert_id;
 
-    audit($conn, (int) $user['id'], 'client.create', $name);
+    audit($conn, (int) $user['id'], 'client.create', $name, 'client', (int) $id);
 
     json_out([
         'client' => [

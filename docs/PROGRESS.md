@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#####################...`  130 done · 14 partial · 14 to do · 158 tracked
+`#####################...`  134 done · 14 partial · 10 to do · 158 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -18,7 +18,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `##########..` | 10 | 3 | 1 |
-| FOUNDATION — Foundation and person spine | 1 | `##########..` | 14 | 1 | 2 |
+| FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
@@ -26,9 +26,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
-| TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
+| TRAINING — Training records and certificates | 8 | `##########..` | 6 | 0 | 1 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `#########...` | 11 | 2 | 3 |
-| PWA — Progressive web app | 9 | `###########.` | 8 | 0 | 1 |
+| PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `##########..` | 7 | 0 | 1 |
 
 ## Detail
@@ -54,9 +54,10 @@ Milestone 0 · 10 done, 3 partial, 1 to do
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 14 done, 1 partial, 2 to do
+Milestone 1 · 16 done, 1 partial, 0 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
+- [x] Constrain columns added by later ALTER passes — _Migration 014 adds the six missing foreign keys. ON DELETE SET NULL throughout: a deleted user must not take their audit entries with them, which is the opposite of what an audit log is for_
 - [x] Extend soft delete to records that cascade — _Migration 013 adds deleted_at to applicants, invoices, incidents, timesheets and shifts, plus updated_at on timesheets and the missing index on shifts.client_id. Every list and count query now filters on it_
 - [x] Local development environment — _npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database_
 - [x] Local fixture data — _server/seed.php: staff logins per role, worker and client logins, 10 workers with a deliberate spread of valid, expiring, expired and missing-RTW compliance. CLI-only, local-host-only, --confirm required_
@@ -67,12 +68,11 @@ Milestone 1 · 14 done, 1 partial, 2 to do
 - [x] Payroll number generator — _next_payroll_no() on next_seq(), format RG-000001. Assigned on worker creation, unique, never reused_
 - [x] Person de-duplication migration — _server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)_
 - [x] Person matching logic — _rg_person_match_key/rg_group_people/rg_group_is_ambiguous in server/pure.php. Matches on email then phone, never on a name, and refuses to merge a group whose names disagree. 34 assertions_
+- [x] Replace the divisions CSV with a junction table — _client_services (migration 014), split from the CSV. clients.divisions is kept in step by clients.php?action=services until nothing reads it; two sources of one fact drift, so they are written in one place_
 - [x] ats.php onboard links instead of copying — _Rewritten. Verified end to end: two applications, an onboarding and a login for one human produce exactly one person record_
 - [x] people table as the single identity — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
 - [x] person_services (person x service) — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
 - [~] Soft delete on records that must not be lost — _present on most, missing on shifts, timesheets, incidents_
-- [ ] Constrain columns added by later ALTER passes — _ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php_
-- [ ] Replace the divisions CSV with a junction table — _clients.divisions is a comma-separated VARCHAR(120), so it cannot be joined, indexed or constrained. worker_skills already demonstrates the correct pattern in this schema_
 
 ### COMPLIANCE — Compliance engine and verification
 
@@ -198,15 +198,15 @@ Milestone 8 · 10 done, 0 partial, 0 to do
 
 ### TRAINING — Training records and certificates
 
-Milestone 8 · 5 done, 0 partial, 2 to do
+Milestone 8 · 6 done, 0 partial, 1 to do
 
 - [x] CPD hours
 - [x] Certificate issue
 - [x] Open Badges 3.0 assertion
 - [x] Programmes and enrolments
 - [x] Public certificate verification — _/verify/:id_
+- [x] Training records linked to the person — _academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith_
 - [ ] External training providers
-- [ ] Training records linked to the person — _enrolments carry a learner_name string, not a person reference_
 
 ### GOVERNANCE — Audit, retention and data protection
 
@@ -231,17 +231,17 @@ Milestone 9 · 11 done, 2 partial, 3 to do
 
 ### PWA — Progressive web app
 
-Milestone 9 · 8 done, 0 partial, 1 to do
+Milestone 9 · 9 done, 0 partial, 0 to do
 
 - [x] Brand-correct app icon — _favicon.svg was still the retired green #15803D. Redrawn navy and mint, with PNGs generated for 192, 512, maskable and the iOS touch icon, which ignores SVG_
 - [x] Cached read-only worker data — _NetworkFirst on me.php and notifications.php with a 5-second timeout. The rest of the PHP API is never cached: stale compliance data would mean showing an eligibility answer that is no longer true_
 - [x] Install payload trimmed — _37 MB of orphaned Pulse-UI template assets removed (cards, products, illustrations, carousels, countries) -- shipped on every deploy and precached into the app. Precache 14.5 MB across 115 entries down to 1.15 MB across 67. The office-only chunks are excluded too: a field worker should not download a charts library, a calendar and a PDF engine_
 - [x] Offline banner — _Says what still works, not just that something is wrong_
+- [x] Offline write queue — _OUT OF SCOPE by decision, not outstanding. Writes require connectivity: a queued clock-in that turns out to be invalid when it lands is worse than being told plainly that you are offline_
 - [x] Registration — _Owned by PwaStatus, which also owns the update prompt. Registering in main.tsx as well would race it_
 - [x] Service worker — _vite-plugin-pwa with a build-hash precache manifest, so a deploy invalidates exactly what changed and offline survives it_
 - [x] Update-available prompt — _src/components/pwa-status.tsx, registerType 'prompt'. Never automatic: swapping the app out from under someone part-way through clocking in is its own failure_
 - [x] Web app manifest — _Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, and the navy theme colour_
-- [ ] Offline write queue — _OUT OF SCOPE by decision. Writes require connectivity_
 
 ### REPORTING — Reporting and insight
 
