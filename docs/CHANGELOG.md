@@ -354,6 +354,29 @@ non-expiring until Milestone 3 replaces the boolean with a check record carrying
 date, a verifier and an expiry. It is a one-row `UPDATE` rather than a code change, which is
 the whole reason rules live in the database.
 
+### Added — the deployment gate
+
+`server/scheduling.php` no longer carries its own hard-coded DBS-for-care and SIA-for-security
+pair. It calls `rg_deployment_check()`, which evaluates the rule set configured for the service
+and refuses the assignment when anything mandatory is unmet.
+
+The refusal names **every** blocking requirement at once, rather than surfacing them one 409 at
+a time, and a warning does not block — a credential inside its expiry window is still valid
+today, and standing someone down early is its own failure. A blocked attempt writes a
+`shift.blocked` audit row with the reason, so what is actually preventing deployments becomes
+visible rather than merely felt.
+
+Verified:
+
+```
+POST scheduling.php  worker: Esi Mensah, security shift
+409  Esi Mensah cannot be deployed. SIA licence: expired 3 days ago
+     blocking: [ SIA licence — expired 3 days ago ]
+
+POST scheduling.php  worker: Dmitri Volkov, same shift
+201  shift created
+```
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

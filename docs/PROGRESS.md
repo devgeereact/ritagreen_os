@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`################........`  82 done · 13 partial · 41 to do · 136 tracked
+`################........`  85 done · 12 partial · 40 to do · 137 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -21,7 +21,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
 | COMPLIANCE — Compliance engine and verification | 2 | `########....` | 11 | 2 | 4 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
-| OPERATIONS — Scheduling, assignments and field operations | 4 | `#########...` | 6 | 1 | 2 |
+| OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `########....` | 5 | 0 | 3 |
@@ -108,17 +108,18 @@ Milestone 3 · 4 done, 0 partial, 2 to do
 
 ### OPERATIONS — Scheduling, assignments and field operations
 
-Milestone 4 · 6 done, 1 partial, 2 to do
+Milestone 4 · 9 done, 0 partial, 1 to do
 
+- [x] Blocked deployments are audited — _A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt_
 - [x] Clients, sites and rate cards
+- [x] Compliance guard on assignment — _Replaced the hard-coded DBS-for-care / SIA-for-security pair with the configured rule set. Every blocking requirement is named at once rather than one 409 at a time_
 - [x] Field events: clock in/out, check-in, panic, signature — _shift_events with lat/lng_
 - [x] Shift broadcast with token acceptance — _shift_offers, SMS link, no login required_
 - [x] Shifts, templates and recurrence
+- [x] Single reusable deployment eligibility gate — _rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned_
 - [x] Smart matching on skills and availability
 - [x] Timesheets and pay rules
-- [~] Compliance guard on assignment — _scheduling.php blocks lapsed DBS/SIA/RTW; not generalised, not called by every path_
 - [ ] Four-eyes approval on high-risk actions
-- [ ] Single reusable deployment eligibility gate
 
 ### IAM — Identity, access and permissions
 

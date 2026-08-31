@@ -365,16 +365,22 @@
         },
         {
           "name": "Compliance guard on assignment",
-          "status": "partial",
-          "note": "scheduling.php blocks lapsed DBS/SIA/RTW; not generalised, not called by every path"
+          "status": "done",
+          "note": "Replaced the hard-coded DBS-for-care / SIA-for-security pair with the configured rule set. Every blocking requirement is named at once rather than one 409 at a time"
         },
         {
           "name": "Single reusable deployment eligibility gate",
-          "status": "todo"
+          "status": "done",
+          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned"
         },
         {
           "name": "Four-eyes approval on high-risk actions",
           "status": "todo"
+        },
+        {
+          "name": "Blocked deployments are audited",
+          "status": "done",
+          "note": "A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt"
         }
       ]
     },

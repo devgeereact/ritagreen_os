@@ -9,6 +9,7 @@
 // Guards: no double-booking; a worker with a lapsed required check (DBS for care,
 // SIA for security) or no right to work cannot be scheduled or matched.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
@@ -249,9 +250,29 @@ if (method() === 'POST') {
     $w = $stmt->get_result()->fetch_assoc();
     if (!$w) fail('Worker not found.', 404);
 
-    if (!$w['right_to_work']) fail($w['name'] . ' has no right-to-work on file and cannot be scheduled.', 409);
-    if (!worker_compliant($conn, $w)) {
-        fail($w['name'] . "'s required check (DBS/SIA) is missing or expired. They cannot be scheduled.", 409);
+    // ---- The deployment gate ----
+    //
+    // One check, driven by the rules configured for the service, rather than the
+    // hard-coded DBS-for-care / SIA-for-security pair this used to carry. The
+    // refusal names every blocking requirement, so the office fixes them in one
+    // pass instead of discovering them one 409 at a time.
+    //
+    // A warning does not block: a credential inside its expiry window is still
+    // valid today, and standing someone down early is its own failure.
+    $gate = rg_deployment_check($conn, $workerId, $w['division']);
+    if (!$gate['eligible']) {
+        audit($conn, (int) $user['id'], 'shift.blocked', "worker #$workerId: " . $gate['reason']);
+        json_out([
+            'error' => $w['name'] . ' cannot be deployed. ' . $gate['reason'],
+            'eligibility' => [
+                'status' => $gate['status'],
+                'score' => $gate['score'],
+                'blocking' => array_map(
+                    static fn(array $b): array => ['requirement' => $b['label'], 'reason' => $b['reason']],
+                    $gate['blocking']
+                ),
+            ],
+        ], 409);
     }
 
     $startSql = date('Y-m-d H:i:s', $startTs);
