@@ -315,7 +315,7 @@ computed identically everywhere.
 | `academy.php` | LMS: programmes, enrolments, certificate issue | Auth; reads any role, writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
 | `ai.php` | OpenRouter chat proxy | Auth, any role |
 | `analytics.php` | Group BI aggregates | `super_admin`/`admin`/`manager` |
-| `api.php` | Items smoke test | **Public** |
+| `api.php` | Items smoke test | Auth, any role |
 | `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else auth, writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
 | `audit.php` | Audit-log viewer | `super_admin`/`admin` |
 | `auth.php` | Login, 2FA, sessions, reset, registration, Google SSO | **Mixed** — see §8 |
@@ -332,11 +332,11 @@ computed identically everywhere.
 | `dashboard.php` | Command-centre summary | Auth, any role |
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
 | `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
-| `field.php` | Field operations, clock-in, panic | Auth, **any role, no role gate on writes** |
+| `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts |
 | `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
 | `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest auth, writes `super_admin`/`admin`/`manager` |
-| `inbox.php` | IMAP mailbox | Auth, any role |
+| `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager` |
 | `incidents.php` | Incidents and safeguarding | Auth; create allows `super_admin`/`admin`/`manager`/`trainer`/`employee`, other writes `super_admin`/`admin`/`manager` |
 | `insurance.php` | Company insurance register | Auth; writes `super_admin`/`admin`/`manager` |
 | `invoices.php` | Invoicing | Auth; writes `super_admin`/`admin`/`manager` |
@@ -358,7 +358,7 @@ computed identically everywhere.
 | `timesheets.php` | Time tracking | Auth; create allows `employee`, approve `super_admin`/`admin`/`manager` |
 | `users.php` | User and role management | `super_admin`/`admin` |
 | `weather.php` | OpenWeather proxy with shift advisory | Auth, any role |
-| `workers.php` | Workforce records | Auth; writes `super_admin`/`admin`/`manager` |
+| `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
 
 Throughout the tables below, "office roles" means
 `super_admin`, `admin`, `manager`.
@@ -402,12 +402,16 @@ routes, three of which are public.
 
 ## 9. `api.php`
 
-Smoke test proving React → PHP → MySQL. No authentication of any kind.
+Smoke test proving React → PHP → MySQL. Reached only from the dev-only
+`/app/smoke-test` page.
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | **Public** | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
-| POST | **Public** | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars |
+| GET | Auth, any role | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
+| POST | Auth, any role | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars; throttled `smoke` 30/5 min |
+
+Both verbs were fully public until this was closed. The POST was an
+unauthenticated, unthrottled write into the production database.
 
 ---
 
@@ -463,13 +467,14 @@ above their handlers.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{workers}` with compliance, pay and availability fields for every non-deleted worker |
+| GET | — | **Staff only** (`require_staff`) | — | `{workers}` with compliance and availability fields for every non-deleted worker. `pay_rate_pence`, `pay_type` and `holiday_hours` are returned only to `super_admin`, `admin` and `manager`; they are stripped from the response for every other account |
 | POST | `availability` | Office roles | `id`; body `{avail_days, avail_nights, avail_weekends, travel_radius_mi, home_postcode}` | `{ok: true}` |
 | POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type}` | `{ok: true}`; pay type ∈ paye/umbrella |
 | POST | — | Office roles | body `{name, email?, phone?, role?, division?, right_to_work?, pay_rate_pence?, pay_type?}` | `{worker}` 201; role ∈ carer/nurse/cleaner/guard/trainer, created as `onboarding` |
 
-Any authenticated user, including a `client`-role portal login, can read the
-full workforce list with pay rates and DBS/SIA detail through the bare GET.
+Until this was gated, any authenticated user — a `client`-role portal login
+included — could read the full workforce list with pay rates and DBS/SIA detail
+through the bare GET.
 
 **Header comment discrepancy.** `workers.php:2-4` documents only GET and the
 bare POST; `availability` and `pay` appear only in inline comments.
@@ -524,20 +529,22 @@ Field operations: the office live board and the worker's clock-in/panic trail.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `live` | Auth, any role | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag |
-| GET | — (with `?shift_id=`) | Auth, any role | `shift_id` | `{events}` — the shift timeline |
-| POST | — | **Auth, any role — no role gate** | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201 |
+| GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag |
+| GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events}` — the shift timeline |
+| POST | — | Staff for any shift; a worker **only for a shift assigned to them** | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403 |
 
 `kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `note`, `task`,
 `signoff`. A `clock_out` flips a `scheduled` shift to `completed`
 (`field.php:103`). A `panic` raises a broadcast notification and, when mail is
 enabled, emails `MAIL_TO` with a `[PANIC]` subject.
 
-The POST handler calls no `require_role`, so any authenticated account — a
-`client` portal login included — can post events against **any** shift id,
-including a panic alert. The worker stamped on the event is the caller's linked
-`worker_id` if present, otherwise the shift's assigned worker
-(`field.php:91`).
+Scoping is by shift ownership rather than role, because a worker's login is an
+ordinary account with `users.worker_id` set and may hold any role. A worker
+account posting against a shift that is unassigned, or assigned to someone else,
+is refused with 403. Until this was added, any authenticated account — a `client`
+portal login included — could post events against **any** shift id, panic alerts
+included. The worker stamped on the event is the caller's linked `worker_id` if
+present, otherwise the shift's assigned worker.
 
 ---
 
@@ -922,8 +929,11 @@ announcement also raises a broadcast notification.
 
 Live IMAP mailbox with SMTP replies. Returns 503 if the PHP `imap` extension
 is absent or `IMAP_HOST` is unset. TLS certificate validation is on unless
-`IMAP_VALIDATE_CERT` is explicitly false (`inbox.php:25`). Every route requires
-authentication and no route checks a role.
+`IMAP_VALIDATE_CERT` is explicitly false (`inbox.php:25`).
+
+**Auth: `super_admin`, `admin`, `manager` for every route.** Reading this mailbox
+exposes every inbound enquiry, and `reply` sends as the company. Until this was
+gated, any authenticated account could do both.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
@@ -1076,14 +1086,23 @@ Every route except the webhook 503s when `GC_ACCESS_TOKEN` is unset
 **Webhook verification** (`gocardless.php:50-55`): HMAC-SHA256 of the raw body
 against `GC_WEBHOOK_SECRET`, compared with `hash_equals`. A bad signature
 returns the non-standard status **498**. Mandate events update `mandates`;
-payment events update `dd_payments`, and a `confirmed` or `paid_out` payment
-marks the linked invoice paid and writes an `invoice.paid.gocardless` audit
-row.
+payment events update `dd_payments`.
 
-Unlike the Stripe webhook, this one does **not** re-verify the amount against
-the invoice before marking it paid (`gocardless.php:84`) — it trusts the
-`dd_payments` row it created itself at charge time — and there is no timestamp
-replay check.
+On the **first** settlement of a payment — a `confirmed` or `paid_out` event for
+a `dd_payments` row not already in one of those states — the collected
+`amount_pence` is credited to the invoice, capped at its total, and the invoice
+is marked paid only once the credited total covers it. A full settlement writes
+an `invoice.paid.gocardless` audit row; a part settlement writes
+`invoice.part_paid.gocardless`.
+
+Previously any confirmed collection set `amount_paid_pence = total_pence`
+unconditionally, so a part-collection reported as paid in full, and a redelivered
+webhook re-credited the same payment. Reading the row's prior status before
+updating it is what makes the handler idempotent.
+
+There is still no timestamp replay check, unlike the Stripe webhook. The
+signature check itself is sound, so this is a robustness gap rather than a way
+in.
 
 `charge` refuses an already-paid invoice, an invoice with no client, or a
 client with no active mandate (all 409).
@@ -1176,12 +1195,12 @@ is `escapeshellarg`-quoted, so it is not an injection risk.
 
 Every route below is reachable with **no bearer token**. This is the full list.
 
+`api.php` was on this list until both of its verbs were placed behind `require_auth()`; its POST was an unauthenticated, unthrottled write to the production database.
+
 ### Fully open, no secret required
 
 | Route | Method | Throttle | Notes |
 |---|---|---|---|
-| `/api.php` | GET | none | Lists up to 100 `items` rows |
-| `/api.php` | POST | none | Inserts an arbitrary `items` row. No auth, no throttle — an open write |
 | `/contact.php` | POST | `contact` 5/10 min | Writes `contact_enquiries`; sends two emails |
 | `/certificates.php?action=verify&id=` | GET | none | Discloses learner name and course for an issued certificate; ids are sequential and enumerable |
 | `/certificates.php?action=badge&id=` | GET | none | Same data as an Open Badges 3.0 assertion |
@@ -1212,7 +1231,7 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | Route | Method | Verification |
 |---|---|---|
 | `/payments.php?action=webhook` | POST | HMAC-SHA256 of `t.payload` against `STRIPE_WEBHOOK_SECRET`, `hash_equals`, plus a 300-second replay window. Amount and currency re-checked against the invoice before marking it paid |
-| `/gocardless.php?action=webhook` | POST | HMAC-SHA256 of the raw body against `GC_WEBHOOK_SECRET`, `hash_equals`. No replay window; the paid amount is not re-verified against the invoice |
+| `/gocardless.php?action=webhook` | POST | HMAC-SHA256 of the raw body against `GC_WEBHOOK_SECRET`, `hash_equals`. No replay window, but settlement is idempotent and credits only the amount actually collected |
 
 ### Open but secured by a shared secret in a query parameter
 

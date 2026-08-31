@@ -270,20 +270,23 @@ endpoint re-checks the role server-side". That is the correct posture — but it
 true, because several read endpoints carry `require_auth` with no `require_role` at all,
 including `dashboard.php`, `field.php`, `notifications.php`, `ai.php` and `weather.php`.
 
-#### Three read endpoints leak across account types
+#### Three read endpoints leaked across account types — FIXED
 
-Verified during the Milestone 0 audit. Each is reachable by **any** authenticated account,
-including a `client` portal login, because the endpoint calls `require_auth()` and never
-`require_role()`:
+Found during the Milestone 0 audit and fixed immediately, ahead of the rest of Milestone 5,
+because `/portal` is an externally-facing surface. Each was reachable by **any** authenticated
+account, including a client portal login, because the endpoint called `require_auth()` and
+never `require_role()`:
 
-| Endpoint | Exposure |
-|---|---|
-| `server/workers.php` GET | Every worker's `pay_rate_pence`, `dbs_status`, `dbs_expiry`, `sia_number` and contact details. The role checks in this file are only on the write paths |
-| `server/inbox.php` | The entire shared company mailbox, and the ability to send replies as the company |
-| `server/field.php` POST | Posting field events — clock-ins, check-ins and **panic alerts** — against any shift id |
+| Endpoint | Was exposed | Now |
+|---|---|---|
+| `server/workers.php` GET | Every worker's `pay_rate_pence`, `dbs_status`, `dbs_expiry`, `sia_number` and contact details — the role checks in this file were only on the write paths | Staff only; pay fields stripped for all but `super_admin`, `admin`, `manager` |
+| `server/inbox.php` | The entire shared company mailbox, and sending replies as the company | `super_admin`, `admin`, `manager` |
+| `server/field.php` POST | Posting field events — clock-ins, check-ins and **panic alerts** — against any shift id | Staff for any shift; a worker only for a shift assigned to them |
 
-These are more urgent than most of Milestone 5, because the client portal is an
-externally-facing surface. They should be fixed ahead of the rest of that milestone.
+The fix introduced `is_staff()`, `require_staff()` and `linked_worker_id()` in
+`server/lib.php`. The important lesson is in the first of those: **role alone could not express
+the boundary**, because a worker's login is an ordinary account with `users.worker_id` set and
+may carry any role. Anything gated on "internal staff" must check the link, not the role.
 
 #### Roles are flat
 

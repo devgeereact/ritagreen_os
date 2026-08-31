@@ -26,7 +26,11 @@ $active_programmes = scalar($conn, 'SELECT COUNT(*) FROM programmes WHERE status
 $enrolments = scalar($conn, 'SELECT COUNT(*) FROM enrolments');
 $upcoming_sessions = scalar($conn, 'SELECT COUNT(*) FROM sessions WHERE starts_at > NOW()');
 $certificates_issued = scalar($conn, 'SELECT COUNT(*) FROM certificates WHERE status = "issued"');
-$open_shifts = scalar($conn, 'SELECT COUNT(*) FROM sessions WHERE worker_id IS NULL AND starts_at > NOW()');
+// Open shifts, not trainer-less training sessions. This counted FROM sessions
+// (the Academy table) rather than FROM shifts, so the tile had always shown the
+// wrong number. shifts.status = 'open' is the field that means unfilled.
+$open_shifts = scalar($conn, 'SELECT COUNT(*) FROM shifts WHERE status = "open" AND starts_at > NOW()' .
+    ($division === 'all' ? '' : " AND division = '" . $conn->real_escape_string($division) . "'"));
 
 $outstanding = scalar($conn, 'SELECT COALESCE(SUM(total_pence),0) FROM invoices WHERE status IN ("sent","overdue")' .
     ($division === 'all' ? '' : " AND division = '" . $conn->real_escape_string($division) . "'"));

@@ -42,19 +42,49 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 - `RitaGreenOS.html` — a 46 KB standalone feature specification carrying a third brand palette.
   Superseded by `docs/PRD.md` and `docs/BLUEPRINT.md`
 
-### Found during the audit
+### Fixed — access control
 
-Recorded in `docs/STATUS.json`, not fixed in this milestone. Verified against source:
+Found during the Milestone 0 audit and fixed immediately, ahead of the rest of Milestone 5,
+because `/portal` is externally facing. Each of these was reachable by **any** authenticated
+account, including a client portal login.
 
-- `server/workers.php` GET, `server/inbox.php` and `server/field.php` POST call `require_auth()`
-  with no `require_role()`, so any authenticated account — including an external client portal
-  login — can read worker pay and DBS/SIA data, read and send from the company mailbox, and
-  post panic alerts against any shift
-- `server/api.php` POST is an unauthenticated, unthrottled write to the production database
-- `server/dashboard.php:29` counts training sessions rather than open shifts, so that tile has
-  always been wrong
-- `server/gocardless.php` marks an invoice fully paid without comparing the collected amount
-- `tokens.last_seen_at` is written at issue and never updated
+- **`server/workers.php` GET** exposed every worker's pay rate, DBS status and expiry, and SIA
+  number. The file's role checks were only on its write paths. Now staff-only, with pay fields
+  returned solely to `super_admin`, `admin` and `manager`
+- **`server/inbox.php`** exposed the entire shared company mailbox and allowed sending replies
+  as the company. Now `super_admin`, `admin`, `manager`
+- **`server/field.php` POST** allowed posting field events — clock-ins and **panic alerts** —
+  against any shift id. The board is now staff-only, and a worker may post only against a shift
+  assigned to them
+- **`server/api.php`** was an unauthenticated, unthrottled write into the production database.
+  Both verbs now require authentication; the write is throttled
+
+Adds `is_staff()`, `require_staff()` and `linked_worker_id()` to `server/lib.php`. Role alone
+could not express this boundary: a worker's login is an ordinary account with
+`users.worker_id` set and may hold any role, so "internal staff" has to be decided by the
+link, not the role. Privileged roles are treated as staff unconditionally, so a manager who
+also holds a worker record does not lock themselves out.
+
+### Fixed — correctness
+
+- **`server/dashboard.php`** counted trainer-less *training sessions* as open shifts
+  (`FROM sessions` rather than `FROM shifts WHERE status = 'open'`). That tile had always shown
+  the wrong number. It now also respects the division filter, like its neighbours
+- **`server/gocardless.php`** marked an invoice fully paid on any confirmed collection, setting
+  `amount_paid_pence = total_pence` regardless of what was actually collected, so a part
+  collection reported as paid in full. It now credits the amount collected, marks the invoice
+  paid only once that covers the total, and reads the payment's prior status first so a
+  redelivered webhook cannot credit twice. Signature verification was already sound
+- **`tokens.last_seen_at`** was written once at issue and never updated, so the device list in
+  Settings showed each session's creation time under a heading that reads as last activity. It
+  is now refreshed per request, throttled to one write a minute per token
+
+### Still open
+
+Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook
+has no timestamp replay window (the Stripe one does); `server/dashboard.php` interpolates the
+division filter with `real_escape_string` rather than binding it; `server/lib.php` returns raw
+exception messages to callers.
 
 ### Notes
 

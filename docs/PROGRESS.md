@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`###########.............`  47 done · 13 partial · 61 to do · 121 tracked
+`############............`  55 done · 13 partial · 54 to do · 122 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -22,14 +22,14 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMPLIANCE — Compliance engine and verification | 2 | `#####.......` | 5 | 2 | 7 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `#########...` | 6 | 1 | 2 |
-| IAM — Identity, access and permissions | 5 | `######......` | 8 | 1 | 8 |
+| IAM — Identity, access and permissions | 5 | `##########..` | 14 | 1 | 3 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `########....` | 5 | 0 | 3 |
 | RECRUITMENT — Recruitment and intake | 8 | `######......` | 3 | 1 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `####........` | 3 | 2 | 6 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `#####.......` | 4 | 2 | 5 |
 | PWA — Progressive web app | 9 | `###.........` | 1 | 2 | 4 |
-| REPORTING — Reporting and insight | 9 | `######......` | 4 | 0 | 4 |
+| REPORTING — Reporting and insight | 9 | `########....` | 5 | 0 | 3 |
 
 ## Detail
 
@@ -110,25 +110,26 @@ Milestone 4 · 6 done, 1 partial, 2 to do
 
 ### IAM — Identity, access and permissions
 
-Milestone 5 · 8 done, 1 partial, 8 to do
+Milestone 5 · 14 done, 1 partial, 3 to do
 
 - [x] Authentication (opaque bearer tokens) — _SHA-256 hashed, 30-day expiry, server/auth.php:35_
+- [x] Close the unauthenticated write on api.php — _Fixed. Both verbs now require auth; POST throttled 30/5 min_
 - [x] Device and session list with revoke
 - [x] Google SSO — _matches existing users by verified email only_
 - [x] Idle lock screen
 - [x] Mandatory 2FA for privileged roles — _MANDATORY_2FA config flag_
 - [x] Password hashing — _bcrypt cost 12_
 - [x] Rate limiting — _rate_limits table + rate_limit()_
+- [x] Role-restrict field event logging — _Fixed. Board is staff-only; a worker may post only against a shift assigned to them_
+- [x] Role-restrict the shared mailbox — _Fixed. server/inbox.php now requires super_admin/admin/manager_
+- [x] Role-restrict worker reads — _Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager_
+- [x] Staff-vs-worker-vs-client account discrimination — _is_staff(), require_staff(), linked_worker_id() in server/lib.php. Role alone cannot express this: a worker login is an ordinary account with users.worker_id set_
 - [x] TOTP two-factor authentication — _hand-rolled RFC 6238, user_2fa_
+- [x] Update last_seen_at on token use — _Fixed. Refreshed in current_user(), throttled to one write a minute per token_
 - [~] Server-side role checks on mutations — _several read endpoints have require_auth with no require_role_
 - [ ] Client-side route role gating — _RequireAuth roles prop is never passed by any route_
-- [ ] Close the unauthenticated write on api.php — _SECURITY. server/api.php POST has no require_auth and no rate_limit: anyone can insert unbounded rows into `items` on production. Smoke-test table, so no data is exposed, but it is an open write_
 - [ ] Per-service permission scoping — _users.division is stored but not enforced as a query filter_
-- [ ] Role-restrict field event logging — _SECURITY. server/field.php:9 calls require_auth only and never require_role. Any authenticated account can post events -- including panic alerts and clock-ins -- against any shift id_
-- [ ] Role-restrict the shared mailbox — _SECURITY. server/inbox.php:13 calls require_auth only. Any authenticated account can read the whole company mailbox and send replies as the company_
-- [ ] Role-restrict worker reads — _SECURITY. server/workers.php GET has no require_role (checks are only on the write paths at :36,:58,:74), so any authenticated account -- including a client portal login -- can read every worker's pay_rate_pence, dbs_status and sia_number_
 - [ ] Sensitive zones (health, payroll, disciplinary, legal)
-- [ ] Update last_seen_at on token use — _Written once at issue (server/auth.php:42) and never updated, so the session list shows creation time under a last-activity heading_
 
 ### EMPLOYMENT — Employment records, contracts and leave
 
@@ -180,15 +181,15 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 3 done, 2 partial, 6 to do
+Milestone 9 · 4 done, 2 partial, 5 to do
 
 - [x] Consent log
 - [x] Database backup with rotation — _above the document root, 14-day prune_
 - [x] Incidents with RIDDOR and safeguarding flags
+- [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [~] Audit log — _action plus a 255-char detail string; no before/after, entity reference or IP_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
 - [ ] Deletion approval workflow
-- [ ] Reconcile part-paid Direct Debit collections — _server/gocardless.php marks an invoice fully paid on a confirmed payment without comparing dd_payments.amount_pence to invoices.total_pence. Signature verification itself is sound_
 - [ ] Restore testing
 - [ ] Retention engine
 - [ ] System health dashboard
@@ -208,13 +209,13 @@ Milestone 9 · 1 done, 2 partial, 4 to do
 
 ### REPORTING — Reporting and insight
 
-Milestone 9 · 4 done, 0 partial, 4 to do
+Milestone 9 · 5 done, 0 partial, 3 to do
 
 - [x] Analytics and margin reconciliation
 - [x] CSV and PDF export
 - [x] Command centre dashboard — _filterable by division_
+- [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
 - [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care_
 - [ ] Action Centre
 - [ ] Export logging with user and purpose
-- [ ] Fix the open-shifts dashboard tile — _server/dashboard.php:29 counts training sessions with no trainer (FROM sessions) instead of open shifts (FROM shifts WHERE status='open'). The tile has always shown the wrong number_
 - [ ] Staff workload view

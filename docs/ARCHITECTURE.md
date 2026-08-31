@@ -76,7 +76,7 @@ cPanel hosting with no shell access to install anything.
 | Bootstrapping | Loads `config.php`, asserts required constants, sets CORS from `ALLOWED_ORIGINS`, installs global error and exception handlers |
 | Response | `json_out()`, `fail()` |
 | Request | `body()`, `method()`, `bearer_token()`, `client_ip()` |
-| Auth | `current_user()`, `require_auth()`, `require_role()` |
+| Auth | `current_user()`, `require_auth()`, `require_role()`, `is_staff()`, `require_staff()`, `linked_worker_id()` |
 | Governance | `audit()`, `rate_limit()` |
 | Sequences | `next_seq()` — atomic named counters for document numbers |
 | Mail | `mail_enabled()`, `smtp_configured()`, `send_mail()`, `smtp_send()`, `encode_mime_word()` |
@@ -114,9 +114,10 @@ On every request `current_user()` hashes the presented bearer token and joins
 Storing only the hash means a database disclosure does not yield usable sessions. Recording
 `user_agent` and `ip` is what powers the device list and per-session revoke in Settings.
 
-**Known defect:** `last_seen_at` is written when the token is issued and never updated
-(`server/auth.php:42` is the only write), so the session list shows each session's creation
-time in a column labelled as last activity.
+`last_seen_at` is refreshed by `current_user()` on each authenticated request, throttled to at
+most one write a minute per token so a burst of calls costs a single update. It was previously
+written only at issue, which made the session list show creation time under a heading that
+reads as last activity.
 
 There is no refresh token and no rotation. The client holds the token in `localStorage` under
 `rgos_token`, which is exposed to XSS by design — the trade being made is that a bearer header
@@ -142,8 +143,14 @@ They are declared in three places that must be kept in sync:
 
 **The server is the only enforced boundary.** `RequireAuth` accepts a `roles` prop that the
 router never passes, so all three authenticated surfaces are gated identically on "logged in".
-Several read endpoints call `require_auth()` with no `require_role()`. Milestone 5 addresses
-both.
+Milestone 5 addresses that.
+
+**Role is not sufficient on its own.** A worker's login is an ordinary account with
+`users.worker_id` set, and a client portal login has `users.client_id` set, so either may hold
+a role such as `employee`. Anything gated on "internal staff" must therefore check the link,
+not just the role — which is what `is_staff()` in `server/lib.php` does. It treats
+`super_admin`, `admin` and `manager` as staff unconditionally, so a manager who also holds a
+worker record does not lock themselves out of the office.
 
 `users.client_id` and `users.worker_id` link a login to a client or worker record. They are
 per-row account links, not a tenancy scope — there is no query-level row filtering anywhere.

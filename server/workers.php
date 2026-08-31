@@ -8,6 +8,12 @@ $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {
+    // Internal staff only. This row set carries pay rates and DBS/SIA data, and
+    // before this check any authenticated account could read it — including a
+    // client portal login, which is an external party.
+    require_staff($user);
+    // Pay is narrower still: only the roles that run payroll see it.
+    $seesPay = in_array($user['role'], ['super_admin', 'admin', 'manager'], true);
     $res = $conn->query(
         'SELECT id, name, email, phone, role, division, status, right_to_work,
                 dbs_status, dbs_expiry, sia_number, sia_expiry,
@@ -25,6 +31,7 @@ if (method() === 'GET') {
         $row['avail_days'] = (bool) $row['avail_days'];
         $row['avail_nights'] = (bool) $row['avail_nights'];
         $row['avail_weekends'] = (bool) $row['avail_weekends'];
+        if (!$seesPay) unset($row['pay_rate_pence'], $row['pay_type'], $row['holiday_hours']);
         $workers[] = $row;
     }
     json_out(['workers' => $workers]);

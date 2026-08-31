@@ -137,28 +137,33 @@
         },
         {
           "name": "Close the unauthenticated write on api.php",
-          "status": "todo",
-          "note": "SECURITY. server/api.php POST has no require_auth and no rate_limit: anyone can insert unbounded rows into `items` on production. Smoke-test table, so no data is exposed, but it is an open write"
+          "status": "done",
+          "note": "Fixed. Both verbs now require auth; POST throttled 30/5 min"
         },
         {
           "name": "Role-restrict worker reads",
-          "status": "todo",
-          "note": "SECURITY. server/workers.php GET has no require_role (checks are only on the write paths at :36,:58,:74), so any authenticated account -- including a client portal login -- can read every worker's pay_rate_pence, dbs_status and sia_number"
+          "status": "done",
+          "note": "Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager"
         },
         {
           "name": "Role-restrict the shared mailbox",
-          "status": "todo",
-          "note": "SECURITY. server/inbox.php:13 calls require_auth only. Any authenticated account can read the whole company mailbox and send replies as the company"
+          "status": "done",
+          "note": "Fixed. server/inbox.php now requires super_admin/admin/manager"
         },
         {
           "name": "Role-restrict field event logging",
-          "status": "todo",
-          "note": "SECURITY. server/field.php:9 calls require_auth only and never require_role. Any authenticated account can post events -- including panic alerts and clock-ins -- against any shift id"
+          "status": "done",
+          "note": "Fixed. Board is staff-only; a worker may post only against a shift assigned to them"
         },
         {
           "name": "Update last_seen_at on token use",
-          "status": "todo",
-          "note": "Written once at issue (server/auth.php:42) and never updated, so the session list shows creation time under a last-activity heading"
+          "status": "done",
+          "note": "Fixed. Refreshed in current_user(), throttled to one write a minute per token"
+        },
+        {
+          "name": "Staff-vs-worker-vs-client account discrimination",
+          "status": "done",
+          "note": "is_staff(), require_staff(), linked_worker_id() in server/lib.php. Role alone cannot express this: a worker login is an ordinary account with users.worker_id set"
         }
       ]
     },
@@ -502,8 +507,8 @@
         },
         {
           "name": "Fix the open-shifts dashboard tile",
-          "status": "todo",
-          "note": "server/dashboard.php:29 counts training sessions with no trainer (FROM sessions) instead of open shifts (FROM shifts WHERE status='open'). The tile has always shown the wrong number"
+          "status": "done",
+          "note": "Fixed. Now counts shifts with status='open', respecting the division filter"
         }
       ]
     },
@@ -557,8 +562,8 @@
         },
         {
           "name": "Reconcile part-paid Direct Debit collections",
-          "status": "todo",
-          "note": "server/gocardless.php marks an invoice fully paid on a confirmed payment without comparing dd_payments.amount_pence to invoices.total_pence. Signature verification itself is sound"
+          "status": "done",
+          "note": "Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery"
         }
       ]
     },

@@ -70,19 +70,44 @@ if ($action === 'webhook' && method() === 'POST') {
         if ($resource === 'payments') {
             $pid = $ev['links']['payment'] ?? '';
             if ($pid) {
+                // Read the current state BEFORE updating it. GoCardless may redeliver a
+                // webhook, and without this an already-settled payment would be credited
+                // to the invoice a second time.
+                $sel = $conn->prepare('SELECT invoice_id, amount_pence, status FROM dd_payments WHERE gc_payment_id = ? LIMIT 1');
+                $sel->bind_param('s', $pid);
+                $sel->execute();
+                $row = $sel->get_result()->fetch_assoc();
+                $alreadySettled = $row && in_array($row['status'], ['confirmed', 'paid_out'], true);
+
                 $stmt = $conn->prepare('UPDATE dd_payments SET status = ? WHERE gc_payment_id = ?');
                 $stmt->bind_param('ss', $act, $pid);
                 $stmt->execute();
-                // On confirmation/payout, mark the linked invoice paid.
-                if (in_array($act, ['confirmed', 'paid_out'], true)) {
-                    $stmt = $conn->prepare('SELECT invoice_id, amount_pence FROM dd_payments WHERE gc_payment_id = ?');
-                    $stmt->bind_param('s', $pid);
-                    $stmt->execute();
-                    $row = $stmt->get_result()->fetch_assoc();
-                    if ($row && $row['invoice_id']) {
-                        $iid = (int) $row['invoice_id'];
-                        $conn->query('UPDATE invoices SET status = "paid", amount_paid_pence = total_pence WHERE id = ' . $iid . ' AND status <> "paid"');
+
+                // On first settlement, credit what was actually collected and mark the
+                // invoice paid only once the credited total covers it. This previously
+                // set amount_paid_pence = total_pence on any confirmed collection, so a
+                // part-collection reported as paid in full.
+                if (in_array($act, ['confirmed', 'paid_out'], true) && !$alreadySettled && $row && $row['invoice_id']) {
+                    $iid = (int) $row['invoice_id'];
+                    $amount = (int) $row['amount_pence'];
+
+                    $credit = $conn->prepare(
+                        'UPDATE invoices SET amount_paid_pence = LEAST(amount_paid_pence + ?, total_pence) WHERE id = ?'
+                    );
+                    $credit->bind_param('ii', $amount, $iid);
+                    $credit->execute();
+
+                    $settle = $conn->prepare(
+                        'UPDATE invoices SET status = "paid"
+                         WHERE id = ? AND status <> "paid" AND amount_paid_pence >= total_pence'
+                    );
+                    $settle->bind_param('i', $iid);
+                    $settle->execute();
+
+                    if ($settle->affected_rows > 0) {
                         audit($conn, 0, 'invoice.paid.gocardless', "#$iid via DD");
+                    } else {
+                        audit($conn, 0, 'invoice.part_paid.gocardless', "#$iid credited {$amount}p via DD");
                     }
                 }
             }
