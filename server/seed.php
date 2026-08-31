@@ -181,6 +181,45 @@ foreach ($certs as $c) {
 }
 echo "  certifications " . count($certs) . "\n";
 
+// ---- Evidence, so the compliance engine has something to decide on ---------
+// Deliberately uneven. The point of these fixtures is that the SAME person gets
+// a different answer per service, and that a single lapsed credential blocks
+// exactly one service and no others.
+//
+// Dmitri  full evidence, SIA valid       -> eligible for security
+// Esi     full evidence, SIA lapsed      -> blocked for security, fine for cleaning
+// Grace   full evidence, cleaning        -> eligible for cleaning
+// Hana    no right to work               -> blocked everywhere
+$ins = $conn->prepare('INSERT INTO worker_references (worker_id, referee_name, referee_org, relationship, email, status) VALUES (?, ?, ?, "Line manager", ?, "verified")');
+foreach (['Amara Chen', 'Bola Adeyemi', 'Dmitri Volkov', 'Esi Mensah', 'Grace Okafor', 'Hana Yilmaz'] as $who) {
+    $refName = 'Referee for ' . $who;
+    $org = 'Previous Employer Ltd';
+    $refEmail = 'referee@example.invalid';
+    $ins->bind_param('isss', $workerIds[$who], $refName, $org, $refEmail);
+    $ins->execute();
+}
+
+// File metadata only: these rows exist so the compliance engine has documents to
+// find. No file is written to disk, so downloading one will 404 -- they are
+// fixtures for the evidence model, not for the document viewer.
+$ins = $conn->prepare('INSERT INTO files (stored_name, original_name, mime, size_bytes, category, worker_id) VALUES (?, ?, "application/pdf", 1024, ?, ?)');
+foreach (['Amara Chen', 'Bola Adeyemi', 'Dmitri Volkov', 'Esi Mensah', 'Grace Okafor', 'Hana Yilmaz'] as $who) {
+    foreach (['contract' => 'Contract of employment.pdf', 'id' => 'Identity document.pdf'] as $category => $original) {
+        $stored = bin2hex(random_bytes(8)) . '.pdf';
+        $ins->bind_param('sssi', $stored, $original, $category, $workerIds[$who]);
+        $ins->execute();
+    }
+}
+echo "  evidence     6 reference sets, 12 documents\n";
+
+// Identity is evidenced by a document, so record it as a certification too --
+// the requirement catalogue treats 'Identity' as a non-expiring, verified item.
+$ins = $conn->prepare('INSERT INTO certifications (worker_id, type, expiry, status) VALUES (?, "Identity", NULL, "valid")');
+foreach (['Amara Chen', 'Bola Adeyemi', 'Dmitri Volkov', 'Esi Mensah', 'Grace Okafor', 'Hana Yilmaz'] as $who) {
+    $ins->bind_param('i', $workerIds[$who]);
+    $ins->execute();
+}
+
 // ---- Applicants across the pipeline ----------------------------------------
 $applicants = [
     ['Kofi Baptiste', 'kofi@local.invalid',   '07700900201', 'Care assistant',  'care',     'applied'],

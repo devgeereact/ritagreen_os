@@ -3,6 +3,7 @@
 // GET  /compliance.php            -> { summary: {...}, items: [...] }
 // POST /compliance.php {worker_id, type, number, expiry} -> add a certification
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 
@@ -80,6 +81,49 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'pack') {
         'generated_by' => $user['name'],
         'generated_at' => date('Y-m-d H:i'),
     ]);
+}
+
+// ----- Eligibility: may this person work in this service? -----
+// GET /compliance.php?action=eligibility&worker_id=N[&service=security]
+//
+// The answer is CALCULATED from the rules configured for the service and the
+// evidence on file. It is never read from a stored flag, and nothing may write
+// one -- see docs/RULES.md rule 1.
+if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility') {
+    $workerId = (int) ($_GET['worker_id'] ?? 0);
+    if ($workerId <= 0) fail('A worker is required.');
+    $service = trim((string) ($_GET['service'] ?? ''));
+    $valid = ['care', 'academy', 'cleaning', 'security'];
+    if ($service !== '' && !in_array($service, $valid, true)) fail('Unknown service.');
+
+    $verdict = rg_deployment_check($conn, $workerId, $service !== '' ? $service : null);
+    json_out($verdict);
+}
+
+// Every service a person is assessed for, in one call. This is what makes the
+// per-service model visible: one human, a different answer per service.
+if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility_all') {
+    $workerId = (int) ($_GET['worker_id'] ?? 0);
+    if ($workerId <= 0) fail('A worker is required.');
+
+    $stmt = $conn->prepare('SELECT person_id, name, role FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+
+    $services = [];
+    foreach (['care', 'academy', 'cleaning', 'security'] as $service) {
+        $v = rg_assess_person($conn, (int) $w['person_id'], $service, $w['role']);
+        $services[$service] = [
+            'status' => $v['status'],
+            'eligible' => $v['eligible'],
+            'score' => $v['score'],
+            'reason' => $v['reason'],
+            'blocking' => array_column($v['blocking'], 'reason'),
+        ];
+    }
+    json_out(['worker' => $w['name'], 'person_id' => (int) $w['person_id'], 'services' => $services]);
 }
 
 if (method() === 'GET') {

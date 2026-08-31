@@ -317,6 +317,43 @@ established so `config.php` keeps its own readable connection-failure message. A
 reaches the exception handler, which logs the detail and returns a reference. That single
 change protects every one of the 47 endpoints, not just the ones touched here.
 
+### Added — the compliance engine, wired to real data
+
+`server/compliance-lib.php` is the boundary between the tested decision logic and the database:
+`rg_load_rules()` reads the configured rule set for a service and role, `rg_load_evidence()`
+gathers what is on file for a person, `rg_assess_person()` evaluates and records the verdict in
+`person_services`, and `rg_deployment_check()` is the single gate every assignment path will
+call. Exposed as `compliance.php?action=eligibility` and `?action=eligibility_all`.
+
+Verified against real data, and it is the blueprint's central claim made concrete:
+
+```
+Esi Mensah
+   care      ELIGIBLE      71%
+   cleaning  ELIGIBLE      89%
+   security  NOT ELIGIBLE  75%  <- SIA licence: expired 3 days ago
+
+Grace Okafor
+   care      NOT ELIGIBLE  57%  <- DBS check: no evidence on file
+   cleaning  ELIGIBLE     100%
+   security  NOT ELIGIBLE  67%  <- SIA licence: no evidence on file
+```
+
+One person, a different answer per service, and one lapsed credential blocking exactly one
+service. That could not be expressed at all while `workers.division` was a single ENUM.
+
+### Changed — right to work is provisionally non-expiring
+
+Migration 005. The catalogue declared `right_to_work` as expiring, which is correct, but the
+evidence behind it is still `workers.right_to_work` — a `TINYINT(1)` with no date. The engine
+therefore classified every worker who *has* right to work as `undated`, meaning incomplete
+evidence, and blocked them from every service.
+
+That was the engine being right about a model that is not ready. The requirement is marked
+non-expiring until Milestone 3 replaces the boolean with a check record carrying a method, a
+date, a verifier and an expiry. It is a one-row `UPDATE` rather than a code change, which is
+the whole reason rules live in the database.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

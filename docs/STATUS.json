@@ -289,8 +289,8 @@
         },
         {
           "name": "Calculated eligibility verdict with reason",
-          "status": "partial",
-          "note": "The evaluation logic is built and tested in server/pure.php (rg_evaluate_eligibility, rg_eligibility_reason). Not yet wired to storage or any endpoint"
+          "status": "done",
+          "note": "rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data"
         },
         {
           "name": "Compliance status read-only in the UI",
@@ -319,6 +319,16 @@
           "name": "Eligibility evaluation logic",
           "status": "done",
           "note": "rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come"
+        },
+        {
+          "name": "Per-service eligibility, demonstrated",
+          "status": "done",
+          "note": "Verified: Esi Mensah is eligible for care and cleaning but blocked for security on a lapsed SIA licence. One credential, one service, exactly as intended"
+        },
+        {
+          "name": "Right to work as a dated, verified check",
+          "status": "todo",
+          "note": "Migration 005 marks the requirement non-expiring, because the evidence is still a TINYINT(1) with no date. The engine correctly blocked everyone as 'undated' until it did. Flip expires back to 1 in Milestone 3"
         }
       ]
     },
