@@ -21,7 +21,11 @@ set_error_handler(function ($severity, $message, $file, $line) {
 if (!file_exists(__DIR__ . '/config.php')) {
     http_response_code(500);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'config.php is missing on the server. Upload it to the document root.']);
+    // Two audiences: a developer who has not set up locally yet, and an operator
+    // who has deployed without placing config.php. Say which is which.
+    echo json_encode(['error' => PHP_SAPI === 'cli-server'
+        ? 'config.php is missing. Locally: cp server/config.local.php.example server/config.php'
+        : 'config.php is missing on the server. Upload it to the document root.']);
     exit;
 }
 require __DIR__ . '/config.php';

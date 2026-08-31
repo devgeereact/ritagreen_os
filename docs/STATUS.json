@@ -43,8 +43,8 @@
         },
         {
           "name": "Local development environment",
-          "status": "todo",
-          "note": "BLOCKER. vite.config.ts proxies to production"
+          "status": "done",
+          "note": "npm run dev:api serves the PHP tier locally; the Vite proxy defaults there and warns when overridden to production. config.local.php.example disables every outbound integration. server/seed.php provides fixtures. A local MySQL must still be installed by the developer"
         },
         {
           "name": "Atomic document-number sequences",
@@ -70,6 +70,11 @@
           "name": "Extend soft delete to records that cascade",
           "status": "todo",
           "note": "11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at"
+        },
+        {
+          "name": "Local fixture data",
+          "status": "done",
+          "note": "server/seed.php: staff logins per role, worker and client logins, 10 workers with a deliberate spread of valid, expiring, expired and missing-RTW compliance. CLI-only, local-host-only, --confirm required"
         }
       ]
     },

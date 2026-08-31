@@ -239,18 +239,47 @@ locally or in CI and ship as static artifacts.
 blocks `^uploads/` so uploaded documents are only ever reachable through `files.php` with an
 authentication check.
 
-## 10. Development environment — current state and target
+## 10. Development environment
 
-**Current, and unacceptable:** `vite.config.ts` proxies every `*.php` request to
-`https://ritagreenservices.com`. There is no local PHP or MySQL. Development reads and writes
-the live production database.
+Development runs entirely locally. It did not always: the Vite proxy defaulted to
+`https://ritagreenservices.com`, so every developer read and wrote the live production
+database, including while testing a migration.
 
-**Target, before any schema work:**
+**Two processes.**
 
-- `server/config.local.php.example` with localhost credentials and mail, SMS and payments
-  disabled
-- `php -S localhost:8122 -t server/` as the local API
-- The Vite proxy target read from an environment variable, defaulting to local
-- A seed script producing realistic fixture data
+| | |
+|---|---|
+| `npm run dev` | Vite on 5122, proxying `*.php` to the local API |
+| `npm run dev:api` | `php -S 127.0.0.1:8122 -t server` — the PHP tier, served exactly as it is on the host |
 
-See `docs/RULES.md`.
+`php -S` executes each `.php` file directly, so no router or rewrite is needed; the request
+path maps to the file, which is how the production document root works too.
+
+**Configuration.** `server/config.local.php.example` is the tracked template. Copy it to
+`server/config.php`, which is gitignored. It points at a local database and **disables every
+outbound integration** — mail, SMS, WhatsApp, Stripe, GoCardless, Google SSO, OpenRouter,
+weather. A local run must not be able to email a real worker or charge a real card.
+
+**Fixtures.** `server/seed.php` populates a local database with staff logins for each role, a
+worker login, a client portal login, four clients with sites, ten workers whose compliance is
+deliberately mixed — valid, inside the 30-day window, expired, and one with no right to work —
+plus certifications, applicants across the pipeline, assigned and open shifts, programmes,
+enrolments, enquiries and an incident. That spread is what makes the compliance and scheduling
+paths testable without editing rows by hand.
+
+It refuses to run unless invoked from the CLI, against a `DB_HOST` of `localhost`, `127.0.0.1`
+or `::1`, with an explicit `--confirm`, and it will not silently double up on a populated
+database without `--reset`.
+
+**Reaching production is deliberate.** The proxy target comes from `RG_API_TARGET` and
+defaults to the local API. Overriding it prints a warning at startup:
+
+```bash
+npm run dev:prod-api
+```
+
+**Prerequisite the repository cannot supply:** a local MySQL or MariaDB server. Install one
+(`brew install mariadb`, or a container) before the steps above. The rest — PHP, the schema,
+the config template, the fixtures — is in the repository.
+
+See `docs/RULES.md` rule 13.

@@ -26,21 +26,21 @@ Machine-readable status lives in `docs/STATUS.json`; the rendered view is `docs/
 
 ---
 
-## Prerequisite — Local development environment
+## Prerequisite — Local development environment — DONE
 
-**Blocks every milestone below. Nothing schema-related starts until this lands.**
+**Blocked every milestone below. Development used to read and write the live production
+database**, because `vite.config.ts` proxied `*.php` to `https://ritagreenservices.com` and
+there was no local alternative.
 
-Development currently reads and writes the live production database
-(`vite.config.ts` proxies `*.php` to `https://ritagreenservices.com`).
+- `server/config.local.php.example` — local database, every outbound integration disabled
+- `npm run dev:api` — `php -S 127.0.0.1:8122 -t server`
+- Vite proxy target from `RG_API_TARGET`, defaulting to local, warning when overridden
+- `server/seed.php` — fixtures with a deliberate spread of compliance states; CLI-only,
+  local-host-only, `--confirm` required
+- `npm run typecheck`, now `tsc -b --force` so it cannot silently no-op
 
-- `server/config.local.php.example` — localhost credentials, mail/SMS/payments disabled
-- `php -S localhost:8122 -t server/` as the local API, documented in the README
-- Vite proxy target from an environment variable, defaulting to local
-- `server/seed.php` — realistic fixture data, so no developer needs a production row
-- `npm run typecheck` script (currently only `tsc -b` inside `build`)
-
-**Done when:** a developer can clone, seed and run the whole stack with no access to
-production, and the default configuration cannot reach it.
+**Outstanding, and outside what the repository can supply:** a local MySQL or MariaDB server
+must be installed on the developer's machine. Everything else is in the repository.
 
 ---
 

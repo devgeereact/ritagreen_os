@@ -45,10 +45,12 @@ and no Composer — the host cannot install packages. Full detail in
 
 Things that have already caused problems here, or will.
 
-**Development runs against production.** `vite.config.ts` proxies every `*.php` request to
-`https://ritagreenservices.com`. There is no local PHP or MySQL. Any query you run in
-development hits live workforce data. **Do not write or run a schema migration until a local
-environment exists** — this is a hard gate, tracked in `docs/ROADMAP.md`.
+**Development is local, and must stay that way.** `npm run dev:api` serves the PHP tier on
+8122 and the Vite proxy points there by default. `server/config.local.php.example` disables
+every outbound integration; `npm run seed -- --confirm` fills a local database with fixtures.
+Reaching production needs an explicit `RG_API_TARGET` and prints a warning. It used to be the
+default, which meant every developer was one query away from editing live workforce records.
+**Never run a migration against anything but a local database.**
 
 **The schema is not migrations.** `server/schema.sql` is one re-runnable file organised in
 "build passes", where later `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier

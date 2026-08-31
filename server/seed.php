@@ -1,0 +1,269 @@
+<?php
+// Local development fixtures.
+//
+//     php server/seed.php --confirm          insert fixtures
+//     php server/seed.php --confirm --reset  wipe the fixture tables first
+//
+// Exists so nobody needs production data to develop against. It refuses to run
+// anywhere but a local database, from the CLI, with an explicit --confirm.
+//
+// The seeded compliance data is deliberately mixed: some credentials valid, some
+// inside the 30-day window, some already expired, and one worker with no right
+// to work at all. That is what makes the compliance and scheduling paths
+// testable without hand-editing rows.
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit("seed.php runs from the command line only.\n");
+}
+
+require __DIR__ . '/lib.php';
+
+$args = array_slice($argv, 1);
+$confirmed = in_array('--confirm', $args, true);
+$reset = in_array('--reset', $args, true);
+
+// Guard 1: never a remote database. This is the whole point of the script.
+$localHosts = ['localhost', '127.0.0.1', '::1'];
+if (!in_array(DB_HOST, $localHosts, true)) {
+    exit("REFUSED: DB_HOST is '" . DB_HOST . "'. seed.php only runs against a local database.\n");
+}
+
+// Guard 2: never silently. Show what is about to be written to, and to where.
+if (!$confirmed) {
+    echo "About to seed fixtures into:\n";
+    echo "  host     " . DB_HOST . "\n";
+    echo "  database " . DB_NAME . "\n";
+    echo "  user     " . DB_USER . "\n\n";
+    echo "Re-run with --confirm to proceed, and --reset to wipe fixture tables first.\n";
+    exit(1);
+}
+
+// Guard 3: do not quietly double up on an already-populated database.
+$existing = (int) $conn->query('SELECT COUNT(*) FROM workers')->fetch_row()[0];
+if ($existing > 0 && !$reset) {
+    exit("REFUSED: workers already holds $existing rows. Re-run with --reset to replace them.\n");
+}
+
+function run(mysqli $conn, string $sql): void
+{
+    if (!$conn->query($sql)) {
+        exit("SQL failed: {$conn->error}\n  $sql\n");
+    }
+}
+
+if ($reset) {
+    echo "Resetting fixture tables…\n";
+    run($conn, 'SET FOREIGN_KEY_CHECKS = 0');
+    foreach ([
+        'shift_events', 'shift_offers', 'shifts', 'shift_templates',
+        'timesheets', 'certifications', 'worker_references', 'worker_skills',
+        'onboarding_tasks', 'applicants', 'enrolments', 'sessions', 'programmes',
+        'incident_actions', 'incidents', 'credit_notes', 'invoices', 'quotes',
+        'contracts', 'jobs', 'rate_cards', 'service_requests', 'sites',
+        'clients', 'workers', 'contact_enquiries', 'notifications', 'files',
+    ] as $table) {
+        run($conn, "DELETE FROM $table");
+    }
+    // Keep the seeded super admin; clear the fixture logins around it.
+    run($conn, "DELETE FROM users WHERE email LIKE '%@local.invalid'");
+    run($conn, 'SET FOREIGN_KEY_CHECKS = 1');
+}
+
+// Dates relative to today, so the fixtures never go stale.
+$d = static fn(int $days): string => date('Y-m-d', strtotime("$days days"));
+$dt = static fn(string $expr): string => date('Y-m-d H:i:s', strtotime($expr));
+
+echo "Seeding…\n";
+
+// ---- Staff logins, one per role -------------------------------------------
+// Local fixture password, shared by every seeded account below. This is a
+// throwaway credential for a throwaway database; it is not a secret and must
+// never appear in a real config.
+$password = password_hash('LocalDev123!', PASSWORD_BCRYPT, ['cost' => 10]);
+$staff = [
+    ['Olu Admin',      'admin@local.invalid',    'admin',    null],
+    ['Mara Manager',   'manager@local.invalid',  'manager',  'care'],
+    ['Tam Trainer',    'trainer@local.invalid',  'trainer',  'academy'],
+    ['Eddie Editor',   'editor@local.invalid',   'editor',   null],
+    ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning'],
+];
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division) VALUES (?, ?, ?, ?, ?)');
+foreach ($staff as [$name, $email, $role, $division]) {
+    $ins->bind_param('sssss', $name, $email, $password, $role, $division);
+    $ins->execute();
+}
+echo "  users        " . count($staff) . "\n";
+
+// ---- Clients and sites -----------------------------------------------------
+$clients = [
+    ['Oakleaf Care Home', 'care_home', 'Priya Nair',   'priya@oakleaf.invalid',  '02071234001', 'care,cleaning', 'active'],
+    ['Bramley Estates',   'landlord',  'Tom Fielding', 'tom@bramley.invalid',    '02071234002', 'cleaning,security', 'active'],
+    ['Northgate Events',  'event',     'Sam Okoro',    'sam@northgate.invalid',  '02071234003', 'security', 'active'],
+    ['Havering NHS Trust','nhs',       'Dr K Ahmed',   'k.ahmed@havering.invalid','02071234004','care', 'prospect'],
+];
+$ins = $conn->prepare('INSERT INTO clients (name, type, contact_name, email, phone, divisions, status) VALUES (?, ?, ?, ?, ?, ?, ?)');
+$clientIds = [];
+foreach ($clients as $c) {
+    $ins->bind_param('sssssss', $c[0], $c[1], $c[2], $c[3], $c[4], $c[5], $c[6]);
+    $ins->execute();
+    $clientIds[$c[0]] = $conn->insert_id;
+}
+$ins = $conn->prepare('INSERT INTO sites (client_id, name, address) VALUES (?, ?, ?)');
+$sites = [
+    [$clientIds['Oakleaf Care Home'], 'Oakleaf — Main House', '1 Oakleaf Way, London E1 1AA'],
+    [$clientIds['Bramley Estates'],   'Bramley Court',        '12 Bramley Road, London N4 2BB'],
+    [$clientIds['Bramley Estates'],   'Bramley Heights',      '40 Bramley Road, London N4 2CC'],
+    [$clientIds['Northgate Events'],  'Northgate Arena',      'Arena Approach, London SE10 3DD'],
+];
+foreach ($sites as $s) {
+    $ins->bind_param('iss', $s[0], $s[1], $s[2]);
+    $ins->execute();
+}
+echo "  clients      " . count($clients) . " (" . count($sites) . " sites)\n";
+
+// ---- Workers, with a deliberate spread of compliance states ----------------
+// name, email, phone, role, division, status, rtw, dbs_status, dbs_expiry,
+// sia_number, sia_expiry, pay pence
+$workers = [
+    ['Amara Chen',    'amara@local.invalid',  '07700900101', 'carer',   'care',     'active',     1, 'valid',   $d(300),  null,           null,    1350],
+    ['Bola Adeyemi',  'bola@local.invalid',   '07700900102', 'nurse',   'care',     'active',     1, 'valid',   $d(21),   null,           null,    2200],
+    ['Cerys Hughes',  'cerys@local.invalid',  '07700900103', 'carer',   'care',     'active',     1, 'expired', $d(-14),  null,           null,    1300],
+    ['Dmitri Volkov', 'dmitri@local.invalid', '07700900104', 'guard',   'security', 'active',     1, 'valid',   $d(400),  'SIA-1000-0104', $d(180), 1500],
+    ['Esi Mensah',    'esi@local.invalid',    '07700900105', 'guard',   'security', 'active',     1, 'valid',   $d(250),  'SIA-1000-0105', $d(-3),  1500],
+    ['Farid Hassan',  'farid@local.invalid',  '07700900106', 'guard',   'security', 'active',     1, 'valid',   $d(500),  'SIA-1000-0106', $d(25),  1550],
+    ['Grace Okafor',  'grace@local.invalid',  '07700900107', 'cleaner', 'cleaning', 'active',     1, null,      null,     null,           null,    1250],
+    ['Hana Yilmaz',   'hana@local.invalid',   '07700900108', 'cleaner', 'cleaning', 'active',     0, null,      null,     null,           null,    1250],
+    ['Ivan Petrov',   'ivan@local.invalid',   '07700900109', 'cleaner', 'cleaning', 'onboarding', 0, null,      null,     null,           null,    1200],
+    ['Jade Thompson', 'jade@local.invalid',   '07700900110', 'trainer', 'academy',  'active',     1, 'valid',   $d(600),  null,           null,    2500],
+];
+$ins = $conn->prepare(
+    'INSERT INTO workers (name, email, phone, role, division, status, right_to_work,
+                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye")'
+);
+$workerIds = [];
+foreach ($workers as $w) {
+    $ins->bind_param('ssssssissssi', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11]);
+    $ins->execute();
+    $workerIds[$w[0]] = $conn->insert_id;
+}
+echo "  workers      " . count($workers) . " (mixed compliance: valid, expiring, expired, no RTW)\n";
+
+// A worker login, so /m can be exercised. Linked to Amara Chen.
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, worker_id) VALUES (?, ?, ?, "employee", "care", ?)');
+$wname = 'Amara Chen'; $wemail = 'amara.login@local.invalid';
+$ins->bind_param('sssi', $wname, $wemail, $password, $workerIds['Amara Chen']);
+$ins->execute();
+
+// A client portal login, so /portal can be exercised.
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, client_id) VALUES (?, ?, ?, "client", ?)');
+$cname = 'Priya Nair'; $cemail = 'priya@local.invalid';
+$ins->bind_param('sssi', $cname, $cemail, $password, $clientIds['Oakleaf Care Home']);
+$ins->execute();
+echo "  portal login 1 client, 1 worker\n";
+
+// ---- Certifications, again spread across the expiry tiers ------------------
+$certs = [
+    ['Amara Chen',    'Care Certificate',      'CC-2024-001', $d(200)],
+    ['Amara Chen',    'Moving & Handling',     null,          $d(55)],
+    ['Bola Adeyemi',  'NMC Registration',      'NMC-77123',   $d(90)],
+    ['Cerys Hughes',  'First Aid',             null,          $d(-40)],
+    ['Dmitri Volkov', 'First Aid',             null,          $d(120)],
+    ['Esi Mensah',    'Conflict Management',   null,          $d(15)],
+    ['Grace Okafor',  'COSHH Awareness',       null,          $d(310)],
+    ['Hana Yilmaz',   'COSHH Awareness',       null,          $d(-8)],
+];
+$ins = $conn->prepare('INSERT INTO certifications (worker_id, type, number, expiry) VALUES (?, ?, ?, ?)');
+foreach ($certs as $c) {
+    $ins->bind_param('isss', $workerIds[$c[0]], $c[1], $c[2], $c[3]);
+    $ins->execute();
+}
+echo "  certifications " . count($certs) . "\n";
+
+// ---- Applicants across the pipeline ----------------------------------------
+$applicants = [
+    ['Kofi Baptiste', 'kofi@local.invalid',   '07700900201', 'Care assistant',  'care',     'applied'],
+    ['Lena Novak',    'lena@local.invalid',   '07700900202', 'Security officer','security', 'screened'],
+    ['Miguel Santos', 'miguel@local.invalid', '07700900203', 'Cleaner',         'cleaning', 'interview'],
+    ['Nadia Rahman',  'nadia@local.invalid',  '07700900204', 'Care assistant',  'care',     'vetting'],
+    ['Omar Diallo',   'omar@local.invalid',   '07700900205', 'Security officer','security', 'offer'],
+];
+$ins = $conn->prepare('INSERT INTO applicants (name, email, phone, role_applied, division, stage, source) VALUES (?, ?, ?, ?, ?, ?, "seed")');
+foreach ($applicants as $a) {
+    $ins->bind_param('ssssss', $a[0], $a[1], $a[2], $a[3], $a[4], $a[5]);
+    $ins->execute();
+}
+echo "  applicants   " . count($applicants) . "\n";
+
+// ---- Shifts: some assigned, some open, across today and the coming week ----
+$ins = $conn->prepare(
+    'INSERT INTO shifts (worker_id, client_id, division, title, site_name, starts_at, ends_at, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+);
+$shifts = [
+    [$workerIds['Amara Chen'],   $clientIds['Oakleaf Care Home'], 'care',     'Day carer',        'Oakleaf — Main House', $dt('today 08:00'),    $dt('today 16:00'),    'scheduled'],
+    [$workerIds['Dmitri Volkov'],$clientIds['Bramley Estates'],   'security', 'Night guard',      'Bramley Court',        $dt('today 20:00'),    $dt('tomorrow 06:00'), 'scheduled'],
+    [$workerIds['Grace Okafor'], $clientIds['Bramley Estates'],   'cleaning', 'Communal clean',   'Bramley Heights',      $dt('today 06:00'),    $dt('today 10:00'),    'scheduled'],
+    [null,                        $clientIds['Northgate Events'],  'security', 'Event steward',    'Northgate Arena',      $dt('+2 days 18:00'),  $dt('+2 days 23:59'),  'open'],
+    [null,                        $clientIds['Oakleaf Care Home'], 'care',     'Waking night',     'Oakleaf — Main House', $dt('+3 days 20:00'),  $dt('+4 days 08:00'),  'open'],
+    [$workerIds['Bola Adeyemi'], $clientIds['Oakleaf Care Home'], 'care',     'Nurse cover',      'Oakleaf — Main House', $dt('+1 day 08:00'),   $dt('+1 day 20:00'),   'scheduled'],
+];
+foreach ($shifts as $s) {
+    $ins->bind_param('iissssss', $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7]);
+    $ins->execute();
+}
+echo "  shifts       " . count($shifts) . " (2 open, for the matching path)\n";
+
+// ---- Academy ---------------------------------------------------------------
+$ins = $conn->prepare('INSERT INTO programmes (title, description, division, status, cpd_hours) VALUES (?, ?, "academy", "published", ?)');
+$programmes = [
+    ['Care Certificate (16 standards)', 'The full Care Certificate for new starters.', 40],
+    ['Moving & Handling',               'Practical moving and handling for care settings.', 6],
+    ['Conflict Management',             'De-escalation for licensed security staff.', 8],
+];
+$programmeIds = [];
+foreach ($programmes as $p) {
+    $ins->bind_param('ssi', $p[0], $p[1], $p[2]);
+    $ins->execute();
+    $programmeIds[$p[0]] = $conn->insert_id;
+}
+$ins = $conn->prepare('INSERT INTO enrolments (programme_id, learner_name, status) VALUES (?, ?, ?)');
+foreach ([
+    [$programmeIds['Care Certificate (16 standards)'], 'Kofi Baptiste', 'in_progress'],
+    [$programmeIds['Care Certificate (16 standards)'], 'Nadia Rahman',  'completed'],
+    [$programmeIds['Conflict Management'],             'Omar Diallo',   'enrolled'],
+] as $e) {
+    $ins->bind_param('iss', $e[0], $e[1], $e[2]);
+    $ins->execute();
+}
+echo "  programmes   " . count($programmes) . " (3 enrolments)\n";
+
+// ---- Enquiries and an incident, so those boards are not empty --------------
+$ins = $conn->prepare('INSERT INTO contact_enquiries (name, email, phone, division, message) VALUES (?, ?, ?, ?, ?)');
+foreach ([
+    ['Rachel Adeniyi', 'rachel@local.invalid', '07700900301', 'care',     'Do you cover weekend respite in E17?'],
+    ['Paul Whitmore',  'paul@local.invalid',   '07700900302', 'security', 'Need two door supervisors for a 200-capacity venue.'],
+] as $e) {
+    $ins->bind_param('sssss', $e[0], $e[1], $e[2], $e[3], $e[4]);
+    $ins->execute();
+}
+
+$ref = 'INC-' . date('Y') . '-0001';
+$ins = $conn->prepare(
+    'INSERT INTO incidents (ref, division, type, severity, title, detail, client_id, site_name, worker_id, status, occurred_at)
+     VALUES (?, "cleaning", "near_miss", "medium", ?, ?, ?, ?, ?, "open", ?)'
+);
+$ititle = 'Wet floor sign missing in communal stairwell';
+$idetail = 'Operative reported a mopped stairwell with no signage. No injury.';
+$isite = 'Bramley Heights';
+$iwhen = $dt('-2 days 09:30');
+$ins->bind_param('sssisis', $ref, $ititle, $idetail, $clientIds['Bramley Estates'], $isite, $workerIds['Grace Okafor'], $iwhen);
+$ins->execute();
+echo "  enquiries    2 (1 incident)\n";
+
+echo "\nDone. Sign in at http://localhost:5122/login\n";
+echo "  admin@local.invalid / LocalDev123!    office\n";
+echo "  amara.login@local.invalid             worker app at /m\n";
+echo "  priya@local.invalid                   client portal at /portal\n";
+echo "  (every seeded account uses the same fixture password)\n";

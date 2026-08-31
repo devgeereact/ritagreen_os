@@ -143,7 +143,8 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 | Documentation matches the code | `docs/STATUS.json` | `scripts/docs_sync.py` | `docs/PROGRESS.md` | `scripts/docs_sync.py` `--check` |
 | Quality gates run before merge | — | `.github/workflows/ci.yml` | GitHub checks | itself |
 | Deploys never disturb server files | — | `.github/workflows/deploy.yml` | — | none |
-| Development does not touch production | `vite.config.ts` proxies to production | planned local API | planned | none |
+| Development does not touch production | `server/config.local.php.example` | `npm run dev:api` | `vite.config.ts` proxy defaults local | none |
+| Fixtures exist without production data | `server/seed.php` | CLI | — | none |
 | Schema changes are ordered migrations | `server/schema.sql` is one re-runnable file | planned migrations directory | — | none |
 | Errors do not leak internals | — | `server/lib.php` returns exception messages | — | none |
 | The app is installable and works offline | `public/manifest.webmanifest`, `public/sw.js` | — | `src/main.tsx` registers it | none |

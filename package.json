@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "php -S 127.0.0.1:8122 -t server",
+    "dev:prod-api": "RG_API_TARGET=https://ritagreenservices.com vite",
+    "seed": "php server/seed.php",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --force",
     "lint": "eslint .",

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#############...........`  60 done · 13 partial · 53 to do · 126 tracked
+`#############...........`  62 done · 13 partial · 52 to do · 127 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -18,7 +18,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `#####.......` | 4 | 2 | 5 |
-| FOUNDATION — Foundation and person spine | 1 | `##..........` | 1 | 1 | 10 |
+| FOUNDATION — Foundation and person spine | 1 | `###.........` | 3 | 1 | 9 |
 | COMPLIANCE — Compliance engine and verification | 2 | `#####.......` | 5 | 2 | 7 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `#########...` | 6 | 1 | 2 |
@@ -51,13 +51,14 @@ Milestone 0 · 4 done, 2 partial, 5 to do
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 1 done, 1 partial, 10 to do
+Milestone 1 · 3 done, 1 partial, 9 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
+- [x] Local development environment — _npm run dev:api serves the PHP tier locally; the Vite proxy defaults there and warns when overridden to production. config.local.php.example disables every outbound integration. server/seed.php provides fixtures. A local MySQL must still be installed by the developer_
+- [x] Local fixture data — _server/seed.php: staff logins per role, worker and client logins, 10 workers with a deliberate spread of valid, expiring, expired and missing-RTW compliance. CLI-only, local-host-only, --confirm required_
 - [~] Soft delete on records that must not be lost — _present on most, missing on shifts, timesheets, incidents_
 - [ ] Constrain columns added by later ALTER passes — _ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php_
 - [ ] Extend soft delete to records that cascade — _11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at_
-- [ ] Local development environment — _BLOCKER. vite.config.ts proxies to production_
 - [ ] Numbered migrations (server/migrations/) — _schema.sql is a single re-runnable build-pass file_
 - [ ] Payroll number generator — _next_seq() at server/lib.php:173 is the primitive to build on_
 - [ ] Person de-duplication migration

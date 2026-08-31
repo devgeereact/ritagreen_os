@@ -116,6 +116,32 @@ imports the typecheck surfaced and applying the auto-fixable `prefer-const`. Wha
 `react-hooks/purity` and 1 `no-unused-expressions` — all of which change runtime behaviour to
 fix. Everything mechanical is done.
 
+### Added — local development, and with it the unblocking of all schema work
+
+Development read and wrote the **live production database**: `vite.config.ts` proxied every
+`*.php` request to `https://ritagreenservices.com`, and there was no local alternative. That
+made every migration in the roadmap unsafe to attempt.
+
+- **`server/config.local.php.example`** — a tracked template pointing at a local database with
+  every outbound integration deliberately disabled: mail, SMS, WhatsApp, Stripe, GoCardless,
+  Google SSO, OpenRouter, weather. A local run must not be able to email a real worker or
+  charge a real card
+- **`npm run dev:api`** — `php -S 127.0.0.1:8122 -t server`, serving the PHP tier exactly as
+  the host does, with no router needed
+- **The Vite proxy now defaults to local.** The target comes from `RG_API_TARGET`; overriding
+  it prints a warning at startup, and `npm run dev:prod-api` makes the deliberate case explicit
+- **`server/seed.php`** — fixtures covering staff logins for every role, a worker login, a
+  client portal login, four clients with sites, and ten workers whose compliance is deliberately
+  mixed: valid, inside the 30-day window, expired, and one with no right to work. Plus
+  certifications, applicants across the pipeline, assigned and open shifts, programmes,
+  enrolments, enquiries and an incident. It refuses to run outside the CLI, against a non-local
+  `DB_HOST`, without `--confirm`, or on a populated database without `--reset`
+- The "config.php is missing" error now tells a developer to copy the local template, rather
+  than telling them to upload a file to a server they are not on
+
+**Still needed on the developer's machine:** a local MySQL or MariaDB. Everything else ships in
+the repository.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

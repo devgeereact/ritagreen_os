@@ -63,8 +63,10 @@ document root. `server/backup.php` already does this correctly.
 ## Development
 
 **13. Development never points at production.**
-`vite.config.ts` currently proxies to the live domain. Until a local PHP and MySQL environment
-exists, no schema migration may be written or run. This is a hard gate on Milestone 1.
+The Vite proxy defaults to the local PHP API. Reaching production requires setting
+`RG_API_TARGET` explicitly, which prints a warning. Never change that default, and never run a
+migration against anything but a local database. This rule exists because the default used to
+be production, so every developer was one query away from editing live workforce records.
 
 **14. Schema changes are numbered migrations.**
 New work goes in `server/migrations/NNN-description.sql`, applied in order and recorded.

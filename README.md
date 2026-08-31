@@ -40,18 +40,36 @@ through to invoices, incidents, communications and reporting.
 
 ## Running it
 
+Two processes: the Vite dev server, and a local PHP API for it to talk to.
+
 ```bash
 npm install
+
+# One-time: a local database and config
+#   (needs MySQL or MariaDB installed — brew install mariadb, or Docker)
+mysql -u root -e "CREATE DATABASE ritagreen_os_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root ritagreen_os_dev < server/schema.sql
+cp server/config.local.php.example server/config.php   # edit if your MySQL user differs
+npm run seed -- --confirm
+
+# Every day: two terminals
+npm run dev:api    # PHP API on 127.0.0.1:8122
 npm run dev        # http://localhost:5122  (strictPort — fails loudly if taken)
 ```
 
-Other scripts: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run preview`.
+Seeded logins, all sharing the fixture password printed by `npm run seed`:
+`admin@local.invalid` for the office, `amara.login@local.invalid` for the worker app at `/m`,
+`priya@local.invalid` for the client portal at `/portal`.
 
-> **Known problem, being fixed.** `vite.config.ts` currently proxies every `*.php` request to
-> the live domain, so **development reads and writes the production database**. There is no
-> local PHP or MySQL yet. Adding one is the prerequisite for all schema work — see
-> [`docs/ROADMAP.md`](docs/ROADMAP.md). Treat local development as production access until it
-> lands.
+**The dev proxy points at the local API by default.** It used to default to the live domain,
+so every developer read and wrote the production workforce database. Reaching production is
+now deliberate and prints a warning:
+
+```bash
+npm run dev:prod-api      # or RG_API_TARGET=https://ritagreenservices.com npm run dev
+```
+
+Other scripts: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run preview`.
 
 ## Repository layout
 
