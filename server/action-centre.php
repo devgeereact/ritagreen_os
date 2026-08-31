@@ -97,13 +97,13 @@ if ($rtwDue) $add(SOON, 'right_to_work', "$rtwDue right-to-work " . ($rtwDue ===
     'Arrange these before the date, not after it.', '/app/compliance', $rtwDue);
 
 // ---- Recruitment -----------------------------------------------------------
-$newApps = $scalar($conn, 'SELECT COUNT(*) FROM applicants WHERE stage = "applied"');
+$newApps = $scalar($conn, 'SELECT COUNT(*) FROM applicants WHERE deleted_at IS NULL AND stage = "applied"');
 if ($newApps) $add(TODAY, 'recruitment', "$newApps " . ($newApps === 1 ? 'application is' : 'applications are') . ' awaiting review',
     'Nobody has looked at these yet.', '/app/ats', $newApps);
 
 $stalled = $scalar($conn,
     'SELECT COUNT(*) FROM applicants
-     WHERE stage IN ("screened","interview","vetting","offer")
+     WHERE deleted_at IS NULL AND stage IN ("screened","interview","vetting","offer")
        AND updated_at < DATE_SUB(NOW(), INTERVAL 14 DAY)');
 if ($stalled) $add(TODAY, 'recruitment', "$stalled " . ($stalled === 1 ? 'candidate has' : 'candidates have') . ' not moved in two weeks',
     'Mid-pipeline and going cold. Progress or close them.', '/app/ats', $stalled);
@@ -111,25 +111,25 @@ if ($stalled) $add(TODAY, 'recruitment', "$stalled " . ($stalled === 1 ? 'candid
 // ---- Unfilled work ---------------------------------------------------------
 $openSoon = $scalar($conn,
     'SELECT COUNT(*) FROM shifts
-     WHERE status = "open" AND starts_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)');
+     WHERE deleted_at IS NULL AND status = "open" AND starts_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)');
 if ($openSoon) $add(URGENT, 'scheduling', "$openSoon unfilled " . ($openSoon === 1 ? 'shift starts' : 'shifts start') . ' within 3 days',
     'Nobody is assigned. These are the ones that become a phone call at 6am.', '/app/scheduling', $openSoon);
 
 // ---- Governance and operations --------------------------------------------
-$openIncidents = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE status IN ("open","investigating")');
+$openIncidents = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE deleted_at IS NULL AND status IN ("open","investigating")');
 if ($openIncidents) $add(TODAY, 'incidents', "$openIncidents open " . ($openIncidents === 1 ? 'incident' : 'incidents'),
     'Including anything flagged RIDDOR or safeguarding.', '/app/incidents', $openIncidents);
 
-$riddor = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE riddor = 1 AND status <> "closed"');
+$riddor = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE deleted_at IS NULL AND riddor = 1 AND status <> "closed"');
 if ($riddor) $add(URGENT, 'incidents', "$riddor RIDDOR-flagged " . ($riddor === 1 ? 'incident is' : 'incidents are') . ' still open',
     'These carry a reporting duty.', '/app/incidents', $riddor);
 
-$unapproved = $scalar($conn, 'SELECT COUNT(*) FROM timesheets WHERE status = "pending"');
+$unapproved = $scalar($conn, 'SELECT COUNT(*) FROM timesheets WHERE deleted_at IS NULL AND status = "pending"');
 if ($unapproved) $add(TODAY, 'payroll', "$unapproved " . ($unapproved === 1 ? 'timesheet is' : 'timesheets are') . ' awaiting approval',
     'Unapproved hours do not reach a pay run.', '/app/timesheets', $unapproved);
 
 $overdue = $scalar($conn,
-    'SELECT COUNT(*) FROM invoices WHERE status IN ("sent","overdue") AND due_date IS NOT NULL AND due_date < CURDATE()');
+    'SELECT COUNT(*) FROM invoices WHERE deleted_at IS NULL AND status IN ("sent","overdue") AND due_date IS NOT NULL AND due_date < CURDATE()');
 if ($overdue) $add(TODAY, 'invoicing', "$overdue overdue " . ($overdue === 1 ? 'invoice' : 'invoices'),
     'Past their due date and unpaid.', '/app/invoicing', $overdue);
 

@@ -65,7 +65,7 @@ $user = require_auth($conn);
 
 if (method() === 'GET' && isset($_GET['id'])) {
     $id = (int) $_GET['id'];
-    $stmt = $conn->prepare('SELECT * FROM applicants WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT * FROM applicants WHERE id = ? AND deleted_at IS NULL LIMIT 1');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $app = $stmt->get_result()->fetch_assoc();
@@ -89,7 +89,7 @@ if (method() === 'GET' && isset($_GET['id'])) {
 if (method() === 'GET') {
     $res = $conn->query(
         'SELECT id, name, email, phone, role_applied, division, stage, source, worker_id, created_at
-         FROM applicants ORDER BY created_at DESC LIMIT 500'
+         FROM applicants WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 500'
     );
     $items = [];
     while ($row = $res->fetch_assoc()) {
@@ -148,7 +148,7 @@ if ($action === 'onboard' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('An applicant is required.');
-    $stmt = $conn->prepare('SELECT * FROM applicants WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT * FROM applicants WHERE id = ? AND deleted_at IS NULL LIMIT 1');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $app = $stmt->get_result()->fetch_assoc();

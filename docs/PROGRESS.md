@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`####################....`  122 done · 14 partial · 19 to do · 155 tracked
+`#####################...`  130 done · 14 partial · 14 to do · 158 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,25 +17,25 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `#########...` | 9 | 3 | 2 |
-| FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
+| PLATFORM — Engineering platform | 0 | `##########..` | 10 | 3 | 1 |
+| FOUNDATION — Foundation and person spine | 1 | `##########..` | 14 | 1 | 2 |
 | COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
-| OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
+| OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `#######.....` | 7 | 2 | 4 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `#########...` | 11 | 2 | 3 |
 | PWA — Progressive web app | 9 | `###########.` | 8 | 0 | 1 |
-| REPORTING — Reporting and insight | 9 | `#########...` | 6 | 0 | 2 |
+| REPORTING — Reporting and insight | 9 | `##########..` | 7 | 0 | 1 |
 
 ## Detail
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 9 done, 3 partial, 2 to do
+Milestone 0 · 10 done, 3 partial, 1 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -43,6 +43,7 @@ Milestone 0 · 9 done, 3 partial, 2 to do
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
+- [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
@@ -50,13 +51,13 @@ Milestone 0 · 9 done, 3 partial, 2 to do
 - [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
 - [~] Documentation pack — _Milestone 0, in progress_
 - [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
-- [ ] Prepared statements in dashboard.php — _division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way_
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 13 done, 1 partial, 3 to do
+Milestone 1 · 14 done, 1 partial, 2 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
+- [x] Extend soft delete to records that cascade — _Migration 013 adds deleted_at to applicants, invoices, incidents, timesheets and shifts, plus updated_at on timesheets and the missing index on shifts.client_id. Every list and count query now filters on it_
 - [x] Local development environment — _npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database_
 - [x] Local fixture data — _server/seed.php: staff logins per role, worker and client logins, 10 workers with a deliberate spread of valid, expiring, expired and missing-RTW compliance. CLI-only, local-host-only, --confirm required_
 - [x] Migration preconditions — _A migration can declare a query that must return 0 before it applies. The runner stops with the count and the remedy rather than failing mid-chain. Needed because a foreign key does not force linkage -- only NOT NULL does_
@@ -71,7 +72,6 @@ Milestone 1 · 13 done, 1 partial, 3 to do
 - [x] person_services (person x service) — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
 - [~] Soft delete on records that must not be lost — _present on most, missing on shifts, timesheets, incidents_
 - [ ] Constrain columns added by later ALTER passes — _ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php_
-- [ ] Extend soft delete to records that cascade — _11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at_
 - [ ] Replace the divisions CSV with a junction table — _clients.divisions is a comma-separated VARCHAR(120), so it cannot be joined, indexed or constrained. worker_skills already demonstrates the correct pattern in this schema_
 
 ### COMPLIANCE — Compliance engine and verification
@@ -112,18 +112,18 @@ Milestone 3 · 6 done, 0 partial, 0 to do
 
 ### OPERATIONS — Scheduling, assignments and field operations
 
-Milestone 4 · 9 done, 0 partial, 1 to do
+Milestone 4 · 10 done, 0 partial, 0 to do
 
 - [x] Blocked deployments are audited — _A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt_
 - [x] Clients, sites and rate cards
 - [x] Compliance guard on assignment — _Replaced the hard-coded DBS-for-care / SIA-for-security pair with the configured rule set. Every blocking requirement is named at once rather than one 409 at a time_
 - [x] Field events: clock in/out, check-in, panic, signature — _shift_events with lat/lng_
+- [x] Four-eyes approval on high-risk actions — _Enforced on deletion. The requester is blocked from deciding their own request, so a single determined person cannot walk it through_
 - [x] Shift broadcast with token acceptance — _shift_offers, SMS link, no login required_
 - [x] Shifts, templates and recurrence
 - [x] Single reusable deployment eligibility gate — _rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned_
 - [x] Smart matching on skills and availability
 - [x] Timesheets and pay rules
-- [ ] Four-eyes approval on high-risk actions
 
 ### IAM — Identity, access and permissions
 
@@ -161,7 +161,7 @@ Milestone 6 · 6 done, 3 partial, 1 to do
 - [x] Overlapping leave is refused — _Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash_
 - [x] Structured written-statement particulars — _employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF_
 - [~] Employment contract lifecycle — _employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not_
-- [~] Records have a retention policy — _retention_policies exists; nothing acts on it yet_
+- [~] Records have a retention policy — _retention_policies is editable through governance.php with the periods left NULL until the business sets them. The sweep that acts on them is still to build_
 - [~] Worker employment fields — _pay rate, pay type, holiday hours present; Acas particulars not structured_
 - [ ] Worker status derived from workflow events — _workers.status is set by hand_
 
@@ -210,18 +210,21 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 7 done, 2 partial, 4 to do
+Milestone 9 · 11 done, 2 partial, 3 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
+- [x] Archiving actually hides the record — _Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
 - [x] Consent log
 - [x] Database backup with rotation — _above the document root, 14-day prune_
+- [x] Deletion approval workflow — _server/governance.php. Staff request with a reason of at least 10 characters; somebody else approves. Four eyes enforced: the approver may not be the requester. Archive is the default disposition_
+- [x] Deletion requires approval — _Verified: an admin cannot approve their own request_
+- [x] Export data — _Logged with user, scope, purpose, record count and IP_
 - [x] Incidents with RIDDOR and safeguarding flags
 - [x] Integration failure surfaced — _Silent integrations and unmappable submissions both reach the Action Centre_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
 - [~] Retention engine — _retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built_
-- [ ] Deletion approval workflow
 - [ ] Restore testing
 - [ ] System health dashboard
 - [ ] Workflow rule engine
@@ -242,13 +245,13 @@ Milestone 9 · 8 done, 0 partial, 1 to do
 
 ### REPORTING — Reporting and insight
 
-Milestone 9 · 6 done, 0 partial, 2 to do
+Milestone 9 · 7 done, 0 partial, 1 to do
 
 - [x] Action Centre — _server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed_
 - [x] Analytics and margin reconciliation
 - [x] CSV and PDF export
 - [x] Command centre dashboard — _filterable by division_
+- [x] Export logging with user and purpose — _export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened_
 - [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
 - [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care_
-- [ ] Export logging with user and purpose
 - [ ] Staff workload view

@@ -70,8 +70,8 @@
         },
         {
           "name": "Extend soft delete to records that cascade",
-          "status": "todo",
-          "note": "11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at"
+          "status": "done",
+          "note": "Migration 013 adds deleted_at to applicants, invoices, incidents, timesheets and shifts, plus updated_at on timesheets and the missing index on shifts.client_id. Every list and count query now filters on it"
         },
         {
           "name": "Local fixture data",
@@ -409,7 +409,8 @@
         },
         {
           "name": "Four-eyes approval on high-risk actions",
-          "status": "todo"
+          "status": "done",
+          "note": "Enforced on deletion. The requester is blocked from deciding their own request, so a single determined person cannot walk it through"
         },
         {
           "name": "Blocked deployments are audited",
@@ -456,7 +457,7 @@
         {
           "name": "Records have a retention policy",
           "status": "partial",
-          "note": "retention_policies exists; nothing acts on it yet"
+          "note": "retention_policies is editable through governance.php with the periods left NULL until the business sets them. The sweep that acts on them is still to build"
         },
         {
           "name": "Leave and absence",
@@ -640,7 +641,8 @@
         },
         {
           "name": "Export logging with user and purpose",
-          "status": "todo"
+          "status": "done",
+          "note": "export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened"
         },
         {
           "name": "Fix the open-shifts dashboard tile",
@@ -688,7 +690,8 @@
         },
         {
           "name": "Deletion approval workflow",
-          "status": "todo"
+          "status": "done",
+          "note": "server/governance.php. Staff request with a reason of at least 10 characters; somebody else approves. Four eyes enforced: the approver may not be the requester. Archive is the default disposition"
         },
         {
           "name": "Workflow rule engine",
@@ -712,6 +715,21 @@
           "name": "Integration failure surfaced",
           "status": "done",
           "note": "Silent integrations and unmappable submissions both reach the Action Centre"
+        },
+        {
+          "name": "Deletion requires approval",
+          "status": "done",
+          "note": "Verified: an admin cannot approve their own request"
+        },
+        {
+          "name": "Export data",
+          "status": "done",
+          "note": "Logged with user, scope, purpose, record count and IP"
+        },
+        {
+          "name": "Archiving actually hides the record",
+          "status": "done",
+          "note": "Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive"
         }
       ]
     },
@@ -814,8 +832,8 @@
         },
         {
           "name": "Prepared statements in dashboard.php",
-          "status": "todo",
-          "note": "division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way"
+          "status": "done",
+          "note": "Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it"
         },
         {
           "name": "Typecheck actually enforces the strict config",

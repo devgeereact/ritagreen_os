@@ -19,7 +19,7 @@ if (method() === 'GET' && isset($_GET['id'])) {
          LEFT JOIN clients c ON c.id = i.client_id
          LEFT JOIN workers w ON w.id = i.worker_id
          LEFT JOIN users u ON u.id = i.reported_by
-         WHERE i.id = ? LIMIT 1'
+         WHERE i.id = ? AND i.deleted_at IS NULL LIMIT 1'
     );
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -49,6 +49,7 @@ if (method() === 'GET') {
          FROM incidents i
          LEFT JOIN clients c ON c.id = i.client_id
          LEFT JOIN workers w ON w.id = i.worker_id
+         WHERE i.deleted_at IS NULL
          ORDER BY FIELD(i.severity,"critical","high","medium","low"), i.created_at DESC
          LIMIT 400'
     );

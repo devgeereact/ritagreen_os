@@ -633,6 +633,50 @@ one person and one applicant and reports the unmapped question; the same respons
 returns `duplicate: true` without creating a second application; a submission missing a required
 answer fails with the question named, and its payload is retained.
 
+### Added — deletion approval, export logging, retention settings
+
+Two gaps with the same shape: an action that removes or copies personal data left no trace of
+who decided it was alright.
+
+**Nobody deletes an employment record on their own say so.** `server/governance.php` gives
+ordinary staff *request deletion*, not *delete*. A reason of at least 10 characters is
+required — a request nobody can explain later is not one an approver can sensibly decide on —
+and **the approver may not be the requester**. Verified: an admin attempting to approve their
+own request is refused. Archive is the default disposition, and the label of what was removed
+is captured at request time, because the record may be gone by the time anybody reads it.
+
+**Every export of personal data is logged** — user, type, format, record count, scope, purpose
+and IP. Exports are built in the browser from data already fetched, so a client call is the
+only point at which the server can know one happened. Where a spreadsheet goes after it leaves
+is outside this system's control, which is precisely the reason to record that it left.
+
+**Retention periods are editable and start NULL**, deliberately. The values belong to the
+business and its legal advice, and NULL is distinct from zero so a dashboard can say "no policy
+set" rather than implying immediate deletion.
+
+### Fixed — archiving now actually archives
+
+The deletion workflow could not archive an applicant: `applicants` had no `deleted_at`, leaving
+a hard `DELETE` as the only option, which is exactly backwards. Migration 013 adds `deleted_at`
+to `applicants`, `invoices`, `incidents`, `timesheets` and `shifts` — five tables where a
+removed row destroys a recruitment decision, a financial record, a statutory report, pay
+evidence or a worked shift, and three of which cascade to child rows.
+
+It also adds `updated_at` to `timesheets`, which had neither, so an approved timesheet could be
+altered with no trace of when; and the index on `shifts.client_id`, which `scheduling.php` joins
+on and which had neither a key nor a foreign key while `shift_templates.client_id` in the same
+build pass had both.
+
+Every list and count query for those tables now filters on `deleted_at`. An archive that leaves
+the row visible is not an archive.
+
+### Fixed — the dashboard binds its parameters
+
+`server/dashboard.php` interpolated the division filter with `real_escape_string`. The value was
+already checked against an allowlist so it was not injectable — but the guarantee depended on
+remembering that check, and the next person adding a filter had a pattern to copy that did not
+carry it. Every division filter is now bound. Verified across all four divisions.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook
