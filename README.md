@@ -50,7 +50,10 @@ npm install
 mysql -u root -e "CREATE DATABASE ritagreen_os_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 mysql -u root ritagreen_os_dev < server/schema.sql
 cp server/config.local.php.example server/config.php   # edit if your MySQL user differs
+php server/migrate.php --go            # applies 001-003, stops at 004
 npm run seed -- --confirm
+php server/backfill-people.php --go    # creates people, links every record
+php server/migrate.php --go            # 004 now passes its precondition
 
 # Every day: two terminals
 npm run dev:api    # PHP API on 127.0.0.1:8122

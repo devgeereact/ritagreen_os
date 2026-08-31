@@ -358,25 +358,66 @@ function rg_person_match_key(array $row): array
 /**
  * Group source records into candidate people.
  *
- * Records that share a match key are the same person. Records with no key are
- * returned separately for human review rather than guessed at — a wrong merge
- * of two employment histories is far harder to undo than an unmerged duplicate.
+ * Two things join records together, and both must be honoured:
  *
- * @param array<int,array> $rows each needing at least: source, id, name, email, phone
+ *  1. An EXPLICIT link the database already records — users.worker_id and
+ *     applicants.worker_id. That is a fact somebody entered, not a guess, and it
+ *     outranks any heuristic. Supply it as `link_key` on the row.
+ *  2. A shared match key — email, else phone. See rg_person_match_key().
+ *
+ * These are unioned rather than applied in sequence, because a record can be
+ * joined to one group by its link and to another by its email, and those two
+ * groups are then the same person. A first version of this matched only on
+ * email and phone, and split a worker from their own login.
+ *
+ * Records with neither a link nor a key are returned separately, to become one
+ * person each rather than be guessed at — a wrong merge of two employment
+ * histories is far harder to undo than an unmerged duplicate.
+ *
+ * @param array<int,array> $rows each needing: source, id, name, email, phone, and
+ *                               optionally link_key
  * @return array{groups: array<string,array<int,array>>, unmatchable: array<int,array>}
  */
 function rg_group_people(array $rows): array
 {
-    $groups = [];
+    // Union-find over the keys each row carries.
+    $parent = [];
+    $find = static function (string $x) use (&$parent, &$find): string {
+        while (($parent[$x] ?? $x) !== $x) {
+            $parent[$x] = $parent[$parent[$x]] ?? $parent[$x];
+            $x = $parent[$x];
+        }
+        return $x;
+    };
+    $union = static function (string $a, string $b) use (&$parent, $find): void {
+        $ra = $find($a);
+        $rb = $find($b);
+        if ($ra !== $rb) $parent[$ra] = $rb;
+    };
+
+    $keyed = [];
     $unmatchable = [];
 
     foreach ($rows as $row) {
+        $keys = [];
+        if (!empty($row['link_key'])) $keys[] = (string) $row['link_key'];
         $match = rg_person_match_key($row);
-        if ($match['key'] === null) {
+        if ($match['key'] !== null) $keys[] = $match['key'];
+
+        if (!$keys) {
             $unmatchable[] = $row;
             continue;
         }
-        $groups[$match['key']][] = $row;
+
+        foreach ($keys as $k) $parent[$k] = $parent[$k] ?? $k;
+        for ($i = 1, $n = count($keys); $i < $n; $i++) $union($keys[0], $keys[$i]);
+
+        $keyed[] = ['row' => $row, 'key' => $keys[0]];
+    }
+
+    $groups = [];
+    foreach ($keyed as $entry) {
+        $groups[$find($entry['key'])][] = $entry['row'];
     }
 
     return ['groups' => $groups, 'unmatchable' => $unmatchable];

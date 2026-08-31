@@ -250,10 +250,28 @@ The runner is deliberately awkward to misuse:
 The migrations use MariaDB's `ADD COLUMN IF NOT EXISTS` and `ADD KEY IF NOT EXISTS`, matching
 the existing `schema.sql` and the host. They are not portable to stock MySQL 8.
 
-**Ordering matters for the person spine.** 001 adds the tables and the nullable `person_id`
-columns; the backfill populates them; 002 then adds the foreign keys, which would fail while
-any `person_id` is unresolved. That is the safety property, not an inconvenience: an ambiguous
-match left unresolved blocks 002 rather than being silently guessed at.
+**A migration may declare a precondition** — a query that must return 0 before it is safe to
+apply — with `-- @precondition:` and `-- @precondition-message:` in its header. The runner
+evaluates it and stops with the count and the remedy rather than failing mid-chain.
+
+**Ordering for the person spine**, which the precondition mechanism exists to enforce:
+
+```
+schema.sql                       the baseline
+  ↓
+migrate.php --go                 applies 001–003, stops at 004
+  ↓
+backfill-people.php --go         creates people, links every record
+  ↓
+migrate.php --go                 004 now passes its precondition and applies
+```
+
+A foreign key does **not** force every row to be linked — it constrains non-NULL values only,
+so unlinked rows pass straight through 002. This was assumed otherwise and corrected after
+testing it: 002 applies cleanly with an unlinked row present. **Migration 004 is what requires
+the link**, by making `person_id NOT NULL`, and it sets `STRICT_ALL_TABLES` itself so the
+behaviour does not depend on the server's `sql_mode` — without strict mode MySQL would coerce
+every unlinked `person_id` to 0 and leave the spine quietly wrong instead of loudly unfinished.
 
 ## 8. Configuration
 

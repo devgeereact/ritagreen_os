@@ -1536,13 +1536,18 @@ legal in MySQL, where index names are per-table, but it makes any global
 
 ---
 
-# Pending schema — written, not yet applied
+# Migrations — applied and verified locally
 
-Everything below exists in `server/migrations/` and has **not been executed against any
-database**. No local MySQL was available when it was written. Treat this section as a design
-record until `php server/migrate.php --status` reports it applied.
+Everything below lives in `server/migrations/`. It has been **applied to a real MariaDB
+database and verified end to end**: schema imported, migrations applied, fixtures seeded,
+backfill run, the API exercised against the result.
 
-Apply with `php server/migrate.php` (dry run) then `--go`. See `docs/ARCHITECTURE.md` §7a.
+What was verified: 22 people created from 23 source records with no duplicates; the UNIQUE
+`match_key` genuinely refuses a second person with the same identity (error 1062); migration
+004's precondition genuinely blocks on an unlinked row and reports the count.
+
+It has **not** been applied to production. Apply with `php server/migrate.php` (dry run) then
+`--go`. See `docs/ARCHITECTURE.md` §7a for the ordering.
 
 ## `people` — migration 001
 
@@ -1591,10 +1596,26 @@ ever being employed.
 ## Foreign keys — migration 002
 
 `fk_workers_person`, `fk_applicants_person`, `fk_users_person`, `fk_enrolments_person`, all
-`ON DELETE RESTRICT`. Split from 001 deliberately: a foreign key fails if any row holds an
-unresolved value, so an ambiguous match left unresolved **blocks this migration** rather than
-being silently guessed at. RESTRICT rather than CASCADE because removing a person goes through
-the deletion-approval workflow, never a cascade that takes their employment history with it.
+`ON DELETE RESTRICT` — because removing a person goes through the deletion-approval workflow,
+never a cascade that takes their employment history with it.
+
+**A foreign key does not force every row to be linked.** It constrains non-NULL values only, so
+unlinked rows pass through it untouched. This was assumed otherwise and corrected after testing:
+002 applied cleanly with an unlinked row present.
+
+## Requiring the link — migration 004
+
+`person_id` becomes `NOT NULL` on `workers`, `applicants` and `users`. This is the migration
+that actually enforces the spine, and it carries a precondition the runner checks first, so it
+stops with a count and a remedy rather than failing mid-chain.
+
+It sets `STRICT_ALL_TABLES` for its own session rather than trusting the server's `sql_mode`:
+without strict mode MySQL coerces every unlinked `person_id` to 0, leaving the spine quietly
+wrong instead of loudly unfinished.
+
+`enrolments` is deliberately excluded — it carries only a `learner_name`, with no email or
+phone to match on, so those rows are linked by hand as the Academy module is rebuilt. Forcing
+`NOT NULL` there would mean inventing links.
 
 ## `compliance_requirements` — migration 003
 

@@ -74,7 +74,6 @@ export default defineConfig({
             "@fullcalendar/interaction",
             "@fullcalendar/react",
           ],
-          editor: ["@tiptap/react", "@tiptap/starter-kit"],
           pdf: ["jspdf", "jspdf-autotable"],
         },
       },

@@ -1,9 +1,13 @@
 -- 002 — constrain the person links.
 --
--- Split from 001 deliberately. Adding a foreign key fails if any existing row
--- holds a value that does not resolve, so these must not run until the backfill
--- has populated person_id and its review list has been cleared. Running 001,
--- then the backfill, then this, is the safe order.
+-- Split from 001 deliberately, so the constraints can be added once the person
+-- rows exist.
+--
+-- NOTE, verified against a real database: a foreign key does NOT force every row
+-- to be linked. It constrains non-NULL values only, so rows with person_id NULL
+-- pass straight through it. This migration applied cleanly with an unlinked row
+-- present. Migration 004 is what actually requires the link, by making the
+-- column NOT NULL, and it carries a precondition the runner checks first.
 --
 -- ON DELETE RESTRICT throughout: a person with an employment record, an
 -- application or a training history attached must not be deletable out from

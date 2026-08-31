@@ -20,18 +20,18 @@
         },
         {
           "name": "people table as the single identity",
-          "status": "partial",
-          "note": "migrations/001_people_spine.sql. WRITTEN, NOT YET APPLIED \u2014 no local MySQL was available to run it against. Must be applied to a seeded local database and verified before it goes near production"
+          "status": "done",
+          "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
         },
         {
           "name": "person_services (person x service)",
-          "status": "partial",
-          "note": "migrations/001_people_spine.sql. WRITTEN, NOT YET APPLIED \u2014 no local MySQL was available to run it against. Must be applied to a seeded local database and verified before it goes near production"
+          "status": "done",
+          "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
         },
         {
           "name": "Person de-duplication migration",
-          "status": "partial",
-          "note": "server/backfill-people.php, dry run by default. Matching logic is pure and tested (34 assertions); the script itself is written, not yet applied \u2014 no local mysql was available to run it against. must be applied to a seeded local database and verified before it goes near production"
+          "status": "done",
+          "note": "server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)"
         },
         {
           "name": "Payroll number generator",
@@ -46,7 +46,7 @@
         {
           "name": "Local development environment",
           "status": "done",
-          "note": "npm run dev:api serves the PHP tier locally; the Vite proxy defaults there and warns when overridden to production. config.local.php.example disables every outbound integration. server/seed.php provides fixtures. A local MySQL must still be installed by the developer"
+          "note": "npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database"
         },
         {
           "name": "Atomic document-number sequences",
@@ -85,8 +85,13 @@
         },
         {
           "name": "Migrations verified against a database",
-          "status": "todo",
-          "note": "BLOCKING for Milestone 1. 001, 002, 003 and the backfill are written but have never been executed \u2014 no local MySQL was available. Install one, apply to a seeded database, confirm the verification output, then production"
+          "status": "done",
+          "note": "Full chain run from scratch against MariaDB 12.3. Migration 004's precondition verified to block on an unlinked row and report the count"
+        },
+        {
+          "name": "Migration preconditions",
+          "status": "done",
+          "note": "A migration can declare a query that must return 0 before it applies. The runner stops with the count and the remedy rather than failing mid-chain. Needed because a foreign key does not force linkage -- only NOT NULL does"
         }
       ]
     },
@@ -264,13 +269,13 @@
         },
         {
           "name": "Requirement catalogue",
-          "status": "partial",
-          "note": "migrations/003_compliance_rules.sql seeds 13 requirements. WRITTEN, NOT YET APPLIED \u2014 no local MySQL was available to run it against. Must be applied to a seeded local database and verified before it goes near production"
+          "status": "done",
+          "note": "migrations/003 seeds 13 requirements. Applied and verified"
         },
         {
           "name": "Configurable rules (service x role x requirement)",
-          "status": "partial",
-          "note": "migrations/003_compliance_rules.sql. Seeded to reproduce what scheduling.php already enforces, so wiring changes no behaviour on day one. WRITTEN, NOT YET APPLIED \u2014 no local MySQL was available to run it against. Must be applied to a seeded local database and verified before it goes near production"
+          "status": "done",
+          "note": "migrations/003 seeds 26 rules across the four services, reproducing what scheduling.php enforces in code. Applied and verified"
         },
         {
           "name": "Mandatory / recommended / optional weighting",

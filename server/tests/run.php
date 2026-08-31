@@ -381,6 +381,33 @@ $viaPhone = rg_group_people([
 ]);
 check('phone matching collapses one person', count($viaPhone['groups']), 1);
 
+// Explicit links outrank heuristics, and combine with them.
+// users.worker_id is a fact somebody entered; matching must not ignore it.
+$linked = rg_group_people([
+    ['source' => 'workers', 'id' => 9, 'name' => 'Amara Chen', 'email' => 'a@learner.invalid', 'phone' => null, 'link_key' => 'w:9'],
+    ['source' => 'users',   'id' => 3, 'name' => 'Amara Chen', 'email' => 'a@learner.invalid', 'phone' => null, 'link_key' => 'w:9'],
+]);
+check('an explicit link joins records with no usable key', count($linked['groups']), 1);
+check('and keeps both', count(reset($linked['groups'])), 2);
+
+// A record joined to one group by its link and to another by its email means
+// those two groups are one person. Applying the rules in sequence rather than
+// unioning them would leave the worker split from their own login.
+$transitive = rg_group_people([
+    ['source' => 'workers',    'id' => 9, 'name' => 'Amara Chen', 'email' => null,            'phone' => '07700900101', 'link_key' => 'w:9'],
+    ['source' => 'users',      'id' => 3, 'name' => 'Amara Chen', 'email' => 'a@example.com', 'phone' => null,          'link_key' => 'w:9'],
+    ['source' => 'applicants', 'id' => 5, 'name' => 'Amara Chen', 'email' => 'a@example.com', 'phone' => null],
+]);
+check('link and email union into one person', count($transitive['groups']), 1);
+check('carrying all three records', count(reset($transitive['groups'])), 3);
+
+// Distinct people must stay distinct even when links are present.
+$distinct = rg_group_people([
+    ['source' => 'workers', 'id' => 1, 'name' => 'A', 'email' => 'a@example.com', 'phone' => null, 'link_key' => 'w:1'],
+    ['source' => 'workers', 'id' => 2, 'name' => 'B', 'email' => 'b@example.com', 'phone' => null, 'link_key' => 'w:2'],
+]);
+check('separate links stay separate', count($distinct['groups']), 2);
+
 // ---------------------------------------------------------------------------
 group('rg_group_is_ambiguous');
 

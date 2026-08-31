@@ -53,15 +53,24 @@ if ($go && !$isLocal) {
 // ---- Gather every record that describes a human --------------------------
 $rows = [];
 
-$res = $conn->query('SELECT id, name, email, phone, person_id FROM workers WHERE deleted_at IS NULL');
-while ($r = $res->fetch_assoc()) $rows[] = $r + ['source' => 'workers'];
+// link_key carries the joins the database ALREADY records — users.worker_id and
+// applicants.worker_id. Those are facts somebody entered, and they outrank any
+// email or phone heuristic. Without them the backfill splits a worker from their
+// own login, which is what the first run of this script actually did.
+$res = $conn->query('SELECT id, name, email, phone, person_id FROM workers');
+while ($r = $res->fetch_assoc()) $rows[] = $r + ['source' => 'workers', 'link_key' => 'w:' . $r['id']];
 
-$res = $conn->query('SELECT id, name, email, phone, person_id FROM applicants');
-while ($r = $res->fetch_assoc()) $rows[] = $r + ['source' => 'applicants'];
+$res = $conn->query('SELECT id, name, email, phone, worker_id, person_id FROM applicants');
+while ($r = $res->fetch_assoc()) {
+    $rows[] = $r + ['source' => 'applicants', 'link_key' => $r['worker_id'] ? 'w:' . $r['worker_id'] : null];
+}
 
-$res = $conn->query('SELECT id, name, email, NULL AS phone, person_id FROM users WHERE deleted_at IS NULL');
-while ($r = $res->fetch_assoc()) $rows[] = $r + ['source' => 'users'];
+$res = $conn->query('SELECT id, name, email, NULL AS phone, worker_id, person_id FROM users');
+while ($r = $res->fetch_assoc()) {
+    $rows[] = $r + ['source' => 'users', 'link_key' => $r['worker_id'] ? 'w:' . $r['worker_id'] : null];
+}
 
+$explicit = count(array_filter($rows, static fn($r) => !empty($r['link_key']) && $r['source'] !== 'workers'));
 echo "Source records: " . count($rows) . "\n";
 foreach (['workers', 'applicants', 'users'] as $src) {
     $n = count(array_filter($rows, static fn($r) => $r['source'] === $src));
@@ -92,6 +101,7 @@ echo sprintf("  %-34s %d\n", "records that collapse into one", array_sum(array_m
 echo sprintf("  %-34s %d\n", "  across this many people", count($merges));
 echo sprintf("  %-34s %d\n", "no email or phone, kept separate", count($unmatchable));
 echo sprintf("  %-34s %d\n", "AMBIGUOUS, needs a human", count($ambiguous));
+echo sprintf("  %-34s %d\n", "joined by an existing worker_id link", $explicit);
 echo sprintf("  %-34s %d\n", "enrolments needing manual linking", $orphanEnrolments);
 echo "\n";
 
@@ -175,10 +185,11 @@ if ($ambiguous) {
 
 // ---- Verify --------------------------------------------------------------
 echo "\nVerification\n";
+// Soft-deleted rows are included deliberately: their history is retained, and an
+// unlinked row would block the NOT NULL migration that enforces the spine.
 foreach (['workers', 'applicants', 'users'] as $table) {
-    $where = in_array($table, ['workers', 'users'], true) ? ' AND deleted_at IS NULL' : '';
-    $unlinked = (int) $conn->query("SELECT COUNT(*) FROM $table WHERE person_id IS NULL$where")->fetch_row()[0];
-    echo sprintf("  %-12s %s\n", $table, $unlinked === 0 ? 'all linked' : "$unlinked still unlinked");
+    $unlinked = (int) $conn->query("SELECT COUNT(*) FROM $table WHERE person_id IS NULL")->fetch_row()[0];
+    echo sprintf("  %-12s %s\n", $table, $unlinked === 0 ? 'all linked, including soft-deleted' : "$unlinked still unlinked");
 }
 $dupes = (int) $conn->query(
     'SELECT COUNT(*) FROM (SELECT match_key FROM people WHERE match_key IS NOT NULL

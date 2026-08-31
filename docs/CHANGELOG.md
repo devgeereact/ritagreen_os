@@ -211,11 +211,31 @@ fragments. The full detail now goes to `error_log` with a short reference; the c
 reference alone, so a user can quote it in a support request without ever having seen the
 underlying error. `GK_DEBUG` still returns the detail locally.
 
-### Added — the person spine, written but not yet applied
+### Added — the person spine, applied and verified locally
 
-> **These migrations have never been executed against a database.** No local MySQL was
-> available. The logic they depend on is verified; the SQL is not. Apply to a seeded local
-> database and read the verification output before this goes anywhere near production.
+> Applied to a real MariaDB and verified end to end — schema, migrations, fixtures, backfill,
+> and the API exercised against the result. **Not yet applied to production.**
+
+Running it found three things that reading it did not:
+
+1. **A foreign key does not force a row to be linked.** Migration 002 was written on the
+   assumption that it would block on an unresolved match. It does not — a foreign key
+   constrains non-NULL values only, and 002 applied cleanly with an unlinked row present. The
+   claim was corrected in the migration, `ARCHITECTURE.md` and `SCHEMA.md`, and migration 004
+   added: `person_id NOT NULL` is what actually requires the link.
+2. **The backfill ignored links the database already recorded.** `users.worker_id` and
+   `applicants.worker_id` are facts somebody entered, and matching on email and phone alone
+   split a worker from their own login. `rg_group_people()` now unions explicit links with
+   matched keys, which also handles the transitive case where a record joins one group by its
+   link and another by its email.
+3. **004 depended on the server's `sql_mode`.** Without `STRICT_TRANS_TABLES` MySQL coerces an
+   unlinked `person_id` to 0 rather than failing, leaving the spine quietly wrong instead of
+   loudly unfinished. It now sets `STRICT_ALL_TABLES` for its own session.
+
+Verified: 22 people from 23 source records with no duplicates; the UNIQUE `match_key` refuses a
+second person with the same identity (error 1062); 004's precondition blocks on an unlinked row
+and reports the count; the API answers correctly against the migrated database, with all four
+access restrictions returning 403 and 401 as intended.
 
 - **`server/migrate.php`** — a migration runner. `server/schema.sql` stays the from-scratch
   baseline; everything after it is a numbered file applied in order and recorded with a

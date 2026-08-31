@@ -48,15 +48,21 @@ must be installed on the developer's machine. Everything else is in the reposito
 
 **Goal:** one human, one record, forever. Unblocks everything after it.
 
-**Status: written, not yet applied.** `server/migrate.php`, `migrations/001_people_spine.sql`,
-`migrations/002_people_foreign_keys.sql` and `server/backfill-people.php` all exist. **None has
-been executed against a database**, because no local MySQL was available. The matching logic
-they depend on *is* verified — it is pure, and covered by 34 assertions in
-`server/tests/run.php`.
+**Status: applied and verified locally. Not yet applied to production.**
 
-Before this milestone can be called done: install a local MySQL, apply the migrations to a
-seeded database, run the backfill dry run, read its review list, apply it, and confirm the
-verification output shows every record linked and no match key mapping to two people.
+The full chain runs from scratch against MariaDB: schema imported, migrations 001–003 applied,
+fixtures seeded, backfill run, 004 applied once its precondition passes. Verified: 22 people
+from 23 source records with no duplicates; the UNIQUE `match_key` refuses a second person with
+the same identity; 004's precondition blocks on an unlinked row and reports the count; and the
+API answers correctly against the migrated database, including all four access restrictions.
+
+Remaining before this milestone is complete:
+
+- Rewrite `ats.php` `onboard` and `from_learner` to link rather than copy
+- Assign payroll numbers to existing active workers
+- The unified person profile in the interface, replacing the separate applicant and worker views
+- Link `enrolments` by hand as the Academy module is rebuilt — they carry only a learner name
+- Apply to production, after a restore-tested backup
 
 - `server/migrations/` established, numbered and applied in order
 - `people` table — the identity

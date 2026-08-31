@@ -52,13 +52,21 @@ Reaching production needs an explicit `RG_API_TARGET` and prints a warning. It u
 default, which meant every developer was one query away from editing live workforce records.
 **Never run a migration against anything but a local database.**
 
-**The schema is not migrations.** `server/schema.sql` is one re-runnable file organised in
-"build passes", where later `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier
-`CREATE TABLE` statements *in the same file*. To know a table's real shape you must read its
-`CREATE` **and** every later `ALTER` against it. New work goes in numbered migrations.
+**Two schema mechanisms, and you need both.** `server/schema.sql` is the from-scratch baseline
+— one re-runnable file organised in "build passes", where later
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier `CREATE TABLE` statements *in
+the same file*, so a table's real shape is its `CREATE` **plus** every later `ALTER`.
+Everything new goes in `server/migrations/NNN_name.sql`, applied by `php server/migrate.php`.
+Dry run is the default; a non-local database needs `--production` and a typed database name.
 
-**A person can exist three times.** `server/ats.php` copies identity fields rather than
-linking. Never add another path that does this. See `docs/BLUEPRINT.md`, "The identity defect".
+**A foreign key does not force a row to be linked** — it constrains non-NULL values only. Only
+`NOT NULL` does. That was assumed otherwise here and corrected after testing it against a real
+database; see migration 004 and its precondition.
+
+**A person can exist three times — `ats.php` still does this.** It copies identity fields
+rather than linking. The `people` spine now exists and every record is linked to it, but
+`ats.php` `onboard` and `from_learner` have not been rewritten yet. Never add another path that
+copies. See `docs/BLUEPRINT.md`, "The identity defect".
 
 **PHP is deployed by hand.** `.github/workflows/deploy.yml` uploads `dist/` only and explicitly
 excludes `*.php`, `config.php` and `.htaccess`. Never add `dangerous-clean-slate` — it would

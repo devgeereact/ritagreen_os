@@ -111,8 +111,38 @@ if (!$isLocal) {
 }
 
 foreach ($pending as $m) {
-    echo "Applying {$m['name']}… ";
     $sql = (string) file_get_contents($m['path']);
+
+    // A migration may declare a precondition: a query that must return 0 before
+    // it is safe to apply. The person spine cannot be made NOT NULL until the
+    // backfill has linked every record, and checking that is better than either
+    // failing mid-chain or nagging on every run with no idea whether the step
+    // was done.
+    //
+    //   -- @precondition: SELECT COUNT(*) FROM ... (may span continuation lines)
+    //   -- @precondition-message: what to do about it
+    if (preg_match('/^--\s*@precondition:\s*(.+?)(?=^--\s*@|\z)/ms', $sql, $pre)) {
+        $check = trim(preg_replace('/^\s*--\s?/m', '', $pre[1]));
+        $message = preg_match('/^--\s*@precondition-message:\s*(.+)$/m', $sql, $msg)
+            ? trim($msg[1])
+            : 'Precondition not met.';
+
+        $result = $conn->query($check);
+        if (!$result) {
+            echo "\nPrecondition check for {$m['name']} could not run:\n  {$conn->error}\n";
+            exit(1);
+        }
+        $outstanding = (int) $result->fetch_row()[0];
+        if ($outstanding !== 0) {
+            echo "\n{$m['name']} is not ready to apply.\n\n";
+            echo "  $message\n";
+            echo "  Outstanding: $outstanding\n\n";
+            echo "Earlier migrations have been applied and recorded. Re-run this once resolved.\n";
+            exit(2);
+        }
+    }
+
+    echo "Applying {$m['name']}… ";
 
     if (!$conn->multi_query($sql)) {
         echo "FAILED\n  {$conn->error}\n";
