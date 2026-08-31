@@ -232,6 +232,29 @@ Every existing table keeps working. `workers` stays, but stops being the person 
 the employment record. The de-duplicating migration matches existing rows by email, then by
 phone, and produces a review list for ambiguous matches rather than guessing.
 
+## 7a. Migrations
+
+`server/schema.sql` is the from-scratch baseline for a new database. Everything after it goes
+in `server/migrations/NNN_name.sql`, applied in order by `server/migrate.php` and recorded in a
+`schema_migrations` table with a checksum.
+
+The runner is deliberately awkward to misuse:
+
+- **Dry run is the default.** Applying takes `--go`.
+- **A non-local database additionally takes `--production` and a typed database name.** MySQL
+  DDL is not transactional: a migration that fails halfway leaves the schema halfway, and there
+  is no rollback to reach for.
+- **An applied migration that has since been edited is reported as drift.** Re-running it would
+  not reconcile the database, so the answer is a new migration.
+
+The migrations use MariaDB's `ADD COLUMN IF NOT EXISTS` and `ADD KEY IF NOT EXISTS`, matching
+the existing `schema.sql` and the host. They are not portable to stock MySQL 8.
+
+**Ordering matters for the person spine.** 001 adds the tables and the nullable `person_id`
+columns; the backfill populates them; 002 then adds the foreign keys, which would fail while
+any `person_id` is unresolved. That is the safety property, not an inconvenience: an ambiguous
+match left unresolved blocks 002 rather than being silently guessed at.
+
 ## 8. Configuration
 
 All server configuration is PHP constants in `server/config.php`, hand-placed on the server

@@ -22,8 +22,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| A person exists once | planned `people` table | planned | planned unified person profile | none |
-| A person may serve several services | planned `person_services` | planned | planned | none |
+| A person exists once | `people` (migration 001, unapplied) | `server/backfill-people.php` | planned | `server/tests/run.php` (matching) |
+| A person may serve several services | `person_services` (migration 001, unapplied) | planned | planned | none |
 | Candidate becomes worker without duplication | `applicants.worker_id` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Staff and workers authenticate | `users`, `tokens` | `server/auth.php` | `src/pages/auth/Login.tsx` | none |
 | Privileged accounts use 2FA | `user_2fa` | `server/auth.php` | `src/components/app/force-2fa.tsx` | none |
@@ -59,7 +59,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Evidence can be produced per worker | `files`, `certifications` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | References are checked | `worker_references` | `server/references.php` | `src/pages/app/Workers.tsx` | none |
 | Company insurance is current | `insurance` | `server/insurance.php` | `src/pages/app/Compliance.tsx` | none |
-| Requirements are configurable per service | planned `compliance_rules` | planned | planned rule builder | none |
+| Requirements are configurable per service | `compliance_rules` (migration 003, unapplied) | planned | planned rule builder | none |
 | Requirements carry a weight | planned | planned | planned | none |
 | Eligibility is calculated, with a reason | planned storage | `rg_evaluate_eligibility()` in `server/pure.php` | planned | `server/tests/run.php` |
 | Requirements carry a weight that decides blocking | planned storage | `server/pure.php` | planned | `server/tests/run.php` |
@@ -87,7 +87,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| Workers have a payroll number | planned | planned, on `next_seq()` in `server/lib.php` | planned | none |
+| Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied) | planned, on `next_seq()` in `server/lib.php` | planned | none |
 | Employment contracts have a lifecycle | planned | planned | planned | none |
 | Written-statement particulars are structured | planned | planned | planned | none |
 | Leave and absence are recorded | planned | planned | planned | none |
@@ -150,6 +150,6 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Deploys never disturb server files | — | `.github/workflows/deploy.yml` | — | none |
 | Development does not touch production | `server/config.local.php.example` | `npm run dev:api` | `vite.config.ts` proxy defaults local | none |
 | Fixtures exist without production data | `server/seed.php` | CLI | — | none |
-| Schema changes are ordered migrations | `server/schema.sql` is one re-runnable file | planned migrations directory | — | none |
+| Schema changes are ordered migrations | `server/schema.sql` is the baseline | `server/migrate.php` | — | none |
 | Errors do not leak internals | — | `server/lib.php` returns exception messages | — | none |
 | The app is installable and works offline | `public/manifest.webmanifest`, `public/sw.js` | — | `src/main.tsx` registers it | none |

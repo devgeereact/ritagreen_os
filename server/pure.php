@@ -290,3 +290,112 @@ function rg_eligibility_reason(array $verdict): string
     }
     return 'All requirements met.';
 }
+
+// ------------------------------------------------------------ person matching
+
+/**
+ * Email addresses the system generated rather than collected.
+ *
+ * ats.php fabricated `<name>@learner.invalid` when an Academy learner had no
+ * address. Those are not identities and must never be used to match two records
+ * together — every learner without an email would otherwise collide on a name.
+ */
+const RG_SYNTHETIC_EMAIL_DOMAINS = ['learner.invalid', 'example.invalid', 'local.invalid'];
+
+/** Lowercased, trimmed email, or null when it is absent or system-generated. */
+function rg_normalise_email(?string $email): ?string
+{
+    if (!$email) return null;
+    $e = strtolower(trim($email));
+    if ($e === '' || !str_contains($e, '@')) return null;
+    $domain = substr($e, strrpos($e, '@') + 1);
+    if (in_array($domain, RG_SYNTHETIC_EMAIL_DOMAINS, true)) return null;
+    return $e;
+}
+
+/**
+ * A phone number reduced to a comparable form, for matching only.
+ *
+ * Deliberately not E.164: normalise_phone() in lib.php produces a number to
+ * dial, this produces a key to compare. '07700 900123', '+447700900123' and
+ * '00447700900123' are one person and must collapse to one key.
+ *
+ * Returns null for anything too short to identify somebody.
+ */
+function rg_phone_key(?string $phone): ?string
+{
+    if (!$phone) return null;
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if ($digits === '') return null;
+    if (str_starts_with($digits, '00')) $digits = substr($digits, 2);       // 0044…
+    if (str_starts_with($digits, '44')) $digits = '0' . substr($digits, 2); // 44…  -> 0…
+    // A UK mobile or landline is 11 digits with the leading zero. Anything
+    // shorter than 7 is an extension or a fragment, not an identity.
+    return strlen($digits) >= 7 ? $digits : null;
+}
+
+/**
+ * The key used to decide that two records describe the same human.
+ *
+ * Email first, because it is the strongest signal we hold; phone second. A
+ * record with neither cannot be matched automatically and must be reviewed by a
+ * person — never merged on a name, which would collapse every John Smith into
+ * one worker.
+ *
+ * @return array{key: ?string, basis: string} basis ∈ email | phone | none
+ */
+function rg_person_match_key(array $row): array
+{
+    $email = rg_normalise_email($row['email'] ?? null);
+    if ($email !== null) return ['key' => 'e:' . $email, 'basis' => 'email'];
+
+    $phone = rg_phone_key($row['phone'] ?? null);
+    if ($phone !== null) return ['key' => 'p:' . $phone, 'basis' => 'phone'];
+
+    return ['key' => null, 'basis' => 'none'];
+}
+
+/**
+ * Group source records into candidate people.
+ *
+ * Records that share a match key are the same person. Records with no key are
+ * returned separately for human review rather than guessed at — a wrong merge
+ * of two employment histories is far harder to undo than an unmerged duplicate.
+ *
+ * @param array<int,array> $rows each needing at least: source, id, name, email, phone
+ * @return array{groups: array<string,array<int,array>>, unmatchable: array<int,array>}
+ */
+function rg_group_people(array $rows): array
+{
+    $groups = [];
+    $unmatchable = [];
+
+    foreach ($rows as $row) {
+        $match = rg_person_match_key($row);
+        if ($match['key'] === null) {
+            $unmatchable[] = $row;
+            continue;
+        }
+        $groups[$match['key']][] = $row;
+    }
+
+    return ['groups' => $groups, 'unmatchable' => $unmatchable];
+}
+
+/**
+ * Do the records in a group agree on who this is?
+ *
+ * Sharing a phone number is not proof: a couple, or a household, may share a
+ * landline. When the names in a group disagree, the group is flagged for review
+ * instead of being merged.
+ */
+function rg_group_is_ambiguous(array $group): bool
+{
+    if (count($group) < 2) return false;
+    $names = [];
+    foreach ($group as $row) {
+        $n = strtolower(trim(preg_replace('/\s+/', ' ', (string) ($row['name'] ?? ''))));
+        if ($n !== '') $names[$n] = true;
+    }
+    return count($names) > 1;
+}

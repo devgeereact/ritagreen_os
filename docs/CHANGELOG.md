@@ -211,6 +211,54 @@ fragments. The full detail now goes to `error_log` with a short reference; the c
 reference alone, so a user can quote it in a support request without ever having seen the
 underlying error. `GK_DEBUG` still returns the detail locally.
 
+### Added — the person spine, written but not yet applied
+
+> **These migrations have never been executed against a database.** No local MySQL was
+> available. The logic they depend on is verified; the SQL is not. Apply to a seeded local
+> database and read the verification output before this goes anywhere near production.
+
+- **`server/migrate.php`** — a migration runner. `server/schema.sql` stays the from-scratch
+  baseline; everything after it is a numbered file applied in order and recorded with a
+  checksum. Dry run is the default; applying takes `--go`; a non-local database additionally
+  takes `--production` and a typed database name, because MySQL DDL is not transactional and a
+  migration that fails halfway leaves the schema halfway. An applied migration that has since
+  been edited is reported as drift, because re-running it would not reconcile anything
+- **`migrations/001_people_spine.sql`** — `people`, `person_services`, nullable `person_id` on
+  `workers`/`applicants`/`users`/`enrolments`, and `workers.payroll_no`. It only *adds*: no
+  column is dropped or renamed, so the application keeps working unchanged while the endpoints
+  move over one at a time. `people.match_key` is UNIQUE, so the database itself refuses a second
+  person with the same identity — the guarantee the old copy-on-onboard behaviour could not make
+- **`migrations/002_people_foreign_keys.sql`** — split from 001 on purpose. A foreign key fails
+  if any row holds an unresolved value, so an ambiguous match left unresolved *blocks* this
+  migration rather than being silently guessed at. `ON DELETE RESTRICT`, because removing a
+  person goes through the deletion-approval workflow, never a cascade that takes their
+  employment history with it
+- **`migrations/003_compliance_rules.sql`** — storage for the engine already built: 13 seeded
+  requirements and the rules per service, seeded to reproduce exactly what `scheduling.php`
+  enforces in code today, so wiring the engine in changes no behaviour on day one. Everything
+  beyond that starts as `recommended`, so the business raises a requirement to mandatory
+  deliberately rather than discovering overnight that half the workforce is blocked
+- **`server/backfill-people.php`** — dry run by default. Reports what will be created, what
+  will collapse into one person, what has no email or phone, and what is ambiguous
+
+### Added — person matching, and its refusals
+
+The matching logic is pure and covered by 34 assertions, which is what makes an otherwise
+unverifiable migration defensible:
+
+- **Email first, then phone. Never a name.** Matching on names would collapse every John Smith
+  into one worker
+- **Synthetic addresses are not identities.** `ats.php` fabricated
+  `<name>@learner.invalid` for learners with no email; matching on those would collide every
+  such learner into one person
+- **`07700 900123`, `+447700900123` and `00447700900123` are one key.** Anything under seven
+  digits is an extension, not an identity
+- **A group whose names disagree is not merged.** A shared landline is not proof of one person,
+  so it is reported for a human to resolve. A wrong merge joins two employment histories, which
+  is far harder to undo than an unmerged duplicate
+- Records with neither email nor phone each become their own person — that can leave a
+  duplicate, which is the safe direction to be wrong in
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

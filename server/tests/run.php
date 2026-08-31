@@ -310,6 +310,89 @@ check('expiring is not unmet', rg_state_is_unmet('expiring'), false);
 check('met is not unmet', rg_state_is_unmet('met'), false);
 
 // ---------------------------------------------------------------------------
+// Person matching. A wrong merge joins two people's employment histories, which
+// is far harder to undo than an unmerged duplicate — so these lean towards
+// review over guessing.
+group('rg_normalise_email');
+
+check('lowercases and trims', rg_normalise_email('  John.Smith@Example.COM '), 'john.smith@example.com');
+check('absent is null', rg_normalise_email(null), null);
+check('empty is null', rg_normalise_email(''), null);
+check('not an address is null', rg_normalise_email('john smith'), null);
+
+// ats.php fabricated these for learners with no address. Matching on them would
+// collide every such learner.
+check('synthetic learner address is null', rg_normalise_email('John Smith@learner.invalid'), null);
+check('seed address is null', rg_normalise_email('amara@local.invalid'), null);
+check('a real address survives', rg_normalise_email('amara@gmail.com'), 'amara@gmail.com');
+
+// ---------------------------------------------------------------------------
+group('rg_phone_key');
+
+// One person, written four ways.
+$expected = '07700900123';
+check('UK local', rg_phone_key('07700900123'), $expected);
+check('spaced', rg_phone_key('07700 900 123'), $expected);
+check('E.164', rg_phone_key('+447700900123'), $expected);
+check('international prefix', rg_phone_key('00447700900123'), $expected);
+check('punctuated', rg_phone_key('(07700) 900-123'), $expected);
+
+check('absent is null', rg_phone_key(null), null);
+check('empty is null', rg_phone_key(''), null);
+check('no digits is null', rg_phone_key('n/a'), null);
+// Too short to identify anybody — an extension, not a person.
+check('extension is null', rg_phone_key('4021'), null);
+check('six digits is null', rg_phone_key('123456'), null);
+check('seven digits is enough', rg_phone_key('1234567'), '1234567');
+
+// ---------------------------------------------------------------------------
+group('rg_person_match_key');
+
+check('prefers email', rg_person_match_key(['email' => 'a@b.com', 'phone' => '07700900123'])['basis'], 'email');
+check('falls back to phone', rg_person_match_key(['email' => null, 'phone' => '07700900123'])['basis'], 'phone');
+check('synthetic email falls through to phone', rg_person_match_key(['email' => 'x@learner.invalid', 'phone' => '07700900123'])['basis'], 'phone');
+check('neither is unmatchable', rg_person_match_key(['name' => 'John Smith'])['basis'], 'none');
+check('unmatchable has no key', rg_person_match_key(['name' => 'John Smith'])['key'], null);
+
+// Never on name. Every John Smith would become one worker.
+check('a name alone gives no key', rg_person_match_key(['name' => 'John Smith', 'email' => '', 'phone' => ''])['key'], null);
+
+// ---------------------------------------------------------------------------
+group('rg_group_people');
+
+$rows = [
+    ['source' => 'applicant', 'id' => 1, 'name' => 'Amara Chen',  'email' => 'Amara@Example.com', 'phone' => '07700900101'],
+    ['source' => 'worker',    'id' => 9, 'name' => 'Amara Chen',  'email' => 'amara@example.com', 'phone' => '+447700900101'],
+    ['source' => 'worker',    'id' => 4, 'name' => 'Bola Adeyemi','email' => 'bola@example.com',  'phone' => '07700900102'],
+    ['source' => 'learner',   'id' => 3, 'name' => 'Cerys Hughes','email' => 'c@learner.invalid', 'phone' => null],
+];
+$grouped = rg_group_people($rows);
+check('the same person collapses', count($grouped['groups']), 2);
+check('and keeps both records', count($grouped['groups']['e:amara@example.com']), 2);
+check('a distinct person stays separate', count($grouped['groups']['e:bola@example.com']), 1);
+// The synthetic address must not become a group of its own keyed on a fake identity.
+check('unmatchable is held back', count($grouped['unmatchable']), 1);
+check('and identified', $grouped['unmatchable'][0]['name'], 'Cerys Hughes');
+
+// Matching across email and phone must not silently merge different people.
+$viaPhone = rg_group_people([
+    ['source' => 'applicant', 'id' => 1, 'name' => 'Dee Okafor', 'email' => null, 'phone' => '07700900200'],
+    ['source' => 'worker',    'id' => 2, 'name' => 'Dee Okafor', 'email' => null, 'phone' => '+44 7700 900200'],
+]);
+check('phone matching collapses one person', count($viaPhone['groups']), 1);
+
+// ---------------------------------------------------------------------------
+group('rg_group_is_ambiguous');
+
+check('a single record is never ambiguous', rg_group_is_ambiguous([['name' => 'Amara Chen']]), false);
+check('the same name agrees', rg_group_is_ambiguous([['name' => 'Amara Chen'], ['name' => 'amara  chen']]), false);
+
+// A shared landline is not proof of one person. Two names on one number is
+// exactly the case that must reach a human rather than be merged.
+check('different names is ambiguous', rg_group_is_ambiguous([['name' => 'Amara Chen'], ['name' => 'Bola Adeyemi']]), true);
+check('a blank name does not create ambiguity', rg_group_is_ambiguous([['name' => 'Amara Chen'], ['name' => '']]), false);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

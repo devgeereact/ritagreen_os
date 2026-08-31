@@ -48,6 +48,16 @@ must be installed on the developer's machine. Everything else is in the reposito
 
 **Goal:** one human, one record, forever. Unblocks everything after it.
 
+**Status: written, not yet applied.** `server/migrate.php`, `migrations/001_people_spine.sql`,
+`migrations/002_people_foreign_keys.sql` and `server/backfill-people.php` all exist. **None has
+been executed against a database**, because no local MySQL was available. The matching logic
+they depend on *is* verified — it is pure, and covered by 34 assertions in
+`server/tests/run.php`.
+
+Before this milestone can be called done: install a local MySQL, apply the migrations to a
+seeded database, run the backfill dry run, read its review list, apply it, and confirm the
+verification output shows every record linked and no match key mapping to two people.
+
 - `server/migrations/` established, numbered and applied in order
 - `people` table — the identity
 - `person_services` — person × service, carrying per-service eligibility

@@ -1533,3 +1533,99 @@ are unindexed. `audit_log.user_id` is unindexed and joined.
 `contracts`, `quotes` and `jobs`; `idx_client` on `sites` and `jobs`. This is
 legal in MySQL, where index names are per-table, but it makes any global
 `information_schema` query about indexes ambiguous to read.
+
+---
+
+# Pending schema — written, not yet applied
+
+Everything below exists in `server/migrations/` and has **not been executed against any
+database**. No local MySQL was available when it was written. Treat this section as a design
+record until `php server/migrate.php --status` reports it applied.
+
+Apply with `php server/migrate.php` (dry run) then `--go`. See `docs/ARCHITECTURE.md` §7a.
+
+## `people` — migration 001
+
+The single human identity. Candidate, worker, learner and login become roles a person holds.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INT PK | |
+| `full_name` | VARCHAR(160) | |
+| `preferred_name` | VARCHAR(80) NULL | |
+| `date_of_birth` | DATE NULL | |
+| `email` | VARCHAR(190) NULL | indexed |
+| `phone` | VARCHAR(40) NULL | indexed |
+| `address_line1`, `address_line2`, `city`, `postcode` | VARCHAR NULL | |
+| `emergency_contact_name` / `_phone` / `_relationship` | VARCHAR NULL | |
+| `match_key` | VARCHAR(200) NULL | **UNIQUE.** `e:<email>` or `p:<digits>`, from `rg_person_match_key()`. The database itself refuses a second person with the same key — the guarantee the old copy-on-onboard behaviour could not make. NULL where a person has neither an email nor a usable phone; MySQL permits many NULLs in a UNIQUE index |
+| `notes` | TEXT NULL | |
+| `created_at`, `updated_at`, `deleted_at` | | soft delete |
+
+## `person_services` — migration 001
+
+Which services a person may work in, and whether they currently may. This is what
+`workers.division` could never express: one person eligible for Security and Cleaning at once,
+with a different answer for each.
+
+| Column | Type | Notes |
+|---|---|---|
+| `person_id` | INT | PK part, FK to `people` ON DELETE CASCADE |
+| `service` | ENUM(care, academy, cleaning, security) | PK part |
+| `active` | TINYINT(1) | whether the business intends this person for this service — separate from whether they currently may |
+| `eligibility_status` | ENUM(eligible, eligible_with_warnings, not_eligible, unassessed) | **calculated, never set by hand** |
+| `eligibility_reason` | VARCHAR(500) NULL | why, in words |
+| `eligibility_score` | TINYINT UNSIGNED NULL | |
+| `assessed_at` | DATETIME NULL | |
+
+## Columns added to existing tables — migration 001
+
+`person_id INT NULL` on `workers`, `applicants`, `users` and `enrolments`, each indexed.
+Nullable, because the backfill has not run and because an unmatched row must stay visible for
+review rather than being dropped.
+
+`workers.payroll_no VARCHAR(20) NULL UNIQUE` — unique, permanent, never reused. It belongs to
+the employment record rather than the person, because a person may hold other roles without
+ever being employed.
+
+## Foreign keys — migration 002
+
+`fk_workers_person`, `fk_applicants_person`, `fk_users_person`, `fk_enrolments_person`, all
+`ON DELETE RESTRICT`. Split from 001 deliberately: a foreign key fails if any row holds an
+unresolved value, so an ambiguous match left unresolved **blocks this migration** rather than
+being silently guessed at. RESTRICT rather than CASCADE because removing a person goes through
+the deletion-approval workflow, never a cascade that takes their employment history with it.
+
+## `compliance_requirements` — migration 003
+
+The catalogue of everything that can be required. Seeded with 13 entries: right to work,
+identity, DBS, SIA licence, references, contract, mandatory training, Care Certificate, first
+aid, moving and handling, COSHH, conflict management, NMC registration.
+
+| Column | Type | Notes |
+|---|---|---|
+| `req_key` | VARCHAR(64) UNIQUE | matches the key the evaluator expects |
+| `label`, `description` | | shown to people |
+| `evidence_source` | ENUM | where to load the evidence from |
+| `expires` | TINYINT(1) | a requirement that should expire but has no date is incomplete evidence, not valid evidence |
+| `requires_verification` | TINYINT(1) | an unverified document is a claim |
+| `active` | TINYINT(1) | |
+
+## `compliance_rules` — migration 003
+
+What each service requires, and how strongly. `worker_role NULL` applies to every role in the
+service; a row naming a role sits alongside it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `service` | ENUM | |
+| `worker_role` | ENUM NULL | NULL = all roles |
+| `requirement_id` | INT | FK, CASCADE |
+| `weight` | ENUM(mandatory, recommended, optional) | mandatory blocks; recommended warns; optional is recorded only |
+
+UNIQUE on `(service, worker_role, requirement_id)`.
+
+**Seeded to reproduce what `server/scheduling.php` already enforces in code** — right to work
+everywhere, DBS for Care, SIA for Security — so wiring the engine in changes no behaviour on
+day one. Everything beyond that starts as `recommended`, so the business raises a requirement
+to mandatory deliberately rather than discovering overnight that half the workforce is blocked.
