@@ -85,8 +85,14 @@ exclusion list in `.github/workflows/deploy.yml` is deliberate and correct.
 Never commit to `main` directly. Push to `main` deploys to production.
 
 **18. CI must be green before merge.**
-Typecheck, lint with zero warnings, build, `php -l` across every PHP file, and the
-documentation consistency check.
+Typecheck, build, both test suites, `php -l` across every PHP file, and the documentation
+consistency check. Lint reports but does not yet block; see `docs/STATUS.json`.
+
+**18a. Domain logic goes in `server/pure.php`, and gets a test.**
+If a function is a function of its arguments, it belongs there rather than inside an endpoint,
+and it gets a case in `server/tests/run.php`. Rules that decide whether someone may work must
+not be reachable only through a database and an HTTP request. Give every date function an
+injectable clock, so a test can pin time rather than hoping the suite never runs at midnight.
 
 ## Documentation
 

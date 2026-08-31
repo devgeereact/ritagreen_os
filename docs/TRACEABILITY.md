@@ -9,9 +9,12 @@ built. A row with no test is not protected.
 described in plain text, never as a backticked path — `scripts/docs_sync.py --check` verifies
 every backticked source path resolves, so a fabricated path fails CI.
 
-**Test column:** every row currently reads _none_. There is not one test file in this
-repository. That is itself a finding, tracked as PLATFORM in `docs/STATUS.json`, and the
-compliance engine rows in particular must not stay that way — see `docs/ROADMAP.md` Milestone 2.
+**Test column:** two suites exist, both dependency-free and both run in CI.
+`server/tests/run.php` covers the pure server logic — credential expiry banding, the
+staff/worker/client distinction, field status, pay premiums — with no database and no
+`server/config.php`. `src/lib/__tests__/access.test.ts` covers the client permission map. Most rows
+still read _none_; the compliance engine rows in particular must not stay that way, see
+`docs/ROADMAP.md` Milestone 2.
 
 ---
 
@@ -27,10 +30,10 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 | A session can be revoked | `tokens` | `server/auth.php` | `src/pages/app/Settings.tsx` | none |
 | Idle sessions lock | — | `server/auth.php` | `src/components/app/lock-screen.tsx` | none |
 | Roles restrict what staff can do | `roles`, `users.role` | `require_role()` in `server/lib.php` | `src/auth/RequireAuth.tsx` | none |
-| Staff, worker and client accounts are distinguished | `users.worker_id`, `users.client_id` | `is_staff()` in `server/lib.php` | `src/lib/access.ts` | none |
+| Staff, worker and client accounts are distinguished | `users.worker_id`, `users.client_id` | `is_staff()` in `server/pure.php` | `src/lib/access.ts` | both suites |
 | Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx` | none |
 | A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
-| Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | none |
+| Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | `src/lib/__tests__/access.test.ts` |
 | Per-service scoping is enforced | `users.division` | planned query filter | planned | none |
 | Sensitive zones are separately permissioned | planned | planned | planned | none |
 
@@ -50,8 +53,8 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
 | Credentials are tracked with expiry | `certifications`, `workers` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
-| Expiry is classified | — | `classify()` in `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
-| Renewals are chased at 90/60/30/expired | `compliance_reminders` | `server/expiry-alerts.php` | email | none |
+| Expiry is classified | — | `rg_classify()` in `server/pure.php` | `src/pages/app/Compliance.tsx` | `server/tests/run.php` |
+| Renewals are chased at 90/60/30/expired | `compliance_reminders` | `rg_reminder_tier()` in `server/pure.php` | email | `server/tests/run.php` |
 | A reminder tier fires only once | `compliance_reminders` | `server/expiry-alerts.php` | — | none |
 | Evidence can be produced per worker | `files`, `certifications` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | References are checked | `worker_references` | `server/references.php` | `src/pages/app/Workers.tsx` | none |
@@ -75,9 +78,9 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
 | No path can assign an ineligible worker | planned shared gate | planned | planned | none |
-| Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | none |
+| Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
-| Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | none |
+| Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` (premium selection) |
 
 ## Employment records
 
@@ -142,6 +145,7 @@ compliance engine rows in particular must not stay that way — see `docs/ROADMA
 |---|---|---|---|---|
 | Documentation matches the code | `docs/STATUS.json` | `scripts/docs_sync.py` | `docs/PROGRESS.md` | `scripts/docs_sync.py` `--check` |
 | Quality gates run before merge | — | `.github/workflows/ci.yml` | GitHub checks | itself |
+| Pure logic is testable without infrastructure | — | `server/pure.php` | — | `server/tests/run.php` |
 | Deploys never disturb server files | — | `.github/workflows/deploy.yml` | — | none |
 | Development does not touch production | `server/config.local.php.example` | `npm run dev:api` | `vite.config.ts` proxy defaults local | none |
 | Fixtures exist without production data | `server/seed.php` | CLI | — | none |

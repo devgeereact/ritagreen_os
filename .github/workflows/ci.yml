@@ -52,6 +52,9 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
@@ -86,6 +89,11 @@ jobs:
             php -l "$file" > /dev/null || { echo "SYNTAX ERROR: $file"; php -l "$file"; status=1; }
           done < <(find server -name '*.php' -print0)
           exit $status
+
+      # Pure server-side logic: credential expiry banding, the staff/worker/client
+      # distinction, field status, pay premiums. No database, no config.php.
+      - name: PHP unit tests
+        run: php server/tests/run.php
 
       - name: Refuse a committed config.php
         run: |

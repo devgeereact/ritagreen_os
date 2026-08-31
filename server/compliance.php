@@ -6,14 +6,12 @@ require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
 
-// Classify an expiry date into a RAG status + days remaining.
+// Classify an expiry date into a RAG status + days remaining. The implementation
+// lives in pure.php so it is shared with expiry-alerts.php and can be tested
+// without a database; this alias keeps the call sites below unchanged.
 function classify(?string $expiry): array
 {
-    if (!$expiry) return ['status' => 'unknown', 'days' => null];
-    $days = (int) floor((strtotime($expiry) - strtotime(date('Y-m-d'))) / 86400);
-    if ($days < 0) return ['status' => 'expired', 'days' => $days];
-    if ($days <= 30) return ['status' => 'expiring', 'days' => $days];
-    return ['status' => 'valid', 'days' => $days];
+    return rg_classify($expiry);
 }
 
 // ----- Audit-ready compliance pack for one worker (CQC / SIA ACS evidence) -----

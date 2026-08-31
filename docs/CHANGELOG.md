@@ -142,6 +142,37 @@ made every migration in the roadmap unsafe to attempt.
 **Still needed on the developer's machine:** a local MySQL or MariaDB. Everything else ships in
 the repository.
 
+### Added — tests, and the separation that makes them possible
+
+There was not one test file in this repository. There are now two suites, both
+dependency-free and both running in CI, because the production host cannot install packages
+and a suite that only runs on one machine stops being run.
+
+- **`server/pure.php`** — domain logic with no database, no config, no output and no globals.
+  Every function is a function of its arguments, and every date function takes an injectable
+  clock so a test can pin time rather than hoping the suite never runs at midnight. It holds
+  credential expiry classification and reminder banding, the staff/worker/client distinction,
+  and field status derivation. Three of those were **duplicated definitions inside separate
+  endpoint files** — `classify()` in `compliance.php`, `tier_for()` in `expiry-alerts.php` and
+  `field_status()` in `field.php` — which is exactly how two places drift on what "expired"
+  means. They now share one implementation
+- **`server/tests/run.php`** — 74 assertions, a few dozen lines of assertion helper, no
+  PHPUnit. Covers the boundary days specifically: a credential expiring *today* is expiring,
+  not expired, and an off-by-one there stands someone down a day early every time. Also that
+  `unknown` stays distinct from `expired`, since a missing date is a gap in the evidence rather
+  than a lapsed credential
+- **`src/lib/__tests__/access.test.ts`** — 24 tests over the permission map, including that a
+  client or worker account cannot reach `/app` by any route, and that `/app` as the shortest
+  prefix never shadows a more specific rule
+- `npm test`, `npm run test:watch`, `npm run test:php`; both wired into CI
+
+### Changed — the documentation checker consults git
+
+`scripts/docs_sync.py` flagged `server/config.php` as a missing file. It is missing by design —
+it holds the live credentials and is gitignored — so the checker now asks
+`git check-ignore` before reporting, rather than carrying a hand-maintained allowlist that
+would itself go stale. Verified both ways: a genuinely absent path still fails the check.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#############...........`  62 done · 13 partial · 52 to do · 127 tracked
+`#############...........`  63 done · 14 partial · 51 to do · 128 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `#####.......` | 4 | 2 | 5 |
+| PLATFORM — Engineering platform | 0 | `######......` | 5 | 3 | 4 |
 | FOUNDATION — Foundation and person spine | 1 | `###.........` | 3 | 1 | 9 |
 | COMPLIANCE — Compliance engine and verification | 2 | `#####.......` | 5 | 2 | 7 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
@@ -35,15 +35,16 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 4 done, 2 partial, 5 to do
+Milestone 0 · 5 done, 3 partial, 4 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
+- [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
+- [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
 - [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
 - [~] Documentation pack — _Milestone 0, in progress_
-- [ ] Automated tests — _no test file exists in the repository_
 - [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
 - [ ] Exception messages withheld from callers — _server/lib.php returns the exception message in JSON_
 - [ ] Prepared statements in dashboard.php — _division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way_
@@ -73,7 +74,7 @@ Milestone 2 · 5 done, 2 partial, 7 to do
 
 - [x] Company insurance register
 - [x] Credential expiry alert engine — _90/60/30/expired tiers, deduplicated, cron-driven_
-- [x] Expiry classification primitive — _classify() at server/compliance.php:10_
+- [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
 - [x] Per-worker evidence pack — _compliance.php?action=pack_
 - [x] Reference checks with gap explanation — _worker_references_
 - [~] DBS verification workflow — _status, expiry and update-service flag stored; no verification record_

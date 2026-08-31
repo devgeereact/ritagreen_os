@@ -69,6 +69,13 @@ Dispatch inside a file is by HTTP method plus a `?action=` query parameter. Ther
 front controller, no autoloader and no dependency on Composer — a deliberate choice for stock
 cPanel hosting with no shell access to install anything.
 
+**`server/pure.php` holds the domain logic.** No database, no config, no output, no globals —
+every function is a function of its arguments alone, and every date function takes an
+injectable clock. `lib.php` requires it, so every endpoint has it, and `server/tests/run.php`
+includes it directly with no infrastructure at all. It holds credential expiry classification
+and reminder banding, the staff/worker/client distinction, and field status derivation. Three
+of those were previously duplicated definitions inside separate endpoint files.
+
 **`server/lib.php` is the kernel.** Every endpoint depends on it. It provides:
 
 | Area | Functions |
@@ -83,6 +90,25 @@ cPanel hosting with no shell access to install anything.
 | SMS and WhatsApp | `sms_enabled()`, `normalise_phone()`, `send_sms()`, `send_whatsapp()`, `message_worker()`, `sms_log()` |
 | 2FA | `totp_secret()`, `base32_decode()`, `totp_code()`, `totp_verify()` |
 | Notifications | `notify()` |
+
+Anything needing `$conn`, a constant from `config.php`, or the network belongs in `lib.php`.
+Anything that is a function of its arguments belongs in `pure.php`, where it can be tested.
+
+## 3a. Tests
+
+Two suites, both dependency-free, both run in CI.
+
+| Suite | Covers | Run |
+|---|---|---|
+| `server/tests/run.php` | Pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premium selection | `npm run test:php` |
+| `src/lib/__tests__/access.test.ts` | The client permission map: staff detection, prefix matching, and that a client or worker account cannot reach `/app` | `npm test` |
+
+No PHPUnit and no Composer: the production host cannot install packages, and a suite that only
+runs on one machine stops being run. `server/tests/run.php` is a few dozen lines of assertion
+helper.
+
+Endpoints and React components are not yet covered. The compliance engine (Milestone 2) must
+be, because its output decides whether a person may work.
 
 `smtp_send()` is a minimal SMTP client written directly over `fsockopen` — no PHPMailer, no
 vendor directory. `totp_verify()` is a hand-rolled RFC 6238 implementation. Both exist because

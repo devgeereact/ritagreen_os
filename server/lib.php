@@ -18,6 +18,10 @@ set_error_handler(function ($severity, $message, $file, $line) {
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
 
+// Pure domain logic — no database, no config, no output. Required first so every
+// endpoint has it, and so server/tests/run.php can include it on its own.
+require_once __DIR__ . '/pure.php';
+
 if (!file_exists(__DIR__ . '/config.php')) {
     http_response_code(500);
     header('Content-Type: application/json');
@@ -137,35 +141,12 @@ function require_role(array $user, string ...$roles): void
     if (!in_array($user['role'], $roles, true)) fail('You do not have access to this.', 403);
 }
 
-// Is this an internal staff account, as opposed to a worker or client login?
-//
-// Role alone cannot answer this. A worker's login is an ordinary account with
-// users.worker_id set, and a client portal login has users.client_id set, so both
-// can hold a role like 'employee'. Anything gated on "internal staff" must check
-// the link, not just the role.
-//
-// Privileged roles are always staff, so a manager who also holds a worker record
-// (a trainer who covers shifts, say) does not lock themselves out of the office.
-function is_staff(array $user): bool
-{
-    if (in_array($user['role'], ['super_admin', 'admin', 'manager'], true)) return true;
-    if ($user['role'] === 'client') return false;
-    if (!empty($user['client_id']) || !empty($user['worker_id'])) return false;
-    return true;
-}
-
 // Require an internal staff account; 403 otherwise. Use on anything that shows
 // one person's data to another — the office board, the shared mailbox, the
 // workforce list.
 function require_staff(array $user): void
 {
     if (!is_staff($user)) fail('You do not have access to this.', 403);
-}
-
-// The worker record this login belongs to, or null for a staff or client account.
-function linked_worker_id(array $user): ?int
-{
-    return empty($user['worker_id']) ? null : (int) $user['worker_id'];
 }
 
 // Write an audit log row for sensitive actions.

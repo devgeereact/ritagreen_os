@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -141,21 +142,47 @@ def render(status: dict) -> str:
     return "\n".join(out).rstrip() + "\n"
 
 
+def git_ignored(paths: list[str]) -> set[str]:
+    """Which of these paths does git deliberately ignore?
+
+    Some referenced files are absent by design rather than by mistake --
+    server/config.php holds the live credentials and is gitignored, so a document
+    that mentions it is correct, not stale. Asking git keeps that list accurate
+    without maintaining an allowlist here.
+    """
+    if not paths:
+        return set()
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "--stdin"],
+            input="\n".join(paths),
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return set()  # no git available; fall back to checking everything
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
 def check_traceability() -> list[str]:
     """Every `path/like/this` in TRACEABILITY.md that looks like a repo file must exist."""
     if not TRACEABILITY.exists():
         return [f"{TRACEABILITY.relative_to(ROOT)} not found"]
 
-    problems: list[str] = []
     text = TRACEABILITY.read_text(encoding="utf-8")
     # Backticked tokens that look like a repo path with a known source extension.
     pattern = re.compile(r"`([A-Za-z0-9_./-]+\.(?:php|ts|tsx|sql|json|py|yml|css|html))(?::\d+)?`")
-    for match in sorted(set(pattern.findall(text))):
-        if match.startswith("docs/"):
-            continue  # documents may reference planned documents
-        if not (ROOT / match).exists():
-            problems.append(f"TRACEABILITY.md references a missing file: {match}")
-    return problems
+    candidates = [m for m in sorted(set(pattern.findall(text))) if not m.startswith("docs/")]
+
+    missing = [c for c in candidates if not (ROOT / c).exists()]
+    ignored = git_ignored(missing)
+    return [
+        f"TRACEABILITY.md references a missing file: {c}"
+        for c in missing
+        if c not in ignored
+    ]
 
 
 def main() -> int:

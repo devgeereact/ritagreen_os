@@ -96,10 +96,12 @@ The full list is [`docs/RULES.md`](docs/RULES.md). The ones most easily broken b
 ## 5. Working here
 
 ```bash
+npm run dev:api      # PHP API on 127.0.0.1:8122  (run this too)
 npm run dev          # localhost:5122
-npm run typecheck
-npm run lint
-npm run build        # tsc -b && vite build
+npm run typecheck    # tsc -b --force
+npm test             # vitest
+npm run test:php     # php server/tests/run.php — no database needed
+npm run build
 ```
 
 CI runs typecheck, lint with zero warnings, build, a source-map assertion, `php -l` across
@@ -116,8 +118,12 @@ every PHP file, and `python3 scripts/docs_sync.py --check`.
 5. Update `docs/SCHEMA.md`, `docs/API.md`, `docs/TRACEABILITY.md` and `docs/STATUS.json`, then
    regenerate progress with `python3 scripts/docs_sync.py`.
 
-**Reuse before building.** `next_seq()` for any sequence. `classify()` in
-`server/compliance.php` for any expiry date. The `compliance_reminders` dedupe pattern for any
+**Pure logic goes in `server/pure.php`, and gets a test in `server/tests/run.php`.** If it is
+a function of its arguments, it does not belong inside an endpoint. Give date functions an
+injectable clock.
+
+**Reuse before building.** `next_seq()` for any sequence. `rg_classify()` in `server/pure.php`
+for any expiry date. The `compliance_reminders` dedupe pattern for any
 tiered alert. The `server/files.php` streamed-download-behind-auth pattern for any document.
 The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 

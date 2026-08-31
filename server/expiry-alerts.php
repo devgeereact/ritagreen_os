@@ -89,13 +89,11 @@ while ($r = $res->fetch_assoc()) {
 }
 
 // ----- 2. Bucket each item into a reminder tier -----
+// Which reminder tier a credential falls into. Implementation in pure.php, so
+// the banding is defined once and is testable without a database.
 function tier_for(int $days): ?string
 {
-    if ($days < 0) return 'expired';
-    if ($days <= 30) return 'd30';
-    if ($days <= 60) return 'd60';
-    if ($days <= 90) return 'd90';
-    return null; // more than 90 days out — nothing to do yet
+    return rg_reminder_tier($days);
 }
 
 // Has this (credential, tier) already been reminded? Future tiers (d90/d60/d30)

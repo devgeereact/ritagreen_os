@@ -71,6 +71,16 @@ npm run dev:prod-api      # or RG_API_TARGET=https://ritagreenservices.com npm r
 
 Other scripts: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run preview`.
 
+### Tests
+
+```bash
+npm test           # frontend: the permission map
+npm run test:php   # server: expiry banding, access rules, field status, pay premiums
+```
+
+Both are dependency-free — no PHPUnit, no Composer — because the production host cannot
+install packages. `npm run test:php` needs no database and no `config.php`.
+
 ## Repository layout
 
 ```

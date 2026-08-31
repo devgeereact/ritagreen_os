@@ -22,16 +22,10 @@ function shift_belongs_to(mysqli $conn, array $user, int $shiftId): bool
 }
 
 // Derive an on-the-ground status for a shift from its events + clock.
+// Implementation in pure.php, where it is tested against a pinned clock.
 function field_status(array $kinds, string $startsAt, string $endsAt): string
 {
-    $now = time();
-    $start = strtotime($startsAt);
-    $end = strtotime($endsAt);
-    if (in_array('clock_out', $kinds, true)) return 'completed';
-    if (in_array('clock_in', $kinds, true)) return $now > $end + 900 ? 'overrunning' : 'on_site';
-    if ($now > $start + 1800) return 'no_show';     // 30 min past start, not clocked in
-    if ($now > $start) return 'late';
-    return 'scheduled';
+    return rg_field_status($kinds, $startsAt, $endsAt);
 }
 
 if ($action === 'live' && method() === 'GET') {

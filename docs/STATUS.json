@@ -229,7 +229,7 @@
         {
           "name": "Expiry classification primitive",
           "status": "done",
-          "note": "classify() at server/compliance.php:10"
+          "note": "rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days"
         },
         {
           "name": "Credential expiry alert engine",
@@ -643,8 +643,8 @@
         },
         {
           "name": "Automated tests",
-          "status": "todo",
-          "note": "no test file exists in the repository"
+          "status": "partial",
+          "note": "Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
         },
         {
           "name": "Exception messages withheld from callers",
@@ -679,6 +679,11 @@
           "name": "Build artefacts out of version control",
           "status": "done",
           "note": "tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp"
+        },
+        {
+          "name": "Pure logic separated from the kernel",
+          "status": "done",
+          "note": "server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation"
         }
       ]
     }
