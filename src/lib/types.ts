@@ -383,13 +383,8 @@ export type AdminUser = {
   created_at: string
 }
 
-export type AuditEntry = {
-  id: number
-  action: string
-  detail: string
-  user: string | null
-  created_at: string
-}
+// AuditEntry is defined with the rest of the governance types at the end of this
+// file. It gained entity, before/after and IP in migration 009.
 
 export type Programme = {
   id: number
@@ -553,4 +548,186 @@ export type DashboardSummary = {
   open_shifts: number
   revenue_by_division: { division: string; pence: number }[]
   compliance_alerts: { worker: string; item: string; days: number }[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The person spine
+//
+// A person exists once. Candidate, worker, learner and login are roles that
+// person holds, not separate records. See docs/BLUEPRINT.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ServiceId = "care" | "academy" | "cleaning" | "security"
+
+export type Person = {
+  id: number
+  full_name: string
+  preferred_name: string | null
+  date_of_birth: string | null
+  email: string | null
+  phone: string | null
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  postcode: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
+  /** 'e:<email>' or 'p:<digits>'. Unique, so no two people share an identity. */
+  match_key: string | null
+  created_at: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compliance
+//
+// Every value below is CALCULATED by the server from the configured rules and
+// the evidence on file. Nothing here is ever POSTed back — there is no endpoint
+// that accepts an eligibility status. See docs/RULES.md rule 1.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EligibilityStatus =
+  | "eligible"
+  | "eligible_with_warnings"
+  | "not_eligible"
+  | "unassessed"
+
+/** Why a requirement is or is not satisfied. */
+export type RequirementState =
+  /** satisfied */
+  | "met"
+  /** valid today, but inside its expiry window — warns, never blocks */
+  | "expiring"
+  /** lapsed */
+  | "expired"
+  /** nothing on file at all, which is a gap in the evidence, not a lapse */
+  | "missing"
+  /** should carry an expiry but none is recorded — incomplete evidence */
+  | "undated"
+  /** on file but nobody has checked it — a claim, not evidence */
+  | "unverified"
+
+export type RequirementWeight = "mandatory" | "recommended" | "optional"
+
+export type AssessedRequirement = {
+  key: string
+  label: string
+  weight: RequirementWeight
+  state: RequirementState
+  /** Human-readable, e.g. "SIA licence: expired 3 days ago". Null when met. */
+  reason: string | null
+  /** Days until expiry; negative once passed. Null where there is no date. */
+  days: number | null
+}
+
+export type EligibilityVerdict = {
+  status: EligibilityStatus
+  eligible: boolean
+  /** 0–100. Mandatory counts double; optional does not count. */
+  score: number
+  /** Every blocker, not just the first. */
+  blocking: AssessedRequirement[]
+  warnings: AssessedRequirement[]
+  items: AssessedRequirement[]
+  reason: string
+  service: ServiceId
+  person_id: number
+  worker?: string
+}
+
+/** One worker, assessed against every service. */
+export type EligibilityBreakdown = {
+  worker: string
+  person_id: number
+  services: Record<
+    ServiceId,
+    {
+      status: EligibilityStatus
+      eligible: boolean
+      score: number
+      reason: string
+      blocking: string[]
+    }
+  >
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Right to work
+//
+// A check, not a flag. Recording and verifying are separate actions: the person
+// who collects a document is often not the person who signs it off.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RightToWorkMethod =
+  | "online_share_code"
+  | "manual_document"
+  | "idsp_digital"
+  | "other"
+
+export type RightToWorkOutcome = "pending" | "valid" | "invalid" | "requires_follow_up"
+
+export type RightToWorkCheck = {
+  id: number
+  method: RightToWorkMethod
+  method_note: string | null
+  reference: string | null
+  checked_on: string
+  outcome: RightToWorkOutcome
+  follow_up_required: boolean
+  recheck_due: string | null
+  evidence_file_id: number | null
+  notes: string | null
+  created_at: string
+  /** Null until somebody signs it off. A check with no verifier is a claim. */
+  verified_at: string | null
+  verified_by: string | null
+  verified: boolean
+}
+
+/** A check needing attention, with the reason it is on the list. */
+export type RightToWorkDue = {
+  id: number
+  person_id: number
+  full_name: string
+  method: RightToWorkMethod
+  checked_on: string
+  outcome: RightToWorkOutcome
+  recheck_due: string | null
+  follow_up_required: boolean
+  verified: boolean
+  days_left: number | null
+  attention: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Governance
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type AuditEntry = {
+  id: number
+  action: string
+  entity_type: string | null
+  entity_id: number | null
+  detail: string
+  /** Only the fields that changed, not a copy of the record. */
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  reason: string | null
+  ip: string | null
+  created_at: string
+  user: string | null
+}
+
+export type EmailQueueStatus = "queued" | "sending" | "sent" | "failed" | "cancelled"
+
+export type QueuedEmail = {
+  id: number
+  recipient: string
+  subject: string
+  status: EmailQueueStatus
+  attempts: number
+  last_error: string | null
+  template_key: string | null
+  created_at: string
+  sent_at: string | null
 }

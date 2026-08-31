@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#################.......`  95 done · 12 partial · 35 to do · 142 tracked
+`#################.......`  97 done · 13 partial · 34 to do · 144 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,9 +17,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `########....` | 7 | 3 | 3 |
+| PLATFORM — Engineering platform | 0 | `########....` | 8 | 3 | 3 |
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
-| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 13 | 3 | 2 |
+| COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 14 | 4 | 1 |
 | DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
@@ -35,13 +35,14 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 7 done, 3 partial, 3 to do
+Milestone 0 · 8 done, 3 partial, 3 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
+- [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (74 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
@@ -75,13 +76,14 @@ Milestone 1 · 13 done, 1 partial, 3 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 13 done, 3 partial, 2 to do
+Milestone 2 · 14 done, 4 partial, 1 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
 - [x] Configurable rules (service x role x requirement) — _migrations/003 seeds 26 rules across the four services, reproducing what scheduling.php enforces in code. Applied and verified_
 - [x] Credential expiry alert engine — _90/60/30/expired tiers, deduplicated, cron-driven_
 - [x] Eligibility evaluation logic — _rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come_
+- [x] Eligibility visible in the interface — _src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first_
 - [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
 - [x] Legacy right-to-work carried over honestly — _Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence_
 - [x] Mandatory / recommended / optional weighting — _RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests_
@@ -90,10 +92,10 @@ Milestone 2 · 13 done, 3 partial, 2 to do
 - [x] Reference checks with gap explanation — _worker_references_
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
 - [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
+- [~] Compliance status read-only in the UI — _The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields_
 - [~] DBS verification workflow — _status, expiry and update-service flag stored; no verification record_
 - [~] Right to work as a dated, verified check — _The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision_
 - [~] SIA verification workflow — _number and expiry stored; no verification record_
-- [ ] Compliance status read-only in the UI
 - [ ] Generalised verification lifecycle
 
 ### DOCUMENTS — Document management

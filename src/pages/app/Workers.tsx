@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Plus, Search, ShieldAlert, ShieldCheck, Pencil } from "lucide-react"
+import { Plus, Search, ShieldAlert, ShieldCheck, ShieldQuestion, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,7 @@ import { api, ApiError } from "@/lib/api"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Worker, Skill } from "@/lib/types"
 import { shortDate, gbp } from "@/lib/format"
+import { EligibilityDialog } from "@/components/app/eligibility-dialog"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const ROLES = [
@@ -50,6 +51,8 @@ export default function Workers() {
   const [q, setQ] = useState("")
   const [open, setOpen] = useState(false)
   const [payWorker, setPayWorker] = useState<Worker | null>(null)
+  // Which worker's per-service eligibility is being shown.
+  const [eligibilityFor, setEligibilityFor] = useState<{ id: number; name: string } | null>(null)
 
   const workers = data?.workers ?? []
   const filtered = workers.filter((w) =>
@@ -138,9 +141,20 @@ export default function Workers() {
                     {w.pay_type && <div className="text-xs uppercase text-muted-foreground">{w.pay_type}</div>}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={w.status === "active" ? "default" : "secondary"} className="capitalize">
-                      {w.status}
-                    </Badge>
+                    {/* The stored status is what the office intends. Eligibility is
+                        what the rules and the evidence actually allow, per service,
+                        and it is only ever calculated. */}
+                    <button
+                      type="button"
+                      onClick={() => setEligibilityFor({ id: w.id, name: w.name })}
+                      className="inline-flex items-center gap-1 hover:opacity-80"
+                      title="Show eligibility for each service"
+                    >
+                      <Badge variant={w.status === "active" ? "default" : "secondary"} className="capitalize">
+                        {w.status}
+                      </Badge>
+                      <ShieldQuestion className="size-3.5 text-muted-foreground" />
+                    </button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -156,6 +170,11 @@ export default function Workers() {
         </Card>
       )}
 
+      <EligibilityDialog
+        workerId={eligibilityFor?.id ?? null}
+        workerName={eligibilityFor?.name}
+        onOpenChange={(o) => !o && setEligibilityFor(null)}
+      />
       <SetPayDialog worker={payWorker} onOpenChange={(o) => !o && setPayWorker(null)} onSaved={reload} />
     </div>
   )

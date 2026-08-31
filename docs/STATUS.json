@@ -294,7 +294,8 @@
         },
         {
           "name": "Compliance status read-only in the UI",
-          "status": "todo"
+          "status": "partial",
+          "note": "The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields"
         },
         {
           "name": "Right to work check record",
@@ -334,6 +335,11 @@
           "name": "Legacy right-to-work carried over honestly",
           "status": "done",
           "note": "Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence"
+        },
+        {
+          "name": "Eligibility visible in the interface",
+          "status": "done",
+          "note": "src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first"
         }
       ]
     },
@@ -762,6 +768,11 @@
           "name": "Failed queries no longer pass silently",
           "status": "done",
           "note": "lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message"
+        },
+        {
+          "name": "Frontend types match the server",
+          "status": "done",
+          "note": "Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift"
         }
       ]
     }

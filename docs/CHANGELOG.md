@@ -464,6 +464,24 @@ problem.
 a filter** is itself audited; the routine full listing is not, or the log fills with entries
 about reading the log.
 
+### Added — eligibility, visible
+
+`src/lib/types.ts` did not know about any of the last few milestones. It now carries `Person`,
+`EligibilityVerdict`, `RequirementState`, `AssessedRequirement`, `RightToWorkCheck`,
+`QueuedEmail` and a fuller `AuditEntry` — a narrower duplicate `AuditEntry` was **merged**
+rather than left alongside it, since two definitions of one thing is the drift this work exists
+to remove.
+
+`src/components/app/eligibility-dialog.tsx` shows one person's answer for all four services,
+opened from the status column on the Workers page. It lists **every** blocking reason, not just
+the first, and it is read-only by construction — there is no endpoint that would accept a
+compliance status if it tried.
+
+Written so it does not add to the lint baseline: `loading` is *derived* from a single state
+object carrying the worker it belongs to, rather than set at the top of the effect. That also
+makes a stale response impossible to render — a reply for a worker who is no longer selected
+simply never matches.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook
