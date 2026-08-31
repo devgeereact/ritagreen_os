@@ -1,0 +1,1535 @@
+# Database schema reference
+
+Source of truth: [`server/schema.sql`](../server/schema.sql) (864 lines, 50 tables).
+Every line citation below is of the form `schema.sql:LINE`.
+
+## 1. Overview
+
+The database is **MySQL/MariaDB on cPanel shared hosting**, reached only through
+the PHP endpoints in `server/`. The React app never connects to it directly.
+
+Conventions that hold across the whole schema:
+
+- **Engine and charset.** Every table is declared
+  `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`. There are no exceptions.
+- **Money is stored as integers in pence** (`schema.sql:3`). Columns are named
+  `*_pence` — `net_pence`, `vat_pence`, `total_pence`, `rate_pence`,
+  `charge_pence`, `pay_rate_pence`, `amount_pence`, `cover_pence`. Nothing uses
+  `DECIMAL` for currency.
+- **Soft delete via `deleted_at TIMESTAMP NULL`** on records that must not be
+  hard-deleted (`schema.sql:3-4` names users, clients, workers and certificates;
+  in practice fourteen tables carry the column — see §5).
+- **Timestamps.** `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` is near
+  universal; mutable records add
+  `updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`.
+  The session runs at `SET time_zone = '+00:00'` (`schema.sql:7`), so everything
+  is UTC.
+- **Booleans are `TINYINT(1) NOT NULL DEFAULT 0`.** The PHP layer casts them to
+  real booleans or to `0`/`1` integers on the way out, inconsistently — see §6.
+
+### The file is not a migration set
+
+`schema.sql` is a **single re-runnable file organised into "build passes"**, not
+a numbered migration directory. Later blocks patch earlier ones *in the same
+file*:
+
+- Every table is `CREATE TABLE IF NOT EXISTS`.
+- Later `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks add columns to tables
+  created hundreds of lines earlier (`schema.sql:405`, `417`, `461`, `505`,
+  `511`, `552`, `667`, `677`, `766`).
+- Two `ALTER TABLE ... MODIFY COLUMN` statements at `schema.sql:733-734` restate
+  a definition that the `CREATE` above already produces; they exist only to
+  bring pre-existing installs into line.
+
+**The true shape of a table is its `CREATE` plus every later `ALTER` against
+it.** The column tables in §4 present the merged result, and every column that
+arrived by a later `ALTER` is marked as such with the line number of the
+`ALTER`.
+
+This is a known limitation. There is no schema version table, no ordering
+guarantee beyond file order, and no down-migration. `ADD COLUMN IF NOT EXISTS`
+is a MariaDB extension — the comment at `schema.sql:354` notes it is relied on
+because the shared host runs MariaDB. On stock MySQL those statements would
+fail. There is also no way to tell, from the database alone, which build pass an
+install is at.
+
+### How the schema reaches the server
+
+The file is imported by hand through cPanel → phpMyAdmin (`schema.sql:2`). It is
+not run by the deploy. Two of the fifty tables are an exception: `blog_posts`
+and `testimonials` are created at request time by their own endpoints — see §6.
+
+---
+
+## 2. Table overview by domain
+
+Fifty tables. One line each.
+
+### Identity and security (8)
+
+| Table | Purpose |
+|---|---|
+| `roles` | Reference list of the seven role keys and their labels. |
+| `users` | Staff, client-portal and worker logins; role, division, soft delete. |
+| `tokens` | Bearer session tokens, with device and last-seen tracking. |
+| `user_2fa` | Per-user TOTP secret and enabled flag. |
+| `password_resets` | Single-use, short-lived reset tokens. |
+| `audit_log` | Append-only record of user actions. |
+| `rate_limits` | One row per throttled request hit, counted within a window. |
+| `counters` | Named atomic sequences for document numbers. |
+
+### Clients and sites (5)
+
+| Table | Purpose |
+|---|---|
+| `clients` | Customer accounts, pipeline stage, account manager, SLA. |
+| `sites` | Physical locations belonging to a client. |
+| `rate_cards` | Agreed charge per client, division and role. |
+| `service_requests` | Client-facing cover requests / bookings. |
+| `mandates` | GoCardless Direct Debit mandates, one active per client. |
+
+### Workers (4)
+
+| Table | Purpose |
+|---|---|
+| `workers` | The workforce: role, division, credentials, pay, availability. |
+| `skills` | Catalogue of skills used for shift matching. |
+| `worker_skills` | Junction of workers to skills. |
+| `worker_references` | Reference checks, including explained employment gaps. |
+
+### Compliance (5)
+
+| Table | Purpose |
+|---|---|
+| `certifications` | Per-worker credentials with expiry and status. |
+| `insurance` | Company-level policy register with cover amounts. |
+| `compliance_reminders` | Dedup log for the 90/60/30/expired renewal digest. |
+| `incidents` | Accidents, near misses, safeguarding and complaints. |
+| `incident_actions` | Follow-up actions against an incident. |
+
+### Recruitment (2)
+
+| Table | Purpose |
+|---|---|
+| `applicants` | ATS pipeline from applied through to onboarded. |
+| `onboarding_tasks` | Checklist items against an applicant. |
+
+### Training (4)
+
+| Table | Purpose |
+|---|---|
+| `programmes` | Academy courses, with CPD hours. |
+| `enrolments` | A learner on a programme, and the certificate they earned. |
+| `sessions` | Scheduled training sessions. |
+| `certificates` | Publicly verifiable certificates with a stable public id. |
+
+### Scheduling (5)
+
+| Table | Purpose |
+|---|---|
+| `shifts` | Scheduled and open shifts. |
+| `shift_templates` | Recurring weekly shift patterns. |
+| `shift_offers` | Broadcast offers on open shifts, first to accept wins. |
+| `shift_events` | Field-ops event stream: clock in/out, check-ins, panic. |
+| `jobs` | Work orders and one-off bookings. |
+
+### Time and pay (4)
+
+| Table | Purpose |
+|---|---|
+| `timesheets` | Worked time awaiting approval. |
+| `pay_rules` | Uplift multipliers for night, weekend, bank holiday, overtime. |
+| `bank_holidays` | England and Wales bank-holiday calendar. |
+| `contracts` | Recurring service agreements with rate and SLA. |
+
+### Commercial (5)
+
+| Table | Purpose |
+|---|---|
+| `quotes` | Estimates, optionally converted to an invoice. |
+| `invoices` | Sales invoices with VAT, due date and payment tracking. |
+| `credit_notes` | Credits and refunds against an invoice. |
+| `dd_payments` | GoCardless payments raised against a mandate. |
+| `files` | Document centre: uploads tied to a client, worker or neither. |
+
+### Governance (2)
+
+| Table | Purpose |
+|---|---|
+| `consent_log` | GDPR opt-in record for public form submissions. |
+| `contact_enquiries` | Submissions from the public contact form. |
+
+### Comms (4)
+
+| Table | Purpose |
+|---|---|
+| `announcements` | Broadcasts to all staff or one division. |
+| `notifications` | Per-user in-app bell notifications. |
+| `sms_log` | Audit of outbound text messages. |
+| `items` | Smoke-test table (see Misc). |
+
+### Content (2)
+
+| Table | Purpose |
+|---|---|
+| `blog_posts` | Public blog and resource posts, managed in the CMS. |
+| `testimonials` | Curated client reviews, managed in the CMS. |
+
+### Misc (0 beyond the above)
+
+`items` (`schema.sql:10`) is a two-column smoke test left over from the initial
+API check. It is counted under Comms above only to keep the totals honest; it
+belongs to no domain and nothing reads it.
+
+---
+
+## 3. Reading the column tables
+
+- **Type** is the declared MySQL type, merged across `CREATE` and any later
+  `ALTER`.
+- **Null** is `yes`/`no` as declared.
+- Where a column arrived through a later `ALTER`, the Notes column says
+  "added by `ALTER` at `schema.sql:N`".
+- Foreign keys give the referenced table and the `ON DELETE` behaviour.
+- Indexes and unique keys are listed after each column table.
+
+---
+
+## 4. Tables
+
+### `items`
+
+Smoke test for the API and database connection. Nothing in the app reads it.
+`CREATE` at `schema.sql:10`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(255) | no | — | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+### `roles`
+
+Reference table of role keys. Seeded, never written at runtime.
+`CREATE` at `schema.sql:17`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `role_key` | VARCHAR(32) | no | — | Primary key |
+| `label` | VARCHAR(64) | no | — | Human-readable name |
+
+### `users`
+
+Every login: staff, client-portal users and worker app users. Soft-deleted.
+`CREATE` at `schema.sql:32`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(160) | no | — | |
+| `email` | VARCHAR(190) | no | — | Unique |
+| `password_hash` | VARCHAR(255) | no | — | bcrypt |
+| `role` | ENUM('super_admin','admin','manager','trainer','editor','employee','client') | no | 'employee' | Mirrors `roles.role_key` but is a separate hardcoded ENUM |
+| `division` | ENUM('care','academy','cleaning','security') | yes | NULL | Division ENUM, `schema.sql:38` |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+| `client_id` | INT | yes | NULL | Added by `ALTER` at `schema.sql:552`. Links a portal login to a client. **No foreign key.** |
+| `worker_id` | INT | yes | NULL | Added by `ALTER` at `schema.sql:552`. Links a mobile login to a worker. **No foreign key.** |
+
+Keys: `UNIQUE uniq_email (email)`.
+
+### `tokens`
+
+Bearer session tokens. One row per active session.
+`CREATE` at `schema.sql:52`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `user_id` | INT | no | — | FK → `users(id)` **ON DELETE CASCADE** |
+| `token_hash` | CHAR(64) | no | — | Unique |
+| `expires_at` | DATETIME | no | — | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `user_agent` | VARCHAR(255) | yes | NULL | Added by `ALTER` at `schema.sql:505` |
+| `ip` | VARCHAR(45) | yes | NULL | Added by `ALTER` at `schema.sql:505` |
+| `last_seen_at` | DATETIME | yes | NULL | Added by `ALTER` at `schema.sql:505` |
+
+Keys: `UNIQUE uniq_token (token_hash)`, `KEY idx_user (user_id)`.
+
+### `audit_log`
+
+Append-only action log. `CREATE` at `schema.sql:64`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `user_id` | INT | yes | NULL | **No foreign key and no index**, though `audit.php:12` joins on it |
+| `action` | VARCHAR(64) | no | — | |
+| `detail` | VARCHAR(255) | no | '' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_action (action)`.
+
+### `counters`
+
+Named atomic sequences. `next_seq()` in `lib.php` increments `val` in one
+statement, so concurrent invoice, quote and certificate creates never collide.
+Key format is e.g. `invoice-2026` (`schema.sql:73-75`).
+`CREATE` at `schema.sql:76`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `name` | VARCHAR(64) | no | — | Primary key |
+| `val` | INT | no | 0 | |
+
+### `rate_limits`
+
+One row per throttled hit on a public endpoint. `rate_limit()` in `lib.php`
+counts rows within a window and prunes rows older than a day probabilistically
+(`lib.php:165`). `CREATE` at `schema.sql:83`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `bucket` | VARCHAR(64) | no | — | |
+| `ip` | VARCHAR(45) | no | — | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_bucket_ip_time (bucket, ip, created_at)`.
+
+### `clients`
+
+Customer accounts. Soft-deleted. `CREATE` at `schema.sql:92`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(190) | no | — | |
+| `type` | ENUM('care_home','nhs','landlord','event','private') | no | 'private' | |
+| `contact_name` | VARCHAR(160) | yes | NULL | |
+| `email` | VARCHAR(190) | yes | NULL | |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `divisions` | VARCHAR(120) | no | '' | **Comma-separated list of division ids, not a junction table.** See §6 |
+| `status` | ENUM('active','prospect','paused') | no | 'prospect' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+| `stage` | ENUM('lead','qualified','proposal','won','lost') | no | 'lead' | Added by `ALTER` at `schema.sql:677` |
+| `account_manager_id` | INT | yes | NULL | Added by `ALTER` at `schema.sql:677`. **No foreign key** to `users` |
+| `sla_response_hours` | INT | yes | NULL | Added by `ALTER` at `schema.sql:677` |
+
+Keys: none beyond the primary key. There is no index on `name`, `status` or
+`deleted_at`.
+
+### `sites`
+
+Locations belonging to a client. `CREATE` at `schema.sql:107`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | no | — | FK → `clients(id)` **ON DELETE CASCADE** |
+| `name` | VARCHAR(190) | no | — | |
+| `address` | VARCHAR(255) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_client (client_id)`.
+
+### `workers`
+
+The workforce. Soft-deleted. This is the most heavily `ALTER`ed table in the
+file: eight of its twenty-three columns arrive after the `CREATE`.
+`CREATE` at `schema.sql:120`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(160) | no | — | |
+| `email` | VARCHAR(190) | yes | NULL | Not unique |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `role` | ENUM('carer','nurse','cleaner','guard','trainer') | no | 'carer' | |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:126` |
+| `status` | ENUM('active','onboarding','inactive') | no | 'onboarding' | |
+| `right_to_work` | TINYINT(1) | no | 0 | |
+| `dbs_status` | ENUM('valid','pending','expired') | yes | NULL | |
+| `dbs_expiry` | DATE | yes | NULL | |
+| `sia_number` | VARCHAR(40) | yes | NULL | |
+| `sia_expiry` | DATE | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+| `dbs_update_service` | TINYINT(1) | no | 0 | Added by `ALTER` at `schema.sql:405` |
+| `recheck_due` | DATE | yes | NULL | Added by `ALTER` at `schema.sql:405` |
+| `pay_rate_pence` | INT | no | 0 | Added by `ALTER` at `schema.sql:417` |
+| `pay_type` | ENUM('paye','umbrella') | no | 'paye' | Added by `ALTER` at `schema.sql:417` |
+| `holiday_hours` | DECIMAL(8,2) | no | 0 | Added by `ALTER` at `schema.sql:417` |
+| `home_postcode` | VARCHAR(12) | yes | NULL | Added by `ALTER` at `schema.sql:766` |
+| `travel_radius_mi` | INT | no | 10 | Added by `ALTER` at `schema.sql:766` |
+| `avail_days` | TINYINT(1) | no | 1 | Added by `ALTER` at `schema.sql:766` |
+| `avail_nights` | TINYINT(1) | no | 0 | Added by `ALTER` at `schema.sql:766` |
+| `avail_weekends` | TINYINT(1) | no | 0 | Added by `ALTER` at `schema.sql:766` |
+
+Keys: none beyond the primary key. No index on `division`, `status`,
+`deleted_at`, `dbs_expiry` or `sia_expiry`, despite the expiry digest scanning
+the last two.
+
+### `certifications`
+
+Per-worker credentials with renewal tracking. Distinct from `certificates`,
+which are academy awards. `CREATE` at `schema.sql:139`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `type` | VARCHAR(80) | no | — | Free text, not an ENUM |
+| `number` | VARCHAR(80) | yes | NULL | |
+| `expiry` | DATE | yes | NULL | |
+| `status` | ENUM('valid','pending','expired') | no | 'valid' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_worker (worker_id)`. No `updated_at`, no `deleted_at`.
+
+### `contact_enquiries`
+
+Public contact-form submissions. `CREATE` at `schema.sql:152`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(160) | no | — | |
+| `email` | VARCHAR(190) | no | — | |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `division` | ENUM('care','academy','cleaning','security','**other**') | no | 'other' | Division ENUM **plus `other`**, `schema.sql:157`. `contact.php:29` coerces anything unrecognised to `other` |
+| `message` | TEXT | no | — | |
+| `status` | ENUM('new','handled') | no | 'new' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: none beyond the primary key.
+
+### `programmes`
+
+Academy courses. `CREATE` at `schema.sql:164`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `title` | VARCHAR(190) | no | — | |
+| `description` | TEXT | yes | NULL | |
+| `division` | ENUM('care','academy','cleaning','security') | no | **'academy'** | Division ENUM, `schema.sql:168`. The only one defaulting to `academy` |
+| `status` | ENUM('draft','published','archived') | no | 'draft' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `cpd_hours` | INT | no | 0 | Added by `ALTER` at `schema.sql:667` |
+
+Keys: none beyond the primary key. No `deleted_at`.
+
+### `enrolments`
+
+A learner on a programme. `CREATE` at `schema.sql:174`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `programme_id` | INT | no | — | FK → `programmes(id)` **ON DELETE CASCADE** |
+| `learner_name` | VARCHAR(160) | no | — | Free text; no link to `users` or `workers` |
+| `status` | ENUM('enrolled','in_progress','completed','withdrawn') | no | 'enrolled' | |
+| `certificate_public_id` | VARCHAR(40) | yes | NULL | Soft reference to `certificates.public_id`. **No foreign key** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_programme (programme_id)`.
+
+### `sessions`
+
+Scheduled training sessions. Not to be confused with auth sessions, which live
+in `tokens`. `CREATE` at `schema.sql:185`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `programme_id` | INT | yes | NULL | FK → `programmes(id)` **ON DELETE CASCADE** |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE SET NULL** |
+| `starts_at` | DATETIME | no | — | |
+| `ends_at` | DATETIME | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_starts (starts_at)`, `KEY idx_sess_programme (programme_id)`,
+`KEY idx_sess_worker (worker_id)`.
+
+Note the CASCADE on a nullable column: deleting a programme deletes its
+sessions rather than orphaning them, which is probably not what the nullable
+column implies.
+
+### `invoices`
+
+Sales invoices. `CREATE` at `schema.sql:200`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `number` | VARCHAR(32) | no | — | Unique; allocated from `counters` |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:204` |
+| `net_pence` | INT | no | 0 | Signed INT caps at £21,474,836.47 |
+| `vat_pence` | INT | no | 0 | |
+| `total_pence` | INT | no | 0 | |
+| `status` | ENUM('draft','sent','paid','overdue','void') | no | 'draft' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `due_date` | DATE | yes | NULL | Added by `ALTER` at `schema.sql:461`. Drives the aged-debt buckets |
+| `pay_token` | CHAR(40) | yes | NULL | Added by `ALTER` at `schema.sql:511`. Public pay-link token. **No index and no unique key** — see §6 |
+| `amount_paid_pence` | INT | no | 0 | Added by `ALTER` at `schema.sql:511`. Partial-payment tracking |
+
+Keys: `UNIQUE uniq_number (number)`, `KEY idx_status (status)`,
+`KEY idx_inv_client (client_id)`. No `deleted_at` — `void` is the terminal
+status instead.
+
+### `timesheets`
+
+Worked time awaiting approval; the input to payroll.
+`CREATE` at `schema.sql:218`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `work_date` | DATE | no | — | |
+| `start_time` | TIME | no | — | |
+| `end_time` | TIME | no | — | |
+| `minutes` | INT | no | 0 | Denormalised duration |
+| `status` | ENUM('pending','approved') | no | 'pending' | |
+| `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_worker_date (worker_id, work_date)`,
+`KEY idx_ts_approver (approved_by)`. No `deleted_at`, no `updated_at`, no link
+to the `shift` the time was worked on.
+
+### `announcements`
+
+Broadcasts to staff. `CREATE` at `schema.sql:235`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `author_id` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `audience` | ENUM('all','care','academy','cleaning','security') | no | 'all' | Division ENUM **plus `all`**, `schema.sql:238` |
+| `title` | VARCHAR(190) | no | — | |
+| `body` | TEXT | no | — | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_audience (audience)`, `KEY idx_ann_author (author_id)`.
+
+### `contracts`
+
+Recurring service agreements. Soft-deleted. `CREATE` at `schema.sql:248`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:251` |
+| `title` | VARCHAR(190) | no | — | |
+| `scope` | TEXT | yes | NULL | |
+| `rate_pence` | INT | no | 0 | |
+| `frequency` | ENUM('weekly','fortnightly','monthly','quarterly') | no | 'monthly' | |
+| `sla_hours` | INT | yes | NULL | |
+| `start_date` | DATE | no | — | |
+| `end_date` | DATE | no | — | **NOT NULL**, so open-ended contracts cannot be represented |
+| `status` | ENUM('active','expired','cancelled') | no | 'active' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_status (status)`, `KEY idx_end (end_date)`,
+`KEY idx_contract_client (client_id)`.
+
+### `quotes`
+
+Estimates, optionally converted to an invoice. `CREATE` at `schema.sql:270`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `number` | VARCHAR(32) | no | — | Unique; allocated from `counters` |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:274` |
+| `title` | VARCHAR(190) | no | — | |
+| `net_pence` | INT | no | 0 | |
+| `vat_pence` | INT | no | 0 | |
+| `total_pence` | INT | no | 0 | |
+| `status` | ENUM('draft','sent','accepted','declined') | no | 'draft' | |
+| `invoice_id` | INT | yes | NULL | FK → `invoices(id)` **ON DELETE SET NULL** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `UNIQUE uniq_quote_number (number)`, `KEY idx_status (status)`,
+`KEY idx_quote_client (client_id)`, `KEY idx_quote_invoice (invoice_id)`.
+No `deleted_at`.
+
+### `jobs`
+
+Work orders. Soft-deleted. `CREATE` at `schema.sql:292`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:295` |
+| `type` | ENUM('care_visit','clean','guard_shift','course','other') | no | 'other' | |
+| `title` | VARCHAR(190) | no | — | |
+| `priority` | ENUM('emergency','high','standard') | no | 'standard' | |
+| `status` | ENUM('booked','assigned','in_progress','done','cancelled') | no | 'booked' | |
+| `scheduled_for` | DATETIME | yes | NULL | |
+| `notes` | TEXT | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_status (status)`, `KEY idx_client (client_id)`. There is no
+worker assignment column despite the `assigned` status.
+
+### `certificates`
+
+Publicly verifiable academy certificates. Soft-deleted.
+`CREATE` at `schema.sql:311`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `public_id` | VARCHAR(40) | no | — | Unique; the id used on the public `/verify` page |
+| `learner_name` | VARCHAR(160) | no | — | Free text |
+| `course` | VARCHAR(190) | no | — | Free text; **no link to `programmes`** |
+| `issued_on` | DATE | no | — | |
+| `status` | ENUM('issued','revoked') | no | 'issued' | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `UNIQUE uniq_public (public_id)`.
+
+### `files`
+
+Document centre. Soft-deleted. `CREATE` at `schema.sql:328`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `stored_name` | VARCHAR(190) | no | — | Name on disk |
+| `original_name` | VARCHAR(255) | no | — | Name as uploaded |
+| `mime` | VARCHAR(120) | no | — | |
+| `size_bytes` | INT | no | 0 | Signed INT caps at ~2.1 GB |
+| `category` | ENUM('contract','certificate','policy','rams','id','other') | no | 'other' | |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE SET NULL** |
+| `uploaded_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_category (category)`, `KEY idx_files_client (client_id)`,
+`KEY idx_files_worker (worker_id)`, `KEY idx_files_uploader (uploaded_by)`.
+
+Soft-deleting a row leaves the file on disk; nothing in the schema records
+whether the blob was reaped.
+
+### `compliance_reminders`
+
+Dedup log for the renewal digest, so a 60-day nudge never fires twice.
+`credential_key` is e.g. `dbs:12`, `sia:12`, `cert:88`, `ins:3`
+(`schema.sql:357-360`). `CREATE` at `schema.sql:361`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `credential_key` | VARCHAR(64) | no | — | Composite string key, not a foreign key |
+| `tier` | ENUM('d90','d60','d30','expired') | no | — | |
+| `sent_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_cred_tier (credential_key, tier)`, `KEY idx_sent (sent_at)`.
+The dedup key is an index, **not a unique key**, so the guarantee depends
+entirely on the application checking before it writes.
+
+### `insurance`
+
+Company-level policy register. Soft-deleted. `CREATE` at `schema.sql:372`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `type` | ENUM('employers_liability','public_liability','professional_indemnity','other') | no | 'public_liability' | |
+| `insurer` | VARCHAR(160) | no | — | |
+| `policy_no` | VARCHAR(80) | yes | NULL | |
+| `cover_pence` | **BIGINT** | no | 0 | The only money column not INT — £5m cover would overflow a signed INT |
+| `start_date` | DATE | yes | NULL | |
+| `expiry` | DATE | yes | NULL | |
+| `notes` | VARCHAR(255) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_ins_expiry (expiry)`.
+
+### `worker_references`
+
+Reference checks, two or more per worker, with gaps explained.
+`CREATE` at `schema.sql:388`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `referee_name` | VARCHAR(160) | no | — | |
+| `referee_org` | VARCHAR(160) | yes | NULL | |
+| `relationship` | VARCHAR(80) | yes | NULL | |
+| `email` | VARCHAR(190) | yes | NULL | |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `status` | ENUM('requested','received','verified','gap_explained') | no | 'requested' | |
+| `gap_note` | VARCHAR(255) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `KEY idx_ref_worker (worker_id)`.
+
+### `pay_rules`
+
+Uplift multipliers. `payroll.php` applies the single highest day premium per
+entry, plus overtime beyond the weekly threshold (`schema.sql:422-425`).
+`CREATE` at `schema.sql:426`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `rule_key` | ENUM('night','weekend','bank_holiday','overtime') | no | — | **Primary key is an ENUM** — adding a rule type is a schema change |
+| `multiplier` | DECIMAL(4,2) | no | 1.00 | 1.50 = time and a half |
+| `meta` | VARCHAR(120) | yes | NULL | Human-readable description of when the rule applies; not machine-read |
+
+### `bank_holidays`
+
+England and Wales calendar. `CREATE` at `schema.sql:439`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `holiday_date` | DATE | no | — | Primary key |
+| `name` | VARCHAR(80) | no | — | |
+
+Seeded with 2026 only — see §5.
+
+### `credit_notes`
+
+Credits and refunds against an invoice. `CREATE` at `schema.sql:465`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `number` | VARCHAR(32) | no | — | Unique; allocated from `counters` |
+| `invoice_id` | INT | no | — | FK → `invoices(id)` **ON DELETE CASCADE** |
+| `amount_pence` | INT | no | 0 | |
+| `reason` | VARCHAR(255) | yes | NULL | |
+| `created_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `UNIQUE uniq_cn_number (number)`, `KEY idx_cn_invoice (invoice_id)`.
+
+CASCADE on a financial record: deleting an invoice row silently destroys its
+credit notes. Since `invoices` has no `deleted_at`, that path is a hard delete.
+
+### `shifts`
+
+Scheduled and open shifts. `worker_id` is nullable because an open shift has no
+worker until one accepts a broadcast offer (`schema.sql:480-481`).
+`CREATE` at `schema.sql:482`, with two no-op `MODIFY` statements at
+`schema.sql:733-734` for older installs.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE CASCADE**. Restated by `MODIFY` at `schema.sql:733` |
+| `client_id` | INT | yes | NULL | **No foreign key** — see §6 |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:486` |
+| `title` | VARCHAR(190) | no | — | |
+| `site_name` | VARCHAR(190) | yes | NULL | Free text; **no link to `sites`** |
+| `starts_at` | DATETIME | no | — | |
+| `ends_at` | DATETIME | no | — | |
+| `status` | ENUM('open','scheduled','completed','cancelled') | no | 'scheduled' | Restated by `MODIFY` at `schema.sql:734` |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `KEY idx_worker_time (worker_id, starts_at)`, `KEY idx_time (starts_at)`.
+No index on `client_id` or `status`. No `deleted_at`.
+
+**ON DELETE CASCADE on `worker_id` is wrong for an audit trail**: hard-deleting a
+worker destroys their shift history, and `shift_events` cascades from `shifts`,
+so the field-ops log goes with it. Workers are soft-deleted in practice, which
+masks this.
+
+### `mandates`
+
+GoCardless Direct Debit mandates. `CREATE` at `schema.sql:516`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | no | — | FK → `clients(id)` **ON DELETE CASCADE** |
+| `gc_customer_id` | VARCHAR(64) | yes | NULL | GoCardless id |
+| `gc_mandate_id` | VARCHAR(64) | yes | NULL | GoCardless id; **not unique** |
+| `status` | ENUM('pending','active','failed','cancelled') | no | 'pending' | |
+| `reference` | VARCHAR(40) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `KEY idx_mandate_client (client_id)`, `KEY idx_mandate_ref (reference)`.
+
+The "one active mandate per client" rule in the comment at `schema.sql:515` is
+not enforced by any constraint.
+
+### `dd_payments`
+
+GoCardless payments raised against a mandate. `CREATE` at `schema.sql:531`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `invoice_id` | INT | yes | NULL | FK → `invoices(id)` **ON DELETE SET NULL** |
+| `mandate_id` | INT | yes | NULL | FK → `mandates(id)` **ON DELETE SET NULL** |
+| `gc_payment_id` | VARCHAR(64) | yes | NULL | GoCardless id; indexed but **not unique**, so a replayed webhook can double-insert |
+| `amount_pence` | INT | no | 0 | |
+| `status` | VARCHAR(40) | no | 'pending_submission' | Free text, not an ENUM — the only payment status column that is not |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_ddp_invoice (invoice_id)`, `KEY idx_ddp_gc (gc_payment_id)`.
+
+### `incidents`
+
+Accidents, near misses, safeguarding concerns and complaints.
+`CREATE` at `schema.sql:557`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `ref` | VARCHAR(24) | no | — | Unique human reference |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:560` |
+| `type` | ENUM('accident','incident','near_miss','safeguarding','complaint') | no | 'incident' | |
+| `severity` | ENUM('low','medium','high','critical') | no | 'low' | |
+| `title` | VARCHAR(190) | no | — | |
+| `detail` | TEXT | no | — | |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `site_name` | VARCHAR(190) | yes | NULL | Free text; no link to `sites` |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE SET NULL** |
+| `riddor` | TINYINT(1) | no | 0 | RIDDOR reportable |
+| `safeguarding` | TINYINT(1) | no | 0 | |
+| `status` | ENUM('open','investigating','actioned','closed') | no | 'open' | |
+| `reported_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `occurred_at` | DATETIME | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `UNIQUE uniq_inc_ref (ref)`, `KEY idx_inc_status (status)`,
+`KEY idx_inc_type (type)`. No `deleted_at` — see §6.
+
+### `incident_actions`
+
+Follow-up actions against an incident. `CREATE` at `schema.sql:583`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `incident_id` | INT | no | — | FK → `incidents(id)` **ON DELETE CASCADE** |
+| `note` | VARCHAR(500) | no | — | |
+| `done` | TINYINT(1) | no | 0 | |
+| `created_by` | INT | yes | NULL | **No foreign key** to `users`, unlike `credit_notes.created_by` |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_ia_incident (incident_id)`.
+
+### `shift_events`
+
+Field-ops event stream: clock in and out, check-ins, panic alerts, notes, tasks
+and client sign-off. `CREATE` at `schema.sql:595`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `shift_id` | INT | no | — | FK → `shifts(id)` **ON DELETE CASCADE** |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE SET NULL** |
+| `kind` | ENUM('clock_in','clock_out','check_in','panic','note','task','signoff') | no | 'note' | |
+| `note` | VARCHAR(500) | yes | NULL | |
+| `lat` | DECIMAL(9,6) | yes | NULL | Returned as a string by mysqli |
+| `lng` | DECIMAL(9,6) | yes | NULL | Returned as a string by mysqli |
+| `signer` | VARCHAR(160) | yes | NULL | Client sign-off name; free text |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_se_shift (shift_id)`, `KEY idx_se_kind (kind)`.
+
+### `applicants`
+
+ATS pipeline. `CREATE` at `schema.sql:612`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(160) | no | — | |
+| `email` | VARCHAR(190) | no | — | Not unique |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `role_applied` | VARCHAR(80) | yes | NULL | Free text, unlike `workers.role` which is an ENUM |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:618` |
+| `stage` | ENUM('applied','screened','interview','vetting','offer','onboarded','rejected') | no | 'applied' | |
+| `source` | VARCHAR(80) | yes | NULL | |
+| `notes` | TEXT | yes | NULL | |
+| `worker_id` | INT | yes | NULL | FK → `workers(id)` **ON DELETE SET NULL**. Set when the applicant is converted |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+
+Keys: `KEY idx_app_stage (stage)`. No `deleted_at` despite holding personal data
+subject to GDPR erasure — see §6.
+
+### `onboarding_tasks`
+
+Checklist items against an applicant. `CREATE` at `schema.sql:629`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `applicant_id` | INT | no | — | FK → `applicants(id)` **ON DELETE CASCADE** |
+| `label` | VARCHAR(160) | no | — | |
+| `done` | TINYINT(1) | no | 0 | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_ot_applicant (applicant_id)`.
+
+### `user_2fa`
+
+Per-user TOTP secret (RFC 6238). `CREATE` at `schema.sql:645`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `user_id` | INT | no | — | Primary key **and** FK → `users(id)` **ON DELETE CASCADE**. One row per user |
+| `secret` | VARCHAR(64) | no | — | Stored in plaintext, not encrypted at rest |
+| `enabled` | TINYINT(1) | no | 0 | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+No recovery-code table exists, so losing the authenticator means an
+administrator has to delete the row by hand.
+
+### `password_resets`
+
+Single-use, short-lived reset tokens. `CREATE` at `schema.sql:654`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `user_id` | INT | no | — | FK → `users(id)` **ON DELETE CASCADE** |
+| `token_hash` | CHAR(64) | no | — | Unique |
+| `expires_at` | DATETIME | no | — | |
+| `used` | TINYINT(1) | no | 0 | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `UNIQUE uniq_reset_token (token_hash)`, `KEY idx_reset_user (user_id)`.
+
+### `rate_cards`
+
+Agreed charge per client, division and role. `CREATE` at `schema.sql:683`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | no | — | FK → `clients(id)` **ON DELETE CASCADE** |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:686` |
+| `role` | VARCHAR(80) | no | 'standard' | Free text, unlike `workers.role` |
+| `charge_pence` | INT | no | 0 | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_rc_client (client_id)`. There is **no unique key on
+(client_id, division, role)**, so duplicate and contradictory rate cards can
+coexist and the lookup result depends on row order.
+
+### `service_requests`
+
+Client-facing cover requests. `CREATE` at `schema.sql:695`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `contact_name` | VARCHAR(160) | no | — | |
+| `email` | VARCHAR(190) | no | — | |
+| `phone` | VARCHAR(40) | yes | NULL | |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:701` |
+| `site_name` | VARCHAR(190) | yes | NULL | Free text |
+| `detail` | TEXT | no | — | |
+| `preferred_start` | DATETIME | yes | NULL | |
+| `preferred_end` | DATETIME | yes | NULL | |
+| `status` | ENUM('new','quoted','confirmed','declined') | no | 'new' | |
+| `shift_id` | INT | yes | NULL | The shift raised from this request. **No foreign key** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_sr_status (status)`, `KEY idx_sr_client (client_id)`.
+No `updated_at` despite `status` being mutable.
+
+### `consent_log`
+
+GDPR opt-in record for public forms. `CREATE` at `schema.sql:715`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `email` | VARCHAR(190) | no | — | |
+| `kind` | VARCHAR(40) | no | 'contact' | Free text, not an ENUM |
+| `granted` | TINYINT(1) | no | 1 | |
+| `source` | VARCHAR(80) | yes | NULL | |
+| `ip` | VARCHAR(45) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_consent_email (email)`.
+
+Append-only by design: a withdrawal is a new row with `granted = 0`, so current
+consent is "the latest row for this email and kind", which nothing in the schema
+enforces.
+
+### `skills`
+
+Catalogue used for shift matching. `CREATE` at `schema.sql:737`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `name` | VARCHAR(80) | no | — | Unique |
+| `category` | ENUM('care','academy','cleaning','security','**general**') | no | 'general' | Division ENUM **plus `general`**, `schema.sql:740` |
+
+Keys: `UNIQUE uniq_skill (name)`.
+
+### `worker_skills`
+
+Junction of workers to skills. `CREATE` at `schema.sql:757`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `worker_id` | INT | no | — | Part of the composite primary key. FK → `workers(id)` **ON DELETE CASCADE** |
+| `skill_id` | INT | no | — | Part of the composite primary key. FK → `skills(id)` **ON DELETE CASCADE** |
+
+Keys: `PRIMARY KEY (worker_id, skill_id)`.
+
+This is the one properly normalised many-to-many in the schema — contrast
+`clients.divisions`.
+
+### `shift_templates`
+
+Recurring weekly shift patterns. `CREATE` at `schema.sql:774`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `title` | VARCHAR(190) | no | — | |
+| `division` | ENUM('care','academy','cleaning','security') | no | 'care' | Division ENUM, `schema.sql:777` |
+| `client_id` | INT | yes | NULL | FK → `clients(id)` **ON DELETE SET NULL** |
+| `site_name` | VARCHAR(190) | yes | NULL | Free text |
+| `weekday` | TINYINT | no | — | 1 = Monday through 7 = Sunday, ISO (`schema.sql:780`). Not range-constrained |
+| `start_time` | TIME | no | — | |
+| `end_time` | TIME | no | — | |
+| `active` | TINYINT(1) | no | 1 | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_tmpl_active (active)`. No `updated_at`, no `deleted_at`.
+
+### `shift_offers`
+
+Broadcast offers on open shifts; first to accept wins.
+`CREATE` at `schema.sql:790`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `shift_id` | INT | no | — | FK → `shifts(id)` **ON DELETE CASCADE** |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `token` | CHAR(40) | no | — | Unique; the accept link |
+| `status` | ENUM('sent','accepted','declined','expired') | no | 'sent' | |
+| `responded_at` | DATETIME | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `UNIQUE uniq_offer_token (token)`, `KEY idx_offer_shift (shift_id)`,
+`KEY idx_offer_worker (worker_id)`.
+
+There is no expiry column and no unique key on `(shift_id, worker_id)`, so the
+same worker can be offered the same shift repeatedly, and "expired" is a status
+someone has to set rather than a time the row passes.
+
+### `notifications`
+
+Per-user in-app bell notifications. `CREATE` at `schema.sql:806`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `user_id` | INT | yes | NULL | NULL means broadcast to all staff (`schema.sql:808`). FK → `users(id)` **ON DELETE CASCADE** |
+| `type` | VARCHAR(40) | no | 'info' | Free text |
+| `title` | VARCHAR(190) | no | — | |
+| `body` | VARCHAR(500) | yes | NULL | |
+| `url` | VARCHAR(190) | yes | NULL | |
+| `read_at` | DATETIME | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_notif_user (user_id, read_at)`.
+
+A broadcast row (`user_id IS NULL`) has a single `read_at`, so it cannot record
+per-user read state — the first person to read it marks it read for everybody,
+or the application ignores `read_at` for broadcasts.
+
+### `sms_log`
+
+Audit of outbound texts. `CREATE` at `schema.sql:820`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `recipient` | VARCHAR(40) | no | — | Phone number, stored in the clear |
+| `body` | VARCHAR(500) | no | — | Message text, stored in the clear |
+| `status` | ENUM('sent','failed','skipped') | no | 'sent' | |
+| `meta` | VARCHAR(190) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `KEY idx_sms_time (created_at)`. No retention or pruning is defined
+anywhere in the schema.
+
+### `blog_posts`
+
+Public blog and resource posts. Soft-deleted.
+`CREATE` at `schema.sql:831`, **and identically at `server/blog.php:18`** — see
+§6.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `slug` | VARCHAR(190) | no | — | Unique |
+| `title` | VARCHAR(255) | no | — | |
+| `excerpt` | VARCHAR(500) | no | '' | |
+| `category` | VARCHAR(64) | no | 'Company' | Free text, not an ENUM |
+| `image` | VARCHAR(500) | no | '' | URL or path |
+| `body` | MEDIUMTEXT | no | — | |
+| `read_mins` | INT | no | 3 | |
+| `status` | ENUM('draft','published') | no | 'draft' | |
+| `published_at` | DATE | yes | NULL | DATE, not DATETIME |
+| `author_id` | INT | yes | NULL | **No foreign key** to `users` |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `UNIQUE uniq_blog_slug (slug)`, `KEY idx_blog_pub (status, published_at)`.
+
+The unique key on `slug` covers soft-deleted rows too, so a deleted post's slug
+can never be reused.
+
+### `testimonials`
+
+Curated client reviews. Soft-deleted.
+`CREATE` at `schema.sql:851`, **and identically at
+`server/testimonials.php:16`** — see §6.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `author` | VARCHAR(160) | no | — | |
+| `role` | VARCHAR(190) | no | '' | Job title of the reviewer, unrelated to `users.role` |
+| `rating` | TINYINT | no | 5 | Not range-constrained; nothing stops 0 or 99 |
+| `body` | VARCHAR(1000) | no | — | |
+| `status` | ENUM('draft','published') | no | **'published'** | The only content table defaulting to published |
+| `sort_order` | INT | no | 0 | |
+| `author_id` | INT | yes | NULL | The CMS user who wrote the row, not the reviewer. **No foreign key** |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | |
+| `deleted_at` | TIMESTAMP | yes | NULL | Soft delete |
+
+Keys: `KEY idx_testi_pub (status, sort_order)`.
+
+---
+
+## 5. Seeded data
+
+The file seeds six things. Every seed uses `INSERT IGNORE`, so re-importing the
+file does not duplicate or overwrite them.
+
+### Roles — 7 rows (`schema.sql:22`)
+
+`super_admin`, `admin`, `manager`, `trainer`, `editor`, `employee`, `client`,
+each with a display label.
+
+### Super-admin account — 1 row (`schema.sql:47`)
+
+A single seed user is created with the `super_admin` role, using a bcrypt hash
+that is written literally into the file. **The account's password is stated in
+plain text in a comment at `schema.sql:45-46`.** It is not reproduced here.
+
+Two consequences worth acting on:
+
+1. The comment at `schema.sql:46` instructs that the password be changed after
+   first login. Nothing enforces that — there is no `must_change_password` flag
+   and no forced-rotation mechanism anywhere in the schema.
+2. Because `schema.sql` is version-controlled and the credentials are in it, the
+   seed password is public to anyone with repository access. Any install that
+   has not had that password changed is accessible to them at super-admin level.
+
+### Pay rules — 4 rows (`schema.sql:432`)
+
+| Rule | Multiplier | Applies to |
+|---|---|---|
+| `night` | 1.30 | Shifts starting 20:00–05:59 |
+| `weekend` | 1.25 | Saturday and Sunday |
+| `bank_holiday` | 2.00 | Listed UK bank holidays |
+| `overtime` | 1.50 | Hours beyond 40 in an ISO week |
+
+The `meta` column holds the descriptions above as free text. They are
+documentation, not logic — the thresholds themselves are hardcoded in
+`payroll.php`, so editing `meta` changes nothing.
+
+### Bank holidays — 8 rows (`schema.sql:444`)
+
+**2026 only**: New Year's Day, Good Friday, Easter Monday, Early May, Spring,
+Summer, Christmas Day, Boxing Day (substitute).
+
+The calendar runs out at the end of 2026. From 1 January 2027 every bank holiday
+silently stops attracting the 2.00 multiplier, with no error and no warning —
+payroll simply pays the base rate. This needs a scheduled top-up.
+
+### Skills — 11 rows (`schema.sql:744`)
+
+Care: Dementia care, Medication trained, Manual handling, Senior carer.
+Security: Door supervision, CCTV operator, ACS vetted.
+Cleaning: COSHH trained, Deep cleaning.
+General: First aid, Driver.
+
+No skills are seeded in the `academy` category, though the ENUM allows it.
+
+### Demo certificate — 1 row (`schema.sql:324`)
+
+One certificate, public id `RG-2026-00123`, learner "Jane Doe", course
+"Health & Social Care (Level 3)", issued 2026-03-15, status `issued`. It exists
+so the public `/verify` page can be tested (`schema.sql:323`), and it is live on
+production unless someone deleted it.
+
+---
+
+## 6. Known schema issues
+
+### 6.1 The division ENUM is copy-pasted into thirteen tables
+
+`ENUM('care','academy','cleaning','security')` is repeated verbatim as a
+hardcoded column type in **thirteen** tables. Adding a fifth division, renaming
+one, or retiring one is an `ALTER TABLE` against every one of them, in the right
+order, on a live database.
+
+| Table | Column | Line |
+|---|---|---|
+| `users` | `division` | `schema.sql:38` |
+| `workers` | `division` | `schema.sql:126` |
+| `programmes` | `division` | `schema.sql:168` |
+| `invoices` | `division` | `schema.sql:204` |
+| `contracts` | `division` | `schema.sql:251` |
+| `quotes` | `division` | `schema.sql:274` |
+| `jobs` | `division` | `schema.sql:295` |
+| `shifts` | `division` | `schema.sql:486` |
+| `incidents` | `division` | `schema.sql:560` |
+| `applicants` | `division` | `schema.sql:618` |
+| `rate_cards` | `division` | `schema.sql:686` |
+| `service_requests` | `division` | `schema.sql:701` |
+| `shift_templates` | `division` | `schema.sql:777` |
+
+Three further columns are the same list with an extra member, which makes the
+problem worse rather than better — they are near-duplicates that will drift
+independently:
+
+| Table | Column | Extra member | Line |
+|---|---|---|---|
+| `contact_enquiries` | `division` | `'other'` | `schema.sql:157` |
+| `announcements` | `audience` | `'all'` | `schema.sql:238` |
+| `skills` | `category` | `'general'` | `schema.sql:740` |
+
+That is sixteen places to touch. The type is also duplicated a seventeenth time
+in TypeScript as `DivisionId` (`src/lib/types.ts:3`), which no tooling checks
+against the SQL.
+
+A `divisions` reference table with foreign keys, mirroring how `roles` is done
+at `schema.sql:17`, would reduce this to one row insert. Note that `roles`
+already demonstrates the problem in miniature: the reference table exists, but
+`users.role` (`schema.sql:37`) is still a hardcoded ENUM with no foreign key to
+it, so the two must be kept in step by hand.
+
+### 6.2 `clients.divisions` is a comma-separated string
+
+`clients.divisions VARCHAR(120) NOT NULL DEFAULT ''` (`schema.sql:99`) stores a
+client's divisions as a delimited list, e.g. `care,cleaning`.
+
+- It cannot be joined, indexed or constrained. "All clients in the security
+  division" is a `LIKE '%security%'` scan, which also matches nothing sensible
+  if a division is ever renamed to a substring of another.
+- Nothing prevents an invalid value, a duplicate, or stray whitespace.
+- Renaming a division means a string rewrite across every row.
+
+`worker_skills` (`schema.sql:757`) shows the correct pattern already exists in
+this schema. `clients.divisions` should be a `client_divisions` junction table.
+
+The TypeScript type documents the workaround rather than fixing it:
+`divisions: string // comma-separated division ids` (`src/lib/types.ts:12`).
+
+### 6.3 Tables lacking `deleted_at` that arguably need it
+
+Eleven tables carry `deleted_at`: `users`, `clients`, `sites`, `workers`,
+`contracts`, `jobs`, `certificates`, `files`, `insurance`, `blog_posts` and
+`testimonials`. The remaining thirty-nine are hard-delete only.
+
+The ones where that is a real problem:
+
+| Table | Why it matters |
+|---|---|
+| `invoices` | A financial record. `void` covers cancellation, but an accidental `DELETE` is unrecoverable, and it **cascades to `credit_notes`** (`schema.sql:475`), destroying the credit trail with it. |
+| `quotes` | Commercial record with a unique document number from `counters`; deleting one leaves a permanent gap with no record of why. |
+| `credit_notes` | A refund record. Cascade-deleted along with its invoice. |
+| `timesheets` | The evidentiary basis for what a worker was paid. No soft delete, no `updated_at`, so an edit or removal after approval leaves no trace. |
+| `incidents` | Accident, RIDDOR and safeguarding records carry statutory retention duties. A hard delete is a compliance failure, and it **cascades to `incident_actions`** (`schema.sql:591`). |
+| `certifications` | Evidence that a worker was cleared to work on a given date. Cascade-deleted with the worker (`schema.sql:148`). |
+| `worker_references` | Vetting evidence. Cascade-deleted with the worker (`schema.sql:401`). |
+| `applicants` | Holds personal data; needs a deletion story either way, and `onboarding_tasks` cascades from it. |
+| `shifts` | The operational record a timesheet is checked against. Cascade-deleted with the worker, taking `shift_events` and `shift_offers` with it. |
+| `programmes` | Cascade-deletes its `enrolments` (`schema.sql:182`), destroying learner history. |
+| `audit_log` | Deliberately append-only, so no `deleted_at` is correct — but there is also no protection against a plain `DELETE`. |
+
+The pattern is that soft delete was applied to the entities a user can click
+"delete" on in the UI, and not to the records those entities cascade into. The
+cascades are where the data loss actually happens.
+
+### 6.4 Missing and inconsistent foreign keys
+
+**`shifts.client_id` has no foreign key.** `schema.sql:485` declares
+`client_id INT NULL` and the table's only constraint is `fk_shifts_worker`
+(`schema.sql:496`). Compare `shift_templates.client_id` at `schema.sql:778`,
+which has `fk_tmpl_client ... ON DELETE SET NULL` (`schema.sql:786`) — the same
+column, in a directly related table, in the same build pass, constrained
+correctly. `scheduling.php:207` does `LEFT JOIN clients c ON c.id = s.client_id`,
+so the join is real; only the constraint is missing. Deleting a client therefore
+leaves shifts pointing at a client id that no longer exists, and the join
+silently returns `NULL` for the client name. There is no index on the column
+either.
+
+Other columns that name a foreign entity but declare no constraint:
+
+| Column | Should reference | Line | Note |
+|---|---|---|---|
+| `users.client_id` | `clients(id)` | `schema.sql:553` | Added by `ALTER`; gates client-portal access |
+| `users.worker_id` | `workers(id)` | `schema.sql:554` | Added by `ALTER`; gates worker-app access |
+| `clients.account_manager_id` | `users(id)` | `schema.sql:679` | Added by `ALTER` |
+| `audit_log.user_id` | `users(id)` | `schema.sql:66` | Joined at `audit.php:12`; also has no index |
+| `incident_actions.created_by` | `users(id)` | `schema.sql:588` | `credit_notes.created_by` at `schema.sql:471` does have one |
+| `service_requests.shift_id` | `shifts(id)` | `schema.sql:707` | The whole point of the column |
+| `enrolments.certificate_public_id` | `certificates(public_id)` | `schema.sql:179` | String reference; the target is unique, so a constraint is possible |
+| `blog_posts.author_id` | `users(id)` | `schema.sql:842` | |
+| `testimonials.author_id` | `users(id)` | `schema.sql:859` | |
+
+Four of these (`users.client_id`, `users.worker_id`,
+`clients.account_manager_id`, and the `workers`/`invoices`/`tokens` additions)
+arrived through `ADD COLUMN IF NOT EXISTS`, which cannot add a constraint in the
+same statement. That is the mechanical cause: **every column added by a later
+`ALTER` in this file is unconstrained**, and every column present in an original
+`CREATE` generally is constrained. The build-pass format produced the gap.
+
+Inconsistent `ON DELETE` behaviour for the same relationship also appears:
+
+- `shifts.worker_id` → **CASCADE** (`schema.sql:496`), but
+  `sessions.worker_id` → SET NULL (`schema.sql:196`),
+  `files.worker_id` → SET NULL (`schema.sql:345`),
+  `incidents.worker_id` → SET NULL (`schema.sql:579`),
+  `shift_events.worker_id` → SET NULL (`schema.sql:608`),
+  `applicants.worker_id` → SET NULL (`schema.sql:626`).
+  Six references to the same parent, five SET NULL and one CASCADE. The CASCADE
+  is on the operational history.
+- `sessions.programme_id` is nullable but **CASCADE**s (`schema.sql:195`), which
+  contradicts the nullability.
+
+Free-text columns that duplicate a real relationship rather than referencing it:
+`shifts.site_name` (`schema.sql:488`), `incidents.site_name`
+(`schema.sql:566`), `service_requests.site_name` (`schema.sql:702`) and
+`shift_templates.site_name` (`schema.sql:779`) are all `VARCHAR(190)` while a
+`sites` table exists (`schema.sql:107`) and is never joined to any of them.
+Likewise `certificates.course` (`schema.sql:315`) and
+`enrolments.learner_name` (`schema.sql:177`) are free text where
+`programmes` and a person record exist.
+
+### 6.5 Two tables are created by their endpoints; forty-eight are not
+
+`blog_posts` and `testimonials` are each defined **twice**: once in `schema.sql`
+(`831` and `851`), and once as a `CREATE TABLE IF NOT EXISTS` executed on every
+request by `server/blog.php:18` and `server/testimonials.php:16`. The comment at
+`blog.php:16-17` calls it a "first-run migration ... lets the endpoint be
+deployed without a manual schema step."
+
+The other forty-eight tables require importing `schema.sql` by hand through
+phpMyAdmin (`schema.sql:2`). So the project has two different, undocumented
+provisioning paths, and which one a table uses is not discoverable without
+reading the PHP.
+
+Concrete problems:
+
+- **The two definitions can drift.** They are byte-identical today; nothing
+  checks that. A change to `schema.sql` that is not mirrored into the endpoint
+  will not take effect on a database that was provisioned by the endpoint, and
+  vice versa. Because both use `IF NOT EXISTS`, the drift is silent — the second
+  definition is simply skipped.
+- **A `CREATE TABLE` runs on every single request**, including every anonymous
+  hit on the public blog. It is cheap but not free, and it means the database
+  user the web app runs as must hold DDL privileges permanently, which is a
+  larger grant than the application otherwise needs.
+- **Neither endpoint can add a column later.** `CREATE TABLE IF NOT EXISTS` is a
+  no-op once the table exists, so the pattern only ever handles first run.
+
+Either extend the self-creating pattern to everything, or drop it and make
+importing `schema.sql` the single documented step. The middle state is the worst
+of both.
+
+### 6.6 Where the TypeScript types and the SQL disagree
+
+`src/lib/types.ts` is described as mirroring the schema (`src/lib/types.ts:1`).
+Most of it does — I checked each type against the PHP that produces it, and the
+casts in `workers.php:21-27`, `users.php:27` and `incidents.php:28` mean the
+declared shapes are generally honest. The disagreements below are real.
+
+**a. `DashboardSummary.open_shifts` is computed from the wrong table.**
+`src/lib/types.ts:553` declares `open_shifts: number` alongside
+`upcoming_sessions`. Both are filled from the **same** table:
+
+```
+dashboard.php:27  SELECT COUNT(*) FROM sessions WHERE starts_at > NOW()
+dashboard.php:29  SELECT COUNT(*) FROM sessions WHERE worker_id IS NULL AND starts_at > NOW()
+```
+
+Line 29 counts unassigned rows in `sessions` — the *training session* table
+(`schema.sql:185`) — not `shifts` (`schema.sql:482`), which is where open shifts
+live and which has an explicit `status = 'open'` for exactly this. The dashboard
+tile reports training sessions with no trainer assigned and labels them open
+shifts. This is a bug in `dashboard.php`, not in the type.
+
+**b. `AdminUser.active` has no backing column.** `src/lib/types.ts:378` declares
+`active: boolean`, but `users` has no `active` column. It is derived:
+`(u.deleted_at IS NULL) AS active` at `users.php:18`, cast at `users.php:27`.
+The type is correct about the API response and misleading about the schema —
+worth a comment, since anyone reading `types.ts` as a schema mirror will look
+for the column.
+
+**c. `TINYINT(1)` maps to `boolean` in some types and `number` in others.**
+The SQL type is identical in every case; the TypeScript is not:
+
+| TS field | TS type | Source column | Line |
+|---|---|---|---|
+| `Worker.right_to_work` | `boolean` | `workers.right_to_work` | `src/lib/types.ts:61` |
+| `Worker.avail_days` etc. | `boolean` | `workers.avail_*` | `src/lib/types.ts:71-73` |
+| `ShiftTemplate.active` | `boolean` | `shift_templates.active` | `src/lib/types.ts:102` |
+| `Incident.riddor` | `number` | `incidents.riddor` | `src/lib/types.ts:185` |
+| `Incident.safeguarding` | `number` | `incidents.safeguarding` | `src/lib/types.ts:186` |
+| `IncidentAction.done` | `number` | `incident_actions.done` | `src/lib/types.ts:193` |
+| `OnboardingTask.done` | `number` | `onboarding_tasks.done` | `src/lib/types.ts:234` |
+
+Both are accurate to their endpoints — `workers.php:21` casts to `bool` while
+`incidents.php:28` and `ats.php:77` cast to `int`. So this is a genuine
+inconsistency in the API, faithfully mirrored into the types. `if (a.riddor)`
+and `if (a.done)` happen to work, but any strict comparison or serialisation
+differs by table, and a developer switching between them will get it wrong.
+
+**d. Types are missing for several tables that the app reads.** There is no
+TypeScript type for `certificates` (`schema.sql:311`) despite a public verify
+page, none for `sites` (`schema.sql:107`) beyond `Client.sites_count`
+(`src/lib/types.ts:18`), and none for `sessions` (`schema.sql:185`),
+`mandates` (`schema.sql:516`) or `dd_payments` (`schema.sql:531`). Those
+responses are untyped at the boundary.
+
+**e. `Enquiry.division` is widened to `string`.** `src/lib/types.ts:366` types it
+as `string` where the column is
+`ENUM('care','academy','cleaning','security','other')` (`schema.sql:157`).
+Widening is safe, but it also means `contact.php:29`'s coercion of unknown values
+to `other` is invisible to the type system. Same for `AdminUser.division`
+(`src/lib/types.ts:377`), `Client.type` and `Client.status`
+(`src/lib/types.ts:7,13`), and `Worker.role`/`Worker.status`
+(`src/lib/types.ts:58,60`) — all typed `string` with the permitted values in a
+trailing comment, while the equivalent fields elsewhere in the same file are
+proper unions.
+
+**f. `Insurance.cover_pence` is a `number` over a `BIGINT`.** `schema.sql:377`
+declares BIGINT, `src/lib/types.ts:259` types it `number`. Safe in practice —
+JavaScript is exact to 2^53, far beyond any plausible cover amount — but it is
+the one place the schema deliberately exceeds INT, and the type does not record
+why.
+
+### 6.7 Other issues found
+
+**`invoices.pay_token` has no index.** The column is added at `schema.sql:512`
+with no key, and `payments.php:127` looks an invoice up by it:
+`... FROM invoices i LEFT JOIN clients c ON c.id = i.client_id WHERE i.pay_token = ?`.
+That is a full table scan on an unauthenticated public endpoint, which gets
+slower as the invoice table grows and is a soft denial-of-service target. It
+should also be `UNIQUE` — nothing currently prevents two invoices sharing a pay
+token, which would let one customer open another's invoice.
+
+**Money columns are signed `INT`, capping at £21,474,836.47.** Applies to
+`invoices.net_pence`/`vat_pence`/`total_pence` (`schema.sql:205-207`),
+`quotes` (`schema.sql:276-278`), `contracts.rate_pence` (`schema.sql:254`),
+`credit_notes.amount_pence` (`schema.sql:469`),
+`dd_payments.amount_pence` (`schema.sql:536`),
+`rate_cards.charge_pence` (`schema.sql:688`) and
+`workers.pay_rate_pence` (`schema.sql:418`). `insurance.cover_pence` is BIGINT
+(`schema.sql:377`) because £5m cover was an obvious overflow. The cap is
+comfortable for line items and less so for an annual aggregate; nothing enforces
+non-negativity either, so a negative invoice total is representable.
+
+**No unique key on `rate_cards(client_id, division, role)`** (`schema.sql:683`).
+Duplicate, contradictory rate cards can coexist for one client, and which one
+wins depends on row order.
+
+**`compliance_reminders` dedup is an index, not a unique key.**
+`KEY idx_cred_tier (credential_key, tier)` at `schema.sql:366` is what stops a
+60-day nudge firing twice (`schema.sql:358-359`), but an index enforces nothing.
+A concurrent or retried digest run can email twice. `UNIQUE` would make the
+guarantee structural.
+
+**`dd_payments.gc_payment_id` and `mandates.gc_mandate_id` are not unique**
+(`schema.sql:535`, `schema.sql:520`). These are external provider ids arriving
+by webhook. Without a unique key, a replayed or duplicated webhook inserts a
+second payment row for the same real-world payment.
+
+**`bank_holidays` runs out at the end of 2026** (`schema.sql:444-452`). See §5.
+
+**No expiry on `shift_offers`** (`schema.sql:790`). The `expired` status exists
+but no timestamp drives it; there is also no unique key on
+`(shift_id, worker_id)`.
+
+**`notifications` cannot track per-user read state for a broadcast.** A
+`user_id IS NULL` row (`schema.sql:808`) has one `read_at` shared by everyone.
+
+**`shift_templates.weekday TINYINT` is not range-constrained**
+(`schema.sql:780`). The comment says 1–7 ISO; the column accepts −128 to 127.
+Same for `testimonials.rating TINYINT DEFAULT 5` (`schema.sql:855`), which
+accepts any value a five-star widget will then try to render.
+
+**`user_2fa.secret` is stored in plaintext** (`schema.sql:647`). A read of that
+one table is enough to mint valid TOTP codes for every user, which removes the
+second factor entirely. It should be encrypted with a key held outside the
+database. There is also no recovery-code table, so a lost authenticator needs
+manual intervention.
+
+**`sms_log` stores recipient numbers and message bodies indefinitely**
+(`schema.sql:820`) with no retention policy anywhere in the schema. Message
+bodies routinely contain names, addresses and shift details.
+
+**`counters` has no protection against reuse.** `next_seq()` is atomic
+(`schema.sql:74-75`), but nothing links a counter to the table it numbers, so
+resetting or mis-keying one produces duplicate document numbers that the
+`UNIQUE` keys on `invoices.number`, `quotes.number` and `credit_notes.number`
+will then reject at insert time rather than at allocation time.
+
+**The `items` table is dead** (`schema.sql:10`). A smoke test in the production
+schema that nothing reads.
+
+**Missing indexes on columns the app filters by.** `clients` has no index at all
+beyond its primary key, despite `deleted_at IS NULL` appearing in essentially
+every query against it. `workers` likewise has none, despite the expiry digest
+scanning `dbs_expiry` and `sia_expiry`. `shifts.status` and `shifts.client_id`
+are unindexed. `audit_log.user_id` is unindexed and joined.
+
+**Index names are reused across tables** — `idx_status` on `invoices`,
+`contracts`, `quotes` and `jobs`; `idx_client` on `sites` and `jobs`. This is
+legal in MySQL, where index names are per-table, but it makes any global
+`information_schema` query about indexes ambiguous to read.

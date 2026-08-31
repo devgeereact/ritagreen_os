@@ -1,0 +1,656 @@
+{
+  "project": "RitaGreen Services Management System",
+  "baseline_date": "2026-08-31",
+  "note": "Seeded from a full audit of the codebase. Item status describes what is IN THE CODE, not what is planned. Update this file when a module changes, then run scripts/docs_sync.py to regenerate docs/PROGRESS.md.",
+  "status_values": [
+    "done",
+    "partial",
+    "todo"
+  ],
+  "modules": [
+    {
+      "key": "FOUNDATION",
+      "title": "Foundation and person spine",
+      "milestone": 1,
+      "items": [
+        {
+          "name": "Numbered migrations (server/migrations/)",
+          "status": "todo",
+          "note": "schema.sql is a single re-runnable build-pass file"
+        },
+        {
+          "name": "people table as the single identity",
+          "status": "todo"
+        },
+        {
+          "name": "person_services (person x service)",
+          "status": "todo",
+          "note": "workers.division is a single-value ENUM"
+        },
+        {
+          "name": "Person de-duplication migration",
+          "status": "todo"
+        },
+        {
+          "name": "Payroll number generator",
+          "status": "todo",
+          "note": "next_seq() at server/lib.php:173 is the primitive to build on"
+        },
+        {
+          "name": "ats.php onboard links instead of copying",
+          "status": "todo",
+          "note": "server/ats.php:145-151 copies identity fields"
+        },
+        {
+          "name": "Local development environment",
+          "status": "todo",
+          "note": "BLOCKER. vite.config.ts proxies to production"
+        },
+        {
+          "name": "Atomic document-number sequences",
+          "status": "done",
+          "note": "counters table + next_seq()"
+        },
+        {
+          "name": "Soft delete on records that must not be lost",
+          "status": "partial",
+          "note": "present on most, missing on shifts, timesheets, incidents"
+        },
+        {
+          "name": "Replace the divisions CSV with a junction table",
+          "status": "todo",
+          "note": "clients.divisions is a comma-separated VARCHAR(120), so it cannot be joined, indexed or constrained. worker_skills already demonstrates the correct pattern in this schema"
+        },
+        {
+          "name": "Constrain columns added by later ALTER passes",
+          "status": "todo",
+          "note": "ADD COLUMN IF NOT EXISTS cannot add a constraint, so users.client_id, users.worker_id, clients.account_manager_id and shifts.client_id are unconstrained. shifts.client_id has no FK and no index despite being joined in scheduling.php"
+        },
+        {
+          "name": "Extend soft delete to records that cascade",
+          "status": "todo",
+          "note": "11 of 50 tables have deleted_at. invoices cascade to credit_notes, incidents to incident_actions, and timesheets hold pay evidence with neither deleted_at nor updated_at"
+        }
+      ]
+    },
+    {
+      "key": "IAM",
+      "title": "Identity, access and permissions",
+      "milestone": 5,
+      "items": [
+        {
+          "name": "Authentication (opaque bearer tokens)",
+          "status": "done",
+          "note": "SHA-256 hashed, 30-day expiry, server/auth.php:35"
+        },
+        {
+          "name": "Password hashing",
+          "status": "done",
+          "note": "bcrypt cost 12"
+        },
+        {
+          "name": "TOTP two-factor authentication",
+          "status": "done",
+          "note": "hand-rolled RFC 6238, user_2fa"
+        },
+        {
+          "name": "Mandatory 2FA for privileged roles",
+          "status": "done",
+          "note": "MANDATORY_2FA config flag"
+        },
+        {
+          "name": "Device and session list with revoke",
+          "status": "done"
+        },
+        {
+          "name": "Idle lock screen",
+          "status": "done"
+        },
+        {
+          "name": "Google SSO",
+          "status": "done",
+          "note": "matches existing users by verified email only"
+        },
+        {
+          "name": "Rate limiting",
+          "status": "done",
+          "note": "rate_limits table + rate_limit()"
+        },
+        {
+          "name": "Server-side role checks on mutations",
+          "status": "partial",
+          "note": "several read endpoints have require_auth with no require_role"
+        },
+        {
+          "name": "Client-side route role gating",
+          "status": "todo",
+          "note": "RequireAuth roles prop is never passed by any route"
+        },
+        {
+          "name": "Per-service permission scoping",
+          "status": "todo",
+          "note": "users.division is stored but not enforced as a query filter"
+        },
+        {
+          "name": "Sensitive zones (health, payroll, disciplinary, legal)",
+          "status": "todo"
+        },
+        {
+          "name": "Close the unauthenticated write on api.php",
+          "status": "todo",
+          "note": "SECURITY. server/api.php POST has no require_auth and no rate_limit: anyone can insert unbounded rows into `items` on production. Smoke-test table, so no data is exposed, but it is an open write"
+        },
+        {
+          "name": "Role-restrict worker reads",
+          "status": "todo",
+          "note": "SECURITY. server/workers.php GET has no require_role (checks are only on the write paths at :36,:58,:74), so any authenticated account -- including a client portal login -- can read every worker's pay_rate_pence, dbs_status and sia_number"
+        },
+        {
+          "name": "Role-restrict the shared mailbox",
+          "status": "todo",
+          "note": "SECURITY. server/inbox.php:13 calls require_auth only. Any authenticated account can read the whole company mailbox and send replies as the company"
+        },
+        {
+          "name": "Role-restrict field event logging",
+          "status": "todo",
+          "note": "SECURITY. server/field.php:9 calls require_auth only and never require_role. Any authenticated account can post events -- including panic alerts and clock-ins -- against any shift id"
+        },
+        {
+          "name": "Update last_seen_at on token use",
+          "status": "todo",
+          "note": "Written once at issue (server/auth.php:42) and never updated, so the session list shows creation time under a last-activity heading"
+        }
+      ]
+    },
+    {
+      "key": "RECRUITMENT",
+      "title": "Recruitment and intake",
+      "milestone": 8,
+      "items": [
+        {
+          "name": "Application pipeline, 7 stages",
+          "status": "done",
+          "note": "applicants.stage"
+        },
+        {
+          "name": "Public application page",
+          "status": "done",
+          "note": "/apply, rate-limited"
+        },
+        {
+          "name": "Onboarding task checklist",
+          "status": "done",
+          "note": "onboarding_tasks, seeded on onboard"
+        },
+        {
+          "name": "Academy to recruitment handoff",
+          "status": "partial",
+          "note": "ats.php from_learner creates a duplicate person with a synthetic email"
+        },
+        {
+          "name": "Google Forms intake webhook",
+          "status": "todo"
+        },
+        {
+          "name": "Configurable field mapping",
+          "status": "todo"
+        },
+        {
+          "name": "Integration health monitoring",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "COMPLIANCE",
+      "title": "Compliance engine and verification",
+      "milestone": 2,
+      "items": [
+        {
+          "name": "Expiry classification primitive",
+          "status": "done",
+          "note": "classify() at server/compliance.php:10"
+        },
+        {
+          "name": "Credential expiry alert engine",
+          "status": "done",
+          "note": "90/60/30/expired tiers, deduplicated, cron-driven"
+        },
+        {
+          "name": "Per-worker evidence pack",
+          "status": "done",
+          "note": "compliance.php?action=pack"
+        },
+        {
+          "name": "Reference checks with gap explanation",
+          "status": "done",
+          "note": "worker_references"
+        },
+        {
+          "name": "Company insurance register",
+          "status": "done"
+        },
+        {
+          "name": "Requirement catalogue",
+          "status": "todo"
+        },
+        {
+          "name": "Configurable rules (service x role x requirement)",
+          "status": "todo",
+          "note": "requirements are hard-coded in scheduling.php"
+        },
+        {
+          "name": "Mandatory / recommended / optional weighting",
+          "status": "todo"
+        },
+        {
+          "name": "Calculated eligibility verdict with reason",
+          "status": "todo"
+        },
+        {
+          "name": "Compliance status read-only in the UI",
+          "status": "todo"
+        },
+        {
+          "name": "Right to work check record",
+          "status": "todo",
+          "note": "currently workers.right_to_work TINYINT(1)"
+        },
+        {
+          "name": "SIA verification workflow",
+          "status": "partial",
+          "note": "number and expiry stored; no verification record"
+        },
+        {
+          "name": "DBS verification workflow",
+          "status": "partial",
+          "note": "status, expiry and update-service flag stored; no verification record"
+        },
+        {
+          "name": "Generalised verification lifecycle",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "OPERATIONS",
+      "title": "Scheduling, assignments and field operations",
+      "milestone": 4,
+      "items": [
+        {
+          "name": "Clients, sites and rate cards",
+          "status": "done"
+        },
+        {
+          "name": "Shifts, templates and recurrence",
+          "status": "done"
+        },
+        {
+          "name": "Smart matching on skills and availability",
+          "status": "done"
+        },
+        {
+          "name": "Shift broadcast with token acceptance",
+          "status": "done",
+          "note": "shift_offers, SMS link, no login required"
+        },
+        {
+          "name": "Field events: clock in/out, check-in, panic, signature",
+          "status": "done",
+          "note": "shift_events with lat/lng"
+        },
+        {
+          "name": "Timesheets and pay rules",
+          "status": "done"
+        },
+        {
+          "name": "Compliance guard on assignment",
+          "status": "partial",
+          "note": "scheduling.php blocks lapsed DBS/SIA/RTW; not generalised, not called by every path"
+        },
+        {
+          "name": "Single reusable deployment eligibility gate",
+          "status": "todo"
+        },
+        {
+          "name": "Four-eyes approval on high-risk actions",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "EMPLOYMENT",
+      "title": "Employment records, contracts and leave",
+      "milestone": 6,
+      "items": [
+        {
+          "name": "Worker employment fields",
+          "status": "partial",
+          "note": "pay rate, pay type, holiday hours present; Acas particulars not structured"
+        },
+        {
+          "name": "Employment contract lifecycle",
+          "status": "todo",
+          "note": "the contracts table is a commercial client contract"
+        },
+        {
+          "name": "Contract versioning",
+          "status": "todo"
+        },
+        {
+          "name": "Structured written-statement particulars",
+          "status": "todo"
+        },
+        {
+          "name": "Leave and absence records",
+          "status": "todo"
+        },
+        {
+          "name": "Worker status derived from workflow events",
+          "status": "todo",
+          "note": "workers.status is set by hand"
+        }
+      ]
+    },
+    {
+      "key": "TRAINING",
+      "title": "Training records and certificates",
+      "milestone": 8,
+      "items": [
+        {
+          "name": "Programmes and enrolments",
+          "status": "done"
+        },
+        {
+          "name": "Certificate issue",
+          "status": "done"
+        },
+        {
+          "name": "Public certificate verification",
+          "status": "done",
+          "note": "/verify/:id"
+        },
+        {
+          "name": "Open Badges 3.0 assertion",
+          "status": "done"
+        },
+        {
+          "name": "CPD hours",
+          "status": "done"
+        },
+        {
+          "name": "External training providers",
+          "status": "todo"
+        },
+        {
+          "name": "Training records linked to the person",
+          "status": "todo",
+          "note": "enrolments carry a learner_name string, not a person reference"
+        }
+      ]
+    },
+    {
+      "key": "DOCUMENTS",
+      "title": "Document management",
+      "milestone": 3,
+      "items": [
+        {
+          "name": "Upload with MIME allowlist and size cap",
+          "status": "done",
+          "note": "10 MB, randomised stored name"
+        },
+        {
+          "name": "Streamed download behind an auth check",
+          "status": "done",
+          "note": "uploads directory blocked in .htaccess"
+        },
+        {
+          "name": "Role restriction on the document centre",
+          "status": "done"
+        },
+        {
+          "name": "Text extraction from docx, xlsx and PDF",
+          "status": "done"
+        },
+        {
+          "name": "Document metadata: issue date, expiry",
+          "status": "todo",
+          "note": "files has a category only"
+        },
+        {
+          "name": "Document verification status and verifier",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "COMMUNICATIONS",
+      "title": "Email, SMS and notifications",
+      "milestone": 7,
+      "items": [
+        {
+          "name": "SMTP client",
+          "status": "done",
+          "note": "hand-rolled over fsockopen, no vendor dependency"
+        },
+        {
+          "name": "IMAP inbox with threaded reply",
+          "status": "done"
+        },
+        {
+          "name": "SMS and WhatsApp via Twilio",
+          "status": "done",
+          "note": "every attempt logged, including skips"
+        },
+        {
+          "name": "In-app notification centre",
+          "status": "done"
+        },
+        {
+          "name": "Announcements by division",
+          "status": "done"
+        },
+        {
+          "name": "Email templates",
+          "status": "todo"
+        },
+        {
+          "name": "Email queue drained out of the request path",
+          "status": "todo",
+          "note": "send_mail() opens an SMTP socket inside the web request"
+        },
+        {
+          "name": "Email delivery log",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "REPORTING",
+      "title": "Reporting and insight",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Command centre dashboard",
+          "status": "done",
+          "note": "filterable by division"
+        },
+        {
+          "name": "Analytics and margin reconciliation",
+          "status": "done"
+        },
+        {
+          "name": "Regulatory packs",
+          "status": "done",
+          "note": "cqc_pack, sia_acs, coshh, skills_for_care"
+        },
+        {
+          "name": "CSV and PDF export",
+          "status": "done"
+        },
+        {
+          "name": "Action Centre",
+          "status": "todo"
+        },
+        {
+          "name": "Staff workload view",
+          "status": "todo"
+        },
+        {
+          "name": "Export logging with user and purpose",
+          "status": "todo"
+        },
+        {
+          "name": "Fix the open-shifts dashboard tile",
+          "status": "todo",
+          "note": "server/dashboard.php:29 counts training sessions with no trainer (FROM sessions) instead of open shifts (FROM shifts WHERE status='open'). The tile has always shown the wrong number"
+        }
+      ]
+    },
+    {
+      "key": "GOVERNANCE",
+      "title": "Audit, retention and data protection",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Audit log",
+          "status": "partial",
+          "note": "action plus a 255-char detail string; no before/after, entity reference or IP"
+        },
+        {
+          "name": "Consent log",
+          "status": "done"
+        },
+        {
+          "name": "GDPR export and erasure",
+          "status": "partial",
+          "note": "by email address; erases immediately with no approval step"
+        },
+        {
+          "name": "Incidents with RIDDOR and safeguarding flags",
+          "status": "done"
+        },
+        {
+          "name": "Database backup with rotation",
+          "status": "done",
+          "note": "above the document root, 14-day prune"
+        },
+        {
+          "name": "Restore testing",
+          "status": "todo"
+        },
+        {
+          "name": "Retention engine",
+          "status": "todo"
+        },
+        {
+          "name": "Deletion approval workflow",
+          "status": "todo"
+        },
+        {
+          "name": "Workflow rule engine",
+          "status": "todo"
+        },
+        {
+          "name": "System health dashboard",
+          "status": "todo"
+        },
+        {
+          "name": "Reconcile part-paid Direct Debit collections",
+          "status": "todo",
+          "note": "server/gocardless.php marks an invoice fully paid on a confirmed payment without comparing dd_payments.amount_pence to invoices.total_pence. Signature verification itself is sound"
+        }
+      ]
+    },
+    {
+      "key": "PWA",
+      "title": "Progressive web app",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Web app manifest",
+          "status": "partial",
+          "note": "no 192/512 PNG icons; theme colour disagrees with the app"
+        },
+        {
+          "name": "Service worker",
+          "status": "partial",
+          "note": "hand-written, no build-hash precache manifest, so offline breaks after a deploy"
+        },
+        {
+          "name": "Registration",
+          "status": "done",
+          "note": "production only, src/main.tsx"
+        },
+        {
+          "name": "Cached read-only worker data",
+          "status": "todo"
+        },
+        {
+          "name": "Update-available prompt",
+          "status": "todo"
+        },
+        {
+          "name": "Offline banner",
+          "status": "todo"
+        },
+        {
+          "name": "Offline write queue",
+          "status": "todo",
+          "note": "OUT OF SCOPE by decision. Writes require connectivity"
+        }
+      ]
+    },
+    {
+      "key": "PLATFORM",
+      "title": "Engineering platform",
+      "milestone": 0,
+      "items": [
+        {
+          "name": "Documentation pack",
+          "status": "partial",
+          "note": "Milestone 0, in progress"
+        },
+        {
+          "name": "Automated deploy",
+          "status": "done",
+          "note": "GitHub Actions, FTPS, dist/ only, PHP excluded"
+        },
+        {
+          "name": "CI quality gates",
+          "status": "partial",
+          "note": "typecheck, build, php -l and docs checks block; lint reports only"
+        },
+        {
+          "name": "Automated tests",
+          "status": "todo",
+          "note": "no test file exists in the repository"
+        },
+        {
+          "name": "Exception messages withheld from callers",
+          "status": "todo",
+          "note": "server/lib.php returns the exception message in JSON"
+        },
+        {
+          "name": "Unused dependencies removed",
+          "status": "todo"
+        },
+        {
+          "name": "ESLint baseline clean",
+          "status": "todo",
+          "note": "33 errors at baseline: 14 react-hooks, 7 react-refresh, 6 unused-imports, 3 typescript-eslint"
+        },
+        {
+          "name": "Documentation consistency enforced in CI",
+          "status": "done",
+          "note": "scripts/docs_sync.py --check"
+        },
+        {
+          "name": "Prepared statements in dashboard.php",
+          "status": "todo",
+          "note": "division is interpolated with real_escape_string rather than bound. Escaped, so not injectable today, but it breaks the rule that keeps it that way"
+        }
+      ]
+    }
+  ]
+}

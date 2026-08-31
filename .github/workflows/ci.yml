@@ -1,0 +1,113 @@
+name: CI
+
+# Quality gates. Runs on every pull request and on pushes to main.
+#
+# This exists because pushing to main deploys straight to production
+# (see deploy.yml) and, until this workflow, nothing checked the code first.
+#
+# Deliberately builds with no config or secrets present: the frontend must never
+# depend on a build-time secret, and a build that only works with one would hide
+# that. Nothing here touches the server or the production database.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Reports but does not block. There are 33 pre-existing ESLint errors in
+      # application code, most of them React 19 hook rules whose fixes change
+      # runtime behaviour, so clearing them is real work rather than a tidy-up.
+      # The baseline is tracked as "ESLint baseline clean" in docs/STATUS.json.
+      # Flip continue-on-error to false, and add --max-warnings 0, once it is zero.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+      - name: Assert build output
+        run: |
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          test -f dist/manifest.webmanifest || { echo "dist/manifest.webmanifest missing"; exit 1; }
+          test -f dist/sw.js || { echo "dist/sw.js missing"; exit 1; }
+          # Source maps must never ship — they would publish the whole frontend source.
+          maps=$(find dist -name '*.map' | wc -l)
+          test "$maps" -eq 0 || { echo "$maps source map(s) in dist/"; exit 1; }
+
+  php:
+    name: PHP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Match the production host (PHP 8.4 on cPanel) so a syntax error that only
+      # appears on that version is caught here rather than after an FTP upload.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+
+      - name: Syntax-check every PHP file
+        run: |
+          status=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" > /dev/null || { echo "SYNTAX ERROR: $file"; php -l "$file"; status=1; }
+          done < <(find server -name '*.php' -print0)
+          exit $status
+
+      - name: Refuse a committed config.php
+        run: |
+          # config.php holds the database password and every API key. It is
+          # gitignored; if it ever appears in the tree, fail loudly.
+          if git ls-files --error-unmatch server/config.php > /dev/null 2>&1; then
+            echo "server/config.php is tracked in git. It must never be committed."
+            exit 1
+          fi
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Fails if docs/PROGRESS.md is out of step with docs/STATUS.json, or if
+      # docs/TRACEABILITY.md cites a source file that does not exist.
+      - name: Check documentation consistency
+        run: python3 scripts/docs_sync.py --check
