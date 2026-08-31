@@ -140,8 +140,11 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Records have a retention policy | `retention_policies` | `server/governance.php` | planned | none |
 | Incidents are logged and actioned | `incidents`, `incident_actions` | `server/incidents.php` | `src/pages/app/Incidents.tsx` | none |
 | The database is backed up | — | `server/backup.php` | cron | none |
-| Backups are restore-tested | — | planned procedure | — | none |
+| Backups are restore-tested | — | `server/system-health.php` reports it as an explicit unknown | — | none |
 | Regulatory packs can be produced | — | `server/reports.php` | `src/pages/app/Reports.tsx` | none |
+| Staff workload is visible | — | `server/system-health.php` | planned | none |
+| The system reports its own health | — | `server/system-health.php` | planned | none |
+| Exports are logged | `export_log` | `server/governance.php` | planned | none |
 
 ## Platform
 

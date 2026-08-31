@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`######################..`  138 done · 14 partial · 8 to do · 160 tracked
+`######################..`  141 done · 16 partial · 5 to do · 162 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -27,9 +27,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `##########..` | 6 | 0 | 1 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `#########...` | 11 | 2 | 3 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `##########..` | 13 | 4 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
-| REPORTING — Reporting and insight | 9 | `##########..` | 7 | 0 | 1 |
+| REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
 
 ## Detail
 
@@ -212,7 +212,7 @@ Milestone 8 · 6 done, 0 partial, 1 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 11 done, 2 partial, 3 to do
+Milestone 9 · 13 done, 4 partial, 1 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Archiving actually hides the record — _Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive_
@@ -225,10 +225,12 @@ Milestone 9 · 11 done, 2 partial, 3 to do
 - [x] Incidents with RIDDOR and safeguarding flags
 - [x] Integration failure surfaced — _Silent integrations and unmappable submissions both reach the Action Centre_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
+- [x] System health dashboard — _server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups_
+- [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
+- [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
+- [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
 - [~] Retention engine — _retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built_
-- [ ] Restore testing
-- [ ] System health dashboard
 - [ ] Workflow rule engine
 
 ### PWA — Progressive web app
@@ -247,7 +249,7 @@ Milestone 9 · 9 done, 0 partial, 0 to do
 
 ### REPORTING — Reporting and insight
 
-Milestone 9 · 7 done, 0 partial, 1 to do
+Milestone 9 · 8 done, 0 partial, 0 to do
 
 - [x] Action Centre — _server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed_
 - [x] Analytics and margin reconciliation
@@ -256,4 +258,4 @@ Milestone 9 · 7 done, 0 partial, 1 to do
 - [x] Export logging with user and purpose — _export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened_
 - [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
 - [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care_
-- [ ] Staff workload view
+- [x] Staff workload view — _?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible_

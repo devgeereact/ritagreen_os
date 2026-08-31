@@ -735,6 +735,30 @@ Verified: a manager scoped to Care sees 3 workers, all Care, with pay. A trainer
 workers across every division and **no pay at all**, because the trainer role has no payroll
 zone. Both from the same endpoint, with no role check in it.
 
+### Added — system health and staff workload
+
+The owner should not learn that recruitment stopped importing three weeks ago from a candidate
+ringing up.
+
+`server/system-health.php` runs **live checks, not a stored status** — a health table goes stale
+exactly when it matters. It covers the database, migrations shipped but never run, mail, the
+queue drainer, integrations, eligibility freshness, document storage and backups. States are
+`ok` / `warn` / `fail` / **`off`**, because a deliberately disabled mailer is a configuration
+choice and must not read as a fault.
+
+It earned its place immediately: on first run it reported `fail — the uploads directory does not
+exist`, which would have meant every document upload failing.
+
+Two checks worth calling out. **Unapplied migrations**: a deploy that ships the files without
+running them looks completely normal until something fails oddly, so the directory is compared
+against `schema_migrations`. And **restore testing**, which cannot be inferred — it is reported
+as an explicit unknown rather than assumed fine, because a backup nobody has restored is a hope,
+not a backup.
+
+`?action=workload` shows what each staff member is carrying. Not a performance measure: it
+exists so work can be moved before somebody quietly drowns in it, which is only possible if it
+is visible.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

@@ -648,7 +648,8 @@
         },
         {
           "name": "Staff workload view",
-          "status": "todo"
+          "status": "done",
+          "note": "?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible"
         },
         {
           "name": "Export logging with user and purpose",
@@ -692,7 +693,8 @@
         },
         {
           "name": "Restore testing",
-          "status": "todo"
+          "status": "partial",
+          "note": "Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent"
         },
         {
           "name": "Retention engine",
@@ -710,7 +712,8 @@
         },
         {
           "name": "System health dashboard",
-          "status": "todo"
+          "status": "done",
+          "note": "server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups"
         },
         {
           "name": "Reconcile part-paid Direct Debit collections",
@@ -741,6 +744,16 @@
           "name": "Archiving actually hides the record",
           "status": "done",
           "note": "Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive"
+        },
+        {
+          "name": "Backups are restore-tested",
+          "status": "partial",
+          "note": "Surfaced by system-health.php as an explicit unknown"
+        },
+        {
+          "name": "Unapplied migrations are visible",
+          "status": "done",
+          "note": "A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations"
         }
       ]
     },
