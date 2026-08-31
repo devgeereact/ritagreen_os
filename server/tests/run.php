@@ -175,6 +175,141 @@ check('night beats weekend', pay_day_premium($rules, '2026-03-07', '22:00', $noH
 check('and pays the higher multiplier', pay_day_premium($rules, '2026-03-07', '22:00', $noHols)['mult'], 1.30);
 
 // ---------------------------------------------------------------------------
+// The compliance engine. This decides whether a person may legally be sent to
+// work, so it gets the most scrutiny in this file.
+group('rg_assess_requirement');
+
+$today = '2026-06-01';
+$mandatory = ['key' => 'sia', 'label' => 'SIA licence', 'weight' => RG_MANDATORY, 'expires' => true];
+
+check('valid credential', rg_assess_requirement($mandatory, ['expiry' => '2026-12-01'], $today)['state'], 'met');
+check('inside the window', rg_assess_requirement($mandatory, ['expiry' => '2026-06-20'], $today)['state'], 'expiring');
+check('lapsed', rg_assess_requirement($mandatory, ['expiry' => '2026-05-01'], $today)['state'], 'expired');
+check('nothing on file', rg_assess_requirement($mandatory, null, $today)['state'], 'missing');
+
+// A credential that should carry an expiry but does not is incomplete evidence,
+// not valid evidence. Treating it as valid is how an undated check passes an audit.
+check('present but undated', rg_assess_requirement($mandatory, ['expiry' => null], $today)['state'], 'undated');
+
+// Some requirements genuinely never expire.
+$noExpiry = ['key' => 'id', 'label' => 'Identity', 'weight' => RG_MANDATORY, 'expires' => false];
+check('non-expiring is met on presence', rg_assess_requirement($noExpiry, [], $today)['state'], 'met');
+check('non-expiring still needs a record', rg_assess_requirement($noExpiry, null, $today)['state'], 'missing');
+
+// An unverified document is a claim, not evidence.
+$verified = ['key' => 'rtw', 'label' => 'Right to work', 'weight' => RG_MANDATORY, 'expires' => true, 'verify' => true];
+check('unverified', rg_assess_requirement($verified, ['expiry' => '2026-12-01'], $today)['state'], 'unverified');
+check('verified', rg_assess_requirement($verified, ['expiry' => '2026-12-01', 'verified' => true], $today)['state'], 'met');
+
+// Reasons must be readable by the person who has to act on them.
+check('expired reads naturally', rg_assess_requirement($mandatory, ['expiry' => '2026-05-31'], $today)['reason'], 'SIA licence: expired yesterday');
+check('expiring today reads naturally', rg_assess_requirement($mandatory, ['expiry' => '2026-06-01'], $today)['reason'], 'SIA licence: expires today');
+check('expiring tomorrow reads naturally', rg_assess_requirement($mandatory, ['expiry' => '2026-06-02'], $today)['reason'], 'SIA licence: expires tomorrow');
+check('missing reads naturally', rg_assess_requirement($mandatory, null, $today)['reason'], 'SIA licence: no evidence on file');
+check('met has no reason', rg_assess_requirement($mandatory, ['expiry' => '2026-12-01'], $today)['reason'], null);
+
+// ---------------------------------------------------------------------------
+group('rg_evaluate_eligibility');
+
+$securityRules = [
+    ['key' => 'rtw', 'label' => 'Right to work',  'weight' => RG_MANDATORY,   'expires' => true],
+    ['key' => 'sia', 'label' => 'SIA licence',    'weight' => RG_MANDATORY,   'expires' => true],
+    ['key' => 'id',  'label' => 'Identity',       'weight' => RG_MANDATORY,   'expires' => false],
+    ['key' => 'fa',  'label' => 'First aid',      'weight' => RG_RECOMMENDED, 'expires' => true],
+    ['key' => 'cm',  'label' => 'Conflict mgmt',  'weight' => RG_OPTIONAL,    'expires' => true],
+];
+$allGood = [
+    'rtw' => ['expiry' => '2027-01-01'],
+    'sia' => ['expiry' => '2027-01-01'],
+    'id'  => [],
+    'fa'  => ['expiry' => '2027-01-01'],
+    'cm'  => ['expiry' => '2027-01-01'],
+];
+
+$v = rg_evaluate_eligibility($securityRules, $allGood, $today);
+check('fully compliant is eligible', $v['eligible'], true);
+check('fully compliant status', $v['status'], RG_ELIGIBLE);
+check('fully compliant scores 100', $v['score'], 100);
+check('fully compliant blocks nothing', count($v['blocking']), 0);
+
+// The case the whole system exists to prevent.
+$lapsedSia = $allGood;
+$lapsedSia['sia'] = ['expiry' => '2026-05-01'];
+$v = rg_evaluate_eligibility($securityRules, $lapsedSia, $today);
+check('lapsed SIA blocks deployment', $v['eligible'], false);
+check('lapsed SIA status', $v['status'], RG_NOT_ELIGIBLE);
+check('lapsed SIA names one blocker', count($v['blocking']), 1);
+check('and says which', $v['blocking'][0]['key'], 'sia');
+check('and says why', rg_eligibility_reason($v), 'SIA licence: expired 31 days ago');
+
+// A mandatory credential inside its window warns, but the person may still work
+// today. Blocking here would stand down someone who is currently valid.
+$expiringSia = $allGood;
+$expiringSia['sia'] = ['expiry' => '2026-06-15'];
+$v = rg_evaluate_eligibility($securityRules, $expiringSia, $today);
+check('expiring does not block', $v['eligible'], true);
+check('but is flagged', $v['status'], RG_ELIGIBLE_WITH_WARNINGS);
+check('with a warning', count($v['warnings']), 1);
+check('and still scores full marks', $v['score'], 100);
+
+// A recommended requirement never blocks.
+$noFirstAid = $allGood;
+unset($noFirstAid['fa']);
+$v = rg_evaluate_eligibility($securityRules, $noFirstAid, $today);
+check('missing recommended does not block', $v['eligible'], true);
+check('missing recommended warns', $v['status'], RG_ELIGIBLE_WITH_WARNINGS);
+// mandatory 2+2+2 and recommended 1 = 7 possible; without first aid, 6 earned.
+check('and costs score', $v['score'], 86);
+
+// An optional requirement neither blocks nor warns nor scores.
+$noOptional = $allGood;
+unset($noOptional['cm']);
+$v = rg_evaluate_eligibility($securityRules, $noOptional, $today);
+check('missing optional is silent', $v['status'], RG_ELIGIBLE);
+check('and does not move the score', $v['score'], 100);
+
+// Every blocker is reported, not just the first. Fixing one at a time, with a
+// fresh refusal each attempt, is how an office loses a day.
+$nothingOnFile = rg_evaluate_eligibility($securityRules, [], $today);
+check('reports every blocker', count($nothingOnFile['blocking']), 3);
+check('scores zero', $nothingOnFile['score'], 0);
+check('is not eligible', $nothingOnFile['eligible'], false);
+
+// The same person, different services: this is why eligibility is per service.
+$cleaningRules = [
+    ['key' => 'rtw', 'label' => 'Right to work', 'weight' => RG_MANDATORY, 'expires' => true],
+    ['key' => 'id',  'label' => 'Identity',      'weight' => RG_MANDATORY, 'expires' => false],
+];
+$v = rg_evaluate_eligibility($cleaningRules, $lapsedSia, $today);
+check('lapsed SIA is irrelevant to cleaning', $v['eligible'], true);
+
+// No rules configured must not read as fully compliant.
+$empty = rg_evaluate_eligibility([], [], $today);
+check('no rules is not 100%', $empty['score'], 0);
+check('no rules blocks nothing', $empty['eligible'], true);
+
+// A refusal always carries a reason.
+check('reason is never empty when blocked', rg_eligibility_reason($nothingOnFile) !== '', true);
+check('all-clear says so', rg_eligibility_reason(rg_evaluate_eligibility($securityRules, $allGood, $today)), 'All requirements met.');
+
+// Undated mandatory evidence blocks.
+$undated = $allGood;
+$undated['rtw'] = ['expiry' => null];
+$v = rg_evaluate_eligibility($securityRules, $undated, $today);
+check('undated mandatory blocks', $v['eligible'], false);
+check('and explains itself', $v['blocking'][0]['reason'], 'Right to work: no expiry date recorded');
+
+// ---------------------------------------------------------------------------
+group('rg_state_is_unmet');
+
+foreach (['missing', 'expired', 'undated', 'unverified'] as $state) {
+    check("$state is unmet", rg_state_is_unmet($state), true);
+}
+// 'expiring' is still valid today. Treating it as unmet would stand people down early.
+check('expiring is not unmet', rg_state_is_unmet('expiring'), false);
+check('met is not unmet', rg_state_is_unmet('met'), false);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

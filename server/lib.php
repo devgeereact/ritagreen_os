@@ -6,11 +6,33 @@
 // Surface fatals / mysqli exceptions as JSON instead of a blank 500 HTML page.
 mysqli_report(MYSQLI_REPORT_OFF);
 set_exception_handler(function (Throwable $e) {
+    // The full detail always goes to the server log; what goes back to the caller
+    // depends on GK_DEBUG. This previously returned $e->getMessage() to whoever
+    // made the request, regardless -- which hands an attacker table names, file
+    // paths and query fragments from any input that provokes a fatal.
+    //
+    // The reference is echoed to the caller and logged alongside the detail, so a
+    // user can quote it in a support request and it can be found in error_log
+    // without them ever having seen the underlying error.
+    $ref = bin2hex(random_bytes(4));
+    error_log(sprintf(
+        '[%s] %s: %s in %s:%d',
+        $ref, get_class($e), $e->getMessage(), $e->getFile(), $e->getLine()
+    ));
+
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/json');
     }
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+
+    $debug = defined('GK_DEBUG') && GK_DEBUG;
+    echo json_encode($debug
+        ? [
+            'error' => 'Server error: ' . $e->getMessage(),
+            'ref' => $ref,
+            'where' => $e->getFile() . ':' . $e->getLine(),
+        ]
+        : ['error' => 'Server error. Quote reference ' . $ref . ' if you report this.', 'ref' => $ref]);
     exit;
 });
 set_error_handler(function ($severity, $message, $file, $line) {

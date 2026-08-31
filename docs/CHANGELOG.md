@@ -173,6 +173,44 @@ it holds the live credentials and is gitignored — so the checker now asks
 `git check-ignore` before reporting, rather than carrying a hand-maintained allowlist that
 would itself go stale. Verified both ways: a genuinely absent path still fails the check.
 
+### Added — the compliance engine's decision logic
+
+The question the whole system exists to answer — *may this person work in this service, and if
+not, why not?* — is now a tested pure function, built ahead of its storage precisely because
+being pure makes it verifiable without a database.
+
+`rg_evaluate_eligibility()` in `server/pure.php` takes a rule set and a person's evidence and
+returns a verdict, a score, every blocking reason and every warning. The behaviour it encodes:
+
+- **A mandatory requirement that is unmet blocks**, and the refusal names it. Every blocker is
+  reported, not just the first — fixing one at a time, with a fresh refusal on each attempt, is
+  how an office loses a day
+- **A mandatory credential inside its expiry window warns without blocking.** The person is
+  still valid today, and standing them down early is its own failure
+- **A recommended requirement never blocks**, and an optional one neither blocks nor warns
+- **Missing, expired, undated and unverified are four different states.** No evidence on file
+  is a gap; a lapsed credential is a lapse; a credential that should carry an expiry but does
+  not is incomplete evidence, not valid evidence; and an unverified document is a claim
+- **An empty rule set scores 0, not 100.** "Nothing configured yet" must never read as "fully
+  compliant" on a dashboard
+- **A refusal always carries a readable reason** — "SIA licence: expired 31 days ago", not a
+  status code
+
+48 assertions cover it, including the boundary days where an off-by-one becomes a person
+wrongly stood down or wrongly deployed. One of them caught an arithmetic error in the test's
+own expected score, which is the point of writing them.
+
+Storage for the rules, and wiring the evaluator into the endpoints, remain — see
+`docs/ROADMAP.md` Milestone 2.
+
+### Fixed — exception messages no longer leak
+
+`server/lib.php` returned `$e->getMessage()` to whoever made the request, regardless of
+`GK_DEBUG`. Any input that provoked a fatal handed the caller table names, file paths and query
+fragments. The full detail now goes to `error_log` with a short reference; the caller gets the
+reference alone, so a user can quote it in a support request without ever having seen the
+underlying error. `GK_DEBUG` still returns the detail locally.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook

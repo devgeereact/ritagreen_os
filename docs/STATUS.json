@@ -261,11 +261,13 @@
         },
         {
           "name": "Mandatory / recommended / optional weighting",
-          "status": "todo"
+          "status": "done",
+          "note": "RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests"
         },
         {
           "name": "Calculated eligibility verdict with reason",
-          "status": "todo"
+          "status": "partial",
+          "note": "The evaluation logic is built and tested in server/pure.php (rg_evaluate_eligibility, rg_eligibility_reason). Not yet wired to storage or any endpoint"
         },
         {
           "name": "Compliance status read-only in the UI",
@@ -289,6 +291,11 @@
         {
           "name": "Generalised verification lifecycle",
           "status": "todo"
+        },
+        {
+          "name": "Eligibility evaluation logic",
+          "status": "done",
+          "note": "rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come"
         }
       ]
     },
@@ -648,8 +655,8 @@
         },
         {
           "name": "Exception messages withheld from callers",
-          "status": "todo",
-          "note": "server/lib.php returns the exception message in JSON"
+          "status": "done",
+          "note": "Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on"
         },
         {
           "name": "Unused dependencies removed",

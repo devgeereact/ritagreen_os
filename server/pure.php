@@ -118,3 +118,175 @@ function rg_field_status(array $kinds, string $startsAt, string $endsAt, ?int $n
     if ($now > $start) return 'late';
     return 'scheduled';
 }
+
+// ---------------------------------------------------------- compliance engine
+
+/**
+ * Requirement weights. A requirement's weight decides what its absence means,
+ * and the same requirement can carry different weights in different services —
+ * first aid may be mandatory for Care and recommended for Cleaning. That is
+ * configuration owned by the business, not a constant in code.
+ */
+const RG_MANDATORY = 'mandatory';
+const RG_RECOMMENDED = 'recommended';
+const RG_OPTIONAL = 'optional';
+
+/** Overall verdicts. */
+const RG_ELIGIBLE = 'eligible';
+const RG_ELIGIBLE_WITH_WARNINGS = 'eligible_with_warnings';
+const RG_NOT_ELIGIBLE = 'not_eligible';
+
+/**
+ * Assess one requirement against the evidence held for a person.
+ *
+ * A rule is:
+ *   ['key' => 'sia_licence', 'label' => 'SIA licence',
+ *    'weight' => RG_MANDATORY, 'expires' => true]
+ *
+ * Evidence for that key, or null when nothing is on file:
+ *   ['expiry' => '2026-09-01', 'verified' => true]
+ *
+ * @return array{key:string,label:string,weight:string,state:string,reason:?string,days:?int}
+ *         state ∈ met | expiring | expired | missing | undated | unverified
+ */
+function rg_assess_requirement(array $rule, ?array $evidence, ?string $today = null): array
+{
+    $key = $rule['key'];
+    $label = $rule['label'] ?? $key;
+    $weight = $rule['weight'] ?? RG_MANDATORY;
+    $expires = $rule['expires'] ?? true;
+    $needsVerifying = $rule['verify'] ?? false;
+
+    $out = static fn(string $state, ?string $reason, ?int $days = null): array => [
+        'key' => $key, 'label' => $label, 'weight' => $weight,
+        'state' => $state, 'reason' => $reason, 'days' => $days,
+    ];
+
+    // Nothing on file at all. Distinct from expired: one is a gap in the
+    // evidence, the other is a lapse, and they are chased differently.
+    if ($evidence === null) {
+        return $out('missing', "$label: no evidence on file");
+    }
+
+    // Present, but nobody has checked it. An unverified document is a claim.
+    if ($needsVerifying && empty($evidence['verified'])) {
+        return $out('unverified', "$label: on file but not yet verified");
+    }
+
+    if (!$expires) {
+        return $out('met', null);
+    }
+
+    $expiry = $evidence['expiry'] ?? null;
+    $class = rg_classify($expiry, $today);
+
+    switch ($class['status']) {
+        case 'unknown':
+            // A credential that should carry an expiry but does not is
+            // incomplete evidence, not valid evidence.
+            return $out('undated', "$label: no expiry date recorded");
+        case 'expired':
+            $days = abs((int) $class['days']);
+            $ago = $days === 1 ? 'yesterday' : "$days days ago";
+            return $out('expired', "$label: expired $ago", $class['days']);
+        case 'expiring':
+            $days = (int) $class['days'];
+            $when = $days === 0 ? 'today' : ($days === 1 ? 'tomorrow' : "in $days days");
+            return $out('expiring', "$label: expires $when", $days);
+        default:
+            return $out('met', null, $class['days']);
+    }
+}
+
+/** Does this state mean the requirement is not satisfied? */
+function rg_state_is_unmet(string $state): bool
+{
+    return in_array($state, ['missing', 'expired', 'undated', 'unverified'], true);
+}
+
+/**
+ * Decide whether a person may work in a service.
+ *
+ * This is the answer the whole system exists to give, and it is CALCULATED —
+ * never a field somebody sets. A mandatory requirement that is unmet blocks
+ * deployment and says why; a mandatory requirement inside its expiry window
+ * warns without blocking, because the person may still work today; a
+ * recommended requirement never blocks.
+ *
+ * $rules    list of requirement definitions for this service and role
+ * $evidence map of requirement key => evidence array, or absent when nothing
+ *           is on file
+ *
+ * @return array{
+ *   status:string, eligible:bool, score:int,
+ *   blocking:array<int,array>, warnings:array<int,array>, items:array<int,array>
+ * }
+ */
+function rg_evaluate_eligibility(array $rules, array $evidence, ?string $today = null): array
+{
+    $items = [];
+    $blocking = [];
+    $warnings = [];
+    $weightPoints = [RG_MANDATORY => 2, RG_RECOMMENDED => 1, RG_OPTIONAL => 0];
+    $earned = 0;
+    $possible = 0;
+
+    foreach ($rules as $rule) {
+        $assessed = rg_assess_requirement($rule, $evidence[$rule['key']] ?? null, $today);
+        $items[] = $assessed;
+
+        $points = $weightPoints[$assessed['weight']] ?? 0;
+        $possible += $points;
+
+        $unmet = rg_state_is_unmet($assessed['state']);
+        if (!$unmet) $earned += $points;
+
+        if ($assessed['weight'] === RG_MANDATORY) {
+            if ($unmet) {
+                $blocking[] = $assessed;
+            } elseif ($assessed['state'] === 'expiring') {
+                $warnings[] = $assessed;
+            }
+        } elseif ($assessed['weight'] === RG_RECOMMENDED && ($unmet || $assessed['state'] === 'expiring')) {
+            $warnings[] = $assessed;
+        }
+    }
+
+    // An empty rule set means nothing has been configured for this service yet.
+    // Report 0, not 100: "no requirements defined" must never read as "fully
+    // compliant" on a dashboard.
+    $score = $possible > 0 ? (int) round($earned / $possible * 100) : 0;
+
+    if ($blocking) {
+        $status = RG_NOT_ELIGIBLE;
+    } elseif ($warnings) {
+        $status = RG_ELIGIBLE_WITH_WARNINGS;
+    } else {
+        $status = RG_ELIGIBLE;
+    }
+
+    return [
+        'status' => $status,
+        'eligible' => $blocking === [],
+        'score' => $score,
+        'blocking' => $blocking,
+        'warnings' => $warnings,
+        'items' => $items,
+    ];
+}
+
+/**
+ * One line explaining a verdict, for a refusal message or an audit entry.
+ * Never returns an empty string: a refusal without a reason is not actionable.
+ */
+function rg_eligibility_reason(array $verdict): string
+{
+    if ($verdict['blocking']) {
+        $reasons = array_column($verdict['blocking'], 'reason');
+        return implode('; ', $reasons);
+    }
+    if ($verdict['warnings']) {
+        return implode('; ', array_column($verdict['warnings'], 'reason'));
+    }
+    return 'All requirements met.';
+}

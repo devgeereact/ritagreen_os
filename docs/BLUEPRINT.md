@@ -217,7 +217,12 @@ cannot say "this person may not work in Security, because their SIA licence has 
 
 The only place requirements are encoded at all is hard-coded inside `server/scheduling.php`.
 
-**Fix:** Milestone 2.
+**Fix:** Milestone 2. The decision logic now exists in `server/pure.php` —
+`rg_evaluate_eligibility()` takes a rule set and a person's evidence and returns a verdict, a
+score and a reason, with mandatory failures blocking and expiring credentials warning without
+blocking. It is tested against the boundary cases that matter, including that a credential
+expiring *today* does not stand someone down. What remains is the storage for the rules, and
+wiring the evaluator into the endpoints.
 
 #### Right to work is a boolean
 

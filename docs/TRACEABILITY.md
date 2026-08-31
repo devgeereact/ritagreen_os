@@ -61,7 +61,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Company insurance is current | `insurance` | `server/insurance.php` | `src/pages/app/Compliance.tsx` | none |
 | Requirements are configurable per service | planned `compliance_rules` | planned | planned rule builder | none |
 | Requirements carry a weight | planned | planned | planned | none |
-| Eligibility is calculated, with a reason | planned | planned | planned | none |
+| Eligibility is calculated, with a reason | planned storage | `rg_evaluate_eligibility()` in `server/pure.php` | planned | `server/tests/run.php` |
+| Requirements carry a weight that decides blocking | planned storage | `server/pure.php` | planned | `server/tests/run.php` |
 | Right to work has an evidence trail | `workers.right_to_work` (boolean only) | `server/workers.php` | `src/pages/app/Workers.tsx` | none |
 | SIA licences are verified, not just recorded | `workers.sia_number` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | DBS is verified, not just recorded | `workers.dbs_status` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |

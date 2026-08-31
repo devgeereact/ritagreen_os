@@ -71,13 +71,18 @@ to more than one `person_id`.
 
 **Goal:** compliance becomes calculated, not remembered.
 
+**The decision logic is built and tested**, ahead of its storage, because it is pure and
+therefore verifiable without a database — see `rg_evaluate_eligibility()` in `server/pure.php`
+and its 48 assertions in `server/tests/run.php`. It already implements the weighting, the
+blocking-versus-warning distinction, the score, and the human-readable reason.
+
+Remaining:
+
 - `compliance_requirements` — the catalogue of things that can be required
 - `compliance_rules` — service × role × requirement × mandatory/recommended/optional
-- Evaluation producing, per person per service, a verdict and a human-readable reason
+- Loading a person's evidence into the shape the evaluator expects
 - Rule builder in Settings, owner-configurable
 - Compliance status becomes read-only everywhere in the UI
-- `classify()` from `server/compliance.php` retained as the date primitive
-- Unit tests — this logic must never regress silently
 
 **Done when:** the system can answer "may this person work in Security, and if not, why not?"
 without a human interpreting a list of dates.
