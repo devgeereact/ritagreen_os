@@ -34,7 +34,7 @@ One merged Vite application: the public corporate site at the root, the internal
 
 ## 2. Architecture in one paragraph
 
-React 19 SPA (static `dist/`) → 47 flat PHP endpoint files in `server/` → MySQL on cPanel.
+React 19 SPA (static `dist/`) → 48 flat PHP endpoint files in `server/` → MySQL on cPanel.
 The browser never touches the database; it calls PHP over HTTP with an
 `Authorization: Bearer` token and receives JSON. Every endpoint begins
 `require __DIR__ . '/lib.php'`, which is the shared kernel. There is no framework, no router

@@ -10,7 +10,7 @@
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 47 flat endpoint files, no framework, no router, no Composer
+server/*.php — 48 flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
 MySQL / MariaDB on cPanel shared hosting (host = localhost)

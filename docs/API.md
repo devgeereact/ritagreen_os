@@ -4,9 +4,12 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- 47 endpoint files, 163 distinct routes.
-- Verified against the tree at `server/` (50 `.php` files: 47 endpoints plus
-  `lib.php`, `pay-lib.php` and `config.sample.php`).
+- **48 HTTP endpoint files.** Verified against the tree at `server/`.
+- Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
+  database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
+- Three command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`
+  and `backfill-people.php`. Each refuses to run outside the CLI. See `docs/ARCHITECTURE.md`
+  §7a and §10.
 
 ---
 
@@ -1190,6 +1193,50 @@ Note that the database password is passed on the `mysqldump` command line
 is `escapeshellarg`-quoted, so it is not an injection risk.
 
 ---
+
+## 54a. `right-to-work.php`
+
+Right-to-work checks. A check is evidence, not a flag. Added in Milestone 3; before it, right
+to work was a single `TINYINT(1)` on the worker record with no method, date, verifier, evidence
+or expiry.
+
+**Auth: internal staff only (`require_staff`) to read; `super_admin`/`admin`/`manager` to
+write.**
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | — | `person_id` | `{person_id, checks[], current}` — full history, newest first, with the verifier's name |
+| GET | `due` | `days` (0–365, default 60) | `{items[], window_days}` — checks that are unverified, flagged for follow-up, or coming up for recheck, each with an `attention` line saying which |
+| POST | — | body `{person_id, method, method_note?, reference?, checked_on?, outcome?, recheck_due?, follow_up_required?, evidence_file_id?, notes?}` | `{ok, id}` 201 |
+| POST | `verify` | `id` | `{ok: true}` |
+
+`method` ∈ `online_share_code`, `manual_document`, `idsp_digital`, `other`.
+`outcome` ∈ `pending`, `valid`, `invalid`, `requires_follow_up`.
+
+**Recording and verifying are separate on purpose.** The person who collects a document is
+often not the person who signs it off, and "verified" with nobody's name against it is not
+verification. A check whose outcome is still `pending` cannot be verified — signing that off
+would be signing off nothing — and a check already verified cannot be verified twice.
+
+A future-dated check is refused. `workers.right_to_work` is kept in step with the latest check
+so anything still reading the old flag does not disagree with the record.
+
+## 15a. `compliance.php` — eligibility
+
+Added in Milestone 2, alongside the existing summary and pack actions.
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | `eligibility` | `worker_id`, `service?` | The verdict for one service: `{status, eligible, score, blocking[], warnings[], items[], reason}` |
+| GET | `eligibility_all` | `worker_id` | `{worker, person_id, services{care,academy,cleaning,security}}` — a separate verdict per service |
+
+`status` ∈ `eligible`, `eligible_with_warnings`, `not_eligible`. The verdict is **calculated**
+from the rules configured for the service and the evidence on file; it is never read from a
+stored flag, and no endpoint accepts one. Each call also records the result in
+`person_services`.
+
+`scheduling.php` POST calls the same check and refuses the assignment with HTTP 409 when
+anything mandatory is unmet, naming every blocking requirement rather than one at a time.
 
 ## 55. Public / unauthenticated surface
 

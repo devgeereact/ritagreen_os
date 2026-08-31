@@ -95,7 +95,7 @@ src/
   providers/            auth context
 server/
   lib.php               the shared kernel every endpoint requires
-  *.php                 47 endpoints, one per resource
+  *.php                 48 endpoints, one per resource
   schema.sql            the database, as a single re-runnable file
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
