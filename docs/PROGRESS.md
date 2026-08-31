@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`##################......`  107 done · 12 partial · 29 to do · 148 tracked
+`###################.....`  115 done · 15 partial · 22 to do · 152 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -20,14 +20,14 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | PLATFORM — Engineering platform | 0 | `#########...` | 9 | 3 | 2 |
 | FOUNDATION — Foundation and person spine | 1 | `##########..` | 13 | 1 | 3 |
 | COMPLIANCE — Compliance engine and verification | 2 | `##########..` | 15 | 4 | 1 |
-| DOCUMENTS — Document management | 3 | `########....` | 4 | 0 | 2 |
+| DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `###########.` | 9 | 0 | 1 |
 | IAM — Identity, access and permissions | 5 | `##########..` | 17 | 1 | 2 |
-| EMPLOYMENT — Employment records, contracts and leave | 6 | `#...........` | 0 | 1 | 5 |
+| EMPLOYMENT — Employment records, contracts and leave | 6 | `#########...` | 6 | 3 | 1 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `#######.....` | 4 | 0 | 3 |
 | TRAINING — Training records and certificates | 8 | `#########...` | 5 | 0 | 2 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `######......` | 6 | 2 | 5 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `#######.....` | 6 | 3 | 4 |
 | PWA — Progressive web app | 9 | `###########.` | 8 | 0 | 1 |
 | REPORTING — Reporting and insight | 9 | `#########...` | 6 | 0 | 2 |
 
@@ -101,14 +101,14 @@ Milestone 2 · 15 done, 4 partial, 1 to do
 
 ### DOCUMENTS — Document management
 
-Milestone 3 · 4 done, 0 partial, 2 to do
+Milestone 3 · 6 done, 0 partial, 0 to do
 
+- [x] Document metadata: issue date, expiry — _files gained issued_on, expires_on and person_id in migration 010_
+- [x] Document verification status and verifier — _files gained verification_status, verified_by and verified_at_
 - [x] Role restriction on the document centre
 - [x] Streamed download behind an auth check — _uploads directory blocked in .htaccess_
 - [x] Text extraction from docx, xlsx and PDF
 - [x] Upload with MIME allowlist and size cap — _10 MB, randomised stored name_
-- [ ] Document metadata: issue date, expiry — _files has a category only_
-- [ ] Document verification status and verifier
 
 ### OPERATIONS — Scheduling, assignments and field operations
 
@@ -152,13 +152,17 @@ Milestone 5 · 17 done, 1 partial, 2 to do
 
 ### EMPLOYMENT — Employment records, contracts and leave
 
-Milestone 6 · 0 done, 1 partial, 5 to do
+Milestone 6 · 6 done, 3 partial, 1 to do
 
+- [x] Contract versioning — _version plus supersedes_id. A signed contract is evidence of what was agreed at a point in time, so it is superseded rather than edited_
+- [x] Holiday balance distinguishes unset from overdrawn — _No entitlement recorded returns null rather than a large negative number, which would read as 'overdrawn' when it means 'nobody set this up'_
+- [x] Leave and absence — _server/leave.php_
+- [x] Leave and absence records — _leave_records plus server/leave.php. Counted in hours, not days, because shift work is not made of whole days. Records holiday taken, carried over, holiday pay and payments in lieu, and return-to-work discussions_
+- [x] Overlapping leave is refused — _Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash_
+- [x] Structured written-statement particulars — _employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF_
+- [~] Employment contract lifecycle — _employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not_
+- [~] Records have a retention policy — _retention_policies exists; nothing acts on it yet_
 - [~] Worker employment fields — _pay rate, pay type, holiday hours present; Acas particulars not structured_
-- [ ] Contract versioning
-- [ ] Employment contract lifecycle — _the contracts table is a commercial client contract_
-- [ ] Leave and absence records
-- [ ] Structured written-statement particulars
 - [ ] Worker status derived from workflow events — _workers.status is set by hand_
 
 ### COMMUNICATIONS — Email, SMS and notifications
@@ -203,7 +207,7 @@ Milestone 8 · 5 done, 0 partial, 2 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 6 done, 2 partial, 5 to do
+Milestone 9 · 6 done, 3 partial, 4 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
@@ -213,9 +217,9 @@ Milestone 9 · 6 done, 2 partial, 5 to do
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
 - [~] Integration failure surfaced — _The Action Centre flags failed emails and a queue not being drained for over two hours -- the first symptom of a broken cron would otherwise be somebody saying they never heard from us. Google Forms monitoring still to come_
+- [~] Retention engine — _retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built_
 - [ ] Deletion approval workflow
 - [ ] Restore testing
-- [ ] Retention engine
 - [ ] System health dashboard
 - [ ] Workflow rule engine
 

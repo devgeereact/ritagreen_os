@@ -488,3 +488,101 @@ function rg_first_name(?string $fullName): string
     $parts = preg_split('/\s+/', $name);
     return $parts[0] !== '' ? $parts[0] : $name;
 }
+
+// -------------------------------------------------------------- leave & absence
+
+/**
+ * Which leave year a date falls in, as "2026/27".
+ *
+ * $startMonth is the month the leave year begins (4 = April, the common UK
+ * choice; 1 = January). A date before that month belongs to the year that
+ * started the previous January.
+ */
+function rg_leave_year(string $date, int $startMonth = 4): string
+{
+    $ts = strtotime($date);
+    if ($ts === false) return '';
+    $year = (int) date('Y', $ts);
+    $month = (int) date('n', $ts);
+    $startYear = $month >= $startMonth ? $year : $year - 1;
+    // A leave year starting in January is one calendar year, not a straddle.
+    if ($startMonth === 1) return (string) $startYear;
+    return $startYear . '/' . substr((string) ($startYear + 1), 2);
+}
+
+/**
+ * A holiday balance from an entitlement and the records against it.
+ *
+ * Counted in HOURS. Shift work is not made of whole days, and a balance in days
+ * is wrong for anyone on variable hours.
+ *
+ * Only ANNUAL leave counts against the entitlement -- sickness and unpaid leave
+ * are recorded but do not consume holiday. Requested leave is shown separately
+ * from taken: it is not yet approved, but somebody planning cover needs to see
+ * it coming.
+ *
+ * @param array<int,array{kind:string,status:string,hours:float|string,carried_over?:int|bool,in_lieu?:int|bool}> $records
+ * @return array{entitlement:float,carried_in:float,taken:float,approved:float,requested:float,paid_in_lieu:float,remaining:float}
+ */
+function rg_leave_balance(?float $entitlementHours, array $records): array
+{
+    // No entitlement recorded is NOT the same as an entitlement of zero. Without
+    // this, somebody whose contracted holiday was never entered shows a large
+    // negative balance, which reads as "overdrawn" when it means "nobody has set
+    // this up". Same distinction as unknown versus expired in compliance.
+    $entitlementKnown = $entitlementHours !== null && $entitlementHours > 0;
+    $entitlementHours = (float) ($entitlementHours ?? 0);
+    $carried = 0.0;
+    $taken = 0.0;
+    $approved = 0.0;
+    $requested = 0.0;
+    $inLieu = 0.0;
+
+    foreach ($records as $r) {
+        if (($r['kind'] ?? '') !== 'annual') continue;
+        $hours = (float) ($r['hours'] ?? 0);
+        $status = $r['status'] ?? '';
+
+        if (!empty($r['carried_over'])) {
+            $carried += $hours;
+            continue;
+        }
+        if (!empty($r['in_lieu'])) {
+            // Paid instead of taken: it still consumes the entitlement.
+            $inLieu += $hours;
+            continue;
+        }
+        if ($status === 'taken') $taken += $hours;
+        elseif ($status === 'approved') $approved += $hours;
+        elseif ($status === 'requested') $requested += $hours;
+        // declined and cancelled consume nothing.
+    }
+
+    $entitlement = $entitlementHours + $carried;
+    // Requested leave is NOT deducted: it has not been agreed, and showing a
+    // balance already reduced by an unapproved request misleads both sides.
+    $remaining = $entitlement - $taken - $approved - $inLieu;
+
+    return [
+        'entitlement_known' => $entitlementKnown,
+        'entitlement' => round($entitlement, 2),
+        'carried_in' => round($carried, 2),
+        'taken' => round($taken, 2),
+        'approved' => round($approved, 2),
+        'requested' => round($requested, 2),
+        'paid_in_lieu' => round($inLieu, 2),
+        // Meaningless until an entitlement is recorded, so it is null rather
+        // than a misleading negative number.
+        'remaining' => $entitlementKnown ? round($remaining, 2) : null,
+        'used' => round($taken + $approved + $inLieu, 2),
+    ];
+}
+
+/**
+ * Do two leave periods overlap? Inclusive of both end dates, because a day of
+ * leave is a whole day.
+ */
+function rg_leave_overlaps(string $aStart, string $aEnd, string $bStart, string $bEnd): bool
+{
+    return strtotime($aStart) <= strtotime($bEnd) && strtotime($bStart) <= strtotime($aEnd);
+}

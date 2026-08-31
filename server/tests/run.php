@@ -451,6 +451,83 @@ check('falls back for empty', rg_first_name(''), 'there');
 check('falls back for null', rg_first_name(null), 'there');
 
 // ---------------------------------------------------------------------------
+group('rg_leave_year');
+
+// April start: the common UK choice.
+check('mid-year', rg_leave_year('2026-06-15', 4), '2026/27');
+check('the day it starts', rg_leave_year('2026-04-01', 4), '2026/27');
+check('the day before', rg_leave_year('2026-03-31', 4), '2025/26');
+check('January belongs to the previous year', rg_leave_year('2026-01-10', 4), '2025/26');
+check('December', rg_leave_year('2026-12-31', 4), '2026/27');
+// A January start is one calendar year, not a straddle.
+check('calendar leave year', rg_leave_year('2026-06-15', 1), '2026');
+check('unparseable is empty', rg_leave_year('nonsense', 4), '');
+
+// ---------------------------------------------------------------------------
+group('rg_leave_balance');
+
+$none = rg_leave_balance(224.0, []);
+check('nothing taken leaves it all', $none['remaining'], 224.0);
+check('entitlement is reported', $none['entitlement'], 224.0);
+check('and is known', $none['entitlement_known'], true);
+
+// No entitlement recorded is not an entitlement of zero. Without this, somebody
+// whose contracted holiday was never entered shows a large negative balance,
+// which reads as "overdrawn" when it means "nobody set this up".
+$unset = rg_leave_balance(null, [['kind' => 'annual', 'status' => 'approved', 'hours' => 37.5]]);
+check('unset entitlement is flagged', $unset['entitlement_known'], false);
+check('and the balance is null, not negative', $unset['remaining'], null);
+check('but usage is still counted', $unset['used'], 37.5);
+$zero = rg_leave_balance(0.0, []);
+check('zero is also treated as unset', $zero['entitlement_known'], false);
+
+$records = [
+    ['kind' => 'annual', 'status' => 'taken',     'hours' => 24],
+    ['kind' => 'annual', 'status' => 'approved',  'hours' => 16],
+    ['kind' => 'annual', 'status' => 'requested', 'hours' => 8],
+    ['kind' => 'annual', 'status' => 'declined',  'hours' => 40],
+    ['kind' => 'annual', 'status' => 'cancelled', 'hours' => 40],
+];
+$b = rg_leave_balance(224.0, $records);
+check('taken counts', $b['taken'], 24.0);
+check('approved counts', $b['approved'], 16.0);
+check('requested is reported separately', $b['requested'], 8.0);
+// A request is not an agreement. Deducting it would mislead both sides.
+check('requested is NOT deducted', $b['remaining'], 184.0);
+check('used is taken plus approved', $b['used'], 40.0);
+check('declined consumes nothing', rg_leave_balance(100.0, [['kind'=>'annual','status'=>'declined','hours'=>50]])['remaining'], 100.0);
+check('cancelled consumes nothing', rg_leave_balance(100.0, [['kind'=>'annual','status'=>'cancelled','hours'=>50]])['remaining'], 100.0);
+
+// Sickness is recorded but does not consume holiday.
+check('sickness does not consume holiday',
+    rg_leave_balance(100.0, [['kind' => 'sickness', 'status' => 'taken', 'hours' => 40]])['remaining'], 100.0);
+check('unpaid leave does not consume holiday',
+    rg_leave_balance(100.0, [['kind' => 'unpaid', 'status' => 'taken', 'hours' => 40]])['remaining'], 100.0);
+
+// Carry-over adds to the entitlement rather than being deducted from it.
+$carried = rg_leave_balance(100.0, [['kind' => 'annual', 'status' => 'approved', 'hours' => 20, 'carried_over' => 1]]);
+check('carry-over increases entitlement', $carried['entitlement'], 120.0);
+check('and is reported', $carried['carried_in'], 20.0);
+check('and is not also deducted', $carried['remaining'], 120.0);
+
+// Paid in lieu still consumes the entitlement -- it was paid instead of taken.
+$lieu = rg_leave_balance(100.0, [['kind' => 'annual', 'status' => 'taken', 'hours' => 10, 'in_lieu' => 1]]);
+check('payment in lieu consumes entitlement', $lieu['remaining'], 90.0);
+check('and is reported separately', $lieu['paid_in_lieu'], 10.0);
+
+// ---------------------------------------------------------------------------
+group('rg_leave_overlaps');
+
+check('clear overlap', rg_leave_overlaps('2026-06-01', '2026-06-10', '2026-06-05', '2026-06-15'), true);
+check('contained', rg_leave_overlaps('2026-06-01', '2026-06-30', '2026-06-10', '2026-06-12'), true);
+check('identical', rg_leave_overlaps('2026-06-01', '2026-06-01', '2026-06-01', '2026-06-01'), true);
+// Ends are inclusive: a day of leave is a whole day, so touching ends DO clash.
+check('touching ends clash', rg_leave_overlaps('2026-06-01', '2026-06-05', '2026-06-05', '2026-06-09'), true);
+check('adjacent days do not', rg_leave_overlaps('2026-06-01', '2026-06-05', '2026-06-06', '2026-06-09'), false);
+check('far apart', rg_leave_overlaps('2026-06-01', '2026-06-05', '2026-08-01', '2026-08-05'), false);
+check('order does not matter', rg_leave_overlaps('2026-08-01', '2026-08-05', '2026-06-01', '2026-06-05'), false);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

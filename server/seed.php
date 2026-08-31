@@ -148,6 +148,10 @@ foreach ($workers as $w) {
     $ins->execute();
     $workerIds[$w[0]] = $conn->insert_id;
 }
+// A statutory-style entitlement in hours, so the leave balance means something.
+// 28 days at 7.5 hours is 210; part-time workers get less, which is the point of
+// counting in hours rather than days.
+$conn->query('UPDATE workers SET holiday_hours = 210 WHERE holiday_hours = 0');
 echo "  workers      " . count($workers) . " (mixed compliance: valid, expiring, expired, no RTW)\n";
 
 // A worker login, so /m can be exercised. Linked to Amara Chen.

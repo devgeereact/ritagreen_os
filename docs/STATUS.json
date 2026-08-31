@@ -412,25 +412,48 @@
         },
         {
           "name": "Employment contract lifecycle",
-          "status": "todo",
-          "note": "the contracts table is a commercial client contract"
+          "status": "partial",
+          "note": "employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not"
         },
         {
           "name": "Contract versioning",
-          "status": "todo"
+          "status": "done",
+          "note": "version plus supersedes_id. A signed contract is evidence of what was agreed at a point in time, so it is superseded rather than edited"
         },
         {
           "name": "Structured written-statement particulars",
-          "status": "todo"
+          "status": "done",
+          "note": "employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF"
         },
         {
           "name": "Leave and absence records",
-          "status": "todo"
+          "status": "done",
+          "note": "leave_records plus server/leave.php. Counted in hours, not days, because shift work is not made of whole days. Records holiday taken, carried over, holiday pay and payments in lieu, and return-to-work discussions"
         },
         {
           "name": "Worker status derived from workflow events",
           "status": "todo",
           "note": "workers.status is set by hand"
+        },
+        {
+          "name": "Records have a retention policy",
+          "status": "partial",
+          "note": "retention_policies exists; nothing acts on it yet"
+        },
+        {
+          "name": "Leave and absence",
+          "status": "done",
+          "note": "server/leave.php"
+        },
+        {
+          "name": "Holiday balance distinguishes unset from overdrawn",
+          "status": "done",
+          "note": "No entitlement recorded returns null rather than a large negative number, which would read as 'overdrawn' when it means 'nobody set this up'"
+        },
+        {
+          "name": "Overlapping leave is refused",
+          "status": "done",
+          "note": "Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash"
         }
       ]
     },
@@ -496,12 +519,13 @@
         },
         {
           "name": "Document metadata: issue date, expiry",
-          "status": "todo",
-          "note": "files has a category only"
+          "status": "done",
+          "note": "files gained issued_on, expires_on and person_id in migration 010"
         },
         {
           "name": "Document verification status and verifier",
-          "status": "todo"
+          "status": "done",
+          "note": "files gained verification_status, verified_by and verified_at"
         }
       ]
     },
@@ -641,7 +665,8 @@
         },
         {
           "name": "Retention engine",
-          "status": "todo"
+          "status": "partial",
+          "note": "retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built"
         },
         {
           "name": "Deletion approval workflow",

@@ -558,6 +558,49 @@ precache   14.5 MB across 115 entries  ->  1.15 MB across 67
 rebrand. Redrawn in navy and mint, with PNGs generated from it for every size the manifest and
 iOS need.
 
+### Added — employment records: contracts, leave, document metadata, retention
+
+Migration 010, closing three gaps at once.
+
+**There was no employment contract.** The `contracts` table is a *commercial* contract with a
+client — scope, rate, frequency, SLA. Nothing described the agreement with a worker.
+`employment_contracts` adds draft → sent → viewed → accepted → signed, with `version` and
+`supersedes_id`: a signed contract is evidence of what was agreed at a point in time, so it is
+superseded rather than edited.
+
+**The Acas particulars were not queryable.** They are now fields — job title, place of work,
+pay and frequency, hours pattern, holiday entitlement, sick pay, other paid leave, notice both
+ways, probation, training entitlement, pension, collective agreements. A PDF is the artefact;
+these are what make them answerable without a human opening a document.
+
+**There was nowhere to record holiday.** `leave_records` plus `server/leave.php` covers annual,
+sickness, unpaid, parental, bereavement, compassionate, jury service and training — with
+holiday pay, payments in lieu, carry-over, and return-to-work discussions after sickness.
+
+Counted in **hours, not days**. Shift work is not made of whole days, and a balance in days is
+wrong for anyone on variable hours.
+
+Two decisions worth stating:
+
+- **A request is not an agreement.** Requested leave is reported but *not* deducted from the
+  balance. Showing a balance already reduced by an unapproved request misleads both sides.
+- **No entitlement recorded is not an entitlement of zero.** The balance returns `null` rather
+  than a large negative number, which would read as "overdrawn" when it means "nobody set this
+  up" — the same distinction as `unknown` versus `expired` in compliance.
+
+Overlapping leave is refused, naming the dates that clash, rather than quietly double-booking
+somebody's holiday. A worker may request their own leave and see only their own; whatever
+status they submit, it is recorded as a request.
+
+**Document metadata:** `files` gained `issued_on`, `expires_on`, `verification_status`,
+`verified_by`, `verified_at` and `person_id`. A document with no issue date, no expiry and no
+verifier cannot be evidence of anything.
+
+**Retention as configuration:** `retention_policies` is seeded with eight record types and
+**NULL periods, deliberately**. The values belong to the business and its legal advice, not to
+this schema, and NULL is distinct from zero so a dashboard can say "no policy set" rather than
+implying immediate deletion.
+
 ### Still open
 
 Recorded in `docs/STATUS.json`, verified against source, not yet fixed: the GoCardless webhook
