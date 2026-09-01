@@ -390,6 +390,11 @@
           "name": "Verifying records what was checked",
           "status": "done",
           "note": "A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later"
+        },
+        {
+          "name": "Seeded rules match prior enforcement",
+          "status": "done",
+          "note": "Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused"
         }
       ]
     },
@@ -900,6 +905,16 @@
           "name": "Frontend types match the server",
           "status": "done",
           "note": "Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift"
+        },
+        {
+          "name": "Reassessment can run without sending mail",
+          "status": "done",
+          "note": "expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose"
+        },
+        {
+          "name": "Migration production guard is meaningful on cPanel",
+          "status": "todo",
+          "note": "migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead"
         }
       ]
     }

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  149 done · 14 partial · 2 to do · 165 tracked
+`#######################.`  151 done · 14 partial · 3 to do · 168 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,9 +17,9 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `##########..` | 10 | 3 | 1 |
+| PLATFORM — Engineering platform | 0 | `#########...` | 11 | 3 | 2 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
-| COMPLIANCE — Compliance engine and verification | 2 | `###########.` | 21 | 2 | 0 |
+| COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 10 done, 3 partial, 1 to do
+Milestone 0 · 11 done, 3 partial, 2 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -45,12 +45,14 @@ Milestone 0 · 10 done, 3 partial, 1 to do
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
 - [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
+- [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
 - [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
 - [~] Documentation pack — _Milestone 0, in progress_
 - [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
+- [ ] Migration production guard is meaningful on cPanel — _migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead_
 
 ### FOUNDATION — Foundation and person spine
 
@@ -76,7 +78,7 @@ Milestone 1 · 16 done, 1 partial, 0 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 21 done, 2 partial, 0 to do
+Milestone 2 · 22 done, 2 partial, 0 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
@@ -97,6 +99,7 @@ Milestone 2 · 21 done, 2 partial, 0 to do
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
 - [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
 - [x] SIA verification workflow — _Carried over as 'received', not 'verified' -- a number was recorded, no register check was captured_
+- [x] Seeded rules match prior enforcement — _Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused_
 - [x] Verification is a workflow — _One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked_
 - [x] Verifying records what was checked — _A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later_
 - [~] Compliance status read-only in the UI — _The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields_

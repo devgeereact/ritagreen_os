@@ -19,6 +19,17 @@ require __DIR__ . '/lib.php';
 require __DIR__ . '/compliance-lib.php';
 
 $isCli = PHP_SAPI === 'cli';
+
+// Reassess without sending anything.
+//
+//     php expiry-alerts.php --reassess-only
+//
+// Folding reassessment into this cron meant recalculating eligibility and
+// emailing the workforce became one action. Running it during a deployment,
+// purely to populate the new columns, therefore sent real reminders to real
+// people at a time nobody chose. Recalculation must be separable from
+// correspondence.
+$reassessOnly = in_array('--reassess-only', $argv ?? [], true);
 if (!$isCli) {
     $key = $_GET['key'] ?? '';
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
@@ -228,6 +239,11 @@ foreach ($items as $it) {
         && filter_var($it['worker_email'], FILTER_VALIDATE_EMAIL)) {
         $perWorker[$it['worker_email']][] = $it;
     }
+}
+
+if ($reassessOnly) {
+    echo "Reassessment only: no reminders scanned, nothing sent.\n";
+    exit;
 }
 
 if (!$due) {
