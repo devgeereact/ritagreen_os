@@ -1,161 +1,151 @@
-# CLAUDE.md — <PROJECT_NAME>
+# CLAUDE.md — RitaGreen OS
 
-> **Project memory for Claude Code.** Read this fully before doing any work on this project.
-> This is a reusable template: copy it into each new project's repo root and fill in §1.
-> The full one-time setup steps live in the separate **PROJECT-SETUP-GUIDE**.
+Persistent context for Claude Code in this repository. Read it fully before doing any work.
+
+**This file is a pointer, not a duplicate.** The detail lives in [`docs/`](docs/) and this file
+links to it. Duplicated facts drift, and the stale copy is the one that gets trusted — see
+`docs/RULES.md` rule 20.
+
+| Read this | Before |
+|---|---|
+| [`docs/RULES.md`](docs/RULES.md) | Changing anything |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Touching the API or auth |
+| [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) | Proposing a feature |
+| [`docs/SCHEMA.md`](docs/SCHEMA.md) | Touching the database |
+| [`docs/API.md`](docs/API.md) | Adding or changing an endpoint |
+| [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Writing UI |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Deciding what to do next |
 
 ---
 
-## 1. Project-specific values — FILL THESE IN
+## 1. Project
 
 | Item | Value |
 |---|---|
-| Project / repo | `devgeereact/ritagreen_os` |
+| Repository | `devgeereact/ritagreen_os` |
 | Domain | `ritagreenservices.com` |
-| Document root | `/home/<cpanel_user>/ritagreenservices.com` (confirm cPanel user) |
-| Database name | `ritagreen_os` (cPanel may prefix as `<cpaneluser>_ritagreen_os`) |
-| Database user | `ritagreen_os` (usually same as DB name) |
-| Database host | `localhost` |
-| Deploy branch | `main` |
-| FTP username | `ritagreen_os@ritagreenservices.com` |
+| Deploy branch | `main` — **pushing to `main` deploys to production** |
+| Dev port | 5122, `strictPort` |
+| Database | `ritagreen_os` (cPanel may prefix with the account name) |
+| Language | TypeScript, strict |
 
-> **Stack note:** this project is **TypeScript** (Pulse-UI kit), not plain JS. It is a
-> **merged single Vite app**: public corporate site at the root, internal CMS behind
-> `/login` → `/app/*`. PHP API + `schema.sql` live in `server/` (version-controlled,
-> uploaded to the doc root by hand, excluded from the FTP deploy). OpenRouter model is
-> set in `config.php` as `OR_MODEL`. Seed super-admin: `dev@ritagreenservices.com` / `Testing123!`.
+One merged Vite application: the public corporate site at the root, the internal CMS behind
+`/login` at `/app/*`, a client portal at `/portal`, a worker app at `/m`.
 
----
+## 2. Architecture in one paragraph
 
-## 2. Shared hosting infrastructure (same for every project on this account)
+React 19 SPA (static `dist/`) → 55 flat PHP endpoint files in `server/` → MySQL on cPanel.
+The browser never touches the database; it calls PHP over HTTP with an
+`Authorization: Bearer` token and receives JSON. Every endpoint begins
+`require __DIR__ . '/lib.php'`, which is the shared kernel. There is no framework, no router
+and no Composer — the host cannot install packages. Full detail in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-| Item | Value |
-|---|---|
-| Hosting | Namecheap shared hosting (cPanel) |
-| cPanel account | `<cpanel_user>` |
-| Home directory | `/home/<cpanel_user>` |
-| Server IP | `<server_ip>` |
-| DNS provider | Cloudflare — records set to **DNS only (grey cloud)** |
-| FTP server | `<server_ip>` |
+## 3. Standing traps
 
-> Credentials are NEVER stored in this repo. The DB password lives only in `config.php` on the server; FTP credentials live only in GitHub repo Secrets.
+Things that have already caused problems here, or will.
 
----
+**Development is local, and must stay that way.** `npm run dev:api` serves the PHP tier on
+8122 and the Vite proxy points there by default. `server/config.local.php.example` disables
+every outbound integration; `npm run seed -- --confirm` fills a local database with fixtures.
+Reaching production needs an explicit `RG_API_TARGET` and prints a warning. It used to be the
+default, which meant every developer was one query away from editing live workforce records.
+**Never run a migration against anything but a local database.**
 
-## 3. What this project is
+**Two schema mechanisms, and you need both.** `server/schema.sql` is the from-scratch baseline
+— one re-runnable file organised in "build passes", where later
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier `CREATE TABLE` statements *in
+the same file*, so a table's real shape is its `CREATE` **plus** every later `ALTER`.
+Everything new goes in `server/migrations/NNN_name.sql`, applied by `php server/migrate.php`.
+Dry run is the default; a non-local database needs `--production` and a typed database name.
 
-A **React (Vite) single-page app** hosted on Namecheap shared hosting (cPanel), served at the domain above. It reads/writes a **MySQL database** on the same server through a small **PHP API** (`api.php`). Deployment is **automatic**: pushing to the deploy branch triggers a GitHub Actions workflow that builds the app and uploads it via FTP.
+**A foreign key does not force a row to be linked** — it constrains non-NULL values only. Only
+`NOT NULL` does. That was assumed otherwise here and corrected after testing it against a real
+database; see migration 004 and its precondition.
 
----
+**A person can exist three times — `ats.php` still does this.** It copies identity fields
+rather than linking. The `people` spine now exists and every record is linked to it, but
+`ats.php` `onboard` and `from_learner` have not been rewritten yet. Never add another path that
+copies. See `docs/BLUEPRINT.md`, "The identity defect".
 
-## 4. Architecture & data flow
+**PHP is deployed by hand.** `.github/workflows/deploy.yml` uploads `dist/` only and explicitly
+excludes `*.php`, `config.php` and `.htaccess`. Never add `dangerous-clean-slate` — it would
+delete the entire API from the server.
 
-```
-Browser (React)
-   │  fetch() → JSON
-   ▼
-api.php  (PHP, on the server)
-   │  mysqli, host = localhost
-   ▼
-MySQL database (cPanel)
-```
+**`server/config.php` is gitignored and holds every secret.** Database password, OpenRouter
+key, Stripe, GoCardless, Twilio, SMTP and IMAP credentials. `server/config.sample.php` is the
+tracked template with `CHANGE_ME` placeholders. Never put a real value in a tracked file, a
+comment, a document or a commit message.
 
-- **React runs in the browser and NEVER connects to MySQL directly.** It only calls `api.php` over HTTP and receives JSON.
-- `api.php` is the only thing that touches the database, using credentials from `config.php`.
-- The React build (static files) and the PHP files live together in the document root.
+**Nothing secret reaches the client bundle.** There is no `.env` and there are no `VITE_*`
+variables; all third-party calls are proxied server-side. Keep it that way.
 
----
+**Client-side gating lives in one file.** `src/lib/access.ts` maps route to permitted roles and
+is read by both `RequireAuth` and the sidebar, so a visible link always leads somewhere the user
+may go. Add a route there when you add a route, or it will be visible to everyone. It mirrors
+the `require_role()` calls in `server/` — and it is a user-experience guard only. **The server
+is the enforced boundary.**
 
-## 5. Tech stack
+**Cloudflare records for this domain stay grey-cloud (DNS only)** so cPanel can issue SSL.
+This differs from other projects on the account — do not "fix" it to match them.
 
-- **Frontend:** React 18 + Vite (JavaScript)
-- **API:** PHP with `mysqli` + prepared statements, returns JSON
-- **Database:** MySQL (cPanel → phpMyAdmin)
-- **DNS:** Cloudflare (DNS only / grey cloud)
-- **CI/CD:** GitHub Actions → FTP deploy (`SamKirkland/FTP-Deploy-Action`)
+## 4. Golden rules
 
----
+The full list is [`docs/RULES.md`](docs/RULES.md). The ones most easily broken by accident:
 
-## 6. Key files & where they live
+1. **Compliance status is calculated, never set.** No editable "compliant" field, anywhere.
+2. **A person exists once.** Link with an identifier; never copy identity fields.
+3. **Never hard-delete an employment record.** Archive, or request deletion with approval.
+4. **Prepared statements always.** No interpolation into SQL, for any value.
+5. **Money is integers in pence.** Never a float.
+6. **Branch, pull request, merge.** Never commit to `main`.
+7. **Documentation states what the code does**, not what the plan says.
 
-**In the repo (version-controlled, auto-deployed on push):**
-- `src/` — React app source
-- `index.html`, `vite.config.js`, `package.json`, `package-lock.json` — Vite project
-- `.github/workflows/deploy.yml` — the auto-deploy workflow
-- `.gitignore` — must exclude `node_modules/`, `dist/`, and `config.php`
-
-**On the server only (placed by hand once, NOT in the repo, NOT touched by deploys):**
-- `config.php` — DB credentials
-- `api.php` — the API endpoints
-- `.htaccess` — SPA routing (`RewriteBase /`)
-
-Deploys upload **only the `dist/` build**, so the three server files are never disturbed.
-
----
-
-## 7. Golden rules (do not break these)
-
-1. **Never commit `config.php` or any password.** It's gitignored. DB creds live only in `config.php` on the server.
-2. **React never connects to MySQL directly.** Any data need = add/extend a PHP endpoint, then `fetch` it.
-3. **Always use the `API_BASE` pattern** so dev and production both work:
-   ```js
-   // dev → hit the live API (CORS enabled in api.php); production → relative (same domain)
-   const API_BASE = import.meta.env.DEV ? "https://<domain.com>" : "";
-   fetch(`${API_BASE}/api.php`)
-   ```
-4. **Deploys upload only `dist/`.** `config.php`/`api.php`/`.htaccess` are managed by hand on the server.
-5. **Cloudflare records stay grey-cloud (DNS only)** so cPanel can issue SSL.
-6. **Don't manually FTP files.** `git push` is the deploy.
-
----
-
-## 8. Local development
+## 5. Working here
 
 ```bash
-npm install      # first time only
-npm run dev      # http://localhost:5122, hot reload (strictPort — fails loudly if taken)
-```
-`fetch` calls hit the live API at the project's domain (no PHP/MySQL on the laptop). Edit components in `src/`.
-
----
-
-## 9. Build & deploy
-
-- **Build:** `npm run build` → `dist/`.
-- **Deploy:** `git push` to the deploy branch. GitHub Actions runs `npm ci` → `npm run build` → FTP-uploads `dist/`. Watch the repo's **Actions** tab; live in ~1–2 minutes.
-
-Everyday loop:
-```bash
-git add . && git commit -m "..." && git push   # → live
+npm run dev:api      # PHP API on 127.0.0.1:8122  (run this too)
+npm run dev          # localhost:5122
+npm run typecheck    # tsc -b --force
+npm test             # vitest
+npm run test:php     # php server/tests/run.php — no database needed
+npm run build
 ```
 
----
+CI runs typecheck, lint with zero warnings, build, a source-map assertion, `php -l` across
+every PHP file, and `python3 scripts/docs_sync.py --check`.
 
-## 10. Database & adding features
+**Adding a feature with data:**
 
-- Managed in cPanel → phpMyAdmin, on the database named in §1.
-- To add a feature with data:
-  1. Create the table(s) in phpMyAdmin.
-  2. Add an endpoint in `api.php` — read `$_SERVER['REQUEST_METHOD']`, use **prepared statements**, `echo json_encode(...)`. For a separate resource, create another PHP file (e.g. `products.php`).
-  3. `fetch` it from React using `API_BASE`.
-- `api.php` begins with `require 'config.php';`, which provides `$conn` (a `mysqli` connection).
+1. Add the table in a numbered migration (and to `server/schema.sql` as the baseline).
+2. Add or extend an endpoint in `server/`. Follow the existing shape: `require lib.php`,
+   `require_auth()`, `require_role()`, prepared statements, `json_out()`, `audit()` the
+   mutation.
+3. Add the type to `src/lib/types.ts`.
+4. Fetch it with `useApi` from `src/hooks/use-api.ts`.
+5. Update `docs/SCHEMA.md`, `docs/API.md`, `docs/TRACEABILITY.md` and `docs/STATUS.json`, then
+   regenerate progress with `python3 scripts/docs_sync.py`.
 
----
+**Pure logic goes in `server/pure.php`, and gets a test in `server/tests/run.php`.** If it is
+a function of its arguments, it does not belong inside an endpoint. Give date functions an
+injectable clock.
 
-## 11. Troubleshooting
+**Reuse before building.** `next_seq()` for any sequence. `rg_classify()` in `server/pure.php`
+for any expiry date. The `compliance_reminders` dedupe pattern for any
+tiered alert. The `server/files.php` streamed-download-behind-auth pattern for any document.
+The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
-- **Site 404 / wrong content:** Cloudflare record may be orange-cloud (set grey) or wrong IP. Hard refresh / incognito for cache.
-- **`api.php` "Database connection failed":** wrong creds in `config.php`, or user lacks privileges.
-- **`api.php` errors on GET:** the queried table doesn't exist — create it in phpMyAdmin.
-- **Deploy red X:** open the Actions run; `npm ci` fail → commit `package-lock.json`; FTP auth fail → check the three Secrets match the FTP account.
-- **HTTPS warning:** SSL still issuing — use `http://` or run cPanel → SSL/TLS Status → Run AutoSSL.
+## 6. Current state
 
----
+46 of 108 tracked items done, 12 partial — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+generated from `docs/STATUS.json`.
 
-## 12. What NOT to do
+Substantially built: recruitment pipeline, credential expiry engine, certificates with public
+verification, regulatory report packs, scheduling with a compliance guard, field operations,
+timesheets and pay, the commercial pipeline with Stripe and GoCardless, authentication with
+two-factor and session revocation, GDPR export and erasure.
 
-- Don't commit `config.php`, `node_modules/`, `dist/`, or any secret.
-- Don't write database connection code in React.
-- Don't manually FTP/upload the build — push instead.
-- Don't switch Cloudflare to orange-cloud without proper SSL setup.
-- Don't deploy into a subfolder — the site lives at the document root (`server-dir: ./`).
+The four things that matter most and are not built: one person record, per-service eligibility,
+a compliance engine that calculates a verdict, and right to work as evidence rather than a
+boolean. That is `docs/ROADMAP.md` milestones 1 to 4, in that order, and the order is not
+negotiable.

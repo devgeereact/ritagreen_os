@@ -3,17 +3,16 @@
 // GET  /compliance.php            -> { summary: {...}, items: [...] }
 // POST /compliance.php {worker_id, type, number, expiry} -> add a certification
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 
-// Classify an expiry date into a RAG status + days remaining.
+// Classify an expiry date into a RAG status + days remaining. The implementation
+// lives in pure.php so it is shared with expiry-alerts.php and can be tested
+// without a database; this alias keeps the call sites below unchanged.
 function classify(?string $expiry): array
 {
-    if (!$expiry) return ['status' => 'unknown', 'days' => null];
-    $days = (int) floor((strtotime($expiry) - strtotime(date('Y-m-d'))) / 86400);
-    if ($days < 0) return ['status' => 'expired', 'days' => $days];
-    if ($days <= 30) return ['status' => 'expiring', 'days' => $days];
-    return ['status' => 'valid', 'days' => $days];
+    return rg_classify($expiry);
 }
 
 // ----- Audit-ready compliance pack for one worker (CQC / SIA ACS evidence) -----
@@ -82,6 +81,49 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'pack') {
         'generated_by' => $user['name'],
         'generated_at' => date('Y-m-d H:i'),
     ]);
+}
+
+// ----- Eligibility: may this person work in this service? -----
+// GET /compliance.php?action=eligibility&worker_id=N[&service=security]
+//
+// The answer is CALCULATED from the rules configured for the service and the
+// evidence on file. It is never read from a stored flag, and nothing may write
+// one -- see docs/RULES.md rule 1.
+if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility') {
+    $workerId = (int) ($_GET['worker_id'] ?? 0);
+    if ($workerId <= 0) fail('A worker is required.');
+    $service = trim((string) ($_GET['service'] ?? ''));
+    $valid = ['care', 'academy', 'cleaning', 'security'];
+    if ($service !== '' && !in_array($service, $valid, true)) fail('Unknown service.');
+
+    $verdict = rg_deployment_check($conn, $workerId, $service !== '' ? $service : null);
+    json_out($verdict);
+}
+
+// Every service a person is assessed for, in one call. This is what makes the
+// per-service model visible: one human, a different answer per service.
+if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility_all') {
+    $workerId = (int) ($_GET['worker_id'] ?? 0);
+    if ($workerId <= 0) fail('A worker is required.');
+
+    $stmt = $conn->prepare('SELECT person_id, name, role FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+
+    $services = [];
+    foreach (['care', 'academy', 'cleaning', 'security'] as $service) {
+        $v = rg_assess_person($conn, (int) $w['person_id'], $service, $w['role']);
+        $services[$service] = [
+            'status' => $v['status'],
+            'eligible' => $v['eligible'],
+            'score' => $v['score'],
+            'reason' => $v['reason'],
+            'blocking' => array_column($v['blocking'], 'reason'),
+        ];
+    }
+    json_out(['worker' => $w['name'], 'person_id' => (int) $w['person_id'], 'services' => $services]);
 }
 
 if (method() === 'GET') {

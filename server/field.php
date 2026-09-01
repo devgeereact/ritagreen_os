@@ -9,20 +9,28 @@ require __DIR__ . '/lib.php';
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
 
+// Is this shift assigned to the worker behind this login? Staff accounts are not
+// worker-linked, so this is only ever consulted for worker logins.
+function shift_belongs_to(mysqli $conn, array $user, int $shiftId): bool
+{
+    $workerId = linked_worker_id($user);
+    if ($workerId === null) return false;
+    $stmt = $conn->prepare('SELECT 1 FROM shifts WHERE id = ? AND worker_id = ? LIMIT 1');
+    $stmt->bind_param('ii', $shiftId, $workerId);
+    $stmt->execute();
+    return (bool) $stmt->get_result()->fetch_row();
+}
+
 // Derive an on-the-ground status for a shift from its events + clock.
+// Implementation in pure.php, where it is tested against a pinned clock.
 function field_status(array $kinds, string $startsAt, string $endsAt): string
 {
-    $now = time();
-    $start = strtotime($startsAt);
-    $end = strtotime($endsAt);
-    if (in_array('clock_out', $kinds, true)) return 'completed';
-    if (in_array('clock_in', $kinds, true)) return $now > $end + 900 ? 'overrunning' : 'on_site';
-    if ($now > $start + 1800) return 'no_show';     // 30 min past start, not clocked in
-    if ($now > $start) return 'late';
-    return 'scheduled';
+    return rg_field_status($kinds, $startsAt, $endsAt);
 }
 
 if ($action === 'live' && method() === 'GET') {
+    // The office board: every shift today, with worker and client names on it.
+    require_staff($user);
     $today = date('Y-m-d');
     $stmt = $conn->prepare(
         'SELECT s.id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status,
@@ -54,6 +62,10 @@ if ($action === 'live' && method() === 'GET') {
 
 if (method() === 'GET' && isset($_GET['shift_id'])) {
     $sid = (int) $_GET['shift_id'];
+    // Staff see any shift's timeline; a worker sees only their own shifts.
+    if (!is_staff($user) && !shift_belongs_to($conn, $user, $sid)) {
+        fail('You do not have access to this.', 403);
+    }
     $stmt = $conn->prepare(
         'SELECT e.id, e.kind, e.note, e.lat, e.lng, e.signer, e.created_at, w.name AS worker
          FROM shift_events e LEFT JOIN workers w ON w.id = e.worker_id
@@ -87,6 +99,17 @@ if (method() === 'POST') {
     $stmt->execute();
     $shift = $stmt->get_result()->fetch_assoc();
     if (!$shift) fail('Shift not found.', 404);
+
+    // A worker may only log events against a shift assigned to them. Without this,
+    // any authenticated account could clock in on someone else's shift or raise a
+    // panic alert against an arbitrary shift id.
+    if (!is_staff($user)) {
+        $workerId = linked_worker_id($user);
+        if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId) {
+            fail('You are not assigned to this shift.', 403);
+        }
+    }
+
     // Prefer the logged-in user's linked worker, else the shift's worker.
     $workerId = $user['worker_id'] ? (int) $user['worker_id'] : ($shift['worker_id'] !== null ? (int) $shift['worker_id'] : null);
 
@@ -106,6 +129,9 @@ if (method() === 'POST') {
     if ($kind === 'panic') {
         $who = $user['name'] ?? 'A worker';
         notify($conn, null, 'PANIC ALERT', "$who on shift \"{$shift['title']}\"" . ($note ? " — $note" : ''), 'panic', '/app/field');
+        // Sent synchronously ON PURPOSE. A lone-worker panic alert waiting in a
+        // queue for the next cron run is not an alert. This is the one place
+        // where blocking the request is the right trade.
         if (function_exists('mail_enabled') && mail_enabled()) {
             send_mail(MAIL_TO, '[PANIC] Lone-worker alert', "$who triggered a panic alert on shift #$shiftId ({$shift['title']}).\n$note");
         }

@@ -53,8 +53,9 @@ if (method() === 'POST' && $action === '') {
     $stmt->execute();
 
     notify($conn, null, 'New cover request', "$name ($division): " . mb_substr($detail, 0, 120), 'booking', '/app/bookings');
-    if (function_exists('mail_enabled') && mail_enabled()) {
-        send_mail(MAIL_TO, "New cover request — $division", "$name <$email> ($phone)\n\n$detail\n\nPreferred: " . ($startVal ?? 'n/a'));
+    // Queued regardless of whether mail is on -- see server/send-queued-mail.php.
+    {
+        queue_mail($conn, MAIL_TO, "New cover request — $division", "$name <$email> ($phone)\n\n$detail\n\nPreferred: " . ($startVal ?? 'n/a'), $email);
     }
     json_out(['ok' => true], 201);
 }
@@ -123,8 +124,10 @@ if ($action === 'confirm' && method() === 'POST') {
     $stmt->execute();
 
     // Confirm to the client.
-    if (function_exists('mail_enabled') && mail_enabled() && filter_var($req['email'], FILTER_VALIDATE_EMAIL)) {
-        send_mail($req['email'], 'Your RitaGreen cover request is confirmed',
+    // The address check stays; the mail_enabled() gate does not -- a queued row
+    // is a record that we meant to confirm this booking.
+    if (filter_var($req['email'], FILTER_VALIDATE_EMAIL)) {
+        queue_mail($conn, $req['email'], 'Your RitaGreen cover request is confirmed',
             "Hi {$req['contact_name']},\n\nThanks — we've logged your request and are arranging cover for "
             . date('D j M, H:i', strtotime($start)) . ".\nWe'll confirm the assigned worker shortly.\n\nRitaGreen Services");
     }

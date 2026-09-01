@@ -60,6 +60,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/providers/auth-provider"
+import { canAccess } from "@/lib/access"
 import { api } from "@/lib/api"
 
 // Poll the mailbox for unread count to badge the Inbox nav item. Silent on
@@ -160,7 +161,13 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 
 export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
   const unread = useInboxUnread()
-  const groups = NAV_GROUPS.map((g) => ({
+  const { user } = useAuth()
+  // Hide what this account cannot open. The route guard reads the same map, so a
+  // visible link always leads somewhere the user is allowed to be.
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((i) => canAccess(user, i.url)) }))
+    .filter((g) => g.items.length > 0)
+    .map((g) => ({
     ...g,
     items: g.items.map((i) =>
       i.url === "/app/inbox" ? { ...i, badge: unread || undefined } : i,

@@ -46,7 +46,8 @@ if ($action === 'deactivate' && method() === 'POST') {
     $del->bind_param('i', $id);
     $del->execute();
 
-    audit($conn, (int) $user['id'], 'user.deactivate', "#$id");
+    audit($conn, (int) $user['id'], 'user.deactivate', "#$id", 'user', $id,
+        ['active' => true], ['active' => false]);
     json_out(['ok' => true]);
 }
 
@@ -99,8 +100,22 @@ if (method() === 'POST') {
     if ($stmt->get_result()->fetch_assoc()) fail('A user with that email already exists.', 409);
 
     $hash = password_hash($password, PASSWORD_BCRYPT);
-    $stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, client_id, worker_id) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->bind_param('sssssii', $name, $email, $hash, $role, $divisionVal, $clientId, $workerId);
+    // A login belongs to a person. Where it is linked to a worker it must be the
+    // SAME person as that worker, or the login and the employment record describe
+    // two different humans -- the defect this milestone exists to remove.
+    if ($workerId) {
+        $lookup = $conn->prepare('SELECT person_id FROM workers WHERE id = ? LIMIT 1');
+        $lookup->bind_param('i', $workerId);
+        $lookup->execute();
+        $found = $lookup->get_result()->fetch_assoc();
+        if (!$found) fail('That worker does not exist.', 404);
+        $personId = (int) $found['person_id'];
+    } else {
+        $personId = find_or_create_person($conn, $name, $email, null);
+    }
+
+    $stmt = $conn->prepare('INSERT INTO users (person_id, name, email, password_hash, role, division, client_id, worker_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->bind_param('isssssii', $personId, $name, $email, $hash, $role, $divisionVal, $clientId, $workerId);
     $stmt->execute();
     $id = $conn->insert_id;
 

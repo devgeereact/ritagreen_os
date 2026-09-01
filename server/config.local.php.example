@@ -1,0 +1,122 @@
+<?php
+// RitaGreenOS — LOCAL DEVELOPMENT configuration.
+//
+// Copy to config.php on your own machine:
+//     cp server/config.local.php.example server/config.php
+//
+// This exists so development never touches production. Until it did, the Vite
+// dev server proxied every *.php request to https://ritagreenservices.com, so
+// every query a developer ran read and wrote the live workforce database.
+//
+// config.php is gitignored. Never commit it, and never put a production
+// credential in this file — it is the LOCAL template and it is tracked.
+//
+// Every outbound integration below is deliberately disabled. A local run must
+// not be able to email a real worker, charge a real card, or text anyone.
+
+// ----- Error display -----
+// On locally: you want the stack trace. Never true on the server.
+define('GK_DEBUG', true);
+ini_set('display_errors', GK_DEBUG ? '1' : '0');
+ini_set('display_startup_errors', GK_DEBUG ? '1' : '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
+// ----- Database (your local MySQL or MariaDB) -----
+// Create it first:
+//     CREATE DATABASE ritagreen_os_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+// then import the schema and seed it:
+//     mysql -u root ritagreen_os_dev < server/schema.sql
+//     php server/seed.php --confirm
+define('DB_HOST', '127.0.0.1');
+define('DB_NAME', 'ritagreen_os_dev');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+
+// ----- AI -----
+// Leave as CHANGE_ME and ai.php returns an error instead of calling out. Put a
+// real key here only if you are actually working on an AI feature.
+define('OR_API_KEY', 'CHANGE_ME');
+define('OR_MODEL', 'openai/gpt-oss-120b:free');
+define('OR_MODELS', ['openai/gpt-oss-120b:free']);
+define('OR_REFERER', 'http://localhost:5122');
+define('OR_TITLE', 'RitaGreenOS (local)');
+
+// ----- Payments: OFF -----
+// payments.php and gocardless.php return 503 while these are CHANGE_ME.
+define('STRIPE_SECRET_KEY', 'CHANGE_ME');
+define('STRIPE_WEBHOOK_SECRET', 'CHANGE_ME');
+define('GC_ACCESS_TOKEN', 'CHANGE_ME');
+define('GC_ENVIRONMENT', 'sandbox');
+define('GC_WEBHOOK_SECRET', 'CHANGE_ME');
+
+// ----- Security policy -----
+// Off locally so you are not enrolling an authenticator on every fresh database.
+define('MANDATORY_2FA', false);
+
+// ----- Cron scripts -----
+// expiry-alerts.php and backup.php still run from the CLI without this.
+define('ALERTS_KEY', 'local-development-only-not-a-secret');
+
+// ----- Weather: OFF -----
+define('OPENWEATHER_API_KEY', 'CHANGE_ME');
+define('OPENWEATHER_UNITS', 'metric');
+
+// ----- SMS and WhatsApp: OFF -----
+// send_sms() logs to sms_log with status 'skipped' and returns false.
+define('TWILIO_SID', 'CHANGE_ME');
+define('TWILIO_TOKEN', 'CHANGE_ME');
+define('TWILIO_FROM', '');
+define('TWILIO_WHATSAPP_FROM', '');
+define('PUBLIC_BASE_URL', 'http://localhost:5122');
+
+// ----- Google SSO: OFF -----
+// The Google button is hidden while CLIENT_ID is CHANGE_ME. Sign in with the
+// seeded local account instead.
+define('GOOGLE_CLIENT_ID', 'CHANGE_ME');
+define('GOOGLE_CLIENT_SECRET', 'CHANGE_ME');
+define('GOOGLE_REDIRECT_URI', 'http://localhost:5122/auth/google/callback');
+
+// ----- Outgoing mail: OFF -----
+// MAIL_ENABLED false means nothing is ever sent. Leave it false. A local run
+// that can email a real worker is a local run that eventually will.
+define('MAIL_ENABLED', false);
+define('MAIL_FROM', 'local@example.invalid');
+define('MAIL_FROM_NAME', 'RitaGreen (local)');
+define('MAIL_TO', 'local@example.invalid');
+
+define('SMTP_HOST', '');
+define('SMTP_PORT', 465);
+define('SMTP_SECURE', 'ssl');
+define('SMTP_USER', '');
+define('SMTP_PASS', '');
+define('SMTP_VERIFY_PEER', true);
+
+// ----- Incoming mail: OFF -----
+// inbox.php returns 503 while IMAP_HOST is blank.
+define('IMAP_HOST', '');
+define('IMAP_PORT', 993);
+define('IMAP_USER', '');
+define('IMAP_PASS', '');
+define('IMAP_VALIDATE_CERT', true);
+
+// ----- CORS -----
+// The Vite dev server proxies *.php to the local PHP server, so requests arrive
+// same-origin and never reach this list. It is the direct-fetch fallback.
+define('ALLOWED_ORIGINS', [
+    'http://localhost:5122',
+    'http://127.0.0.1:5122',
+]);
+
+// ----- Connect -----
+$conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+if ($conn->connect_errno) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'error' => 'Local database connection failed: ' . $conn->connect_error
+            . ' — is MySQL running, and does ' . DB_NAME . ' exist?',
+    ]);
+    exit;
+}
+$conn->set_charset('utf8mb4');

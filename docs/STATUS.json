@@ -1,0 +1,922 @@
+{
+  "project": "RitaGreen Services Management System",
+  "baseline_date": "2026-08-31",
+  "note": "Seeded from a full audit of the codebase. Item status describes what is IN THE CODE, not what is planned. Update this file when a module changes, then run scripts/docs_sync.py to regenerate docs/PROGRESS.md.",
+  "status_values": [
+    "done",
+    "partial",
+    "todo"
+  ],
+  "modules": [
+    {
+      "key": "FOUNDATION",
+      "title": "Foundation and person spine",
+      "milestone": 1,
+      "items": [
+        {
+          "name": "Numbered migrations (server/migrations/)",
+          "status": "done",
+          "note": "server/migrate.php with a dry run by default, checksum drift detection, and a typed-name confirmation for any non-local database. schema.sql remains the from-scratch baseline"
+        },
+        {
+          "name": "people table as the single identity",
+          "status": "done",
+          "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
+        },
+        {
+          "name": "person_services (person x service)",
+          "status": "done",
+          "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
+        },
+        {
+          "name": "Person de-duplication migration",
+          "status": "done",
+          "note": "server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)"
+        },
+        {
+          "name": "Payroll number generator",
+          "status": "done",
+          "note": "next_payroll_no() on next_seq(), format RG-000001. Assigned on worker creation, unique, never reused"
+        },
+        {
+          "name": "ats.php onboard links instead of copying",
+          "status": "done",
+          "note": "Rewritten. Verified end to end: two applications, an onboarding and a login for one human produce exactly one person record"
+        },
+        {
+          "name": "Local development environment",
+          "status": "done",
+          "note": "npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database"
+        },
+        {
+          "name": "Atomic document-number sequences",
+          "status": "done",
+          "note": "counters table + next_seq()"
+        },
+        {
+          "name": "Soft delete on records that must not be lost",
+          "status": "partial",
+          "note": "present on most, missing on shifts, timesheets, incidents"
+        },
+        {
+          "name": "Replace the divisions CSV with a junction table",
+          "status": "done",
+          "note": "client_services (migration 014), split from the CSV. clients.divisions is kept in step by clients.php?action=services until nothing reads it; two sources of one fact drift, so they are written in one place"
+        },
+        {
+          "name": "Constrain columns added by later ALTER passes",
+          "status": "done",
+          "note": "Migration 014 adds the six missing foreign keys. ON DELETE SET NULL throughout: a deleted user must not take their audit entries with them, which is the opposite of what an audit log is for"
+        },
+        {
+          "name": "Extend soft delete to records that cascade",
+          "status": "done",
+          "note": "Migration 013 adds deleted_at to applicants, invoices, incidents, timesheets and shifts, plus updated_at on timesheets and the missing index on shifts.client_id. Every list and count query now filters on it"
+        },
+        {
+          "name": "Local fixture data",
+          "status": "done",
+          "note": "server/seed.php: staff logins per role, worker and client logins, 10 workers with a deliberate spread of valid, expiring, expired and missing-RTW compliance. CLI-only, local-host-only, --confirm required"
+        },
+        {
+          "name": "Person matching logic",
+          "status": "done",
+          "note": "rg_person_match_key/rg_group_people/rg_group_is_ambiguous in server/pure.php. Matches on email then phone, never on a name, and refuses to merge a group whose names disagree. 34 assertions"
+        },
+        {
+          "name": "Migrations verified against a database",
+          "status": "done",
+          "note": "Full chain run from scratch against MariaDB 12.3. Migration 004's precondition verified to block on an unlinked row and report the count"
+        },
+        {
+          "name": "Migration preconditions",
+          "status": "done",
+          "note": "A migration can declare a query that must return 0 before it applies. The runner stops with the count and the remedy rather than failing mid-chain. Needed because a foreign key does not force linkage -- only NOT NULL does"
+        },
+        {
+          "name": "One person across every creation path",
+          "status": "done",
+          "note": "find_or_create_person() in lib.php is used by the public application, self-registration, the learner handoff, worker creation and user creation. A login linked to a worker inherits that worker's person"
+        }
+      ]
+    },
+    {
+      "key": "IAM",
+      "title": "Identity, access and permissions",
+      "milestone": 5,
+      "items": [
+        {
+          "name": "Authentication (opaque bearer tokens)",
+          "status": "done",
+          "note": "SHA-256 hashed, 30-day expiry, server/auth.php:35"
+        },
+        {
+          "name": "Password hashing",
+          "status": "done",
+          "note": "bcrypt cost 12"
+        },
+        {
+          "name": "TOTP two-factor authentication",
+          "status": "done",
+          "note": "hand-rolled RFC 6238, user_2fa"
+        },
+        {
+          "name": "Mandatory 2FA for privileged roles",
+          "status": "done",
+          "note": "MANDATORY_2FA config flag"
+        },
+        {
+          "name": "Device and session list with revoke",
+          "status": "done"
+        },
+        {
+          "name": "Idle lock screen",
+          "status": "done"
+        },
+        {
+          "name": "Google SSO",
+          "status": "done",
+          "note": "matches existing users by verified email only"
+        },
+        {
+          "name": "Rate limiting",
+          "status": "done",
+          "note": "rate_limits table + rate_limit()"
+        },
+        {
+          "name": "Server-side role checks on mutations",
+          "status": "partial",
+          "note": "several read endpoints have require_auth with no require_role"
+        },
+        {
+          "name": "Client-side route role gating",
+          "status": "done",
+          "note": "Fixed. src/lib/access.ts maps route to roles and is read by both RequireAuth and the sidebar, so a visible link always leads somewhere the user may go"
+        },
+        {
+          "name": "Per-service permission scoping",
+          "status": "done",
+          "note": "service_scope() in lib.php, applied to the workforce and candidate lists. Opt-in per account via users.scope_to_division, so switching it on narrows nobody's access by surprise. super_admin and admin are never scoped"
+        },
+        {
+          "name": "Sensitive zones (health, payroll, disciplinary, legal)",
+          "status": "done",
+          "note": "zone_permissions, a role x zone matrix editable by a super admin. can_view_zone() replaces the hard-coded role list that gated pay. No row means no permission, so an unconfigured zone is not readable by default"
+        },
+        {
+          "name": "Close the unauthenticated write on api.php",
+          "status": "done",
+          "note": "Fixed. Both verbs now require auth; POST throttled 30/5 min"
+        },
+        {
+          "name": "Role-restrict worker reads",
+          "status": "done",
+          "note": "Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager"
+        },
+        {
+          "name": "Role-restrict the shared mailbox",
+          "status": "done",
+          "note": "Fixed. server/inbox.php now requires super_admin/admin/manager"
+        },
+        {
+          "name": "Role-restrict field event logging",
+          "status": "done",
+          "note": "Fixed. Board is staff-only; a worker may post only against a shift assigned to them"
+        },
+        {
+          "name": "Update last_seen_at on token use",
+          "status": "done",
+          "note": "Fixed. Refreshed in current_user(), throttled to one write a minute per token"
+        },
+        {
+          "name": "Staff-vs-worker-vs-client account discrimination",
+          "status": "done",
+          "note": "is_staff(), require_staff(), linked_worker_id() in server/lib.php. Role alone cannot express this: a worker login is an ordinary account with users.worker_id set"
+        },
+        {
+          "name": "Portal and worker app gated to their linked accounts",
+          "status": "done",
+          "note": "/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side"
+        },
+        {
+          "name": "Role-filtered navigation",
+          "status": "done",
+          "note": "app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse"
+        },
+        {
+          "name": "Per-service scoping is enforced",
+          "status": "done",
+          "note": "As a query filter, not just a stored preference"
+        },
+        {
+          "name": "A super admin cannot lock themselves out",
+          "status": "done",
+          "note": "Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it"
+        }
+      ]
+    },
+    {
+      "key": "RECRUITMENT",
+      "title": "Recruitment and intake",
+      "milestone": 8,
+      "items": [
+        {
+          "name": "Application pipeline, 7 stages",
+          "status": "done",
+          "note": "applicants.stage"
+        },
+        {
+          "name": "Public application page",
+          "status": "done",
+          "note": "/apply, rate-limited"
+        },
+        {
+          "name": "Onboarding task checklist",
+          "status": "done",
+          "note": "onboarding_tasks, seeded on onboard"
+        },
+        {
+          "name": "Academy to recruitment handoff",
+          "status": "done",
+          "note": "from_learner resolves a person. The fabricated @learner.invalid address is kept only to satisfy a NOT NULL column and is explicitly not treated as an identity"
+        },
+        {
+          "name": "Google Forms intake webhook",
+          "status": "done",
+          "note": "server/forms-intake.php. Shared secret compared with hash_equals, rate limited, and redelivery-safe via the form's own response id"
+        },
+        {
+          "name": "Configurable field mapping",
+          "status": "done",
+          "note": "integration_field_maps. Matching tolerates case, spacing and the asterisk Google adds to required questions, because an exact-string join breaks silently"
+        },
+        {
+          "name": "Integration health monitoring",
+          "status": "done",
+          "note": "?action=health plus an Action Centre item. Silence is the failure that matters: a form that stops feeding the system looks exactly like a quiet week"
+        },
+        {
+          "name": "Google Forms submissions reach the system",
+          "status": "done",
+          "note": "Verified end to end, including secret enforcement and redelivery"
+        },
+        {
+          "name": "A stalled integration raises an alert",
+          "status": "done",
+          "note": "expect_within_hours per integration; the Action Centre reports anything past its window"
+        },
+        {
+          "name": "Raw submissions retained",
+          "status": "done",
+          "note": "The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed"
+        }
+      ]
+    },
+    {
+      "key": "COMPLIANCE",
+      "title": "Compliance engine and verification",
+      "milestone": 2,
+      "items": [
+        {
+          "name": "Expiry classification primitive",
+          "status": "done",
+          "note": "rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days"
+        },
+        {
+          "name": "Credential expiry alert engine",
+          "status": "done",
+          "note": "90/60/30/expired tiers, deduplicated, cron-driven"
+        },
+        {
+          "name": "Per-worker evidence pack",
+          "status": "done",
+          "note": "compliance.php?action=pack"
+        },
+        {
+          "name": "Reference checks with gap explanation",
+          "status": "done",
+          "note": "worker_references"
+        },
+        {
+          "name": "Company insurance register",
+          "status": "done"
+        },
+        {
+          "name": "Requirement catalogue",
+          "status": "done",
+          "note": "migrations/003 seeds 13 requirements. Applied and verified"
+        },
+        {
+          "name": "Configurable rules (service x role x requirement)",
+          "status": "done",
+          "note": "migrations/003 seeds 26 rules across the four services, reproducing what scheduling.php enforces in code. Applied and verified"
+        },
+        {
+          "name": "Mandatory / recommended / optional weighting",
+          "status": "done",
+          "note": "RG_MANDATORY/RG_RECOMMENDED/RG_OPTIONAL in server/pure.php, with the blocking-versus-warning behaviour covered by tests"
+        },
+        {
+          "name": "Calculated eligibility verdict with reason",
+          "status": "done",
+          "note": "rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data"
+        },
+        {
+          "name": "Compliance status read-only in the UI",
+          "status": "partial",
+          "note": "The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields"
+        },
+        {
+          "name": "Right to work check record",
+          "status": "done",
+          "note": "right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose"
+        },
+        {
+          "name": "SIA verification workflow",
+          "status": "done",
+          "note": "Carried over as 'received', not 'verified' -- a number was recorded, no register check was captured"
+        },
+        {
+          "name": "DBS verification workflow",
+          "status": "done",
+          "note": "Same, and for the same reason"
+        },
+        {
+          "name": "Generalised verification lifecycle",
+          "status": "done",
+          "note": "verifications table plus server/verifications.php: requested / received / under_review / verified / rejected / expired, with only legal transitions permitted and the refusal naming what IS possible"
+        },
+        {
+          "name": "Eligibility evaluation logic",
+          "status": "done",
+          "note": "rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come"
+        },
+        {
+          "name": "Per-service eligibility, demonstrated",
+          "status": "done",
+          "note": "Verified: Esi Mensah is eligible for care and cleaning but blocked for security on a lapsed SIA licence. One credential, one service, exactly as intended"
+        },
+        {
+          "name": "Right to work as a dated, verified check",
+          "status": "partial",
+          "note": "The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision"
+        },
+        {
+          "name": "Legacy right-to-work carried over honestly",
+          "status": "done",
+          "note": "Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence"
+        },
+        {
+          "name": "Eligibility visible in the interface",
+          "status": "done",
+          "note": "src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first"
+        },
+        {
+          "name": "Eligibility recalculated daily",
+          "status": "done",
+          "note": "Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners"
+        },
+        {
+          "name": "Reassessment runs on quiet days too",
+          "status": "done",
+          "note": "It sat after an early exit taken when no reminder was due, so on a quiet day nothing was recalculated and eligibility went stale on exactly the days nobody was watching. It now runs first, and unconditionally"
+        },
+        {
+          "name": "Verification is a workflow",
+          "status": "done",
+          "note": "One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked"
+        },
+        {
+          "name": "Verifying records what was checked",
+          "status": "done",
+          "note": "A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later"
+        },
+        {
+          "name": "Seeded rules match prior enforcement",
+          "status": "done",
+          "note": "Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused"
+        }
+      ]
+    },
+    {
+      "key": "OPERATIONS",
+      "title": "Scheduling, assignments and field operations",
+      "milestone": 4,
+      "items": [
+        {
+          "name": "Clients, sites and rate cards",
+          "status": "done"
+        },
+        {
+          "name": "Shifts, templates and recurrence",
+          "status": "done"
+        },
+        {
+          "name": "Smart matching on skills and availability",
+          "status": "done"
+        },
+        {
+          "name": "Shift broadcast with token acceptance",
+          "status": "done",
+          "note": "shift_offers, SMS link, no login required"
+        },
+        {
+          "name": "Field events: clock in/out, check-in, panic, signature",
+          "status": "done",
+          "note": "shift_events with lat/lng"
+        },
+        {
+          "name": "Timesheets and pay rules",
+          "status": "done"
+        },
+        {
+          "name": "Compliance guard on assignment",
+          "status": "done",
+          "note": "Replaced the hard-coded DBS-for-care / SIA-for-security pair with the configured rule set. Every blocking requirement is named at once rather than one 409 at a time"
+        },
+        {
+          "name": "Single reusable deployment eligibility gate",
+          "status": "done",
+          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned"
+        },
+        {
+          "name": "Four-eyes approval on high-risk actions",
+          "status": "done",
+          "note": "Enforced on deletion. The requester is blocked from deciding their own request, so a single determined person cannot walk it through"
+        },
+        {
+          "name": "Blocked deployments are audited",
+          "status": "done",
+          "note": "A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt"
+        }
+      ]
+    },
+    {
+      "key": "EMPLOYMENT",
+      "title": "Employment records, contracts and leave",
+      "milestone": 6,
+      "items": [
+        {
+          "name": "Worker employment fields",
+          "status": "partial",
+          "note": "pay rate, pay type, holiday hours present; Acas particulars not structured"
+        },
+        {
+          "name": "Employment contract lifecycle",
+          "status": "partial",
+          "note": "employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not"
+        },
+        {
+          "name": "Contract versioning",
+          "status": "done",
+          "note": "version plus supersedes_id. A signed contract is evidence of what was agreed at a point in time, so it is superseded rather than edited"
+        },
+        {
+          "name": "Structured written-statement particulars",
+          "status": "done",
+          "note": "employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF"
+        },
+        {
+          "name": "Leave and absence records",
+          "status": "done",
+          "note": "leave_records plus server/leave.php. Counted in hours, not days, because shift work is not made of whole days. Records holiday taken, carried over, holiday pay and payments in lieu, and return-to-work discussions"
+        },
+        {
+          "name": "Worker status derived from workflow events",
+          "status": "done",
+          "note": "rg_derive_worker_status() in pure.php, recomputed by the daily cron into workers.derived_status. The manual column stays as the INTENT; the derived one is what is actually true. Verified: all 10 fixtures read 'active' manually, only 4 genuinely are"
+        },
+        {
+          "name": "Records have a retention policy",
+          "status": "partial",
+          "note": "retention_policies is editable through governance.php with the periods left NULL until the business sets them. The sweep that acts on them is still to build"
+        },
+        {
+          "name": "Leave and absence",
+          "status": "done",
+          "note": "server/leave.php"
+        },
+        {
+          "name": "Holiday balance distinguishes unset from overdrawn",
+          "status": "done",
+          "note": "No entitlement recorded returns null rather than a large negative number, which would read as 'overdrawn' when it means 'nobody set this up'"
+        },
+        {
+          "name": "Overlapping leave is refused",
+          "status": "done",
+          "note": "Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash"
+        }
+      ]
+    },
+    {
+      "key": "TRAINING",
+      "title": "Training records and certificates",
+      "milestone": 8,
+      "items": [
+        {
+          "name": "Programmes and enrolments",
+          "status": "done"
+        },
+        {
+          "name": "Certificate issue",
+          "status": "done"
+        },
+        {
+          "name": "Public certificate verification",
+          "status": "done",
+          "note": "/verify/:id"
+        },
+        {
+          "name": "Open Badges 3.0 assertion",
+          "status": "done"
+        },
+        {
+          "name": "CPD hours",
+          "status": "done"
+        },
+        {
+          "name": "External training providers",
+          "status": "done",
+          "note": "training_providers, with provider_id on programmes and enrolments, an external_course name, and completion and expiry dates. programme_id is now nullable, because training done elsewhere has no programme of ours"
+        },
+        {
+          "name": "Training records linked to the person",
+          "status": "done",
+          "note": "academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith"
+        }
+      ]
+    },
+    {
+      "key": "DOCUMENTS",
+      "title": "Document management",
+      "milestone": 3,
+      "items": [
+        {
+          "name": "Upload with MIME allowlist and size cap",
+          "status": "done",
+          "note": "10 MB, randomised stored name"
+        },
+        {
+          "name": "Streamed download behind an auth check",
+          "status": "done",
+          "note": "uploads directory blocked in .htaccess"
+        },
+        {
+          "name": "Role restriction on the document centre",
+          "status": "done"
+        },
+        {
+          "name": "Text extraction from docx, xlsx and PDF",
+          "status": "done"
+        },
+        {
+          "name": "Document metadata: issue date, expiry",
+          "status": "done",
+          "note": "files gained issued_on, expires_on and person_id in migration 010"
+        },
+        {
+          "name": "Document verification status and verifier",
+          "status": "done",
+          "note": "files gained verification_status, verified_by and verified_at"
+        }
+      ]
+    },
+    {
+      "key": "COMMUNICATIONS",
+      "title": "Email, SMS and notifications",
+      "milestone": 7,
+      "items": [
+        {
+          "name": "SMTP client",
+          "status": "done",
+          "note": "hand-rolled over fsockopen, no vendor dependency"
+        },
+        {
+          "name": "IMAP inbox with threaded reply",
+          "status": "done"
+        },
+        {
+          "name": "SMS and WhatsApp via Twilio",
+          "status": "done",
+          "note": "every attempt logged, including skips"
+        },
+        {
+          "name": "In-app notification centre",
+          "status": "done"
+        },
+        {
+          "name": "Announcements by division",
+          "status": "done"
+        },
+        {
+          "name": "Email templates",
+          "status": "done",
+          "note": "email_templates, seeded with 7: application received/unsuccessful, document request, credential expiring/expired, right-to-work recheck, worker approved. Wording is editable without a deployment"
+        },
+        {
+          "name": "Email queue drained out of the request path",
+          "status": "done",
+          "note": "queue_mail() and queue_templated_mail() in lib.php; server/send-queued-mail.php drains by cron with claim-before-send, capped retries and a batch limit"
+        },
+        {
+          "name": "Email delivery log",
+          "status": "done",
+          "note": "email_log records every attempt including skips, and is kept after the queue row is pruned"
+        },
+        {
+          "name": "Delivery failures are visible",
+          "status": "done",
+          "note": "email_queue.last_error plus an email_log row on terminal failure"
+        },
+        {
+          "name": "Mail leaves the request path",
+          "status": "done",
+          "note": "Nine senders converted. Three stay synchronous on purpose: the lone-worker panic alert, password reset, and interactive mailbox replies"
+        },
+        {
+          "name": "Queued regardless of whether mail is enabled",
+          "status": "done",
+          "note": "The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted"
+        }
+      ]
+    },
+    {
+      "key": "REPORTING",
+      "title": "Reporting and insight",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Command centre dashboard",
+          "status": "done",
+          "note": "filterable by division"
+        },
+        {
+          "name": "Analytics and margin reconciliation",
+          "status": "done"
+        },
+        {
+          "name": "Regulatory packs",
+          "status": "done",
+          "note": "cqc_pack, sia_acs, coshh, skills_for_care"
+        },
+        {
+          "name": "CSV and PDF export",
+          "status": "done"
+        },
+        {
+          "name": "Action Centre",
+          "status": "done",
+          "note": "server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed"
+        },
+        {
+          "name": "Staff workload view",
+          "status": "done",
+          "note": "?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible"
+        },
+        {
+          "name": "Export logging with user and purpose",
+          "status": "done",
+          "note": "export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened"
+        },
+        {
+          "name": "Fix the open-shifts dashboard tile",
+          "status": "done",
+          "note": "Fixed. Now counts shifts with status='open', respecting the division filter"
+        }
+      ]
+    },
+    {
+      "key": "GOVERNANCE",
+      "title": "Audit, retention and data protection",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Audit log",
+          "status": "done",
+          "note": "Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically"
+        },
+        {
+          "name": "Consent log",
+          "status": "done"
+        },
+        {
+          "name": "GDPR export and erasure",
+          "status": "partial",
+          "note": "by email address; erases immediately with no approval step"
+        },
+        {
+          "name": "Incidents with RIDDOR and safeguarding flags",
+          "status": "done"
+        },
+        {
+          "name": "Database backup with rotation",
+          "status": "done",
+          "note": "above the document root, 14-day prune"
+        },
+        {
+          "name": "Restore testing",
+          "status": "partial",
+          "note": "Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent"
+        },
+        {
+          "name": "Retention engine",
+          "status": "partial",
+          "note": "retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built"
+        },
+        {
+          "name": "Deletion approval workflow",
+          "status": "done",
+          "note": "server/governance.php. Staff request with a reason of at least 10 characters; somebody else approves. Four eyes enforced: the approver may not be the requester. Archive is the default disposition"
+        },
+        {
+          "name": "Workflow rule engine",
+          "status": "todo"
+        },
+        {
+          "name": "System health dashboard",
+          "status": "done",
+          "note": "server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups"
+        },
+        {
+          "name": "Reconcile part-paid Direct Debit collections",
+          "status": "done",
+          "note": "Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery"
+        },
+        {
+          "name": "A record's own history is retrievable",
+          "status": "done",
+          "note": "audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log"
+        },
+        {
+          "name": "Integration failure surfaced",
+          "status": "done",
+          "note": "Silent integrations and unmappable submissions both reach the Action Centre"
+        },
+        {
+          "name": "Deletion requires approval",
+          "status": "done",
+          "note": "Verified: an admin cannot approve their own request"
+        },
+        {
+          "name": "Export data",
+          "status": "done",
+          "note": "Logged with user, scope, purpose, record count and IP"
+        },
+        {
+          "name": "Archiving actually hides the record",
+          "status": "done",
+          "note": "Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive"
+        },
+        {
+          "name": "Backups are restore-tested",
+          "status": "partial",
+          "note": "Surfaced by system-health.php as an explicit unknown"
+        },
+        {
+          "name": "Unapplied migrations are visible",
+          "status": "done",
+          "note": "A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations"
+        }
+      ]
+    },
+    {
+      "key": "PWA",
+      "title": "Progressive web app",
+      "milestone": 9,
+      "items": [
+        {
+          "name": "Web app manifest",
+          "status": "done",
+          "note": "Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, and the navy theme colour"
+        },
+        {
+          "name": "Service worker",
+          "status": "done",
+          "note": "vite-plugin-pwa with a build-hash precache manifest, so a deploy invalidates exactly what changed and offline survives it"
+        },
+        {
+          "name": "Registration",
+          "status": "done",
+          "note": "Owned by PwaStatus, which also owns the update prompt. Registering in main.tsx as well would race it"
+        },
+        {
+          "name": "Cached read-only worker data",
+          "status": "done",
+          "note": "NetworkFirst on me.php and notifications.php with a 5-second timeout. The rest of the PHP API is never cached: stale compliance data would mean showing an eligibility answer that is no longer true"
+        },
+        {
+          "name": "Update-available prompt",
+          "status": "done",
+          "note": "src/components/pwa-status.tsx, registerType 'prompt'. Never automatic: swapping the app out from under someone part-way through clocking in is its own failure"
+        },
+        {
+          "name": "Offline banner",
+          "status": "done",
+          "note": "Says what still works, not just that something is wrong"
+        },
+        {
+          "name": "Offline write queue",
+          "status": "done",
+          "note": "OUT OF SCOPE by decision, not outstanding. Writes require connectivity: a queued clock-in that turns out to be invalid when it lands is worse than being told plainly that you are offline"
+        },
+        {
+          "name": "Install payload trimmed",
+          "status": "done",
+          "note": "37 MB of orphaned Pulse-UI template assets removed (cards, products, illustrations, carousels, countries) -- shipped on every deploy and precached into the app. Precache 14.5 MB across 115 entries down to 1.15 MB across 67. The office-only chunks are excluded too: a field worker should not download a charts library, a calendar and a PDF engine"
+        },
+        {
+          "name": "Brand-correct app icon",
+          "status": "done",
+          "note": "favicon.svg was still the retired green #15803D. Redrawn navy and mint, with PNGs generated for 192, 512, maskable and the iOS touch icon, which ignores SVG"
+        }
+      ]
+    },
+    {
+      "key": "PLATFORM",
+      "title": "Engineering platform",
+      "milestone": 0,
+      "items": [
+        {
+          "name": "Documentation pack",
+          "status": "partial",
+          "note": "Milestone 0, in progress"
+        },
+        {
+          "name": "Automated deploy",
+          "status": "done",
+          "note": "GitHub Actions, FTPS, dist/ only, PHP excluded"
+        },
+        {
+          "name": "CI quality gates",
+          "status": "partial",
+          "note": "typecheck, build, php -l and docs checks block; lint reports only"
+        },
+        {
+          "name": "Automated tests",
+          "status": "partial",
+          "note": "Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
+        },
+        {
+          "name": "Exception messages withheld from callers",
+          "status": "done",
+          "note": "Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on"
+        },
+        {
+          "name": "Unused dependencies removed",
+          "status": "done",
+          "note": "12 packages with zero imports removed, plus the dead editor chunk they were splitting into"
+        },
+        {
+          "name": "ESLint baseline clean",
+          "status": "todo",
+          "note": "27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done"
+        },
+        {
+          "name": "Documentation consistency enforced in CI",
+          "status": "done",
+          "note": "scripts/docs_sync.py --check"
+        },
+        {
+          "name": "Prepared statements in dashboard.php",
+          "status": "done",
+          "note": "Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it"
+        },
+        {
+          "name": "Typecheck actually enforces the strict config",
+          "status": "done",
+          "note": "tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op"
+        },
+        {
+          "name": "Build artefacts out of version control",
+          "status": "done",
+          "note": "tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp"
+        },
+        {
+          "name": "Pure logic separated from the kernel",
+          "status": "done",
+          "note": "server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation"
+        },
+        {
+          "name": "Failed queries no longer pass silently",
+          "status": "done",
+          "note": "lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message"
+        },
+        {
+          "name": "Frontend types match the server",
+          "status": "done",
+          "note": "Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift"
+        },
+        {
+          "name": "Reassessment can run without sending mail",
+          "status": "done",
+          "note": "expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose"
+        },
+        {
+          "name": "Migration production guard is meaningful on cPanel",
+          "status": "todo",
+          "note": "migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead"
+        }
+      ]
+    }
+  ]
+}

@@ -60,6 +60,11 @@ if ($action === 'enrol' && method() === 'POST') {
     $data = body();
     $pid = (int) ($data['programme_id'] ?? 0);
     $learner = trim((string) ($data['learner_name'] ?? ''));
+    $email = trim((string) ($data['email'] ?? ''));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    // An explicit person wins over matching on details, for the case where the
+    // office already knows exactly whose training record this is.
+    $personId = isset($data['person_id']) && $data['person_id'] !== '' ? (int) $data['person_id'] : null;
     if ($pid <= 0 || $learner === '') fail('A programme and learner name are required.');
 
     $stmt = $conn->prepare('SELECT id FROM programmes WHERE id = ?');
@@ -67,11 +72,29 @@ if ($action === 'enrol' && method() === 'POST') {
     $stmt->execute();
     if (!$stmt->get_result()->fetch_assoc()) fail('Programme not found.', 404);
 
-    $stmt = $conn->prepare('INSERT INTO enrolments (programme_id, learner_name, status) VALUES (?, ?, "enrolled")');
-    $stmt->bind_param('is', $pid, $learner);
+    if ($personId !== null) {
+        $stmt = $conn->prepare('SELECT full_name FROM people WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('i', $personId);
+        $stmt->execute();
+        if (!$stmt->get_result()->fetch_assoc()) fail('Person not found.', 404);
+    } elseif ($email !== '' || $phone !== '') {
+        // Enough to identify somebody: resolve them, so their training joins the
+        // record they already have rather than starting a second identity.
+        $personId = find_or_create_person($conn, $learner, $email ?: null, $phone ?: null);
+    }
+    // With neither an email nor a phone there is nothing to match on but a name,
+    // and matching on a name would merge every John Smith. The enrolment is
+    // recorded unlinked and appears in the Action Centre to be linked by hand.
+
+    $stmt = $conn->prepare('INSERT INTO enrolments (person_id, programme_id, learner_name, status) VALUES (?, ?, ?, "enrolled")');
+    $stmt->bind_param('iis', $personId, $pid, $learner);
     $stmt->execute();
-    audit($conn, (int) $user['id'], 'enrolment.create', "$learner -> programme #$pid");
-    json_out(['ok' => true], 201);
+    $enrolmentId = (int) $conn->insert_id;
+
+    audit($conn, (int) $user['id'], 'enrolment.create', "$learner -> programme #$pid", 'enrolment', $enrolmentId,
+        null, ['person_id' => $personId, 'programme_id' => $pid]);
+    json_out(['ok' => true, 'id' => $enrolmentId, 'person_id' => $personId,
+              'linked' => $personId !== null], 201);
 }
 
 if ($action === 'complete' && method() === 'POST') {

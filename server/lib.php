@@ -4,13 +4,37 @@
 // which pulls in config.php ($conn) and sets up CORS + JSON helpers.
 
 // Surface fatals / mysqli exceptions as JSON instead of a blank 500 HTML page.
+// Reporting is switched to throw once the connection exists -- see below, after
+// config.php is loaded.
 mysqli_report(MYSQLI_REPORT_OFF);
 set_exception_handler(function (Throwable $e) {
+    // The full detail always goes to the server log; what goes back to the caller
+    // depends on GK_DEBUG. This previously returned $e->getMessage() to whoever
+    // made the request, regardless -- which hands an attacker table names, file
+    // paths and query fragments from any input that provokes a fatal.
+    //
+    // The reference is echoed to the caller and logged alongside the detail, so a
+    // user can quote it in a support request and it can be found in error_log
+    // without them ever having seen the underlying error.
+    $ref = bin2hex(random_bytes(4));
+    error_log(sprintf(
+        '[%s] %s: %s in %s:%d',
+        $ref, get_class($e), $e->getMessage(), $e->getFile(), $e->getLine()
+    ));
+
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/json');
     }
-    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+
+    $debug = defined('GK_DEBUG') && GK_DEBUG;
+    echo json_encode($debug
+        ? [
+            'error' => 'Server error: ' . $e->getMessage(),
+            'ref' => $ref,
+            'where' => $e->getFile() . ':' . $e->getLine(),
+        ]
+        : ['error' => 'Server error. Quote reference ' . $ref . ' if you report this.', 'ref' => $ref]);
     exit;
 });
 set_error_handler(function ($severity, $message, $file, $line) {
@@ -18,13 +42,33 @@ set_error_handler(function ($severity, $message, $file, $line) {
     throw new ErrorException($message, 0, $severity, $file, $line);
 });
 
+// Pure domain logic — no database, no config, no output. Required first so every
+// endpoint has it, and so server/tests/run.php can include it on its own.
+require_once __DIR__ . '/pure.php';
+
 if (!file_exists(__DIR__ . '/config.php')) {
     http_response_code(500);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'config.php is missing on the server. Upload it to the document root.']);
+    // Two audiences: a developer who has not set up locally yet, and an operator
+    // who has deployed without placing config.php. Say which is which.
+    echo json_encode(['error' => PHP_SAPI === 'cli-server'
+        ? 'config.php is missing. Locally: cp server/config.local.php.example server/config.php'
+        : 'config.php is missing on the server. Upload it to the document root.']);
     exit;
 }
 require __DIR__ . '/config.php';
+
+// From here on a failed query THROWS instead of returning false.
+//
+// It was MYSQLI_REPORT_OFF throughout, and almost no call site checks the return
+// value of execute(), so a failed INSERT was silently ignored and the endpoint
+// went on to report success. workers.php returned HTTP 200 with a complete
+// worker object, id 0, for a row that was never written.
+//
+// Set after the connection is established so config.php keeps its own readable
+// message for a connection failure. Anything thrown from here reaches the
+// exception handler above, which logs the detail and returns a reference.
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
     if (!defined($_required)) {
@@ -95,7 +139,7 @@ function current_user(mysqli $conn): ?array
     if (!$token) return null;
     $hash = hash('sha256', $token);
     $stmt = $conn->prepare(
-        'SELECT u.id, u.name, u.email, u.role, u.division, u.client_id, u.worker_id
+        'SELECT u.id, u.name, u.email, u.role, u.division, u.scope_to_division, u.client_id, u.worker_id
          FROM tokens t JOIN users u ON u.id = t.user_id
          WHERE t.token_hash = ? AND t.expires_at > NOW() AND u.deleted_at IS NULL
          LIMIT 1'
@@ -103,7 +147,20 @@ function current_user(mysqli $conn): ?array
     $stmt->bind_param('s', $hash);
     $stmt->execute();
     $res = $stmt->get_result()->fetch_assoc();
-    return $res ?: null;
+    if (!$res) return null;
+
+    // Keep last_seen_at meaningful. It was written once when the token was issued
+    // and never updated, so the device list in Settings showed each session's
+    // creation time under a heading that reads as last activity. Throttled to at
+    // most one write a minute per token, so a burst of calls costs one update.
+    $touch = $conn->prepare(
+        'UPDATE tokens SET last_seen_at = NOW()
+         WHERE token_hash = ? AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL 1 MINUTE)'
+    );
+    $touch->bind_param('s', $hash);
+    $touch->execute();
+
+    return $res;
 }
 
 // Require a logged-in user; 401 otherwise. Returns the user row.
@@ -120,12 +177,244 @@ function require_role(array $user, string ...$roles): void
     if (!in_array($user['role'], $roles, true)) fail('You do not have access to this.', 403);
 }
 
-// Write an audit log row for sensitive actions.
-function audit(mysqli $conn, ?int $userId, string $action, string $detail = ''): void
+// Require an internal staff account; 403 otherwise. Use on anything that shows
+// one person's data to another — the office board, the shared mailbox, the
+// workforce list.
+function require_staff(array $user): void
 {
-    $stmt = $conn->prepare('INSERT INTO audit_log (user_id, action, detail) VALUES (?, ?, ?)');
-    $stmt->bind_param('iss', $userId, $action, $detail);
+    if (!is_staff($user)) fail('You do not have access to this.', 403);
+}
+
+/**
+ * May this account see a category of information?
+ *
+ * Zones exist because a worker profile is not one undifferentiated record.
+ * Health information, disciplinary matters and payroll are not ordinary fields,
+ * and "can open the profile" must not mean "can see all of it".
+ *
+ * Cached per request: a profile touches several zones and this would otherwise
+ * run the same query five times.
+ */
+function can_view_zone(mysqli $conn, array $user, string $zone): bool
+{
+    static $cache = [];
+    $role = (string) ($user['role'] ?? '');
+    $key = $role . '|' . $zone;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $stmt = $conn->prepare('SELECT can_view FROM zone_permissions WHERE role_key = ? AND zone = ? LIMIT 1');
+    $stmt->bind_param('ss', $role, $zone);
     $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    // No row means no permission. A zone nobody has configured must not be
+    // readable by default.
+    return $cache[$key] = (bool) ($row['can_view'] ?? false);
+}
+
+/** As above, for changing rather than reading. */
+function can_edit_zone(mysqli $conn, array $user, string $zone): bool
+{
+    $stmt = $conn->prepare('SELECT can_edit FROM zone_permissions WHERE role_key = ? AND zone = ? LIMIT 1');
+    $role = (string) ($user['role'] ?? '');
+    $stmt->bind_param('ss', $role, $zone);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return (bool) ($row['can_edit'] ?? false);
+}
+
+/**
+ * The service this account is limited to, or null for no limit.
+ *
+ * users.division has always been recorded but never enforced, so a Care
+ * recruiter saw Security candidates -- which is not what "scoped to a division"
+ * means. Enforcement is opt-in per account via scope_to_division, so switching
+ * it on narrows nobody's access by surprise.
+ *
+ * super_admin and admin are never scoped: somebody has to see the whole picture.
+ */
+function service_scope(array $user): ?string
+{
+    if (in_array($user['role'] ?? '', ['super_admin', 'admin'], true)) return null;
+    if (empty($user['scope_to_division'])) return null;
+    $division = $user['division'] ?? null;
+    return $division !== null && $division !== '' ? (string) $division : null;
+}
+
+/**
+ * Find the person these details describe, or create them.
+ *
+ * Every path that creates a candidate, worker or login goes through here, which
+ * is what stops the system growing a second copy of somebody. Matching uses the
+ * same rules as the backfill (rg_person_match_key in pure.php): email first,
+ * then phone, never a name.
+ *
+ * A person with neither a usable email nor a usable phone gets a NULL match_key
+ * and is therefore always created fresh. That can leave a duplicate, which is
+ * the safe direction to be wrong in -- merging two people is far harder to undo.
+ */
+function find_or_create_person(mysqli $conn, string $name, ?string $email = null, ?string $phone = null): int
+{
+    $match = rg_person_match_key(['email' => $email, 'phone' => $phone]);
+
+    if ($match['key'] !== null) {
+        $stmt = $conn->prepare('SELECT id FROM people WHERE match_key = ? LIMIT 1');
+        $stmt->bind_param('s', $match['key']);
+        $stmt->execute();
+        if ($row = $stmt->get_result()->fetch_assoc()) {
+            // Fill in anything we did not have before, without overwriting what
+            // is already recorded.
+            $stmt = $conn->prepare(
+                'UPDATE people SET email = COALESCE(email, ?), phone = COALESCE(phone, ?) WHERE id = ?'
+            );
+            $normalised = rg_normalise_email($email);
+            $stmt->bind_param('ssi', $normalised, $phone, $row['id']);
+            $stmt->execute();
+            return (int) $row['id'];
+        }
+    }
+
+    $normalised = rg_normalise_email($email);
+    $stmt = $conn->prepare('INSERT INTO people (full_name, email, phone, match_key) VALUES (?, ?, ?, ?)');
+    $stmt->bind_param('ssss', $name, $normalised, $phone, $match['key']);
+    $stmt->execute();
+    return (int) $conn->insert_id;
+}
+
+/**
+ * The next payroll number. Unique, permanent, never reused.
+ *
+ * Deliberately not derived from the service: a person's service can change, and
+ * a payroll number that implies one would then be wrong forever.
+ */
+function next_payroll_no(mysqli $conn): string
+{
+    return sprintf('RG-%06d', next_seq($conn, 'payroll'));
+}
+
+/**
+ * Queue an email instead of sending it now.
+ *
+ * Nothing in a web request should open an SMTP socket. send_mail() does, so a
+ * slow mail server slows the application, and a failure is lost -- nobody finds
+ * out that an applicant never got their confirmation.
+ *
+ * Returns the queue id. Draining is server/send-queued-mail.php, run by cron.
+ */
+function queue_mail(
+    mysqli $conn,
+    string $to,
+    string $subject,
+    string $body,
+    ?string $replyTo = null,
+    ?string $templateKey = null,
+    ?string $relatedType = null,
+    ?int $relatedId = null,
+    ?int $queuedBy = null,
+    ?string $sendAfter = null
+): int {
+    $stmt = $conn->prepare(
+        'INSERT INTO email_queue
+           (recipient, subject, body, reply_to, template_key, related_type, related_id, queued_by, send_after)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $stmt->bind_param('ssssssiis', $to, $subject, $body, $replyTo, $templateKey, $relatedType, $relatedId, $queuedBy, $sendAfter);
+    $stmt->execute();
+    return (int) $conn->insert_id;
+}
+
+/**
+ * Queue an email built from a stored template.
+ *
+ * Refuses rather than sending a half-filled message: an email that goes out
+ * reading "Hi {{first_name}}," has already reached the recipient by the time
+ * anybody notices. Returns the queue id, or throws with what was missing.
+ */
+function queue_templated_mail(
+    mysqli $conn,
+    string $templateKey,
+    string $to,
+    array $values,
+    ?string $relatedType = null,
+    ?int $relatedId = null,
+    ?int $queuedBy = null
+): int {
+    $stmt = $conn->prepare('SELECT subject, body FROM email_templates WHERE template_key = ? AND active = 1 LIMIT 1');
+    $stmt->bind_param('s', $templateKey);
+    $stmt->execute();
+    $tpl = $stmt->get_result()->fetch_assoc();
+    if (!$tpl) fail("No active email template '$templateKey'.", 500);
+
+    $subject = rg_render_template($tpl['subject'], $values);
+    $body = rg_render_template($tpl['body'], $values);
+
+    $missing = array_merge(rg_unfilled_placeholders($subject), rg_unfilled_placeholders($body));
+    if ($missing) {
+        fail("Cannot send '$templateKey': missing " . implode(', ', array_unique($missing)) . '.', 422);
+    }
+
+    return queue_mail($conn, $to, $subject, $body, null, $templateKey, $relatedType, $relatedId, $queuedBy);
+}
+
+/**
+ * Write an audit log row for a sensitive action.
+ *
+ * The signature is unchanged, so every existing call site keeps working. The
+ * optional arguments are what make an entry answerable months later: which
+ * record it touched, what the values were before and after, why, and from where.
+ *
+ * $before and $after are arrays of the fields that changed -- pass only those,
+ * not the whole row. An audit entry holding a copy of every field is a second
+ * copy of the data, which is its own retention problem.
+ */
+function audit(
+    mysqli $conn,
+    ?int $userId,
+    string $action,
+    string $detail = '',
+    ?string $entityType = null,
+    ?int $entityId = null,
+    ?array $before = null,
+    ?array $after = null,
+    ?string $reason = null
+): void {
+    $beforeJson = $before !== null ? json_encode($before, JSON_UNESCAPED_UNICODE) : null;
+    $afterJson = $after !== null ? json_encode($after, JSON_UNESCAPED_UNICODE) : null;
+    $ip = client_ip();
+    $agent = substr((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255) ?: null;
+
+    $stmt = $conn->prepare(
+        'INSERT INTO audit_log (user_id, action, entity_type, entity_id, detail, before_json, after_json, reason, ip, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    // user_id i | action s | entity_type s | entity_id i | detail s
+    // before s | after s | reason s | ip s | user_agent s
+    $stmt->bind_param(
+        'ississssss',
+        $userId, $action, $entityType, $entityId, $detail, $beforeJson, $afterJson, $reason, $ip, $agent
+    );
+    $stmt->execute();
+}
+
+/**
+ * Only the fields that actually changed, as [before, after].
+ *
+ * Keeps an audit entry to the difference rather than a copy of the record.
+ * Values are compared loosely as strings, because a column read back from MySQL
+ * is a string and the value written was often an int.
+ */
+function audit_diff(array $before, array $after, array $fields): array
+{
+    $b = [];
+    $a = [];
+    foreach ($fields as $field) {
+        $old = $before[$field] ?? null;
+        $new = $after[$field] ?? null;
+        if ((string) $old !== (string) $new) {
+            $b[$field] = $old;
+            $a[$field] = $new;
+        }
+    }
+    return [$b, $a];
 }
 
 // Best-effort client IP. Cloudflare and generic proxies put the real address in

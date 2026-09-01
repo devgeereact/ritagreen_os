@@ -8,12 +8,23 @@ $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {
+    // Internal staff only. This row set carries pay rates and DBS/SIA data, and
+    // before this check any authenticated account could read it — including a
+    // client portal login, which is an external party.
+    require_staff($user);
+    // Pay is its own zone, not a hard-coded role list. The business can widen or
+    // narrow who sees it without a deployment.
+    $seesPay = can_view_zone($conn, $user, 'payroll');
+    // A division-scoped account sees only its own division's workforce.
+    $scope = service_scope($user);
     $res = $conn->query(
         'SELECT id, name, email, phone, role, division, status, right_to_work,
                 dbs_status, dbs_expiry, sia_number, sia_expiry,
                 pay_rate_pence, pay_type, holiday_hours,
                 home_postcode, travel_radius_mi, avail_days, avail_nights, avail_weekends, created_at
-         FROM workers WHERE deleted_at IS NULL ORDER BY name'
+         FROM workers WHERE deleted_at IS NULL'
+        . ($scope !== null ? " AND division = '" . $conn->real_escape_string($scope) . "'" : '')
+        . ' ORDER BY name'
     );
     $workers = [];
     while ($row = $res->fetch_assoc()) {
@@ -25,6 +36,7 @@ if (method() === 'GET') {
         $row['avail_days'] = (bool) $row['avail_days'];
         $row['avail_nights'] = (bool) $row['avail_nights'];
         $row['avail_weekends'] = (bool) $row['avail_weekends'];
+        if (!$seesPay) unset($row['pay_rate_pence'], $row['pay_type'], $row['holiday_hours']);
         $workers[] = $row;
     }
     json_out(['workers' => $workers]);
@@ -63,10 +75,19 @@ if ($action === 'pay' && method() === 'POST') {
     if ($id <= 0) fail('A worker is required.');
     if ($rate < 0) fail('Pay rate cannot be negative.');
     if (!in_array($type, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
+    // Read the current values first: an audit entry that cannot say what the pay
+    // rate was before is not much of an audit entry.
+    $prev = $conn->prepare('SELECT pay_rate_pence, pay_type FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $prev->bind_param('i', $id);
+    $prev->execute();
+    $was = $prev->get_result()->fetch_assoc() ?: [];
+
     $stmt = $conn->prepare('UPDATE workers SET pay_rate_pence = ?, pay_type = ? WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('isi', $rate, $type, $id);
     $stmt->execute();
-    audit($conn, (int) $user['id'], 'worker.pay', "worker #$id rate=$rate type=$type");
+
+    [$before, $after] = audit_diff($was, ['pay_rate_pence' => $rate, 'pay_type' => $type], ['pay_rate_pence', 'pay_type']);
+    audit($conn, (int) $user['id'], 'worker.pay', "worker #$id", 'worker', $id, $before, $after);
     json_out(['ok' => true]);
 }
 
@@ -91,15 +112,20 @@ if (method() === 'POST') {
     if (!in_array($payType, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
 
+    // One person, one record: a worker created here for somebody already known
+    // attaches to their existing person rather than starting a second identity.
+    $personId = find_or_create_person($conn, $name, $email ?: null, $phone ?: null);
+    $payrollNo = next_payroll_no($conn);
     $stmt = $conn->prepare(
-        'INSERT INTO workers (name, email, phone, role, division, right_to_work, pay_rate_pence, pay_type, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, "onboarding")'
+        'INSERT INTO workers (person_id, payroll_no, name, email, phone, role, division, right_to_work, pay_rate_pence, pay_type, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "onboarding")'
     );
-    $stmt->bind_param('sssssiis', $name, $email, $phone, $role, $division, $rtw, $payRate, $payType);
+    $stmt->bind_param('issssssiis', $personId, $payrollNo, $name, $email, $phone, $role, $division, $rtw, $payRate, $payType);
     $stmt->execute();
     $id = $conn->insert_id;
 
-    audit($conn, (int) $user['id'], 'worker.create', $name);
+    audit($conn, (int) $user['id'], 'worker.create', $name, 'worker', (int) $id,
+        null, ['person_id' => $personId, 'payroll_no' => $payrollNo, 'role' => $role, 'division' => $division]);
 
     json_out([
         'worker' => [

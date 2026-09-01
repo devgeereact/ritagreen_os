@@ -11,6 +11,10 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The shared company mailbox: reading it exposes every inbound enquiry, and
+// replying sends as the company. Before this check any authenticated account
+// could do both, including a client portal login.
+require_role($user, 'super_admin', 'admin', 'manager');
 
 if (!function_exists('imap_open')) {
     fail('The PHP imap extension is not installed on the server.', 503);

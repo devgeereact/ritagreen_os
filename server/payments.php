@@ -68,9 +68,10 @@ if ($action === 'webhook' && method() === 'POST') {
                 $stmt->bind_param('i', $invoiceId);
                 $stmt->execute();
                 $r = $stmt->get_result()->fetch_assoc();
-                if ($r && $r['email'] && function_exists('mail_enabled') && mail_enabled()) {
+                // The address check stays; the mail_enabled() gate does not.
+                if ($r && $r['email']) {
                     $amt = '£' . number_format(((int) $r['total_pence']) / 100, 2);
-                    send_mail($r['email'], 'Payment received — ' . $r['number'],
+                    queue_mail($conn, $r['email'], 'Payment received — ' . $r['number'],
                         "Hi {$r['name']},\n\nThank you — we've received your payment of $amt for invoice {$r['number']}.\nThis email is your receipt.\n\nRitaGreen Services");
                 }
             } else {

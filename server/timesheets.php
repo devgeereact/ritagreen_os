@@ -13,6 +13,7 @@ if (method() === 'GET') {
         'SELECT t.id, t.worker_id, w.name AS worker, w.division, t.work_date, t.start_time,
                 t.end_time, t.minutes, t.status
          FROM timesheets t JOIN workers w ON w.id = t.worker_id
+         WHERE t.deleted_at IS NULL
          ORDER BY t.work_date DESC, t.start_time DESC LIMIT 300'
     );
     $timesheets = [];
