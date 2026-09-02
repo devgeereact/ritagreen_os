@@ -201,12 +201,23 @@ reach the caller on an unexpected failure.
 
 ## 5. Rate limiting
 
-`rate_limit($conn, $bucket, $max, $windowSec)` (`lib.php:147`) is a sliding
-window keyed on `(bucket, client IP)` backed by the `rate_limits` table. The
-client IP comes from `client_ip()` (`lib.php:133`), which prefers
-`CF-Connecting-IP`, then the first hop of `X-Forwarded-For`, then
-`REMOTE_ADDR`. Roughly 1% of calls opportunistically delete rows older than a
-day.
+`rate_limit($conn, $bucket, $max, $windowSec, $subject = null)` is a sliding
+window keyed on `(bucket, subject)` backed by the `rate_limits` table. `$subject`
+defaults to the caller's IP; pass one explicitly to throttle something else —
+login also limits per account (hashed), and `ai.php` limits per user id. Roughly
+1% of calls opportunistically delete rows older than a day.
+
+The IP comes from `client_ip()`, which returns **`REMOTE_ADDR`**. A forwarded
+header (`CF-Connecting-IP`, `X-Forwarded-For`) is read only when `REMOTE_ADDR` is
+listed in the `TRUSTED_PROXIES` constant, which is empty by default.
+
+> This used to prefer the forwarded headers unconditionally. Both are set by the
+> caller, so rotating one per request landed in a fresh bucket every time and
+> defeated every limit in this table — verified against a running server, where
+> fourteen login attempts with a rotating `X-Forwarded-For` all returned 401 and
+> none returned 429. `TRUSTED_PROXIES` empty is correct on this deployment:
+> Cloudflare IP restoration already puts the visitor's real address in
+> `REMOTE_ADDR` before PHP runs. Populate it only behind a proxy that does not.
 
 Every call site:
 
@@ -390,7 +401,16 @@ SSO. 16 routes. Falls through to `Unknown action.` (404) at `auth.php:419`.
 | POST | `register` | **Public**, rate-limited | `{name, email, phone?, division, role_applied?, consent}` | `{ok: true}` 201; creates an `applicants` row with source `self-registration`, a `consent_log` entry, a broadcast notification and an office email |
 | GET | `google_config` | **Public** | — | `{enabled}` |
 | GET | `google_start` | **Public** | — | `{url}` — the Google authorisation URL; 503 if SSO is unconfigured |
-| POST | `google_callback` | **Public**, rate-limited | `{code}` | `{token, user}`; requires `email_verified`, matches an existing non-deleted user, 403 if none (`auth.php:402`) |
+| POST | `google_callback` | **Public**, rate-limited | `{code, state}` | `{token, user}`, or `{twofa_required: true, ticket}` when the matched account has an authenticator enrolled. Requires `email_verified`, a valid single-use `state`, and an existing non-deleted user (403 if none) |
+| POST | `google_2fa` | **Public**, rate-limited | `{ticket, code}` | `{token, user}`; completes a Google sign-in for a 2FA account. The ticket is issued by `google_callback` and lasts 5 minutes |
+
+> `state` and `google_2fa` are both new. Without `state` the callback accepted any
+> authorization code handed to it, which is login CSRF: an attacker obtains a code
+> against their own Google account and causes a victim's browser to submit it,
+> signing the victim into the attacker's account. And 2FA was skipped entirely on
+> this path — an account with an authenticator enrolled could sign in through
+> Google with no code at all. A ticket is needed rather than a second call with a
+> code because Google has already spent the authorization code by then.
 
 Password hashing is bcrypt: cost 12 on reset (`auth.php:176`), PHP's default
 cost when a user is created (`users.php:101`).

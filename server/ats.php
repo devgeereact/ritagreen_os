@@ -29,21 +29,38 @@ if (method() === 'POST' && $action === '') {
     $phone = trim((string) ($data['phone'] ?? ''));
     $role = trim((string) ($data['role_applied'] ?? ''));
     $division = trim((string) ($data['division'] ?? 'care'));
+    // What the applicant wrote about themselves. The careers form asks for it and
+    // it is the most useful thing a recruiter reads, so it is stored rather than
+    // dropped on the way in.
+    $notes = trim((string) ($data['notes'] ?? ''));
     $consent = !empty($data['consent']);
     if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('A name and valid email are required.');
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Choose a division.');
     if (!$consent) fail('Please agree to be contacted about your application.');
+    // Length caps. There were none, so an oversized field reached MySQL in strict
+    // mode and came back as a 500 rather than a message the applicant could act
+    // on -- and nothing stopped a script posting megabytes at the endpoint.
+    if (mb_strlen($name) > 160) fail('That name is too long.');
+    if (mb_strlen($email) > 190) fail('That email is too long.');
+    if (mb_strlen($role) > 80) fail('That role is too long.');
+    if (mb_strlen($notes) > 5000) fail('Please keep that under 5000 characters.');
 
     $roleVal = $role !== '' ? $role : null;
-    $phoneVal = $phone !== '' ? $phone : null;
+    $phoneVal = $phone !== '' ? mb_substr($phone, 0, 40) : null;
+    $notesVal = $notes !== '' ? $notes : null;
     // Resolve the person BEFORE the application, so a returning applicant lands
     // on the record they already have rather than becoming a second copy.
     $personId = find_or_create_person($conn, $name, $email, $phoneVal);
     $stmt = $conn->prepare(
-        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source) VALUES (?, ?, ?, ?, ?, ?, "careers")'
+        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, notes, source) VALUES (?, ?, ?, ?, ?, ?, ?, "careers")'
     );
-    $stmt->bind_param('isssss', $personId, $name, $email, $phoneVal, $roleVal, $division);
+    $stmt->bind_param('issssss', $personId, $name, $email, $phoneVal, $roleVal, $division, $notesVal);
     $stmt->execute();
+    // Captured immediately. Two more inserts follow before the email is queued,
+    // and $conn->insert_id tracks the LAST one -- so the queued message used to
+    // carry the notifications row's id as its related_id, pointing anybody who
+    // followed it at the wrong record.
+    $applicantId = (int) $conn->insert_id;
 
     $ip = client_ip();
     $stmt = $conn->prepare('INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "application", 1, "careers", ?)');
@@ -54,8 +71,10 @@ if (method() === 'POST' && $action === '') {
     // Queued regardless of whether mail is switched on: the queue is the record
     // of intent, and the drainer records 'skipped' when it cannot send.
     {
-        queue_mail($conn, MAIL_TO, "New application — $division", "$name <$email> ($phone)\nRole: $role",
-            $email, null, 'applicant', (int) $conn->insert_id);
+        $body = "$name <$email> ($phone)\nRole: $role";
+        if ($notesVal !== null) $body .= "\n\nAbout them:\n$notesVal";
+        queue_mail($conn, MAIL_TO, "New application — $division", $body,
+            $email, null, 'applicant', $applicantId);
     }
     json_out(['ok' => true], 201);
 }

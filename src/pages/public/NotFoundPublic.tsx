@@ -3,9 +3,13 @@ import { Button } from "@/components/ui/button"
 import { useSeo } from "@/hooks/use-seo"
 
 export default function NotFoundPublic() {
+  // noindex, and no canonical. Without it this page inherited the static
+  // canonical in index.html and told Google every mistyped URL was a duplicate
+  // of the homepage.
   useSeo({
     title: "Page not found",
     description: "The page may have moved or never existed. Try the homepage or get in touch.",
+    noindex: true,
   })
 
   return (

@@ -7,6 +7,94 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Security — production-readiness audit (2026-09-03)
+
+- **Rate limiting could be bypassed with a header.** `client_ip()` read
+  `X-Forwarded-For` / `CF-Connecting-IP` whenever they were present. Both are set by
+  the caller, so rotating one per request produced a fresh bucket every time and
+  defeated every `rate_limit()` call — login, password reset, the contact form, the
+  public application form. Reproduced against a running server (14 login attempts with
+  a rotating header: all 401, none 429), then fixed and re-verified (429 from the
+  eleventh). A forwarded header is now read only when `REMOTE_ADDR` is in the new
+  `TRUSTED_PROXIES` config list, which is empty by default and correct for this host
+  (Cloudflare IP restoration already puts the real address in `REMOTE_ADDR`)
+- **Google sign-in skipped two-factor entirely.** An account with an authenticator
+  enrolled could sign in through Google with no code. It now stops at the same place a
+  password sign-in does, via a short-lived ticket (`action=google_2fa`) — Google has
+  already spent the authorization code by that point, so the callback cannot simply be
+  replayed
+- **Google sign-in had no `state` parameter**, so the callback accepted any
+  authorization code handed to it — login CSRF, which signs a victim into an attacker's
+  account. Single-use state added (`migrations/019_oauth_state.sql`)
+- **No security headers.** `public/.htaccess` now sets CSP (`script-src 'self'`, no
+  inline scripts), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
+  `Permissions-Policy` and HSTS. Verified by serving the real build under the real
+  headers in a browser: zero violations across every public route
+- **`ai.php` was open to any logged-in account** — including client-portal and worker
+  logins — with no spend limit and no length cap, against a metered OpenRouter key. Now
+  `require_staff()`, 40 calls/hour/account, prompt capped
+- **`certificates.php` allowed bulk PII enumeration.** Public, unthrottled, and it
+  returns a learner's name against a countable ID (`RG-2026-00123`). Rate-limited
+- Per-account login throttle added alongside the per-IP one; the cron-key endpoints
+  (`backup`, `expiry-alerts`, `send-queued-mail`) throttle their key check; password
+  reset retires outstanding tokens when a new one is issued; `config.sample.php` no
+  longer returns the database connection error to anonymous callers; `forms-intake.php`
+  uses a prepared statement rather than `real_escape_string` (rule 4)
+
+### Fixed — production-readiness audit (2026-09-03)
+
+- **Website applications never reached the ATS.** The careers form posted to
+  `contact.php` with the role flattened into a message prefixed
+  `CAREERS APPLICATION`, so every application landed in `contact_enquiries` and
+  `/app/ats` — the recruitment pipeline the CMS is built around — was fed by nothing.
+  It now posts to `ats.php`: applicant, person link, role, division, the applicant's own
+  words in `notes`, and a real consent record. Verified end to end through a browser
+- **`/apply` and `/request` were orphans** — real, working conversion pages with no link
+  from anywhere on the site, no sitemap entry and no SEO tags. Linked from the footer,
+  added to the sitemap, given titles and canonicals
+- **The footer newsletter form was fake.** It validated the address, said "we'll keep
+  you posted" and sent nothing anywhere — there is no subscribers table, endpoint or
+  unsubscribe path. Replaced with the two entry points that do complete
+- **Five of the six ⌘K palette destinations did not exist** (`/analytics`, `/crm`,
+  `/profile`, `/billing`, `/settings` — leftovers from the dashboard template; the sixth
+  went to the marketing homepage). The palette now lists real routes, filtered through
+  `canAccess()`
+- **No phone number on mobile.** It lived only in the desktop utility bar, which is
+  hidden below `md`. A labelled Call button is now in the mobile header and both numbers
+  are in the menu
+- **Clicking "privacy policy" inside a form wiped it.** Four internal `<a href>` links
+  forced a full page load; now `<Link>`
+- **The engagement table was clipped on mobile** — `overflow-hidden` around a 576px
+  table in a 326px column, so the rates column could not be reached. Now scrollable
+- `ats.php` queued the office email against `$conn->insert_id` after two further
+  inserts, so `related_id` pointed at a notifications row, not the applicant
+- Length caps on the public `ats.php` and `bookings.php` fields, as `contact.php`
+  already had; an oversized field returned a 500 instead of a message
+- `ErrorPage` rendered a raw `Error.message` to the user in production
+
+### Changed — production-readiness audit (2026-09-03)
+
+- **SEO: every page without `useSeo` claimed the homepage as its canonical.**
+  `index.html` carries a static canonical, so the 404 page, sign-in, register, reset,
+  `/apply`, `/request` and the Google callback all told Google they were duplicates of
+  `/`. `useSeo` gained a `noindex` mode that also drops the canonical, and the pages
+  that lacked it now have it
+- `robots.txt` disallows `/portal`, `/m`, `/register`, `/forgot`, `/reset/`, `/auth/`
+  and `/offer/` — previously only `/app/` and `/login`
+- Sitemap: `lastmod` on every entry, plus `/apply` and `/request`
+- **Entry bundle 206 kB → 141 kB gzipped.** All seventeen public pages were imported
+  eagerly, and `AppLayout` was too — so a visitor reading the marketing homepage
+  downloaded the legal pages, the certificate verifier, five forms, the CMS sidebar, the
+  command palette and a QR encoder before anything rendered. Home stays eager;
+  everything else is a route-level chunk
+- Accessibility: skip link on the public site (the CMS had one), `role="alert"` on
+  form-level errors, `scope="col"` and a caption on the engagement table, 44px touch
+  targets in the mobile header, `prefers-reduced-motion` honoured by the scroll handler,
+  a description on the mobile-menu dialog
+- ESLint baseline 27 → 19 errors; `react-refresh/only-export-components` scoped off the
+  vendored `src/components/ui` primitives only
+
+
 ### Added — Milestone 0, documentation pack
 
 - `docs/PRD.md` — problem, users, outcomes and the explicit non-goals

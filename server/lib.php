@@ -417,25 +417,69 @@ function audit_diff(array $before, array $after, array $fields): array
     return [$b, $a];
 }
 
-// Best-effort client IP. Cloudflare and generic proxies put the real address in
-// these headers; fall back to the socket peer. Trimmed to fit VARCHAR(45).
+/**
+ * The caller's IP address, for rate limiting and the audit trail.
+ *
+ * This used to read CF-Connecting-IP, then X-Forwarded-For, then REMOTE_ADDR,
+ * taking whichever appeared first. Both of those headers are supplied by the
+ * caller, so anybody could hand us a different one on every request and land in
+ * a fresh rate-limit bucket each time. That defeated every rate_limit() call in
+ * the codebase: login, password reset, the contact form, the public application
+ * form. Verified against a running server -- fourteen login attempts with a
+ * rotating X-Forwarded-For all returned 401, none returned 429.
+ *
+ * A proxy header is only meaningful if the hop that set it is one we trust. So
+ * the socket peer is the default, and a forwarded header is read ONLY when
+ * REMOTE_ADDR is a proxy listed in TRUSTED_PROXIES.
+ *
+ * On this deployment that default is also the correct answer: the origin sits
+ * behind Cloudflare with IP restoration enabled, so REMOTE_ADDR already holds
+ * the visitor's real address by the time PHP runs. TRUSTED_PROXIES exists for a
+ * host where that is not true; leave it undefined and nothing is trusted.
+ *
+ * Trimmed to fit audit_log.ip / tokens.ip, both VARCHAR(45).
+ */
 function client_ip(): string
 {
-    $ip = $_SERVER['HTTP_CF_CONNECTING_IP']
-        ?? $_SERVER['HTTP_X_FORWARDED_FOR']
-        ?? $_SERVER['REMOTE_ADDR']
-        ?? '0.0.0.0';
-    if (strpos($ip, ',') !== false) $ip = trim(explode(',', $ip)[0]); // first hop in XFF list
-    return substr($ip, 0, 45);
+    $peer = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+
+    $trusted = defined('TRUSTED_PROXIES') && is_array(TRUSTED_PROXIES) ? TRUSTED_PROXIES : [];
+    if ($peer !== '' && in_array($peer, $trusted, true)) {
+        // Cloudflare sets CF-Connecting-IP to the single client address, so it
+        // needs no list-splitting. X-Forwarded-For is a chain appended to by
+        // each hop; the left-most entry is the original client.
+        $forwarded = (string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
+        if ($forwarded !== '') {
+            $candidate = trim(explode(',', $forwarded)[0]);
+            // Anything that is not an IP address is a forged header, not a hop.
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) return substr($candidate, 0, 45);
+        }
+    }
+
+    if ($peer !== '' && filter_var($peer, FILTER_VALIDATE_IP)) return substr($peer, 0, 45);
+    return '0.0.0.0';
 }
 
-// Sliding-window rate limit per (bucket, IP). Records one hit per call and
-// fails with 429 once $max hits land inside $windowSec. Throttles public /
-// unauthenticated endpoints (login, contact form) against brute-force and spam.
-// Requires the `rate_limits` table (see schema.sql).
-function rate_limit(mysqli $conn, string $bucket, int $max, int $windowSec): void
+/**
+ * Sliding-window rate limit per (bucket, subject).
+ *
+ * Records one hit per call and fails with 429 once $max hits land inside
+ * $windowSec. Throttles public and unauthenticated endpoints -- login, password
+ * reset, the contact form, the public application form -- against brute force
+ * and spam.
+ *
+ * $subject defaults to the caller's IP, which is what every existing call site
+ * wants. Pass one explicitly to throttle something other than an address: the
+ * login endpoint also limits per account, because a per-IP limit alone does
+ * nothing about one password guessed from a thousand hosts. Never pass a raw
+ * identifier -- hash it, so the table does not accumulate a list of the email
+ * addresses people have tried to sign in as.
+ *
+ * Requires the `rate_limits` table (see schema.sql).
+ */
+function rate_limit(mysqli $conn, string $bucket, int $max, int $windowSec, ?string $subject = null): void
 {
-    $ip = client_ip();
+    $ip = $subject !== null ? substr($subject, 0, 45) : client_ip();
     $stmt = $conn->prepare(
         'SELECT COUNT(*) FROM rate_limits
          WHERE bucket = ? AND ip = ? AND created_at > (NOW() - INTERVAL ? SECOND)'

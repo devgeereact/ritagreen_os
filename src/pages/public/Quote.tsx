@@ -186,7 +186,7 @@ export default function Quote() {
           <p className="text-xs text-muted-foreground">
             Rates are confirmed per engagement and set out clearly in your quote. We handle your
             details under our{" "}
-            <a href="/privacy" className="font-medium text-primary hover:underline">privacy policy</a>.
+            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy policy</Link>.
           </p>
         </form>
 

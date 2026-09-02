@@ -8,8 +8,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function ResetPassword() {
+  useSeo({
+    title: "Choose a new password",
+    description: "Set a new password for your RitaGreen account.",
+    noindex: true,
+  })
+
   const { token } = useParams()
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
@@ -60,7 +67,7 @@ export default function ResetPassword() {
               </div>
             ) : (
               <form onSubmit={onSubmit} className="grid gap-5" noValidate>
-                {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+                {error && <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
                 <div className="grid gap-2">
                   <Label htmlFor="password">New password</Label>
                   <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />

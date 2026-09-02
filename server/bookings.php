@@ -26,6 +26,14 @@ if (method() === 'POST' && $action === '') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('A valid email is required.');
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Choose a service.');
     if (!$consent) fail('Please agree to be contacted about your request.');
+    // Length caps, as on contact.php. Without them an oversized field reached
+    // MySQL in strict mode and returned a 500 rather than something the person
+    // filling the form could act on.
+    if (mb_strlen($name) > 160) fail('That name is too long.');
+    if (mb_strlen($email) > 190) fail('That email is too long.');
+    if (mb_strlen($site) > 160) fail('That site name is too long.');
+    if (mb_strlen($detail) > 5000) fail('Please keep the detail under 5000 characters.');
+    $phone = mb_substr($phone, 0, 40);
 
     // Link to an existing client by email if we know them.
     $clientId = null;

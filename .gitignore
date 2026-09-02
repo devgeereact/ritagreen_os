@@ -16,7 +16,7 @@ dist-ssr
 server/config.php
 
 # Local credentials note: logins and test passwords. Never commit.
-ACCOUNT.md
+docs/ACCOUNT.md
 
 # Uploaded files live on the server, not in the repo
 server/uploads/

@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -92,12 +93,15 @@ const FAQS_CAREERS = [
   },
 ]
 
+// `division` is the ATS column an application is filed under, so the choice made
+// here decides which recruiter sees it. "Become a carer" is the academy route --
+// they train first and are placed after -- which is why it is not `care`.
 const ROLES = [
-  { value: "carer", label: "Become a carer (Care Certificate)" },
-  { value: "cleaning", label: "Cleaning operative" },
-  { value: "security", label: "Security officer (SIA)" },
-  { value: "other", label: "Something else" },
-]
+  { value: "carer", label: "Become a carer (Care Certificate)", division: "academy" },
+  { value: "cleaning", label: "Cleaning operative", division: "cleaning" },
+  { value: "security", label: "Security officer (SIA)", division: "security" },
+  { value: "other", label: "Something else", division: "care" },
+] as const
 
 export default function Careers() {
   useSeo({
@@ -109,7 +113,11 @@ export default function Careers() {
 
   const [submitting, setSubmitting] = useState(false)
   const [role, setRole] = useState("carer")
-  const [errors, setErrors] = useState<{ name?: string; email?: string; about?: string }>({})
+  // Explicit consent, not an inferred one. ats.php writes a consent_log row for
+  // every application; before this the form only showed a privacy notice, so
+  // that row recorded a consent nobody had actually given.
+  const [consent, setConsent] = useState(false)
+  const [errors, setErrors] = useState<{ name?: string; email?: string; about?: string; consent?: string }>({})
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -119,7 +127,8 @@ export default function Careers() {
     const email = String(data.get("email") || "").trim()
     const phone = String(data.get("phone") || "").trim()
     const about = String(data.get("about") || "").trim()
-    const roleLabel = ROLES.find((r) => r.value === role)?.label ?? role
+    const chosen = ROLES.find((r) => r.value === role)
+    const roleLabel = chosen?.label ?? role
 
     // Inline per-field validation so the offending field is marked, not just a toast.
     const next: typeof errors = {}
@@ -127,26 +136,41 @@ export default function Careers() {
     if (!email) next.email = "Please add an email so we can reply."
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "That email doesn't look right."
     if (!about) next.about = "Tell us a few words about you."
+    if (!consent) next.consent = "Please agree to be contacted about your application."
     setErrors(next)
     if (Object.keys(next).length > 0) {
       form.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
       return
     }
 
-    // Reuse the public enquiry endpoint. Applications land in the same inbox,
-    // tagged to the academy division, with the role captured in the message.
-    const message = `CAREERS APPLICATION\nRole: ${roleLabel}\n\n${about}`
-
     setSubmitting(true)
     try {
-      await api("contact.php", {
+      // The applicant tracker, not the enquiry inbox.
+      //
+      // This posted to contact.php with the role flattened into a message body
+      // prefixed "CAREERS APPLICATION". Every application from the website
+      // therefore landed in contact_enquiries and NOTHING reached /app/ats — the
+      // recruitment pipeline the CMS is built around, with stages, onboarding
+      // checklists and the hand-off into a worker record, was fed by nothing.
+      // ats.php also resolves the applicant to the person spine, so somebody who
+      // applies twice lands on the record they already have.
+      await api("ats.php", {
         method: "POST",
-        body: { name, email, phone, division: "academy", message },
+        body: {
+          name,
+          email,
+          phone,
+          division: chosen?.division ?? "care",
+          role_applied: roleLabel,
+          notes: about,
+          consent,
+        },
         auth: false,
       })
       toast.success("Thanks. We've got your application and will be in touch about the next intake.")
       form.reset()
       setRole("carer")
+      setConsent(false)
       setErrors({})
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
@@ -300,13 +324,39 @@ export default function Careers() {
               />
               {errors.about && <p id="about-error" className="text-xs text-destructive">{errors.about}</p>}
             </div>
+            <div className="grid gap-2">
+              <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Checkbox
+                  checked={consent}
+                  onCheckedChange={(v) => {
+                    setConsent(!!v)
+                    if (v) setErrors((p) => ({ ...p, consent: undefined }))
+                  }}
+                  aria-invalid={!!errors.consent}
+                  aria-describedby={errors.consent ? "consent-error" : undefined}
+                  className="mt-0.5"
+                />
+                <span>
+                  I agree that RitaGreen may store these details and contact me about my
+                  application, as described in the{" "}
+                  {/* Link, not <a href>. A full page load here threw away everything
+                      typed into the form -- so reading the privacy policy before
+                      agreeing to it cost the applicant their application. */}
+                  <Link to="/privacy" className="font-medium text-primary hover:underline">
+                    privacy policy
+                  </Link>
+                  .
+                </span>
+              </label>
+              {errors.consent && (
+                <p id="consent-error" role="alert" className="text-xs text-destructive">
+                  {errors.consent}
+                </p>
+              )}
+            </div>
             <Button type="submit" size="lg" disabled={submitting}>
               {submitting ? "Sending…" : "Send application"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              We handle your details under our{" "}
-              <a href="/privacy" className="font-medium text-primary hover:underline">privacy policy</a>.
-            </p>
           </form>
         </div>
 

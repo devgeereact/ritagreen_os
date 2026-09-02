@@ -100,6 +100,11 @@ define('IMAP_USER', '');
 define('IMAP_PASS', '');
 define('IMAP_VALIDATE_CERT', true);
 
+// ----- Trusted proxies -----
+// Empty locally: nothing sits in front of the PHP dev server, so REMOTE_ADDR is
+// the real caller. See config.sample.php for what this guards against.
+define('TRUSTED_PROXIES', []);
+
 // ----- CORS -----
 // The Vite dev server proxies *.php to the local PHP server, so requests arrive
 // same-origin and never reach this list. It is the direct-fetch fallback.

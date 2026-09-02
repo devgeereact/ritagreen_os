@@ -55,10 +55,16 @@ if (method() === 'GET') {
         $sql = 'SELECT s.id, s.external_id, s.status, s.failure_reason, s.received_at,
                        s.applicant_id, i.name AS integration
                 FROM integration_submissions s JOIN integrations i ON i.id = s.integration_id';
-        if (in_array($status, ['received','mapped','failed','ignored'], true)) {
-            $sql .= " WHERE s.status = '" . $conn->real_escape_string($status) . "'";
-        }
-        $res = $conn->query($sql . ' ORDER BY s.id DESC LIMIT 100');
+        // Prepared, not escaped. The value was allowlisted first so this was not
+        // injectable, but rule 4 is "prepared statements always, for any value" --
+        // and a rule with one documented exception is a rule people stop trusting.
+        $filtered = in_array($status, ['received', 'mapped', 'failed', 'ignored'], true);
+        if ($filtered) $sql .= ' WHERE s.status = ?';
+        $sql .= ' ORDER BY s.id DESC LIMIT 100';
+        $stmt = $conn->prepare($sql);
+        if ($filtered) $stmt->bind_param('s', $status);
+        $stmt->execute();
+        $res = $stmt->get_result();
         $items = [];
         while ($row = $res->fetch_assoc()) {
             $row['id'] = (int) $row['id'];

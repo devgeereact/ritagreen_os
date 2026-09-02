@@ -10,6 +10,10 @@
 // POST /auth.php?action=2fa_enable  {code}                 -> { ok:true }
 // POST /auth.php?action=2fa_disable {code}                 -> { ok:true }
 // GET  /auth.php?action=2fa_status                         -> { enabled }
+// Google SSO (staff, matches existing users only):
+// GET  /auth.php?action=google_start                       -> { url }  (carries a single-use state)
+// POST /auth.php?action=google_callback {code, state}      -> { token, user } | { twofa_required:true, ticket }
+// POST /auth.php?action=google_2fa {ticket, code}          -> { token, user }
 require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
@@ -55,6 +59,14 @@ if ($action === 'login' && method() === 'POST') {
     $password = (string) ($data['password'] ?? '');
     $code = trim((string) ($data['code'] ?? ''));
     if ($email === '' || $password === '') fail('Email and password are required.');
+
+    // Second limit, per account rather than per address. The per-IP limit above
+    // does nothing about one account guessed at from many hosts, which is the
+    // shape a real credential-stuffing run takes. Hashed so the table does not
+    // become a list of the addresses people have tried to sign in as. The window
+    // is wider and the allowance larger, so a person mistyping their own
+    // password on two devices is not locked out by it.
+    rate_limit($conn, 'login-account', 20, 900, hash('sha256', $email));
 
     $stmt = $conn->prepare(
         'SELECT id, name, email, role, division, password_hash
@@ -132,9 +144,18 @@ if ($action === 'forgot' && method() === 'POST') {
     $user = $stmt->get_result()->fetch_assoc();
 
     if ($user) {
+        $uid = (int) $user['id'];
+
+        // Retire any reset this account already has outstanding. Every request
+        // used to add another live token, so a chain of "I didn't get it, send
+        // another" left several working links in several inboxes at once, each
+        // good for an hour. Only the newest should open the door.
+        $stmt = $conn->prepare('UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0');
+        $stmt->bind_param('i', $uid);
+        $stmt->execute();
+
         $token = bin2hex(random_bytes(32));
         $hash = hash('sha256', $token);
-        $uid = (int) $user['id'];
         $stmt = $conn->prepare(
             'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 1 HOUR))'
         );
@@ -143,13 +164,23 @@ if ($action === 'forgot' && method() === 'POST') {
 
         $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : '';
         $link = $base . '/reset/' . $token;
-        // Queued regardless of whether mail is on -- see server/send-queued-mail.php.
-    {
-            // Synchronous on purpose: somebody is sitting on the reset screen
-            // waiting for this. Queue latency here reads as a broken feature.
-            send_mail($email, 'Reset your RitaGreen password',
-                "Hi {$user['name']},\n\nReset your password using this link (valid for 1 hour):\n$link\n\n"
-                . "If you didn't request this, ignore this email.\n\nRitaGreen Services");
+
+        // Sent now, not queued. Somebody is sitting on the reset screen waiting
+        // for this, and queue latency here reads as a broken feature -- so this
+        // is one of the deliberate exceptions to "nothing in a web request opens
+        // an SMTP socket" (see docs/ARCHITECTURE.md).
+        //
+        // send_mail() returns false when mail is not configured. The caller is
+        // told nothing either way -- deliberately, so the endpoint cannot be used
+        // to discover which addresses have accounts -- which means a
+        // misconfigured mailer would otherwise be silent to everyone including
+        // us. Log it, so "nobody can reset their password" is answerable.
+        $sent = send_mail($email, 'Reset your RitaGreen password',
+            "Hi {$user['name']},\n\nReset your password using this link (valid for 1 hour):\n$link\n\n"
+            . "If you didn't request this, ignore this email.\n\nRitaGreen Services");
+        if (!$sent) {
+            error_log('password.forgot: reset email could not be sent for user #' . $uid
+                . ' (check MAIL_FROM / SMTP_* in config.php)');
         }
         audit($conn, $uid, 'password.forgot', $email);
     }
@@ -352,6 +383,18 @@ if ($action === 'google_config' && method() === 'GET') {
 
 if ($action === 'google_start' && method() === 'GET') {
     if (!google_configured()) fail('Google sign-in is not configured.', 503);
+    rate_limit($conn, 'google-start', 20, 300);
+
+    // Single-use state, so the callback can refuse an authorization code that
+    // did not come from a sign-in started here. See migration 019.
+    $state = bin2hex(random_bytes(32));
+    $stateHash = hash('sha256', $state);
+    $stmt = $conn->prepare(
+        'INSERT INTO oauth_states (state_hash, expires_at) VALUES (?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))'
+    );
+    $stmt->bind_param('s', $stateHash);
+    $stmt->execute();
+
     $params = http_build_query([
         'client_id' => GOOGLE_CLIENT_ID,
         'redirect_uri' => GOOGLE_REDIRECT_URI,
@@ -359,6 +402,7 @@ if ($action === 'google_start' && method() === 'GET') {
         'scope' => 'openid email profile',
         'access_type' => 'online',
         'prompt' => 'select_account',
+        'state' => $state,
     ]);
     json_out(['url' => 'https://accounts.google.com/o/oauth2/v2/auth?' . $params]);
 }
@@ -366,8 +410,29 @@ if ($action === 'google_start' && method() === 'GET') {
 if ($action === 'google_callback' && method() === 'POST') {
     if (!google_configured()) fail('Google sign-in is not configured.', 503);
     rate_limit($conn, 'google', 20, 300);
-    $code = trim((string) (body()['code'] ?? ''));
+    $data = body();
+    $code = trim((string) ($data['code'] ?? ''));
+    $state = trim((string) ($data['state'] ?? ''));
     if ($code === '') fail('Missing authorization code.', 400);
+
+    // Consume the state before spending the code. A state that is missing,
+    // unknown, already used or expired means this callback did not come from a
+    // sign-in this browser started, which is what login CSRF looks like.
+    if (!preg_match('/^[a-f0-9]{64}$/', $state)) fail('Google sign-in could not be verified. Start again from the sign-in page.', 400);
+    $stateHash = hash('sha256', $state);
+    $stmt = $conn->prepare(
+        "UPDATE oauth_states SET used = 1
+          WHERE state_hash = ? AND purpose = 'state' AND used = 0 AND expires_at > NOW()"
+    );
+    $stmt->bind_param('s', $stateHash);
+    $stmt->execute();
+    if ($conn->affected_rows !== 1) {
+        fail('Google sign-in could not be verified. Start again from the sign-in page.', 400);
+    }
+    // Opportunistic sweep (~5% of callbacks) so the table never grows unbounded.
+    if (random_int(1, 20) === 1) {
+        $conn->query('DELETE FROM oauth_states WHERE expires_at < (NOW() - INTERVAL 1 DAY)');
+    }
 
     // Exchange the code for tokens.
     $ch = curl_init('https://oauth2.googleapis.com/token');
@@ -409,8 +474,94 @@ if ($action === 'google_callback' && method() === 'POST') {
     if (!$user) fail('No RitaGreen account for that Google email. Ask an administrator to add you.', 403);
     $uid = (int) $user['id'];
 
+    // Second factor, exactly as for a password sign-in.
+    //
+    // This was missing: an account with 2FA switched on could sign in through
+    // Google with no code at all, so the second factor protected one door and
+    // not the other. Google having verified the email address says the person
+    // holds that mailbox; it says nothing about the authenticator this account
+    // was told to enrol. Whoever turned 2FA on asked for both.
+    $stmt = $conn->prepare('SELECT secret FROM user_2fa WHERE user_id = ? AND enabled = 1 LIMIT 1');
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $twofa = $stmt->get_result()->fetch_assoc();
+    if ($twofa) {
+        // Google has already spent the authorization code, so the browser cannot
+        // call this action again with a code appended. Hand it a short-lived
+        // ticket naming this account instead, and collect the authenticator code
+        // against that -- see action=google_2fa below.
+        $ticket = bin2hex(random_bytes(32));
+        $ticketHash = hash('sha256', $ticket);
+        $stmt = $conn->prepare(
+            "INSERT INTO oauth_states (state_hash, purpose, user_id, expires_at)
+             VALUES (?, 'twofa', ?, DATE_ADD(NOW(), INTERVAL 5 MINUTE))"
+        );
+        $stmt->bind_param('si', $ticketHash, $uid);
+        $stmt->execute();
+        json_out(['twofa_required' => true, 'ticket' => $ticket]);
+    }
+
     $token = issue_token($conn, $uid);
     audit($conn, $uid, 'login.google', $email);
+    json_out([
+        'token' => $token,
+        'user' => [
+            'id' => $uid, 'name' => $user['name'], 'email' => $user['email'],
+            'role' => $user['role'], 'division' => $user['division'],
+            'client_id' => $user['client_id'] !== null ? (int) $user['client_id'] : null,
+            'worker_id' => $user['worker_id'] !== null ? (int) $user['worker_id'] : null,
+            'must_setup_2fa' => needs_2fa_setup($conn, $user['role'], $uid),
+        ],
+    ]);
+}
+
+// Second step of a Google sign-in for an account with 2FA enabled.
+// POST /auth.php?action=google_2fa {ticket, code} -> { token, user }
+if ($action === 'google_2fa' && method() === 'POST') {
+    rate_limit($conn, 'google-2fa', 10, 300);
+    $data = body();
+    $ticket = trim((string) ($data['ticket'] ?? ''));
+    $code = trim((string) ($data['code'] ?? ''));
+    if (!preg_match('/^[a-f0-9]{64}$/', $ticket)) fail('Start the sign-in again.', 400);
+
+    $ticketHash = hash('sha256', $ticket);
+    $stmt = $conn->prepare(
+        "SELECT id, user_id FROM oauth_states
+          WHERE state_hash = ? AND purpose = 'twofa' AND used = 0 AND expires_at > NOW() LIMIT 1"
+    );
+    $stmt->bind_param('s', $ticketHash);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if (!$row) fail('That sign-in has expired. Start again from the sign-in page.', 400);
+    $uid = (int) $row['user_id'];
+
+    $stmt = $conn->prepare('SELECT secret FROM user_2fa WHERE user_id = ? AND enabled = 1 LIMIT 1');
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $twofa = $stmt->get_result()->fetch_assoc();
+    if (!$twofa) fail('Start the sign-in again.', 400);
+
+    // The ticket is burned only on a correct code. Burning it on a wrong one
+    // would turn a mistyped digit into "start the whole Google round trip
+    // again"; the rate limit above is what bounds guessing, not the ticket.
+    if (!totp_verify($twofa['secret'], $code)) fail('That authentication code is not valid.', 401);
+
+    $ticketId = (int) $row['id'];
+    $stmt = $conn->prepare('UPDATE oauth_states SET used = 1 WHERE id = ?');
+    $stmt->bind_param('i', $ticketId);
+    $stmt->execute();
+
+    $stmt = $conn->prepare(
+        'SELECT id, name, email, role, division, client_id, worker_id
+         FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('i', $uid);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    if (!$user) fail('That account is no longer active.', 403);
+
+    $token = issue_token($conn, $uid);
+    audit($conn, $uid, 'login.google', (string) $user['email']);
     json_out([
         'token' => $token,
         'user' => [

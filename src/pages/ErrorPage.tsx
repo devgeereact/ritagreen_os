@@ -16,9 +16,16 @@ export default function ErrorPage() {
 
   if (isRouteErrorResponse(error)) {
     status = error.status
+    // A router status text ("Not Found") is written by us and safe to show.
     detail = error.statusText || ""
   } else if (error instanceof Error) {
-    detail = error.message
+    // A thrown Error's message is not. It is whatever the failing code said --
+    // a module path, a property name, a fragment of internal state -- and it was
+    // being rendered straight onto the page for anyone who tripped a bug. It is
+    // useful while developing and it is a disclosure in production, so it stays
+    // on the console, where a developer can still reach it, and goes no further.
+    if (import.meta.env.DEV) detail = error.message
+    else console.error("Route error:", error)
   }
 
   const info = MESSAGES[status] ?? MESSAGES[500]

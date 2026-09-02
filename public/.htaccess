@@ -27,6 +27,41 @@
   AddType text/css .css
 </IfModule>
 
+# --- Security headers ---
+# The site shipped none of these. Each one closes something specific:
+#
+#   nosniff            stops a browser deciding an uploaded .txt is really HTML
+#                      and running it. files.php serves user uploads.
+#   frame-options      the CMS holds workforce records behind a session; without
+#                      this it can be framed and clickjacked.
+#   referrer-policy    a full URL leaks record ids (/app/clients/41) to whatever
+#                      a user clicks through to. Origin-only on cross-origin.
+#   permissions-policy switches off device APIs nothing here asks for.
+#   HSTS               the whole site is HTTPS behind Cloudflare; this stops the
+#                      first request of a session going out in the clear.
+#                      No `preload` -- that is a one-way submission and belongs
+#                      to whoever owns the domain, not to a deploy.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" "expr=%{HTTPS} == 'on'"
+
+  # Content-Security-Policy.
+  #
+  # 'unsafe-inline' is present for styles only, and is not removable today:
+  # Tailwind is compiled to a stylesheet but Radix, the FullCalendar build and
+  # ApexCharts all set inline style attributes at runtime, and several components
+  # here compute a colour into style={{...}}. Scripts carry no such exemption --
+  # which is the half that matters, and the half that turns a stored-XSS bug into
+  # a non-event. `connect-src 'self'` is enough because every third-party call is
+  # proxied server-side; nothing in the bundle talks to an API directly.
+  #
+  # frame-ancestors repeats X-Frame-Options for browsers that have dropped it.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdn.boxicons.com; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdn.boxicons.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+</IfModule>
+
 # --- Caching ---
 # Never cache the HTML entry point, so a new deploy is visible immediately and
 # the page always picks up the latest hashed asset names. Content-hashed assets

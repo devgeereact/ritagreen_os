@@ -123,12 +123,36 @@ define('ALLOWED_ORIGINS', [
     'https://www.ritagreenservices.com',
 ]);
 
+// ----- Trusted proxies -----
+// Which socket peers are allowed to tell us the caller's real IP.
+//
+// client_ip() feeds every rate_limit() call and the audit trail. It used to read
+// X-Forwarded-For / CF-Connecting-IP whenever they were present -- both are
+// supplied by the caller, so anybody could send a different one per request and
+// get a fresh rate-limit bucket every time. That defeated the throttles on login,
+// password reset and the public forms; it was reproduced against a running
+// server before it was fixed.
+//
+// A forwarded header is now read ONLY when REMOTE_ADDR is listed here. Leave the
+// list empty and only the socket peer is used, which is CORRECT on this host:
+// the origin sits behind Cloudflare with IP restoration enabled, so REMOTE_ADDR
+// already holds the visitor's real address by the time PHP runs.
+//
+// Populate this only if you move to a proxy that does NOT rewrite REMOTE_ADDR,
+// and then list that proxy's addresses exactly.
+define('TRUSTED_PROXIES', []);
+
 // ----- Connect -----
 $conn = @new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_errno) {
+    // The detail goes to the log, not to the caller. $conn->connect_error names
+    // the host, the database and the user, and this fires for any anonymous
+    // request the moment MySQL is unreachable -- which is exactly when somebody
+    // is most likely to be poking at the site.
+    error_log('DB connection failed (' . $conn->connect_errno . '): ' . $conn->connect_error);
     http_response_code(500);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'Database connection failed: ' . $conn->connect_error]);
+    echo json_encode(['error' => 'The service is temporarily unavailable. Please try again shortly.']);
     exit;
 }
 $conn->set_charset('utf8mb4');

@@ -1,6 +1,6 @@
-import { FileText, Image, Video } from "lucide-react"
+import { FileText, Image, Video, type LucideIcon } from "lucide-react"
 
-const icons: Record<string, any> = {
+const icons: Record<string, LucideIcon> = {
   pdf: FileText,
   image: Image,
   video: Video,

@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 const SERVICES = [
   { value: "care", label: "Care staff" },
@@ -22,6 +23,13 @@ const SERVICES = [
 ]
 
 export default function RequestCover() {
+  useSeo({
+    title: "Request cover — care, cleaning or security staff in London",
+    description:
+      "Tell us the role, the site and the times. We match a qualified, checked worker and confirm fast — same-day where we can.",
+    path: "/request",
+  })
+
   const [division, setDivision] = useState("care")
   const [consent, setConsent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -126,7 +134,7 @@ export default function RequestCover() {
           <span>I agree that RitaGreen may contact me about this request and store these details, per the privacy policy.</span>
         </label>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
         <Button type="submit" size="lg" disabled={submitting} className="justify-self-start">
           {submitting ? "Sending…" : "Send request"}

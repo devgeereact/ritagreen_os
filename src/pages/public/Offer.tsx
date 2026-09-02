@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2, XCircle, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
 import { DIVISION_LABELS } from "@/lib/format"
+import { useSeo } from "@/hooks/use-seo"
 
 type OfferData = {
   offer: { status: string; worker: string }
@@ -25,6 +26,14 @@ function when(dt: string): string {
 }
 
 export default function Offer() {
+  // Reached only from a tokenised SMS link, and the token is the secret.
+  // Indexing it would publish the link; robots.txt disallows /offer/ as well.
+  useSeo({
+    title: "Shift offer",
+    description: "Accept or decline a shift offered to you by RitaGreen.",
+    noindex: true,
+  })
+
   const { token } = useParams()
   const [data, setData] = useState<OfferData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +73,7 @@ export default function Offer() {
       </div>
 
       {error && (
-        <div className="rounded-xl border bg-card p-6 text-center text-sm text-destructive">{error}</div>
+        <div role="alert" className="rounded-xl border bg-card p-6 text-center text-sm text-destructive">{error}</div>
       )}
 
       {!data && !error && (

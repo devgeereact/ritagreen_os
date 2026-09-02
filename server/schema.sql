@@ -663,6 +663,25 @@ CREATE TABLE IF NOT EXISTS password_resets (
   CONSTRAINT fk_reset_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ---- Google sign-in round trip: CSRF state, and the second-factor ticket ----
+-- 'state' guards the callback against an authorization code the browser did not
+-- ask for (login CSRF). 'twofa' is issued when the matched account has an
+-- authenticator enrolled, because Google has already spent the authorization
+-- code by then and the code cannot be replayed to finish the sign-in.
+-- See server/migrations/019_oauth_state.sql.
+CREATE TABLE IF NOT EXISTS oauth_states (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  state_hash CHAR(64) NOT NULL,
+  purpose ENUM('state','twofa') NOT NULL DEFAULT 'state',
+  user_id INT NULL,
+  used TINYINT(1) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  UNIQUE KEY uq_oauth_states_hash (state_hash),
+  KEY idx_oauth_states_expiry (expires_at),
+  CONSTRAINT fk_oauth_states_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- CPD / training hours per programme (feeds certificates + CPD tracking).
 ALTER TABLE programmes
   ADD COLUMN IF NOT EXISTS cpd_hours INT NOT NULL DEFAULT 0;
