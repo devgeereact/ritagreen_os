@@ -72,6 +72,35 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
   already had; an oversized field returned a 500 instead of a message
 - `ErrorPage` rendered a raw `Error.message` to the user in production
 
+### Fixed — PWA, offline and third-party weight (2026-09-03)
+
+- **The app rendered a blank page on every route offline**, including the worker
+  app the PWA exists for. `manualChunks` named `charts`, `calendar` and `pdf`,
+  which promotes those chunks into the entry's dependency graph — the build emitted
+  `<link rel="modulepreload" href="/assets/pdf-*.js">` in `index.html`, so every
+  visitor to the marketing home page preloaded a 425 kB PDF library reachable only
+  from four lazy CMS pages. Workbox's `globIgnores` then deliberately kept that same
+  chunk out of the precache, so offline the preload never resolved, the module graph
+  never settled and React never mounted. The two settings were fighting each other.
+  Reproduced offline against both this build and the pre-audit build (identical
+  blank page, so this was long-standing, not a regression), and re-verified after:
+  home, careers, services and apply all render fully offline, and `/m` correctly
+  redirects to sign-in. Only `react` stays a manual chunk, because it is genuinely
+  needed immediately
+- **`globIgnores` had silently stopped matching.** Its patterns named chunks that
+  `manualChunks` used to create; with those gone the globs matched nothing — except
+  `**/calendar-*.js`, which matched a 0.3 kB lucide icon — so ~700 kB of office code
+  re-entered the worker's install unnoticed. Patterns now match the real chunk names,
+  with a note to re-check them after any chunking change
+- `og.png` was listed in `includeAssets`, which overrides `globIgnores`, so the 81 kB
+  social-share image was precached into the worker app despite a `globIgnores` entry
+  that looked like it excluded it
+- **Two icon-font CDNs were render-blocking on every page.** Boxicons was used for
+  nothing at all — not one `bx-*` class in the codebase. Bootstrap Icons was loaded
+  for exactly one glyph, the X logo in the footer, at 14 kB of CSS plus a 131 kB
+  webfont. Both removed, the icon inlined as SVG, and the CSP tightened to drop both
+  origins. Verified: zero console errors under the tightened policy
+
 ### Changed — production-readiness audit (2026-09-03)
 
 - **SEO: every page without `useSeo` claimed the homepage as its canonical.**
