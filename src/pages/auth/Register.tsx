@@ -70,7 +70,7 @@ export default function Register() {
         <div className="mb-6 flex justify-center"><Link to="/"><Logo /></Link></div>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Register your interest</CardTitle>
+            <CardTitle className="text-xl"><h1>Register your interest</h1></CardTitle>
             <CardDescription>Join the RitaGreen workforce — we'll review and get you onboarded.</CardDescription>
           </CardHeader>
           <CardContent>

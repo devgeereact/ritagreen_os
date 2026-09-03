@@ -56,7 +56,7 @@ export default function ResetPassword() {
         <div className="mb-6 flex justify-center"><Link to="/"><Logo /></Link></div>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Choose a new password</CardTitle>
+            <CardTitle className="text-xl"><h1>Choose a new password</h1></CardTitle>
             <CardDescription>Set a password of at least 8 characters.</CardDescription>
           </CardHeader>
           <CardContent>

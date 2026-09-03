@@ -92,7 +92,7 @@ export default function Login() {
         </div>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Member login</CardTitle>
+            <CardTitle className="text-xl"><h1>Member login</h1></CardTitle>
             <CardDescription>Sign in to the RitaGreen platform</CardDescription>
           </CardHeader>
           <CardContent>
