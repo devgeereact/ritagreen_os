@@ -1,3 +1,30 @@
+# .htaccess for RitaGreenOS.
+#
+# IMPORTANT: this file is NOT deployed automatically. .github/workflows/deploy.yml
+# excludes **/.htaccess, and cpanel-deploy excludes it too, because the copy on
+# the server is hand-maintained and carries things this repo cannot know about.
+# The SERVER copy is authoritative. Keep this one in step with it so that if
+# anyone ever does upload it, nothing is silently lost.
+#
+# It had drifted: the Cloudflare origin lock and the webmanifest MIME type both
+# existed on the server and were missing here. Deploying this file as it stood
+# would have removed the origin lock (re-exposing the origin to direct-to-origin
+# traffic, bypassing the WAF) and broken PWA installability.
+
+# === BEGIN Cloudflare-origin-lock (2026-08-24) ===
+# Cloudflare IP restoration is ON, so REMOTE_ADDR is the VISITOR's IP for proxied
+# traffic -- an IP allow-list would block real users. LiteSpeed also ignores
+# "Require ip" in .htaccess (verified). So we key on Cloudflare's own headers,
+# which are present on proxied requests and absent on direct-to-origin hits.
+# NOTE: a determined attacker can forge CF-RAY. This stops mass scanners, it is
+# not a cryptographic boundary -- that needs Authenticated Origin Pulls (mTLS).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:CF-RAY} ^$
+  RewriteCond %{REQUEST_URI} !^/\.well-known/
+  RewriteRule ^ - [F,L]
+</IfModule>
+# === END Cloudflare-origin-lock ===
 # SPA routing for RitaGreenOS.
 # Real files and directories (api.php, assets, etc.) are served as-is;
 # everything else falls through to index.html so React Router can handle it.
@@ -23,6 +50,9 @@
 
 # Send wrong-extension assets with the right type just in case.
 <IfModule mod_mime.c>
+  # PWA. Without the correct manifest type the browser will not offer to install
+  # the app -- it was being served as application/octet-stream.
+  AddType application/manifest+json .webmanifest
   AddType application/javascript .js
   AddType text/css .css
 </IfModule>

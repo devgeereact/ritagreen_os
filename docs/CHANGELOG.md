@@ -7,6 +7,32 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Deployed — production (2026-09-03)
+
+- Migration 019 applied to `devgeereact_ritagreen_os` after a fresh dump to
+  `~/backups/`. Production was at 18 applied / 0 pending, so 019 was the only new
+  one and it is purely additive (`CREATE TABLE IF NOT EXISTS oauth_states`)
+- Eleven changed PHP files uploaded, checksum-matched byte for byte against local
+  and `php -l` clean on the host. Previous copies kept in
+  `~/private_backups/php-predeploy-*`
+- **The rate-limit fix verified against production**: fourteen login attempts with a
+  rotating `X-Forwarded-For` returned 429 from the tenth. This also confirms
+  Cloudflare IP restoration is live, which is what makes `TRUSTED_PROXIES` empty the
+  correct setting here
+- Security headers merged into the server's `.htaccess` rather than replacing it,
+  and the origin lock re-verified afterwards (direct-to-origin still 403)
+- **`public/.htaccess` had drifted from the server and was a live hazard.** The
+  server copy carries the Cloudflare origin lock and
+  `AddType application/manifest+json .webmanifest`; the tracked copy had neither.
+  Uploading the repo version would have removed the origin lock — re-exposing the
+  origin to direct-to-origin traffic and bypassing the WAF — and broken PWA
+  installability. Reconciled, with a note that the server copy is authoritative
+- Noted for later: `migrate.php`'s production guard does not engage on this host.
+  It treats `localhost` as local, and on cPanel the production database genuinely
+  is on localhost, so `--production` and the typed-name confirmation never fire when
+  the script is run on the server. The guard protects a developer running it from a
+  laptop against a remote database; it does not protect the server-side path
+
 ### Security — production-readiness audit (2026-09-03)
 
 - **Rate limiting could be bypassed with a header.** `client_ip()` read
