@@ -20,8 +20,13 @@ helpers and token auth.
 1. In cPanel → MySQL Databases, create the database and user (the values in
    `config.sample.php`), and grant the user all privileges on the database.
 2. In phpMyAdmin, select the database and import `schema.sql`. This creates the
-   tables and seeds the super-admin `dev@ritagreenservices.com` / `Testing123!`.
-   **Change that password after first login.**
+   tables. **No administrator is created** -- `schema.sql` used to seed one whose
+   password was printed in the file, which is not something a tracked file should
+   ever contain.
+   Create the first administrator over SSH with a password you choose:
+   `php server/create-admin.php --email you@example.com --name "Your Name"`.
+   It prompts for the password rather than taking it as an argument, so it never
+   reaches your shell history or the process list.
 3. Copy `config.sample.php` → `config.php` and fill in `DB_PASS`, `OR_API_KEY`
    and (optionally) a different `OR_MODEL`.
 4. Upload all `*.php` to the document root.

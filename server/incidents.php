@@ -9,6 +9,11 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Incidents carry safeguarding and RIDDOR records with free-text detail about
+// named people. Reading them takes the same roles as acting on them -- the
+// checks further down covered writes only, and the GET paths had none at all,
+// so any authenticated account could read a safeguarding case by id.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET' && isset($_GET['id'])) {

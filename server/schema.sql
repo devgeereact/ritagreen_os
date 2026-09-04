@@ -42,11 +42,21 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uniq_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seed super-admin: dev@ritagreenservices.com / Testing123!
--- (bcrypt hash of Testing123!; change the password after first login.)
-INSERT IGNORE INTO users (name, email, password_hash, role) VALUES
-  ('RitaGreen Dev', 'dev@ritagreenservices.com',
-   '$2y$12$Edlcu2ZtmatAFKEbK6OeJeZbgjMZEMx1xKQiyqF2Ee15QdycnAEN6', 'super_admin');
+-- No administrator is seeded here, deliberately.
+--
+-- This file used to create a super_admin whose password was written in plain
+-- text in the comment above the hash -- in a tracked file, in a public
+-- repository, for an account with access to every worker record in the system.
+-- "Change it after first login" is not a control; nothing enforced it and
+-- nothing checked whether anyone had.
+--
+-- Create the first administrator with a password you choose, after importing
+-- this file:
+--
+--     php server/create-admin.php --email you@example.com --name "Your Name"
+--
+-- Local development does not need this: seed.php creates its own fixture
+-- accounts, and refuses to run against anything but a local database.
 
 -- ---- Auth tokens ----
 CREATE TABLE IF NOT EXISTS tokens (

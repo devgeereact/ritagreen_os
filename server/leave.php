@@ -63,12 +63,24 @@ if (method() === 'GET' && $action === '') {
     $stmt->execute();
     $res = $stmt->get_result();
 
+    // The HEALTH zone, enforced. Why somebody was absent, and what was said in
+    // their return-to-work discussion, is health information -- a manager needs
+    // to know a person is off and for how long to arrange cover, which is not
+    // the same as needing to know why. Seeded so only super_admin and admin hold
+    // the zone; see migration 015. A person always sees their own record in full.
+    $seesHealth = ($own !== null && $personId === $own) || can_view_zone($conn, $user, 'health');
+
     $records = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['hours'] = (float) $row['hours'];
         $row['in_lieu'] = (bool) $row['in_lieu'];
         $row['carried_over'] = (bool) $row['carried_over'];
+        if (!$seesHealth) {
+            $row['reason'] = null;
+            $row['return_to_work_note'] = null;
+            $row['health_redacted'] = true;
+        }
         $records[] = $row;
     }
 
@@ -119,6 +131,7 @@ if (method() === 'GET' && $action === 'calendar') {
 // ----- Waiting on a decision -----
 if (method() === 'GET' && $action === 'pending') {
     require_staff($user);
+    $seesHealth = can_view_zone($conn, $user, 'health');
     $res = $conn->query(
         'SELECT l.id, l.person_id, p.full_name, l.kind, l.starts_on, l.ends_on, l.hours, l.reason, l.created_at
          FROM leave_records l JOIN people p ON p.id = l.person_id
@@ -128,6 +141,10 @@ if (method() === 'GET' && $action === 'pending') {
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['hours'] = (float) $row['hours'];
+        if (!$seesHealth) {
+            $row['reason'] = null;
+            $row['health_redacted'] = true;
+        }
         $items[] = $row;
     }
     json_out(['items' => $items]);

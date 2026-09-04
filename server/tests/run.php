@@ -641,6 +641,44 @@ check('leaving today counts', rg_derive_worker_status(['status' => 'active', 'le
 check('a future leaving date does not', rg_derive_worker_status(['status' => 'active', 'left_on' => '2026-12-01'], $ready, '2026-06-01')['status'], 'active');
 check('an empty leaving date is ignored', rg_derive_worker_status(['status' => 'active', 'left_on' => ''], $ready, '2026-06-01')['status'], 'active');
 
+group('rg_file_readable');
+
+// The document vault holds company material and named people's records in the
+// same place. Opening the vault is not permission to open everything in it.
+$office = ['role' => 'manager'];
+$editor = ['role' => 'editor'];
+$policy = ['category' => 'policy', 'person_id' => null, 'worker_id' => null, 'client_id' => null];
+$idScan = ['category' => 'id', 'person_id' => null, 'worker_id' => null, 'client_id' => null];
+
+check('an office role reads anything', rg_file_readable($idScan, $office), true);
+check('an editor reads company material', rg_file_readable($policy, $editor), true);
+check('an editor does not read an identity document', rg_file_readable($idScan, $editor), false);
+check('nor a contract', rg_file_readable(['category' => 'contract'], $editor), false);
+check('nor a certificate', rg_file_readable(['category' => 'certificate'], $editor), false);
+
+// Category is not the only signal -- a file filed against a person is personal
+// whatever it was labelled on upload.
+check('filed against a person', rg_file_readable(['category' => 'other', 'person_id' => 4], $editor), false);
+check('filed against a worker', rg_file_readable(['category' => 'other', 'worker_id' => 9], $editor), false);
+check('filed against a client', rg_file_readable(['category' => 'other', 'client_id' => 2], $editor), false);
+check('unfiled other is company material', rg_file_readable(['category' => 'other'], $editor), true);
+check('a missing category is not personal on its own', rg_file_readable([], $editor), true);
+check('a role we do not know reads nothing personal', rg_file_readable($idScan, ['role' => 'client']), false);
+
+group('rg_coord_places / rg_round_coord');
+
+// Attendance is stored coarsely; a panic alert is not.
+check('clock in is coarse', rg_coord_places('clock_in'), 3);
+check('clock out is coarse', rg_coord_places('clock_out'), 3);
+check('a note is coarse', rg_coord_places('note'), 3);
+check('panic keeps precision', rg_coord_places('panic'), 6);
+
+check('rounds to about 110 m', rg_round_coord(51.5074456, 3), 51.507);
+check('and the other axis', rg_round_coord(-0.1277653, 3), -0.128);
+check('panic precision is untouched', rg_round_coord(51.5074456, 6), 51.507446);
+check('null stays null', rg_round_coord(null, 3), null);
+check('zero survives rounding', rg_round_coord(0.0, 3), 0.0);
+
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";

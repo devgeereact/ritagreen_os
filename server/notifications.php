@@ -4,12 +4,15 @@
 // GET  /notifications.php?action=unread -> { unread }
 // POST /notifications.php?action=read {id}   -> mark one read
 // POST /notifications.php?action=read_all     -> mark all my notifications read
-// A user sees their own notifications plus broadcasts (user_id IS NULL). Unread
-// count tracks only the user's own targeted notifications.
+// A user sees their own notifications plus, for staff accounts only, broadcasts
+// (user_id IS NULL). Broadcasts name applicants, cover-request contacts and
+// workers raising panic alerts, so a client or worker login gets only its own.
+// Unread count tracks only the user's own targeted notifications.
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
 $uid = (int) $user['id'];
+$seesBroadcasts = is_staff($user);
 $action = $_GET['action'] ?? '';
 
 function unread_count(mysqli $conn, int $uid): int
@@ -26,10 +29,15 @@ if ($action === 'unread' && method() === 'GET') {
 
 if (method() === 'GET') {
     $stmt = $conn->prepare(
-        'SELECT id, type, title, body, url, read_at, created_at, (user_id IS NULL) AS broadcast
-         FROM notifications
-         WHERE user_id = ? OR user_id IS NULL
-         ORDER BY id DESC LIMIT 50'
+        $seesBroadcasts
+            ? 'SELECT id, type, title, body, url, read_at, created_at, (user_id IS NULL) AS broadcast
+               FROM notifications
+               WHERE user_id = ? OR user_id IS NULL
+               ORDER BY id DESC LIMIT 50'
+            : 'SELECT id, type, title, body, url, read_at, created_at, 0 AS broadcast
+               FROM notifications
+               WHERE user_id = ?
+               ORDER BY id DESC LIMIT 50'
     );
     $stmt->bind_param('i', $uid);
     $stmt->execute();

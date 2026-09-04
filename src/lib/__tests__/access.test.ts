@@ -81,8 +81,27 @@ describe("rolesFor", () => {
   })
 
   it("does not treat a shared word-prefix as a match", () => {
-    // "/app/workers" must not be matched by a rule for "/app/work".
-    expect(rolesFor("/app/workers")).toEqual(STAFF)
+    // "/app/workers" must not be matched by a rule for "/app/work". Asserted on
+    // the rule it resolves to rather than a role list, so tightening who may
+    // open the page does not look like a prefix-matching regression.
+    expect(rolesFor("/app/workers")).toEqual(rolesFor("/app/workers/42"))
+    expect(rolesFor("/app/workers")).not.toEqual(rolesFor("/app"))
+  })
+
+  // Special-category pages are narrower than "any internal login". Editor is a
+  // content role and holds no compliance zone in server/migrations/015, so the
+  // link must not appear for it; incidents carry safeguarding and RIDDOR detail
+  // and are office-only. These mirror the server checks, which are the boundary.
+  it("keeps vetting records away from the content role", () => {
+    for (const path of ["/app/workers", "/app/compliance"]) {
+      expect(rolesFor(path)).not.toContain("editor")
+      expect(rolesFor(path)).toContain("trainer")
+      expect(rolesFor(path)).toContain("manager")
+    }
+  })
+
+  it("keeps safeguarding incidents to the office", () => {
+    expect(rolesFor("/app/incidents")).toEqual(OFFICE)
   })
 
   it("returns null for a path it does not govern", () => {

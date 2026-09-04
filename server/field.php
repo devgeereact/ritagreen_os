@@ -88,10 +88,18 @@ if (method() === 'POST') {
     $kind = trim((string) ($data['kind'] ?? ''));
     $note = trim((string) ($data['note'] ?? ''));
     $signer = trim((string) ($data['signer'] ?? ''));
+    // Stored at a precision proportionate to the purpose -- see rg_coord_places.
     $lat = isset($data['lat']) && $data['lat'] !== '' ? (float) $data['lat'] : null;
     $lng = isset($data['lng']) && $data['lng'] !== '' ? (float) $data['lng'] : null;
     $valid = ['clock_in', 'clock_out', 'check_in', 'panic', 'note', 'task', 'signoff'];
     if ($shiftId <= 0 || !in_array($kind, $valid, true)) fail('A shift and valid event kind are required.');
+
+    // A routine attendance record is stored to ~110 m: enough to show somebody
+    // was at the site, not enough to be a movement history. A panic alert keeps
+    // full precision, because the point of it is that somebody has to be found.
+    $places = rg_coord_places($kind);
+    $lat = rg_round_coord($lat, $places);
+    $lng = rg_round_coord($lng, $places);
 
     // Resolve the worker on this shift (used to stamp the event).
     $stmt = $conn->prepare('SELECT worker_id, title FROM shifts WHERE id = ? LIMIT 1');

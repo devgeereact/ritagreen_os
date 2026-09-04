@@ -18,6 +18,14 @@ const OFFICE_PLUS_EDITOR: Role[] = [...OFFICE, "editor"]
 const OFFICE_PLUS_TRAINER: Role[] = [...OFFICE, "trainer"]
 
 /**
+ * Roles holding the 'compliance' zone in server/migrations/015.
+ *
+ * Editor is the one internal role without it: it is a content role, and vetting
+ * records are not content. Mirrors can_view_zone($conn, $user, 'compliance').
+ */
+const COMPLIANCE: Role[] = [...OFFICE, "trainer", "employee"]
+
+/**
  * Is this an internal staff account, as opposed to a worker or client login?
  *
  * Mirrors is_staff() in server/lib.php, and for the same reason: role alone
@@ -44,13 +52,13 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/payroll", roles: OFFICE },
 
   // People
-  { path: "/app/workers", roles: STAFF },
-  { path: "/app/compliance", roles: STAFF },
+  { path: "/app/workers", roles: COMPLIANCE },
+  { path: "/app/compliance", roles: COMPLIANCE },
   { path: "/app/ats", roles: OFFICE_PLUS_TRAINER },
   { path: "/app/academy", roles: [...OFFICE, "trainer", "editor"] },
 
   // Quality
-  { path: "/app/incidents", roles: STAFF },
+  { path: "/app/incidents", roles: OFFICE },
 
   // Clients and sales
   { path: "/app/clients", roles: OFFICE },

@@ -97,6 +97,52 @@ function linked_worker_id(array $user): ?int
     return empty($user['worker_id']) ? null : (int) $user['worker_id'];
 }
 
+/**
+ * May this account read this stored file?
+ *
+ * The document vault is one endpoint holding two very different things: company
+ * documents (policies, RAMS, marketing collateral) and a named person's records
+ * (identity scans, DBS evidence, signed contracts). Being allowed to open the
+ * vault is not the same as being allowed to open everything in it, and until
+ * this existed the only check was the endpoint-level role list -- so an editor
+ * could download an identity document by guessing its id.
+ *
+ * A file is personal if it is filed against a person, a worker or a client, or
+ * if its category says so. Everything else is company material.
+ */
+function rg_file_readable(array $file, array $user): bool
+{
+    if (in_array($user['role'] ?? '', ['super_admin', 'admin', 'manager'], true)) return true;
+
+    $personal = in_array((string) ($file['category'] ?? ''), ['id', 'contract', 'certificate'], true)
+        || !empty($file['person_id'])
+        || !empty($file['worker_id'])
+        || !empty($file['client_id']);
+
+    return !$personal;
+}
+
+/**
+ * Round a location to a precision proportionate to why it was collected.
+ *
+ * A clock-in needs to show somebody was at the site; it does not need to say
+ * where in the building they stood. Three decimal places is roughly 110 m, which
+ * answers the operational question and stops the record being a precise movement
+ * history of a worker's day. A panic alert is the opposite case -- somebody has
+ * to be found -- so it keeps full precision.
+ */
+function rg_round_coord(?float $value, int $places): ?float
+{
+    if ($value === null) return null;
+    return round($value, $places);
+}
+
+/** Decimal places to store for a field event of this kind. */
+function rg_coord_places(string $kind): int
+{
+    return $kind === 'panic' ? 6 : 3;
+}
+
 // ---------------------------------------------------------------- field state
 
 /**

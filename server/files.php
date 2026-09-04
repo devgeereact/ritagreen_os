@@ -77,11 +77,12 @@ const ALLOWED_MIME = [
 if ($action === 'download' && method() === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A file is required.');
-    $stmt = $conn->prepare('SELECT stored_name, original_name, mime FROM files WHERE id = ? AND deleted_at IS NULL');
+    $stmt = $conn->prepare('SELECT stored_name, original_name, mime, category, person_id, worker_id, client_id FROM files WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $f = $stmt->get_result()->fetch_assoc();
     if (!$f) fail('File not found.', 404);
+    if (!rg_file_readable($f, $user)) fail('You do not have access to this.', 403);
     $path = UPLOAD_DIR . '/' . $f['stored_name'];
     if (!is_file($path)) fail('File missing on disk.', 404);
 
@@ -99,11 +100,14 @@ if ($action === 'download' && method() === 'GET') {
 if ($action === 'extract' && method() === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A file is required.');
-    $stmt = $conn->prepare('SELECT stored_name, original_name, mime FROM files WHERE id = ? AND deleted_at IS NULL');
+    $stmt = $conn->prepare('SELECT stored_name, original_name, mime, category, person_id, worker_id, client_id FROM files WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $f = $stmt->get_result()->fetch_assoc();
     if (!$f) fail('File not found.', 404);
+    // Extraction feeds ai.php, which sends the text to a third-party model. The
+    // same rule as download applies, and more sharply.
+    if (!rg_file_readable($f, $user)) fail('You do not have access to this.', 403);
     $path = UPLOAD_DIR . '/' . $f['stored_name'];
     if (!is_file($path)) fail('File missing on disk.', 404);
 
@@ -142,14 +146,19 @@ if ($action === 'extract' && method() === 'GET') {
 
 if (method() === 'GET') {
     $res = $conn->query(
-        'SELECT f.id, f.original_name, f.mime, f.size_bytes, f.category, f.created_at, u.name AS uploaded_by
+        'SELECT f.id, f.original_name, f.mime, f.size_bytes, f.category, f.created_at,
+                f.person_id, f.worker_id, f.client_id, u.name AS uploaded_by
          FROM files f LEFT JOIN users u ON u.id = f.uploaded_by
          WHERE f.deleted_at IS NULL ORDER BY f.created_at DESC'
     );
     $files = [];
     while ($row = $res->fetch_assoc()) {
+        // Filenames leak too -- "Ade Okoro DBS certificate.pdf" is disclosure on
+        // its own, so a file that cannot be opened is not listed either.
+        if (!rg_file_readable($row, $user)) continue;
         $row['id'] = (int) $row['id'];
         $row['size_bytes'] = (int) $row['size_bytes'];
+        unset($row['person_id'], $row['worker_id'], $row['client_id']);
         $files[] = $row;
     }
     json_out(['files' => $files]);

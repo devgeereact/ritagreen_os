@@ -20,6 +20,14 @@ function classify(?string $expiry): array
 // in one bundle: identity + right-to-work, every credential with status, the
 // reference checks, and the documents on file. The client turns this into a PDF.
 if (method() === 'GET' && ($_GET['action'] ?? '') === 'pack') {
+    // The pack is one worker's identity, right-to-work state, DBS/SIA numbers
+    // and expiry dates. It sits above the first require_role in this file, so
+    // without this line any authenticated account -- including a client login
+    // or a worker's own login -- could read it for any worker_id.
+    require_staff($user);
+    // And staff is not enough on its own: the pack is the whole vetting record,
+    // so it takes the compliance zone. Configurable in Settings, not hard-coded.
+    if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
     $workerId = (int) ($_GET['worker_id'] ?? 0);
     if ($workerId <= 0) fail('A worker is required.');
 

@@ -15,6 +15,11 @@ if (method() === 'GET') {
     // Pay is its own zone, not a hard-coded role list. The business can widen or
     // narrow who sees it without a deployment.
     $seesPay = can_view_zone($conn, $user, 'payroll');
+    // Right-to-work state, DBS status and an SIA licence number are compliance
+    // data about a named person, and the zone matrix already says who may see
+    // it. An editor holds 'general' only, so the content role no longer reads
+    // the workforce's vetting record as a side effect of opening the page.
+    $seesCompliance = can_view_zone($conn, $user, 'compliance');
     // A division-scoped account sees only its own division's workforce.
     $scope = service_scope($user);
     $res = $conn->query(
@@ -37,6 +42,10 @@ if (method() === 'GET') {
         $row['avail_nights'] = (bool) $row['avail_nights'];
         $row['avail_weekends'] = (bool) $row['avail_weekends'];
         if (!$seesPay) unset($row['pay_rate_pence'], $row['pay_type'], $row['holiday_hours']);
+        if (!$seesCompliance) {
+            unset($row['right_to_work'], $row['dbs_status'], $row['dbs_expiry'], $row['sia_number'], $row['sia_expiry']);
+            $row['compliance_redacted'] = true;
+        }
         $workers[] = $row;
     }
     json_out(['workers' => $workers]);

@@ -8,6 +8,9 @@ require __DIR__ . '/lib.php';
 $user = require_auth($conn);
 
 if (method() === 'GET') {
+    // Referee name, employer, email and phone belong to a third party who gave
+    // them to us, not to the worker's client. Same roles as the POST paths below.
+    require_role($user, 'super_admin', 'admin', 'manager');
     $workerId = (int) ($_GET['worker_id'] ?? 0);
     if ($workerId <= 0) fail('A worker is required.');
     $stmt = $conn->prepare(
