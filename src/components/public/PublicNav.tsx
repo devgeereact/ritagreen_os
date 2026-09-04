@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -241,10 +242,33 @@ export function PublicNav() {
             <Link to={user ? "/app" : "/quote"}>{user ? "Dashboard" : "Get a quote"}</Link>
           </Button>
 
+          {/* Call us — phones only.
+              The number lived exclusively in the utility bar above, which is
+              `hidden ... md:block`, and appeared nowhere in the mobile sheet. On
+              a phone -- where a visitor is most likely to be standing in front
+              of the problem, and where tapping a number is one action -- the
+              fastest route to a booking was invisible. Our own FAQ tells people
+              "the fastest way is to call us". */}
+          {/* Labelled, not a bare handset: there is room for it at 360px, and the
+              primary mobile action should say what it does. min-h/min-w-11 is
+              44px, the touch-target size in WCAG 2.5.5 and Apple's HIG -- the
+              header controls rendered at 36px. */}
+          <Button
+            asChild
+            variant="ghost"
+            className="min-h-11 px-3 text-primary sm:hidden"
+            aria-label={`Call RitaGreen on ${COMPANY.phone}`}
+          >
+            <a href={COMPANY.phoneHref}>
+              <Phone className="mr-1.5 size-5" />
+              Call
+            </a>
+          </Button>
+
           {/* Mobile menu */}
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
+              <Button variant="ghost" size="icon" className="min-h-11 min-w-11 lg:hidden" aria-label="Open menu">
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
@@ -253,7 +277,36 @@ export function PublicNav() {
                 <SheetTitle className="text-left">
                   <Logo />
                 </SheetTitle>
+                {/* Radix warns when a dialog has no description, and a screen
+                    reader announces the dialog with nothing to say about it.
+                    sr-only: sighted users already see the menu. */}
+                <SheetDescription className="sr-only">
+                  Site navigation, contact details and account links.
+                </SheetDescription>
               </SheetHeader>
+              {/* The contact details from the desktop utility bar, which is
+                  hidden below md. Without this block a phone visitor could not
+                  reach either number from the menu. */}
+              <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3">
+                <a
+                  href={COMPANY.phoneHref}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 text-sm font-semibold text-primary"
+                >
+                  <Phone className="size-4" /> {COMPANY.phone}
+                </a>
+                <a
+                  href={COMPANY.emergencyPhoneHref}
+                  onClick={() => setOpen(false)}
+                  className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"
+                >
+                  <ShieldAlert className="size-4 text-accent" /> 24hr cover {COMPANY.emergencyPhone}
+                </a>
+                <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="size-3.5" /> {COMPANY.hours}
+                </p>
+              </div>
+
               <div className="mt-4 flex flex-col gap-1">
                 <MobileLink to="/" onClick={() => setOpen(false)}>
                   Home

@@ -24,7 +24,10 @@ export default defineConfig({
     // deploy -- the one moment it most needed to work.
     VitePWA({
       registerType: "prompt", // never swap the app out under someone mid-task
-      includeAssets: ["favicon.svg", "apple-touch-icon.png", "og.png"],
+      // og.png is deliberately absent: includeAssets OVERRIDES globIgnores, so
+      // listing it here quietly precached the social-share image the app never
+      // displays, while the globIgnores entry below looked like it excluded it.
+      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "RitaGreen Worker",
         short_name: "RitaGreen",
@@ -48,16 +51,29 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
         // The installable app is the WORKER app, starting at /m. Precaching the
         // office bundle would make a field worker download charts, a calendar
-        // and a PDF engine they will never open -- about 1.3 MB of the total.
+        // and a PDF engine they will never open -- about 1.5 MB of the total.
         // These stay available online and are simply not part of the install.
+        //
+        // These patterns must be checked against `ls dist/assets` after any
+        // change to chunking. They previously named chunks that manualChunks
+        // created -- `charts-*`, `calendar-*` -- and when those manual entries
+        // were removed the patterns silently matched nothing (except, absurdly,
+        // `calendar-check-*.js`, a 0.3 kB lucide icon), so 700 kB of office code
+        // quietly re-entered the worker's install. A glob that matches nothing
+        // fails silently, which is exactly how this drifted.
+        //
+        // Excluding these is only safe because they are genuine async chunks,
+        // reached from lazily-imported CMS pages. Do not exclude anything the
+        // entry preloads: offline, the module graph waits for it forever and the
+        // app renders a blank page on every route.
         globIgnores: [
-          "**/charts-*.js",
-          "**/calendar-*.js",
-          "**/pdf-*.js",
-          "**/html2canvas*.js",
-          "**/index.es-*.js",
-          "**/purify.es-*.js",
-          "**/og.png",
+          "**/react-apexcharts.esm-*.js", // charts — Dashboard, Analytics, Insights
+          "**/Scheduling-*.js", // carries FullCalendar
+          "**/pdf-*.js", // jspdf + autotable
+          "**/html2canvas*.js", // jspdf dependency
+          "**/index.es-*.js", // jspdf dependency
+          "**/purify.es-*.js", // jspdf dependency
+          "**/og.png", // social share image, never needed by the app
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",
@@ -138,18 +154,29 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Split heavy, rarely-changing vendor libs out of the main bundle so
-        // the public site doesn't pay for CMS-only charts/calendar/editor code.
+        // React only.
+        //
+        // charts, calendar and pdf used to be listed here too, to "stop the
+        // public site paying for CMS-only code". They did the opposite. Naming a
+        // manual chunk promotes it into the entry's dependency graph, so the
+        // build emitted `<link rel="modulepreload" href="/assets/pdf-*.js">` in
+        // index.html and every visitor to the marketing home page preloaded a
+        // 417 kB PDF library reachable only from four lazy CMS pages.
+        //
+        // Worse, it broke offline outright. The workbox `globIgnores` below
+        // deliberately keeps those same chunks OUT of the precache, so offline
+        // the preload for pdf-*.js hung unresolved, the entry module graph never
+        // settled, and the app rendered a blank page -- on every route,
+        // including the worker app the PWA exists for. Reproduced offline
+        // against both this build and the pre-audit one.
+        //
+        // Without the manual entries Rollup still splits them, because they are
+        // only reachable through lazily-imported pages -- but as genuine async
+        // chunks, fetched when a page needs them rather than preloaded by the
+        // entry. React stays because it IS needed immediately, so preloading it
+        // is correct.
         manualChunks: {
           react: ["react", "react-dom", "react-router-dom"],
-          charts: ["apexcharts", "react-apexcharts"],
-          calendar: [
-            "@fullcalendar/daygrid",
-            "@fullcalendar/timegrid",
-            "@fullcalendar/interaction",
-            "@fullcalendar/react",
-          ],
-          pdf: ["jspdf", "jspdf-autotable"],
         },
       },
     },

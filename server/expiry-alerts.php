@@ -31,6 +31,10 @@ $isCli = PHP_SAPI === 'cli';
 // correspondence.
 $reassessOnly = in_array('--reassess-only', $argv ?? [], true);
 if (!$isCli) {
+    // Throttle the key check itself. hash_equals stops a timing attack, not an
+    // attacker who simply tries a lot of keys; without a limit the guard was a
+    // single shared secret with unlimited attempts against it.
+    rate_limit($conn, 'cron-key', 10, 600);
     $key = $_GET['key'] ?? '';
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
     if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, (string) $key)) {

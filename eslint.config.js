@@ -42,4 +42,21 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // Vendored shadcn/ui primitives.
+    //
+    // `react-refresh/only-export-components` fires on every one of these because
+    // shadcn's own design puts the component and its variant helper in one file
+    // — `Button` beside `buttonVariants`, `badgeVariants`, `toggleVariants`. The
+    // rule is about hot-reload granularity during development, not correctness,
+    // and splitting upstream files to satisfy it would mean re-doing the split
+    // by hand on every `shadcn add`.
+    //
+    // Scoped off HERE rather than disabled globally, so the rule still applies
+    // to code we write. Nothing else is relaxed for these files.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

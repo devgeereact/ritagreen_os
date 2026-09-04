@@ -1,6 +1,19 @@
 User-agent: *
 Allow: /
+
+# Authenticated surfaces. None of these render anything useful to a crawler --
+# they redirect to /login -- and an indexed URL for a client portal or a worker
+# app is an invitation to probe it. /app and /login were already listed; the
+# portal, the worker app, the account flows and the tokenised shift-offer links
+# were not.
 Disallow: /app/
+Disallow: /portal
+Disallow: /m
 Disallow: /login
+Disallow: /register
+Disallow: /forgot
+Disallow: /reset/
+Disallow: /auth/
+Disallow: /offer/
 
 Sitemap: https://ritagreenservices.com/sitemap.xml

@@ -34,7 +34,7 @@ One merged Vite application: the public corporate site at the root, the internal
 
 ## 2. Architecture in one paragraph
 
-React 19 SPA (static `dist/`) → 55 flat PHP endpoint files in `server/` → MySQL on cPanel.
+React 19 SPA (static `dist/`) → 54 flat PHP endpoint files in `server/` → MySQL on cPanel.
 The browser never touches the database; it calls PHP over HTTP with an
 `Authorization: Bearer` token and receives JSON. Every endpoint begins
 `require __DIR__ . '/lib.php'`, which is the shared kernel. There is no framework, no router
@@ -63,10 +63,12 @@ Dry run is the default; a non-local database needs `--production` and a typed da
 `NOT NULL` does. That was assumed otherwise here and corrected after testing it against a real
 database; see migration 004 and its precondition.
 
-**A person can exist three times — `ats.php` still does this.** It copies identity fields
-rather than linking. The `people` spine now exists and every record is linked to it, but
-`ats.php` `onboard` and `from_learner` have not been rewritten yet. Never add another path that
-copies. See `docs/BLUEPRINT.md`, "The identity defect".
+**A person can exist three times — link, never copy.** The `people` spine exists, every
+record is linked to it, and `ats.php` `onboard` / `from_learner` were rewritten to use
+`find_or_create_person()` and read identity back from `people`. The `workers` row still carries
+denormalised `name`/`email`/`phone` columns beside `person_id`; treat `people` as the truth and
+never introduce a new path that writes identity from anywhere else. See `docs/BLUEPRINT.md`,
+"The identity defect".
 
 **PHP is deployed by hand.** `.github/workflows/deploy.yml` uploads `dist/` only and explicitly
 excludes `*.php`, `config.php` and `.htaccess`. Never add `dangerous-clean-slate` — it would
@@ -107,13 +109,30 @@ The full list is [`docs/RULES.md`](docs/RULES.md). The ones most easily broken b
 npm run dev:api      # PHP API on 127.0.0.1:8122  (run this too)
 npm run dev          # localhost:5122
 npm run typecheck    # tsc -b --force
-npm test             # vitest
-npm run test:php     # php server/tests/run.php — no database needed
+npm run lint         # eslint . — has a known non-zero baseline, see below
+npm test             # vitest, node environment, src/**/*.test.ts(x)
+npm test -- access   # one test file, by substring of its path
+npm run test:php     # php server/tests/run.php — whole suite, no database, no filtering
 npm run build
 ```
 
-CI runs typecheck, lint with zero warnings, build, a source-map assertion, `php -l` across
-every PHP file, and `python3 scripts/docs_sync.py --check`.
+Database chores (local only — see "Development is local" above):
+
+```bash
+php server/migrate.php            # dry run is the DEFAULT; --go applies
+php server/backfill-people.php    # same: --go to write
+npm run seed -- --confirm         # fixtures, CLI-only and local-host-only
+```
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, `npm test`, build, a build-output
+assertion (`dist/index.html`, `manifest.webmanifest`, `sw.js` present, **zero `*.map` files**),
+`php -l` across every PHP file, `php server/tests/run.php`, a check that `server/config.php` is
+not tracked, and `python3 scripts/docs_sync.py --check`.
+
+**Lint does not gate yet.** It is `continue-on-error: true` with ~19 remaining errors, nearly
+all React 19's new hook ruleset on working code. Do not add to the pile. Flip
+`continue-on-error` to `false` and add `--max-warnings 0` when it reaches zero — that is
+tracked as "ESLint baseline clean" in `docs/STATUS.json`.
 
 **Adding a feature with data:**
 
@@ -137,15 +156,35 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
 ## 6. Current state
 
-46 of 108 tracked items done, 12 partial — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
-generated from `docs/STATUS.json`.
+151 done, 14 partial, 3 to do of 168 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
-Substantially built: recruitment pipeline, credential expiry engine, certificates with public
-verification, regulatory report packs, scheduling with a compliance guard, field operations,
-timesheets and pay, the commercial pipeline with Stripe and GoCardless, authentication with
-two-factor and session revocation, GDPR export and erasure.
+Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
+verification, and the deployment gate — are **built and verified against a local database, and
+not yet applied to production**. Migrations `001`–`019` exist in `server/migrations/`; applying
+them to the live database is the outstanding step and is a deliberate, separate act. Read
+`docs/ROADMAP.md` for what each milestone still owes before it is called complete.
 
-The four things that matter most and are not built: one person record, per-service eligibility,
-a compliance engine that calculates a verdict, and right to work as evidence rather than a
-boolean. That is `docs/ROADMAP.md` milestones 1 to 4, in that order, and the order is not
-negotiable.
+What is left is concentrated in PLATFORM (the lint baseline, tooling), EMPLOYMENT and
+GOVERNANCE. Check `docs/PROGRESS.md` rather than assuming from this paragraph.
+
+## 7. Frontend traps
+
+**Routing and chunking are load-bearing, and heavily commented in the files themselves.**
+`src/routes/index.tsx` lazy-loads every route except `Home`; `AppLayout` is lazy too, so a
+visitor to the marketing site never downloads the CMS shell. Adding an eager import to that
+file puts whatever it pulls in into the entry chunk for every visitor.
+
+**Do not add manual chunks in `vite.config.ts`.** Naming a chunk in `manualChunks` promotes it
+into the entry's dependency graph, which emits a `modulepreload` for it on every page — and
+because the same chunks are excluded from the service-worker precache, offline the preload
+never resolves and the app renders blank on every route. Only `react` is named, deliberately.
+
+**The workbox `globIgnores` patterns must be re-checked against `ls dist/assets` whenever
+chunking changes.** A glob that matches nothing fails silently; that is how 700 kB of office
+code previously re-entered the worker app's install.
+
+**`src/lib/access.ts` maps route → permitted roles** and is read by both `RequireAuth` and the
+sidebar. Add a route there when you add a route. It is a UX guard only — the server is the
+enforced boundary. It is the one part of `src/` with unit tests
+(`src/lib/__tests__/access.test.ts`); keep them passing.

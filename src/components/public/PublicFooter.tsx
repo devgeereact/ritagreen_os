@@ -1,51 +1,51 @@
-import { useState, type ReactNode } from "react"
+import { type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { ArrowUp, Instagram, Linkedin, Facebook, Mail, Phone } from "lucide-react"
-import { toast } from "sonner"
 import { Logo } from "@/components/brand/Logo"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, SOCIALS } from "@/lib/company"
 
-// Compact, single-instance newsletter signup. Lives in the footer so the public
-// site has exactly one subscribe field site-wide, not a band repeated per page.
-function FooterSubscribe() {
-  const [email, setEmail] = useState("")
-
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("That email doesn't look right.")
-      return
-    }
-    toast.success("Thanks — we'll keep you posted on RitaGreen news.")
-    setEmail("")
-  }
-
+/**
+ * The two ways in, one per audience.
+ *
+ * This band used to be a newsletter signup. Its submit handler validated the
+ * address, showed "Thanks — we'll keep you posted", cleared the field and sent
+ * nothing anywhere: there is no subscribers table, no endpoint and no
+ * unsubscribe mechanism in this system. Every person who used it was told they
+ * had subscribed to a list that does not exist. A form that reports success
+ * without storing anything is worse than no form, and a marketing list without a
+ * working unsubscribe is a compliance problem on top -- so it is not something
+ * to half-wire. Capturing subscribers properly is tracked as future work.
+ *
+ * What stands here instead are the two entry points that actually complete, and
+ * that nothing on the site linked to: /request for a client who needs cover, and
+ * /apply for someone who wants work. Both post to endpoints that persist -- a
+ * service_requests row and an ATS applicant respectively.
+ */
+function FooterActions() {
   return (
     <div className="border-b border-border">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="font-display text-lg font-bold tracking-tight">Stay in the loop</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Occasional updates on care, training, cleaning and security across London. No spam.
+      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 sm:grid-cols-2">
+        <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <h3 className="font-display text-lg font-bold tracking-tight">Need cover?</h3>
+          <p className="text-sm text-muted-foreground">
+            Tell us the role, the site and the times. We confirm fast — same-day where we can.
           </p>
-        </div>
-        <form onSubmit={onSubmit} className="flex w-full gap-2 sm:max-w-sm">
-          <Input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
-            aria-label="Email address"
-            className="bg-background"
-          />
-          <Button type="submit" className="shrink-0">
-            Subscribe
+          <Button asChild className="mt-auto">
+            <Link to="/request">Request cover</Link>
           </Button>
-        </form>
+        </div>
+        <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <h3 className="font-display text-lg font-bold tracking-tight">Looking for work?</h3>
+          <p className="text-sm text-muted-foreground">
+            Care, training, cleaning and security roles across London. No experience needed for the
+            academy route.
+          </p>
+          <Button asChild variant="outline" className="mt-auto">
+            <Link to="/apply">Apply to join</Link>
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -55,13 +55,19 @@ const SOCIAL_ICON: Record<string, ReactNode> = {
   instagram: <Instagram className="size-4" />,
   facebook: <Facebook className="size-4" />,
   linkedin: <Linkedin className="size-4" />,
-  x: <i className="bi bi-twitter-x text-[15px] leading-none" />,
+  // Inline rather than an icon font: this was the only glyph the whole
+  // Bootstrap Icons stylesheet and webfont were loaded for.
+  x: (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 fill-current">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  ),
 }
 
 export function PublicFooter() {
   return (
     <footer className="mt-20 border-t border-border bg-soft-mesh">
-      <FooterSubscribe />
+      <FooterActions />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <Logo />
@@ -107,6 +113,8 @@ export function PublicFooter() {
             <li><Link to="/careers" className="hover:text-foreground">Careers</Link></li>
             <li><Link to="/resources" className="hover:text-foreground">Resources</Link></li>
             <li><Link to="/quote" className="hover:text-foreground">Request a quote</Link></li>
+            <li><Link to="/request" className="hover:text-foreground">Request cover</Link></li>
+            <li><Link to="/apply" className="hover:text-foreground">Apply to join us</Link></li>
             <li><Link to="/contact" className="hover:text-foreground">Contact</Link></li>
           </ul>
         </div>

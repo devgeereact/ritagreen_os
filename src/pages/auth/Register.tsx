@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 const DIVS = [
   { value: "care", label: "Care" },
@@ -20,6 +21,12 @@ const DIVS = [
 ]
 
 export default function Register() {
+  useSeo({
+    title: "Create a worker account",
+    description: "Register your details to work with RitaGreen.",
+    noindex: true,
+  })
+
   const [division, setDivision] = useState("care")
   const [consent, setConsent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -63,7 +70,7 @@ export default function Register() {
         <div className="mb-6 flex justify-center"><Link to="/"><Logo /></Link></div>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Register your interest</CardTitle>
+            <CardTitle className="text-xl"><h1>Register your interest</h1></CardTitle>
             <CardDescription>Join the RitaGreen workforce — we'll review and get you onboarded.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -75,7 +82,7 @@ export default function Register() {
               </div>
             ) : (
               <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-                {error && <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+                {error && <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
                 <div className="grid gap-2"><Label htmlFor="name">Full name</Label><Input id="name" name="name" required /></div>
                 <div className="grid gap-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" required /></div>
                 <div className="grid gap-4 sm:grid-cols-2">

@@ -5,6 +5,16 @@ require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
 
+// Both actions below are public and both return a learner's NAME against an ID
+// of the form RG-2026-00123 -- which counts. Unthrottled, that is a script away
+// from a list of everybody the academy has ever certified, which is exactly the
+// bulk disclosure UK GDPR asks us not to make trivially available.
+//
+// The limit is set for the real use: an employer checking the certificates in
+// front of them, not enumerating a range. A wrong ID costs a lookup either way,
+// so the limit covers hits and misses alike.
+rate_limit($conn, 'verify', 30, 600);
+
 // Open Badges 3.0 assertion (public JSON-LD) for an issued certificate.
 if ($action === 'badge' && method() === 'GET') {
     $id = trim((string) ($_GET['id'] ?? ''));

@@ -8,8 +8,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth, homeFor } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 export default function Login() {
+  // A sign-in form is a step, not a destination: noindex, and no canonical.
+  // Without this it inherited the homepage title AND the static canonical in
+  // index.html, telling Google /login was a duplicate of the homepage.
+  useSeo({
+    title: "Sign in",
+    description: "Sign in to the RitaGreen workforce platform.",
+    noindex: true,
+  })
+
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -82,7 +92,7 @@ export default function Login() {
         </div>
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Member login</CardTitle>
+            <CardTitle className="text-xl"><h1>Member login</h1></CardTitle>
             <CardDescription>Sign in to the RitaGreen platform</CardDescription>
           </CardHeader>
           <CardContent>

@@ -42,10 +42,21 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Reports but does not block. 27 pre-existing errors remain in application
-      # code, all of them React 19 hook rules, react-refresh, or explicit `any` --
-      # fixes that change runtime behaviour, so clearing them is real work rather
-      # than a tidy-up. Everything mechanically fixable has already been fixed.
+      # Reports but does not block. 19 errors remain in application code, down
+      # from 27: the production-readiness audit cleared the two `any`s, the
+      # unused expression, two dead template components, and scoped
+      # react-refresh/only-export-components off the VENDORED shadcn primitives
+      # in src/components/ui (upstream ships Button beside buttonVariants; the
+      # rule still applies to everything we write).
+      #
+      # What is left is React 19's new hook ruleset -- set-state-in-effect,
+      # static-components, refs, purity -- on code that works. static-components
+      # in particular is a false positive here: divisionIcon() SELECTS a
+      # module-level lucide component from a lookup table, it does not create
+      # one, so no state is reset. Clearing the rest means restructuring effects,
+      # which changes runtime behaviour and needs its own change with its own
+      # testing, not a tidy-up inside an audit.
+      #
       # The baseline is tracked as "ESLint baseline clean" in docs/STATUS.json.
       # Flip continue-on-error to false, and add --max-warnings 0, once it is zero.
       - name: Lint

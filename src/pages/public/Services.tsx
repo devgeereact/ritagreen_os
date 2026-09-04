@@ -181,13 +181,22 @@ export default function Services() {
           title="Ways to work with us"
           intro="From one-off emergency cover to a managed contract across a portfolio — pick the engagement that fits, and we'll confirm scope and rates in writing."
         />
-        <div className="surface mt-8 overflow-hidden p-0">
-          <table className="w-full text-left text-sm">
+        {/* overflow-x-auto, not overflow-hidden.
+            Three columns of prose need roughly 36rem before the text starts
+            wrapping to one word a line; the container was `overflow-hidden`, so
+            on a 360px phone the third column ("Typical terms" -- the rates and
+            rebate wording) was simply cut off with no way to scroll to it.
+            min-w keeps the columns readable and lets the wrapper scroll. */}
+        <div className="surface mt-8 overflow-x-auto p-0">
+          <table className="w-full min-w-[36rem] text-left text-sm">
+            <caption className="sr-only">
+              Ways to work with RitaGreen: engagement type, what it suits, and typical terms.
+            </caption>
             <thead className="bg-soft-mesh text-foreground">
               <tr>
-                <th className="px-6 py-4 font-semibold">Engagement</th>
-                <th className="px-6 py-4 font-semibold">Best for</th>
-                <th className="px-6 py-4 font-semibold">Typical terms</th>
+                <th scope="col" className="px-6 py-4 font-semibold">Engagement</th>
+                <th scope="col" className="px-6 py-4 font-semibold">Best for</th>
+                <th scope="col" className="px-6 py-4 font-semibold">Typical terms</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

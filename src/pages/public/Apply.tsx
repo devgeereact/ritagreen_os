@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { api, ApiError } from "@/lib/api"
+import { useSeo } from "@/hooks/use-seo"
 
 const DIVS = [
   { value: "care", label: "Care" },
@@ -17,6 +18,13 @@ const DIVS = [
 ]
 
 export default function Apply() {
+  useSeo({
+    title: "Work with RitaGreen — care, cleaning, security and training jobs in London",
+    description:
+      "Apply to join RitaGreen. Care, cleaning, security and training roles across London — DBS-checked, trained and supported from day one.",
+    path: "/apply",
+  })
+
   const [division, setDivision] = useState("care")
   const [consent, setConsent] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -91,7 +99,7 @@ export default function Apply() {
           <span>I agree that RitaGreen may store these details and contact me about my application, per the privacy policy.</span>
         </label>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <Button type="submit" size="lg" disabled={submitting} className="justify-self-start">{submitting ? "Sending…" : "Submit application"}</Button>
       </form>
     </div>

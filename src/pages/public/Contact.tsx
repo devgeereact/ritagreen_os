@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { Mail, Phone, MapPin, Clock } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -163,7 +164,7 @@ export default function Contact() {
           <p className="text-xs text-muted-foreground">
             By sending this you agree we may contact you about your enquiry. We handle your details
             under our{" "}
-            <a href="/privacy" className="font-medium text-primary hover:underline">privacy policy</a>.
+            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy policy</Link>.
           </p>
         </form>
 
@@ -203,9 +204,9 @@ export default function Contact() {
 
           <div className="surface p-5 text-muted-foreground">
             <p>Already a client or worker? Use the member login to reach your account.</p>
-            <a href="/login" className="mt-2 inline-block font-medium text-primary hover:underline">
+            <Link to="/login" className="mt-2 inline-block font-medium text-primary hover:underline">
               Member login
-            </a>
+            </Link>
           </div>
         </aside>
       </Section>

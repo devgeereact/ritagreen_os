@@ -3,38 +3,55 @@ import { createBrowserRouter } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 
 import PublicLayout from "@/layouts/PublicLayout"
-import AppLayout from "@/layouts/AppLayout"
 import RequireAuth from "@/auth/RequireAuth"
 import ErrorPage from "@/pages/ErrorPage"
 
-// Public corporate site — eager: this is the first paint for most visitors.
+// The home page stays eager: it is the first paint for most visitors, and
+// making it wait on a second round trip would cost exactly the metric this
+// split exists to improve.
 import Home from "@/pages/public/Home"
-import About from "@/pages/public/About"
-import Services from "@/pages/public/Services"
-import ServiceDetail from "@/pages/public/ServiceDetail"
-import Sectors from "@/pages/public/Sectors"
-import Careers from "@/pages/public/Careers"
-import Accreditations from "@/pages/public/Accreditations"
-import Resources from "@/pages/public/Resources"
-import Article from "@/pages/public/Article"
-import Contact from "@/pages/public/Contact"
-import Quote from "@/pages/public/Quote"
-import Verify from "@/pages/public/Verify"
-import Legal from "@/pages/public/Legal"
-import NotFoundPublic from "@/pages/public/NotFoundPublic"
 
-import Offer from "@/pages/public/Offer"
-import RequestCover from "@/pages/public/RequestCover"
-import Apply from "@/pages/public/Apply"
+// Every other public page is a navigation, not a first paint.
+//
+// All seventeen used to be imported eagerly, so the entry chunk carried the
+// whole corporate site — 697 kB raw, 206 kB gzipped — and a visitor landing on
+// the home page downloaded and parsed the legal pages, the certificate
+// verifier, the article template and five forms before anything rendered. That
+// is LCP and INP spent on pages most visitors never open. Each is now its own
+// chunk, fetched when it is actually routed to.
+const About = lazy(() => import("@/pages/public/About"))
+const Services = lazy(() => import("@/pages/public/Services"))
+const ServiceDetail = lazy(() => import("@/pages/public/ServiceDetail"))
+const Sectors = lazy(() => import("@/pages/public/Sectors"))
+const Careers = lazy(() => import("@/pages/public/Careers"))
+const Accreditations = lazy(() => import("@/pages/public/Accreditations"))
+const Resources = lazy(() => import("@/pages/public/Resources"))
+const Article = lazy(() => import("@/pages/public/Article"))
+const Contact = lazy(() => import("@/pages/public/Contact"))
+const Quote = lazy(() => import("@/pages/public/Quote"))
+const Verify = lazy(() => import("@/pages/public/Verify"))
+const Legal = lazy(() => import("@/pages/public/Legal"))
+const NotFoundPublic = lazy(() => import("@/pages/public/NotFoundPublic"))
+
+const Offer = lazy(() => import("@/pages/public/Offer"))
+const RequestCover = lazy(() => import("@/pages/public/RequestCover"))
+const Apply = lazy(() => import("@/pages/public/Apply"))
 
 // Auth
-import Login from "@/pages/auth/Login"
-import ForgotPassword from "@/pages/auth/ForgotPassword"
-import ResetPassword from "@/pages/auth/ResetPassword"
-import GoogleCallback from "@/pages/auth/GoogleCallback"
-import Register from "@/pages/auth/Register"
+const Login = lazy(() => import("@/pages/auth/Login"))
+const ForgotPassword = lazy(() => import("@/pages/auth/ForgotPassword"))
+const ResetPassword = lazy(() => import("@/pages/auth/ResetPassword"))
+const GoogleCallback = lazy(() => import("@/pages/auth/GoogleCallback"))
+const Register = lazy(() => import("@/pages/auth/Register"))
 
 // CMS — lazy-loaded so public visitors never download the internal app bundle.
+//
+// AppLayout is part of that and was NOT: it was imported eagerly, so the shell
+// it pulls in -- the sidebar, the ⌘K command palette (cmdk), the AI assistant,
+// the notification dropdown and the 2FA enrolment screen with its QR encoder --
+// all landed in the entry chunk. Somebody reading the marketing home page was
+// downloading the internal CMS chrome to render it.
+const AppLayout = lazy(() => import("@/layouts/AppLayout"))
 const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
 const Clients = lazy(() => import("@/pages/app/Clients"))
 const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
@@ -72,7 +89,7 @@ const Help = lazy(() => import("@/pages/app/Help"))
 const Notifications = lazy(() => import("@/pages/app/Notifications"))
 const SmokeTest = lazy(() => import("@/pages/app/SmokeTest"))
 
-// Suspense fallback while a lazy CMS chunk loads.
+// Suspense fallback while a lazily-loaded page chunk arrives.
 function PageLoader() {
   return (
     <div className="flex h-full min-h-[60vh] w-full items-center justify-center">
@@ -81,8 +98,9 @@ function PageLoader() {
   )
 }
 
-// Wrap a lazy CMS element in a Suspense boundary.
-const cms = (el: ReactElement): ReactElement => (
+// Wrap a lazily-loaded page in a Suspense boundary. Named `cms` when only the
+// internal app was lazy; the public pages are lazy now too.
+const page = (el: ReactElement): ReactElement => (
   <Suspense fallback={<PageLoader />}>{el}</Suspense>
 )
 
@@ -93,43 +111,43 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { index: true, element: <Home /> },
-      { path: "about", element: <About /> },
-      { path: "services", element: <Services /> },
-      { path: "services/:slug", element: <ServiceDetail /> },
-      { path: "sectors", element: <Sectors /> },
-      { path: "careers", element: <Careers /> },
-      { path: "accreditations", element: <Accreditations /> },
-      { path: "resources", element: <Resources /> },
-      { path: "resources/:slug", element: <Article /> },
-      { path: "contact", element: <Contact /> },
-      { path: "quote", element: <Quote /> },
-      { path: "request", element: <RequestCover /> },
-      { path: "apply", element: <Apply /> },
-      { path: "verify", element: <Verify /> },
-      { path: "verify/:id", element: <Verify /> },
-      { path: "privacy", element: <Legal kind="privacy" /> },
-      { path: "terms", element: <Legal kind="terms" /> },
-      { path: "cookies", element: <Legal kind="cookies" /> },
-      { path: "*", element: <NotFoundPublic /> },
+      { path: "about", element: page(<About />) },
+      { path: "services", element: page(<Services />) },
+      { path: "services/:slug", element: page(<ServiceDetail />) },
+      { path: "sectors", element: page(<Sectors />) },
+      { path: "careers", element: page(<Careers />) },
+      { path: "accreditations", element: page(<Accreditations />) },
+      { path: "resources", element: page(<Resources />) },
+      { path: "resources/:slug", element: page(<Article />) },
+      { path: "contact", element: page(<Contact />) },
+      { path: "quote", element: page(<Quote />) },
+      { path: "request", element: page(<RequestCover />) },
+      { path: "apply", element: page(<Apply />) },
+      { path: "verify", element: page(<Verify />) },
+      { path: "verify/:id", element: page(<Verify />) },
+      { path: "privacy", element: page(<Legal kind="privacy" />) },
+      { path: "terms", element: page(<Legal kind="terms" />) },
+      { path: "cookies", element: page(<Legal kind="cookies" />) },
+      { path: "*", element: page(<NotFoundPublic />) },
     ],
   },
 
   // 🔐 AUTH
-  { path: "/login", element: <Login />, errorElement: <ErrorPage /> },
-  { path: "/forgot", element: <ForgotPassword />, errorElement: <ErrorPage /> },
-  { path: "/reset/:token", element: <ResetPassword />, errorElement: <ErrorPage /> },
-  { path: "/register", element: <Register />, errorElement: <ErrorPage /> },
-  { path: "/auth/google/callback", element: <GoogleCallback />, errorElement: <ErrorPage /> },
+  { path: "/login", element: page(<Login />), errorElement: <ErrorPage /> },
+  { path: "/forgot", element: page(<ForgotPassword />), errorElement: <ErrorPage /> },
+  { path: "/reset/:token", element: page(<ResetPassword />), errorElement: <ErrorPage /> },
+  { path: "/register", element: page(<Register />), errorElement: <ErrorPage /> },
+  { path: "/auth/google/callback", element: page(<GoogleCallback />), errorElement: <ErrorPage /> },
 
   // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
-  { path: "/offer/:token", element: <Offer />, errorElement: <ErrorPage /> },
+  { path: "/offer/:token", element: page(<Offer />), errorElement: <ErrorPage /> },
 
   // 🏢 CLIENT PORTAL (client-role accounts)
   {
     path: "/portal",
     element: <RequireAuth />,
     errorElement: <ErrorPage />,
-    children: [{ index: true, element: cms(<ClientPortal />) }],
+    children: [{ index: true, element: page(<ClientPortal />) }],
   },
 
   // 📱 WORKER MOBILE APP (worker-linked accounts)
@@ -137,7 +155,7 @@ export const router = createBrowserRouter([
     path: "/m",
     element: <RequireAuth />,
     errorElement: <ErrorPage />,
-    children: [{ index: true, element: cms(<WorkerApp />) }],
+    children: [{ index: true, element: page(<WorkerApp />) }],
   },
 
   // 📊 INTERNAL CMS (behind login)
@@ -147,43 +165,43 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       {
-        element: <AppLayout />,
+        element: page(<AppLayout />),
         children: [
-          { index: true, element: cms(<Dashboard />) },
-          { path: "clients", element: cms(<Clients />) },
-          { path: "clients/:id", element: cms(<ClientDetail />) },
-          { path: "enquiries", element: cms(<Enquiries />) },
-          { path: "bookings", element: cms(<Bookings />) },
-          { path: "incidents", element: cms(<Incidents />) },
-          { path: "field", element: cms(<FieldOps />) },
-          { path: "ats", element: cms(<ATS />) },
-          { path: "reports", element: cms(<Reports />) },
-          { path: "inbox", element: cms(<Mailbox />) },
-          { path: "workers", element: cms(<Workers />) },
-          { path: "scheduling", element: cms(<Scheduling />) },
-          { path: "timetable", element: cms(<Timetable />) },
-          { path: "timesheets", element: cms(<Timesheets />) },
-          { path: "payroll", element: cms(<Payroll />) },
-          { path: "jobs", element: cms(<Jobs />) },
-          { path: "compliance", element: cms(<Compliance />) },
-          { path: "quotes", element: cms(<Quotes />) },
-          { path: "contracts", element: cms(<Contracts />) },
-          { path: "invoicing", element: cms(<Invoicing />) },
-          { path: "academy", element: cms(<Academy />) },
-          { path: "academy/:id", element: cms(<AcademyDetail />) },
-          { path: "analytics", element: cms(<Analytics />) },
-          { path: "insights", element: cms(<Insights />) },
-          { path: "files", element: cms(<Files />) },
-          { path: "comms", element: cms(<Comms />) },
-          { path: "blog", element: cms(<Blog />) },
-          { path: "testimonials", element: cms(<TestimonialsAdmin />) },
-          { path: "content-studio", element: cms(<ContentStudio />) },
-          { path: "profile", element: cms(<Profile />) },
-          { path: "notifications", element: cms(<Notifications />) },
-          { path: "help", element: cms(<Help />) },
-          { path: "settings", element: cms(<Settings />) },
+          { index: true, element: page(<Dashboard />) },
+          { path: "clients", element: page(<Clients />) },
+          { path: "clients/:id", element: page(<ClientDetail />) },
+          { path: "enquiries", element: page(<Enquiries />) },
+          { path: "bookings", element: page(<Bookings />) },
+          { path: "incidents", element: page(<Incidents />) },
+          { path: "field", element: page(<FieldOps />) },
+          { path: "ats", element: page(<ATS />) },
+          { path: "reports", element: page(<Reports />) },
+          { path: "inbox", element: page(<Mailbox />) },
+          { path: "workers", element: page(<Workers />) },
+          { path: "scheduling", element: page(<Scheduling />) },
+          { path: "timetable", element: page(<Timetable />) },
+          { path: "timesheets", element: page(<Timesheets />) },
+          { path: "payroll", element: page(<Payroll />) },
+          { path: "jobs", element: page(<Jobs />) },
+          { path: "compliance", element: page(<Compliance />) },
+          { path: "quotes", element: page(<Quotes />) },
+          { path: "contracts", element: page(<Contracts />) },
+          { path: "invoicing", element: page(<Invoicing />) },
+          { path: "academy", element: page(<Academy />) },
+          { path: "academy/:id", element: page(<AcademyDetail />) },
+          { path: "analytics", element: page(<Analytics />) },
+          { path: "insights", element: page(<Insights />) },
+          { path: "files", element: page(<Files />) },
+          { path: "comms", element: page(<Comms />) },
+          { path: "blog", element: page(<Blog />) },
+          { path: "testimonials", element: page(<TestimonialsAdmin />) },
+          { path: "content-studio", element: page(<ContentStudio />) },
+          { path: "profile", element: page(<Profile />) },
+          { path: "notifications", element: page(<Notifications />) },
+          { path: "help", element: page(<Help />) },
+          { path: "settings", element: page(<Settings />) },
           // Dev-only API smoke test — never registered in production builds.
-          ...(import.meta.env.DEV ? [{ path: "smoke-test", element: cms(<SmokeTest />) }] : []),
+          ...(import.meta.env.DEV ? [{ path: "smoke-test", element: page(<SmokeTest />) }] : []),
         ],
       },
     ],
