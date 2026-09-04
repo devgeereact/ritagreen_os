@@ -4,7 +4,7 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- **55 HTTP endpoint files.** Verified against the tree at `server/`.
+- **57 HTTP endpoint files.** Verified against the tree at `server/`.
 - Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
   database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
 - Three command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`
@@ -347,11 +347,12 @@ computed identically everywhere.
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
 | `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
 | `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts |
-| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager` |
+| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
+| `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
 | `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest auth, writes `super_admin`/`admin`/`manager` |
 | `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager` |
-| `incidents.php` | Incidents and safeguarding | Auth; create allows `super_admin`/`admin`/`manager`/`trainer`/`employee`, other writes `super_admin`/`admin`/`manager` |
+| `incidents.php` | Incidents and safeguarding | `super_admin`/`admin`/`manager` throughout, reads included |
 | `insurance.php` | Company insurance register | Auth; writes `super_admin`/`admin`/`manager` |
 | `invoices.php` | Invoicing | Auth; writes `super_admin`/`admin`/`manager` |
 | `jobs.php` | Work orders | Auth; status allows `employee`, create `super_admin`/`admin`/`manager` |
@@ -746,8 +747,9 @@ The audit pack is readable by any authenticated role, including `client` and
 `employee`, and returns a worker's email, phone, DBS and SIA detail and
 document list.
 
-**Header comment discrepancy.** `compliance.php:2-4` omits `?action=pack`; it
-is documented only in the inline comment at `compliance.php:19-22`.
+**`?action=pack` is staff-only and takes the `compliance` zone.** It sits above the file's
+first `require_role`, so until the privacy audit any authenticated account — a client portal
+login included — could read a named worker's whole vetting record by changing `worker_id`.
 
 ---
 
@@ -1004,9 +1006,11 @@ is **inside the document root**. Downloads are proxied through this endpoint,
 but nothing in the PHP prevents a direct request to
 `/uploads/<stored_name>`; that has to be blocked by `.htaccess` on the server.
 
-**Header comment discrepancy.** `files.php:2-6` omits `?action=extract`, and
-describes download as merely "auth required" without noting the file-wide role
-gate.
+**Per-file authorisation.** The file-wide role gate is not the whole check: `rg_file_readable()`
+(`server/pure.php`, tested in `server/tests/run.php`) decides each file, so a content role can
+open a policy or a RAMS document but not an identity scan, a contract or anything filed against
+a person, worker or client. It applies to `download`, `extract` and the listing — a filename is
+disclosure on its own.
 
 ---
 
@@ -1014,18 +1018,94 @@ gate.
 
 | Method | Action | Auth | Body | Returns |
 |---|---|---|---|---|
-| POST | `export` | `super_admin`/`admin` | `{email}` | Everything held for that address: enquiries, service requests, consent log, client records, worker records |
-| POST | `erase` | `super_admin`/`admin` | `{email}` | `{ok: true, erased: {...}, needs_manual_review: {clients, workers}}` |
+| POST | `export` | `super_admin`/`admin` | `{email}` | 27 collections, plus `resolved` and `not_included` |
+| POST | `erase` | `super_admin`/`admin` | `{email}` | `{ok, erased, marketing_suppression_kept, needs_approval, note}` |
 
-Erasure anonymises `contact_enquiries` and `service_requests` and deletes
-`consent_log` rows. Client and worker records are **not** erased — employment
-and contract records have an independent legal basis — but any match is
-surfaced under `needs_manual_review` for a manual decision.
+**Export resolves identity through the `people` spine in both directions.** It looks up
+`people` by email, then adds the `person_id` of any `workers`, `applicants` or `users` row
+matching that address, then pulls every record filed against those person and worker ids. That
+matters because `people.email` is routinely empty — a person created from an application only
+ever carried the address on the applicant row — and resolving by email alone returned an export
+with no right-to-work check, no absence and no contract in it.
+
+It covers identity, checks and credentials, employment, training, documents (metadata only),
+contact, consent, messages and notifications, and it lists what it deliberately omits under
+`not_included`: the audit log, file contents, server logs and backups. Every export writes a row
+to `export_log` and an `audit_log` entry.
+
+**Erasure does not bypass the approval workflow.** It anonymises `contact_enquiries` and
+`service_requests`, which have no ongoing basis, and surfaces everything filed against the
+person under `needs_approval` for `governance.php?action=request_deletion`, which requires a
+reason and a second person. It previously erased immediately with neither.
+
+Consent rows are anonymised rather than deleted, **except a marketing opt-out**, which keeps its
+address: a suppression record that names nobody suppresses nobody, and deleting it is how
+somebody gets signed up again by the next import.
 
 Note that the file reads the body and validates the email at `gdpr.php:13-15`,
 **before** dispatching on the action. There is therefore no GET path at all,
 and any request without a valid email in a JSON body fails 400 regardless of
 action.
+
+---
+
+## 46a. `data-request.php`
+
+| Method | Action | Auth | Body | Returns |
+|---|---|---|---|---|
+| POST | — | **public**, rate limited 5 per 10 min | `{name, email, kind, relationship?, detail?}` | `{ok: true, ref}` |
+| GET | — | `super_admin`/`admin` | — | `{requests}` — the queue, ordered by status then age |
+| POST | `status&id=N` | `super_admin`/`admin` | `{status, note?}` | `{ok: true}` |
+
+`kind` is one of `access`, `correction`, `deletion`, `objection`, `restriction`, `portability`,
+`withdraw_consent`, `other`; anything else becomes `other`. The reference is `DSR-NNNN` from
+`next_seq()`. Creating a request queues an office alert and an acknowledgement to the requester,
+notifies staff, and audits. Closing one as `completed` or `refused` requires a note of at least
+ten characters — a closed request with no reason is not a record.
+
+It collects no identity documents, and it self-serves nothing: it opens a case for a person to
+handle. No statutory deadline is written into the code, deliberately.
+
+---
+
+## 46b. `unsubscribe.php`
+
+| Method | Auth | Query | Returns |
+|---|---|---|---|
+| GET | **public** | `?e=<email>&t=<token>` | An HTML confirmation page |
+| POST | **public**, rate limited 20 per 10 min | same | An HTML page, and a `granted = 0` row in `consent_log` |
+
+The token is `rg_unsubscribe_token()`, an HMAC over the lower-cased address under `APP_SECRET`.
+No table of tokens, nothing to expire, and it cannot be guessed for another address. GET only
+renders the page; the opt-out happens on POST, because mail scanners and link previewers fetch
+every URL in a message.
+
+Returns HTML, not JSON — it is the one endpoint a person reads directly in a browser. Every
+failure reads the same and nothing confirms whether an address is on the list. With `APP_SECRET`
+unset it returns 503 and `unsubscribe_link()` returns null, so marketing is not sent at all
+rather than sent with a broken unsubscribe.
+
+---
+
+## 46c. `retention-sweep.php`
+
+| Invocation | Auth | Behaviour |
+|---|---|---|
+| `php server/retention-sweep.php` | CLI | Reports. Changes nothing |
+| `php server/retention-sweep.php --go` | CLI | Acts |
+| `GET ?key=ALERTS_KEY` | **HTTP with the cron key**, rate limited | Reports only. `--go` is CLI-only |
+
+The consumer `retention_policies` never had. It acts only where `retain_months` is set, and all
+fourteen are NULL. `review` raises a task, `archive` sets `deleted_at`, `delete` opens a request
+in the four-eyes workflow. It never hard-deletes. See `docs/RETENTION.md`.
+
+---
+
+## 46d. `create-admin.php`
+
+CLI only. `php server/create-admin.php --email you@example.com --name "Your Name"`, prompting
+for the password so it never reaches shell history or the process list. `schema.sql` used to
+seed a `super_admin` whose password was written in a comment in the tracked file.
 
 ---
 
@@ -1362,6 +1442,10 @@ Each of these is a case where the block comment at the top of the file
 understates or misstates what the code does. None of them changes behaviour,
 but each one misleads a reader who trusts the header.
 
+The privacy audit corrected four of these at source rather than documenting them: `gdpr.php`,
+`files.php`, `incidents.php` and `compliance.php` headers now match their code, and their rows
+have been removed from the table below.
+
 | File | Discrepancy |
 |---|---|
 | `auth.php:2-12` | Omits seven routes: `sessions`, `revoke_session`, `unlock`, `register`, `google_config`, `google_start`, `google_callback`. Three of them are public |
@@ -1369,8 +1453,6 @@ but each one misleads a reader who trusts the header.
 | `payments.php:6-7` | Omits `?action=public_checkout` (public) and `?action=paylink` |
 | `reports.php:2-3` | Omits four of five report actions: `cqc_pack`, `sia_acs`, `coshh`, `skills_for_care` |
 | `inbox.php:3-8` | Omits `?action=unread` |
-| `files.php:2-6` | Omits `?action=extract`; describes download as "auth required" without the file-wide role gate at `files.php:60` |
-| `compliance.php:2-4` | Omits `?action=pack` (present only in an inline comment) |
 | `clients.php:2-5` | Omits `?action=update` and `?action=rate_card` (inline comments only) |
 | `workers.php:2-4` | Omits `?action=availability` and `?action=pay` (inline comments only) |
 | `bookings.php:5` | Says the status route sets `quoted`/`declined`; the code also accepts `new` (`bookings.php:87`) |

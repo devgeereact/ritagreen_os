@@ -14,6 +14,9 @@ links to it. Duplicated facts drift, and the stale copy is the one that gets tru
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Touching the database |
 | [`docs/API.md`](docs/API.md) | Adding or changing an endpoint |
 | [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) | Writing UI |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Touching anything that holds personal data |
+| [`docs/COOKIES.md`](docs/COOKIES.md) | Adding browser storage or a third-party request |
+| [`docs/RETENTION.md`](docs/RETENTION.md) | Deleting or expiring anything |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Deciding what to do next |
 
 ---
@@ -88,6 +91,25 @@ may go. Add a route there when you add a route, or it will be visible to everyon
 the `require_role()` calls in `server/` — and it is a user-experience guard only. **The server
 is the enforced boundary.**
 
+**The public site makes no third-party requests, and that is load-bearing.** Fonts are
+self-hosted in `public/fonts` with the faces in `src/fonts.css`; the CSP in `public/.htaccess` is
+`default-src 'self'` with no external origin allow-listed. Because nothing optional is loaded and
+nothing optional is stored, the site shows a storage *notice* rather than a consent choice. Add a
+third-party script, font, map or pixel and that stops being true: you then owe a real consent
+control that keeps the script inert until the visitor agrees, an entry in `docs/COOKIES.md`, and
+a line in the privacy notice. See `src/components/public/CookieConsent.tsx`.
+
+**Sensitive data is separated by zone, not by role alone.** `can_view_zone()` reads
+`zone_permissions` (migration 015), and it is enforced for `payroll`, `compliance` and `health`.
+A new endpoint that returns right-to-work state, DBS status, an SIA number or anything about
+somebody's health takes the zone check as well as `require_staff()`. `rg_file_readable()` does the
+same job per file in `server/files.php` — being allowed to open the vault is not permission to
+open everything in it.
+
+**Retention periods are configuration, and they are all NULL.** `server/retention-sweep.php`
+reports by default, acts only with `--go`, acts only where a period is set, and never
+hard-deletes. Do not put a period in code. See `docs/RETENTION.md`.
+
 **Cloudflare records for this domain stay grey-cloud (DNS only)** so cPanel can issue SSL.
 This differs from other projects on the account — do not "fix" it to match them.
 
@@ -156,12 +178,12 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
 ## 6. Current state
 
-151 done, 14 partial, 3 to do of 168 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+157 done, 13 partial, 3 to do of 173 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
 generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
 verification, and the deployment gate — are **built and verified against a local database, and
-not yet applied to production**. Migrations `001`–`019` exist in `server/migrations/`; applying
+not yet applied to production**. Migrations `001`–`020` exist in `server/migrations/`; applying
 them to the live database is the outstanding step and is a deliberate, separate act. Read
 `docs/ROADMAP.md` for what each milestone still owes before it is called complete.
 

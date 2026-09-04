@@ -22,16 +22,17 @@ const VERSION = "2026-09-04"
  * still leaves clocking in working.
  */
 export function LocationNotice({ onDone }: { onDone?: () => void }) {
-  const [open, setOpen] = useState(false)
-  const headingRef = useRef<HTMLHeadingElement>(null)
-
-  useEffect(() => {
+  // Read during the first render, not in an effect: a worker about to clock in
+  // should not see the shift list paint and the notice arrive on top of it.
+  const [open, setOpen] = useState(() => {
     try {
-      if (localStorage.getItem(STORAGE_KEY) !== VERSION) setOpen(true)
+      return localStorage.getItem(STORAGE_KEY) !== VERSION
     } catch {
-      setOpen(true)
+      // Storage blocked. Showing the notice is the safe failure.
+      return true
     }
-  }, [])
+  })
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
     if (open) headingRef.current?.focus()

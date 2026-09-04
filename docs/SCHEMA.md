@@ -1,8 +1,9 @@
 # Database schema reference
 
-Source of truth: [`server/schema.sql`](../server/schema.sql) (864 lines, 50 tables) **plus**
-`server/migrations/` (17 migrations). A freshly built database has **71 tables**: the 50 in the
-baseline and 21 added by migration. `schema.sql` is the from-scratch baseline and is not
+Source of truth: [`server/schema.sql`](../server/schema.sql) (52 tables) **plus**
+`server/migrations/` (20 migrations). A freshly built database has **73 tables**: the 52 in the
+baseline, 20 added by migration, and `schema_migrations` itself. Counted against a local
+database built from scratch on 2026-09-04. `schema.sql` is the from-scratch baseline and is not
 edited to reflect migrations — `php server/migrate.php --status` is what tells you where a
 database actually is.
 Every line citation below is of the form `schema.sql:LINE`.
@@ -1156,20 +1157,19 @@ file does not duplicate or overwrite them.
 `super_admin`, `admin`, `manager`, `trainer`, `editor`, `employee`, `client`,
 each with a display label.
 
-### Super-admin account — 1 row (`schema.sql:47`)
+### Super-admin account — removed
 
-A single seed user is created with the `super_admin` role, using a bcrypt hash
-that is written literally into the file. **The account's password is stated in
-plain text in a comment at `schema.sql:45-46`.** It is not reproduced here.
+`schema.sql` used to seed a `super_admin` whose password was written in plain text in the
+comment above its bcrypt hash, in a version-controlled file, for an account with access to every
+worker record. "Change it after first login" was the only control, and nothing enforced or
+checked it.
 
-Two consequences worth acting on:
+The seed is gone. `php server/create-admin.php --email … --name …` creates the first
+administrator with a prompted password instead. Local development is unaffected: `seed.php`
+makes its own fixture accounts and refuses to run against a remote database.
 
-1. The comment at `schema.sql:46` instructs that the password be changed after
-   first login. Nothing enforces that — there is no `must_change_password` flag
-   and no forced-rotation mechanism anywhere in the schema.
-2. Because `schema.sql` is version-controlled and the credentials are in it, the
-   seed password is public to anyone with repository access. Any install that
-   has not had that password changed is accessible to them at super-admin level.
+**Any database built from the old `schema.sql` still has that account.** Check for
+`dev@ritagreenservices.com` on every existing install and remove it or change its password.
 
 ### Pay rules — 4 rows (`schema.sql:432`)
 
@@ -1275,9 +1275,12 @@ The TypeScript type documents the workaround rather than fixing it:
 
 ### 6.3 Tables lacking `deleted_at` that arguably need it
 
-Eleven tables carry `deleted_at`: `users`, `clients`, `sites`, `workers`,
-`contracts`, `jobs`, `certificates`, `files`, `insurance`, `blog_posts` and
-`testimonials`. The remaining thirty-nine are hard-delete only.
+Eleven tables carry `deleted_at` in the baseline: `users`, `clients`, `sites`, `workers`,
+`contracts`, `jobs`, `certificates`, `files`, `insurance`, `blog_posts` and `testimonials`.
+Migration 013 added five more (`applicants`, `invoices`, `incidents`, `timesheets`, `shifts`),
+and migration 020 three more that hold public-intake personal data and previously had no way to
+be archived at all: `contact_enquiries`, `service_requests` and `integration_submissions`. The
+rest are hard-delete only.
 
 The ones where that is a real problem:
 
@@ -1654,3 +1657,36 @@ UNIQUE on `(service, worker_role, requirement_id)`.
 everywhere, DBS for Care, SIA for Security — so wiring the engine in changes no behaviour on
 day one. Everything beyond that starts as `recommended`, so the business raises a requirement
 to mandatory deliberately rather than discovering overnight that half the workforce is blocked.
+
+
+## `data_requests` — migration 020
+
+A person's route to ask about their own data, and the record of what was done about it. Written
+by `server/data-request.php`; read by the same file's staff queue.
+
+| Column | Type | Notes |
+|---|---|---|
+| `ref` | VARCHAR(24) | `DSR-NNNN` from `next_seq()`. UNIQUE |
+| `kind` | ENUM | access, correction, deletion, objection, restriction, portability, withdraw_consent, other |
+| `name`, `email` | VARCHAR | The requester, as they gave it |
+| `relationship` | VARCHAR(120) NULL | In their own words: worker, applicant, client contact. Tells staff where to look |
+| `detail` | TEXT NULL | Optional |
+| `status` | ENUM | received, verifying, in_progress, completed, refused, withdrawn |
+| `acknowledged_at`, `completed_at` | DATETIME NULL | Set as the request moves |
+| `outcome_note` | VARCHAR(1000) NULL | Required, ten characters minimum, to close as completed or refused |
+| `handled_by` | INT NULL | FK to `users`, SET NULL |
+| `ip` | VARCHAR(45) NULL | Who submitted it |
+
+**No identity documents.** A public form is the wrong place to collect a passport scan, and
+gathering more personal data to answer a question about personal data is the wrong instinct.
+Verification happens afterwards, over the address on the request.
+
+**No deadline in the schema.** How long a response takes, and how it is counted, is the
+business's to state with advice; a number written here would be trusted and would go stale.
+
+## `consent_log` — index added by migration 020
+
+`ADD INDEX idx_consent_email_kind (email, kind, id)`. Marketing consent is the latest row for
+`kind = 'marketing'`, checked before every send, so it has to be a lookup and not a scan. No new
+table: an opt-out is a row with `granted = 0`, never a deletion — erasing the record that
+somebody unsubscribed is how they get signed up again by the next import.

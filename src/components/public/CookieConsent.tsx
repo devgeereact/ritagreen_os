@@ -52,15 +52,15 @@ function readAck(): Ack | null {
  * with granular choices, and the scripts stay inert until it says otherwise.
  */
 export function CookieConsent() {
-  const [open, setOpen] = useState(false)
+  // Read once, during the first render, rather than in an effect that then sets
+  // state: the notice would otherwise paint absent and flash in a frame later.
+  const [open, setOpen] = useState(() => {
+    const ack = readAck()
+    return !ack || ack.version !== NOTICE_VERSION
+  })
   const [returnFocus, setReturnFocus] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    const ack = readAck()
-    if (!ack || ack.version !== NOTICE_VERSION) setOpen(true)
-  }, [])
 
   useEffect(() => {
     const reopen = () => {

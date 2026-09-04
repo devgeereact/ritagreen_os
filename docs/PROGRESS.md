@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  151 done · 14 partial · 3 to do · 168 tracked
+`#######################.`  157 done · 13 partial · 3 to do · 173 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,17 +17,17 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `#########...` | 11 | 3 | 2 |
+| PLATFORM — Engineering platform | 0 | `##########..` | 12 | 3 | 2 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `##########..` | 7 | 3 | 0 |
-| COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 11 | 0 | 0 |
+| COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 12 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `############` | 7 | 0 | 0 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `##########..` | 13 | 4 | 1 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 17 | 3 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
 
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 11 done, 3 partial, 2 to do
+Milestone 0 · 12 done, 3 partial, 2 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -43,6 +43,7 @@ Milestone 0 · 11 done, 3 partial, 2 to do
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
+- [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
 - [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
@@ -175,7 +176,7 @@ Milestone 6 · 7 done, 3 partial, 0 to do
 
 ### COMMUNICATIONS — Email, SMS and notifications
 
-Milestone 7 · 11 done, 0 partial, 0 to do
+Milestone 7 · 12 done, 0 partial, 0 to do
 
 - [x] Announcements by division
 - [x] Delivery failures are visible — _email_queue.last_error plus an email_log row on terminal failure_
@@ -185,6 +186,7 @@ Milestone 7 · 11 done, 0 partial, 0 to do
 - [x] IMAP inbox with threaded reply
 - [x] In-app notification centre
 - [x] Mail leaves the request path — _Nine senders converted. Three stay synchronous on purpose: the lone-worker panic alert, password reset, and interactive mailbox replies_
+- [x] Marketing consent and unsubscribe — _Optional unticked box on the contact and quote forms, marketing_allowed() where the latest consent_log row wins and no row means no, and unsubscribe.php reached from an email with no login, authenticated by an HMAC over the address. An opt-out is a new row, never a deletion. Refuses to build a link at all if APP_SECRET is unset_
 - [x] Queued regardless of whether mail is enabled — _The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted_
 - [x] SMS and WhatsApp via Twilio — _every attempt logged, including skips_
 - [x] SMTP client — _hand-rolled over fsockopen, no vendor dependency_
@@ -218,25 +220,28 @@ Milestone 8 · 7 done, 0 partial, 0 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 13 done, 4 partial, 1 to do
+Milestone 9 · 17 done, 3 partial, 1 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Archiving actually hides the record — _Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
 - [x] Consent log
+- [x] Data-subject request pathway — _/data-request and server/data-request.php. Public form, reference, acknowledgement, staff queue with a status trail. Collects no identity documents and self-serves nothing -- whether a deletion can be honoured depends on employment and safeguarding duties a form cannot weigh. No statutory deadline is written into the code_
 - [x] Database backup with rotation — _above the document root, 14-day prune_
 - [x] Deletion approval workflow — _server/governance.php. Staff request with a reason of at least 10 characters; somebody else approves. Four eyes enforced: the approver may not be the requester. Archive is the default disposition_
 - [x] Deletion requires approval — _Verified: an admin cannot approve their own request_
 - [x] Export data — _Logged with user, scope, purpose, record count and IP_
+- [x] GDPR export and erasure — _Export resolves through the people spine in both directions -- people.email is routinely empty when the row came from an application -- and returns 27 collections instead of 5, names what it leaves out, and is written to export_log. Erasure anonymises public-form data and routes everything else to the four-eyes deletion workflow instead of erasing immediately_
 - [x] Incidents with RIDDOR and safeguarding flags
 - [x] Integration failure surfaced — _Silent integrations and unmappable submissions both reach the Action Centre_
+- [x] Privacy documentation — _docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
+- [x] Retention engine — _server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one_
 - [x] System health dashboard — _server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups_
 - [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
 - [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
-- [~] GDPR export and erasure — _by email address; erases immediately with no approval step_
 - [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
-- [~] Retention engine — _retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built_
+- [~] Sensitive zones enforced — _can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet_
 - [ ] Workflow rule engine
 
 ### PWA — Progressive web app

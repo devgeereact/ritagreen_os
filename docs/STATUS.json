@@ -637,6 +637,11 @@
           "name": "Queued regardless of whether mail is enabled",
           "status": "done",
           "note": "The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted"
+        },
+        {
+          "name": "Marketing consent and unsubscribe",
+          "status": "done",
+          "note": "Optional unticked box on the contact and quote forms, marketing_allowed() where the latest consent_log row wins and no row means no, and unsubscribe.php reached from an email with no login, authenticated by an HMAC over the address. An opt-out is a new row, never a deletion. Refuses to build a link at all if APP_SECRET is unset"
         }
       ]
     },
@@ -701,8 +706,8 @@
         },
         {
           "name": "GDPR export and erasure",
-          "status": "partial",
-          "note": "by email address; erases immediately with no approval step"
+          "status": "done",
+          "note": "Export resolves through the people spine in both directions -- people.email is routinely empty when the row came from an application -- and returns 27 collections instead of 5, names what it leaves out, and is written to export_log. Erasure anonymises public-form data and routes everything else to the four-eyes deletion workflow instead of erasing immediately"
         },
         {
           "name": "Incidents with RIDDOR and safeguarding flags",
@@ -720,8 +725,8 @@
         },
         {
           "name": "Retention engine",
-          "status": "partial",
-          "note": "retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built"
+          "status": "done",
+          "note": "server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one"
         },
         {
           "name": "Deletion approval workflow",
@@ -776,6 +781,21 @@
           "name": "Unapplied migrations are visible",
           "status": "done",
           "note": "A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations"
+        },
+        {
+          "name": "Data-subject request pathway",
+          "status": "done",
+          "note": "/data-request and server/data-request.php. Public form, reference, acknowledgement, staff queue with a status trail. Collects no identity documents and self-serves nothing -- whether a deletion can be honoured depends on employment and safeguarding duties a form cannot weigh. No statutory deadline is written into the code"
+        },
+        {
+          "name": "Sensitive zones enforced",
+          "status": "partial",
+          "note": "can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet"
+        },
+        {
+          "name": "Privacy documentation",
+          "status": "done",
+          "note": "docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review"
         }
       ]
     },
@@ -915,6 +935,11 @@
           "name": "Migration production guard is meaningful on cPanel",
           "status": "todo",
           "note": "migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead"
+        },
+        {
+          "name": "No third-party requests from the public site",
+          "status": "done",
+          "note": "Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin"
         }
       ]
     }

@@ -1,9 +1,15 @@
 <?php
 // Files & document centre.
-// GET  /files.php                       -> { files: [...] }
+// GET  /files.php                       -> { files: [...] }  filtered per file
 // POST /files.php  (multipart: file, category, client_id?, worker_id?) -> upload
-// GET  /files.php?action=download&id=5  -> stream the file (auth required)
+// GET  /files.php?action=download&id=5  -> stream the file
+// GET  /files.php?action=extract&id=5   -> { text } for the browser to summarise
 // POST /files.php?action=delete&id=5    -> soft delete
+//
+// The whole file is restricted to staff roles, and each individual file is then
+// checked with rg_file_readable(): the vault holds company material and named
+// people's records in the same place, and being allowed to open it is not
+// permission to open everything in it.
 require __DIR__ . '/lib.php';
 
 // Pull readable text out of an OOXML file (docx/xlsx) by reading one XML entry
