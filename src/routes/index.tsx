@@ -31,6 +31,7 @@ const Contact = lazy(() => import("@/pages/public/Contact"))
 const Quote = lazy(() => import("@/pages/public/Quote"))
 const Verify = lazy(() => import("@/pages/public/Verify"))
 const Legal = lazy(() => import("@/pages/public/Legal"))
+const DataRequest = lazy(() => import("@/pages/public/DataRequest"))
 const NotFoundPublic = lazy(() => import("@/pages/public/NotFoundPublic"))
 
 const Offer = lazy(() => import("@/pages/public/Offer"))
@@ -128,6 +129,7 @@ export const router = createBrowserRouter([
       { path: "privacy", element: page(<Legal kind="privacy" />) },
       { path: "terms", element: page(<Legal kind="terms" />) },
       { path: "cookies", element: page(<Legal kind="cookies" />) },
+      { path: "data-request", element: page(<DataRequest />) },
       { path: "*", element: page(<NotFoundPublic />) },
     ],
   },

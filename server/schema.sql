@@ -891,3 +891,43 @@ CREATE TABLE IF NOT EXISTS testimonials (
   deleted_at TIMESTAMP NULL,
   KEY idx_testi_pub (status, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Data-subject requests (baseline of migration 020) ----
+--
+-- A person's route to ask for their data, and the record of what was done. It
+-- collects no identity documents on purpose: a public form is the wrong place
+-- to gather a passport scan, and asking for more personal data in order to
+-- answer a question about personal data is the wrong instinct.
+CREATE TABLE IF NOT EXISTS data_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ref VARCHAR(24) NOT NULL,
+  kind ENUM('access','correction','deletion','objection','restriction','portability','withdraw_consent','other')
+    NOT NULL DEFAULT 'access',
+  name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  relationship VARCHAR(120) NULL,
+  detail TEXT NULL,
+  status ENUM('received','verifying','in_progress','completed','refused','withdrawn') NOT NULL DEFAULT 'received',
+  acknowledged_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  outcome_note VARCHAR(1000) NULL,
+  handled_by INT NULL,
+  ip VARCHAR(45) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_data_req_ref (ref),
+  KEY idx_data_req_status (status, created_at),
+  KEY idx_data_req_email (email),
+  CONSTRAINT fk_data_req_user FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Marketing consent is the latest consent_log row for kind = 'marketing'. This
+-- index is what makes that a lookup rather than a scan, since it is checked
+-- before every send.
+ALTER TABLE consent_log ADD INDEX IF NOT EXISTS idx_consent_email_kind (email, kind, id);
+
+-- Public intake data had no way to be archived: the only disposal available was
+-- a hard DELETE, which is not a disposal a retention policy should have to use.
+ALTER TABLE contact_enquiries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+ALTER TABLE integration_submissions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -47,6 +48,8 @@ export default function Quote() {
   const [service, setService] = useState(VALID_SERVICE.has(initialService) ? initialService : "")
   const [engagement, setEngagement] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  // Unticked, and separate from the quote request itself.
+  const [marketing, setMarketing] = useState(false)
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -85,12 +88,13 @@ export default function Quote() {
     try {
       await api("contact.php", {
         method: "POST",
-        body: { name, email, phone, division: service, message },
+        body: { name, email, phone, division: service, message, marketing_consent: marketing, source: "quote" },
         auth: false,
       })
       toast.success("Thanks. We've got your request and will send a written quote shortly.")
       form.reset()
       setEngagement("")
+      setMarketing(false)
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
       toast.error(msg)
@@ -180,13 +184,26 @@ export default function Quote() {
               placeholder="Tell us the role, the setting and anything that affects the quote — nights, weekends, access, special requirements."
             />
           </div>
+          {/* Optional, unticked, and it does not gate the quote. */}
+          <label className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={marketing}
+              onCheckedChange={(v) => setMarketing(!!v)}
+              className="mt-0.5"
+            />
+            <span>
+              Optional: email me occasionally about RitaGreen services, training and
+              availability. You can unsubscribe from any of those emails.
+            </span>
+          </label>
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? "Sending…" : "Request quote"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Rates are confirmed per engagement and set out clearly in your quote. We handle your
-            details under our{" "}
-            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy policy</Link>.
+            Rates are confirmed per engagement and set out clearly in your quote. We use your
+            details to prepare and send it, which is not marketing and does not need the box
+            above. See our{" "}
+            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy notice</Link>.
           </p>
         </form>
 

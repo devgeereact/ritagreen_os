@@ -74,6 +74,12 @@ export default defineConfig({
           "**/index.es-*.js", // jspdf dependency
           "**/purify.es-*.js", // jspdf dependency
           "**/og.png", // social share image, never needed by the app
+          // Latin Extended font subsets. Same-origin and cached normally by the
+          // browser, but ~430 kB that most visits never request — the browser
+          // only fetches a subset when a glyph in its unicode-range appears.
+          // Offline, a name with an accent falls back to the system font rather
+          // than the install being half a megabyte heavier for everyone.
+          "**/*-latin-ext.woff2",
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",
@@ -92,14 +98,6 @@ export default defineConfig({
               cacheName: "worker-reads",
               networkTimeoutSeconds: 5,
               expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 12 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts",
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
             },
           },
         ],

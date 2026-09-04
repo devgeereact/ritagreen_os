@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -37,6 +38,10 @@ export default function Contact() {
 
   const [submitting, setSubmitting] = useState(false)
   const [division, setDivision] = useState("")
+  // Unticked, and it stays unticked. A pre-selected marketing box is not a
+  // choice, and the state is separate from the enquiry so one cannot carry the
+  // other: replying to the enquiry is why they came, marketing is not.
+  const [marketing, setMarketing] = useState(false)
   const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({})
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,6 +54,8 @@ export default function Contact() {
       phone: String(data.get("phone") || "").trim(),
       division,
       message: String(data.get("message") || "").trim(),
+      marketing_consent: marketing,
+      source: "contact",
     }
 
     // Inline per-field validation so the offending field is marked, not just a toast.
@@ -70,6 +77,7 @@ export default function Contact() {
       toast.success("Thanks. We've received your enquiry and will be in touch shortly.")
       form.reset()
       setDivision("")
+      setMarketing(false)
       setErrors({})
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
@@ -158,13 +166,29 @@ export default function Contact() {
             />
             {errors.message && <p id="message-error" className="text-xs text-destructive">{errors.message}</p>}
           </div>
+          {/* Optional, and nothing depends on it. The enquiry is answered
+              either way — bundling "may we market to you" into "please reply to
+              me" would make the second conditional on the first. */}
+          <label className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={marketing}
+              onCheckedChange={(v) => setMarketing(!!v)}
+              className="mt-0.5"
+            />
+            <span>
+              Optional: email me occasionally about RitaGreen services, training and
+              availability. You can unsubscribe from any of those emails.
+            </span>
+          </label>
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? "Sending…" : "Send enquiry"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            By sending this you agree we may contact you about your enquiry. We handle your details
-            under our{" "}
-            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy policy</Link>.
+            We use your details to answer this enquiry. That is not marketing and does not
+            need the box above. See our{" "}
+            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy notice</Link>,
+            or ask us{" "}
+            <Link to="/data-request" className="font-medium text-primary hover:underline">what we hold about you</Link>.
           </p>
         </form>
 

@@ -143,6 +143,29 @@ function rg_coord_places(string $kind): int
     return $kind === 'panic' ? 6 : 3;
 }
 
+/**
+ * The unsubscribe token for an address.
+ *
+ * An unsubscribe link has to work from an email client with no session, so the
+ * address is in the URL and the token proves the link came from us. HMAC over a
+ * server-side secret, rather than a stored random token, because it needs no
+ * table and no cleanup, and it cannot be enumerated.
+ *
+ * The address is lower-cased first so that the link in an email addressed to
+ * Sam@Example.com still validates against sam@example.com.
+ */
+function rg_unsubscribe_token(string $email, string $secret): string
+{
+    return hash_hmac('sha256', 'unsubscribe:' . mb_strtolower(trim($email)), $secret);
+}
+
+/** Constant-time check of an unsubscribe token. */
+function rg_unsubscribe_valid(string $email, string $token, string $secret): bool
+{
+    if ($token === '' || $secret === '') return false;
+    return hash_equals(rg_unsubscribe_token($email, $secret), $token);
+}
+
 // ---------------------------------------------------------------- field state
 
 /**

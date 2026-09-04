@@ -16,6 +16,13 @@ $email = trim((string) ($data['email'] ?? ''));
 $phone = trim(str_replace(["\r", "\n"], ' ', (string) ($data['phone'] ?? '')));
 $division = trim((string) ($data['division'] ?? ''));
 $message = trim((string) ($data['message'] ?? ''));
+// Optional and separate. Replying to an enquiry is what the person came here
+// for and needs no consent; marketing is a different thing being asked for at
+// the same time, so it is its own unticked box and its own record. Absent means
+// no -- an empty field must never read as agreement.
+$marketing = !empty($data['marketing_consent']);
+$source = trim((string) ($data['source'] ?? 'contact'));
+if (!in_array($source, ['contact', 'quote'], true)) $source = 'contact';
 
 if ($name === '' || $email === '' || $message === '') {
     fail('Please add your name, email and a message.');
@@ -33,6 +40,11 @@ $stmt = $conn->prepare(
 );
 $stmt->bind_param('sssss', $name, $email, $phone, $division, $message);
 $stmt->execute();
+
+// Only a yes is recorded here. A no from someone who has never opted in adds a
+// row saying nothing, and a no must not overwrite a yes given elsewhere -- if
+// they want off the list, the unsubscribe link is the route that records it.
+if ($marketing) record_marketing_consent($conn, $email, true, $source);
 
 // Notify the office and confirm to the sender.
 //

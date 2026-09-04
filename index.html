@@ -34,12 +34,14 @@
         "description": "One trusted name for staff, training, cleaning and security — every worker qualified, checked and ready."
       }
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Webfonts are self-hosted: see src/fonts.css and public/fonts.
+
+         They used to load from fonts.googleapis.com, which meant every visitor's
+         IP address and User-Agent reached Google on first paint — before the
+         page had asked them anything, and disclosed in neither the privacy nor
+         the cookie notice. Serving the files ourselves removes the only
+         third-party request the site made. There is now nothing to disclose and
+         nothing to seek consent for, which is a better answer than a banner. -->
     <!-- Two icon-font CDNs used to load here, both render-blocking, both from
          third-party origins, and neither cached by the service worker (so they
          also failed on every offline load).

@@ -514,6 +514,71 @@ function next_seq(mysqli $conn, string $key): int
     return (int) $conn->insert_id;
 }
 
+// ----- Marketing consent -----
+//
+// There is no marketing_preferences table. consent_log already records
+// (email, kind, granted, source, ip), which is the right shape; it simply never
+// held a granted = 0 row because nothing ever wrote one. An opt-out is a new
+// row, never a deletion: erasing the record that somebody unsubscribed is
+// precisely how they get signed up again by the next import.
+
+/**
+ * May we send marketing to this address?
+ *
+ * The latest row wins, and no row means no. Silence is not consent, and an
+ * address we have never asked is an address we have not been given permission
+ * to email.
+ */
+function marketing_allowed(mysqli $conn, string $email): bool
+{
+    $email = mb_strtolower(trim($email));
+    if ($email === '') return false;
+    $stmt = $conn->prepare(
+        'SELECT granted FROM consent_log WHERE email = ? AND kind = "marketing" ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row !== null && (int) $row['granted'] === 1;
+}
+
+/** Record a marketing choice, in either direction. */
+function record_marketing_consent(mysqli $conn, string $email, bool $granted, string $source): void
+{
+    $email = mb_strtolower(trim($email));
+    if ($email === '') return;
+    $g = $granted ? 1 : 0;
+    $ip = client_ip();
+    $stmt = $conn->prepare(
+        'INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "marketing", ?, ?, ?)'
+    );
+    $stmt->bind_param('siss', $email, $g, $source, $ip);
+    $stmt->execute();
+}
+
+/**
+ * The secret behind unsubscribe links.
+ *
+ * Not derived from anything else. A configuration this depends on should be
+ * absent loudly rather than fall back to something that merely looks random.
+ */
+function app_secret(): string
+{
+    $s = defined('APP_SECRET') ? (string) APP_SECRET : '';
+    return ($s === '' || $s === 'CHANGE_ME') ? '' : $s;
+}
+
+/** A one-click unsubscribe URL, or null when APP_SECRET has not been set. */
+function unsubscribe_link(string $email): ?string
+{
+    $secret = app_secret();
+    if ($secret === '') return null;
+    $base = defined('PUBLIC_BASE_URL') ? rtrim((string) PUBLIC_BASE_URL, '/') : '';
+    if ($base === '') return null;
+    return $base . '/unsubscribe.php?e=' . rawurlencode(mb_strtolower(trim($email)))
+        . '&t=' . rg_unsubscribe_token($email, $secret);
+}
+
 // ----- Email notifications -----
 // Optional: only fires when config.php defines MAIL_ENABLED, MAIL_FROM and
 // MAIL_TO. Used to alert the office the moment a public enquiry or application

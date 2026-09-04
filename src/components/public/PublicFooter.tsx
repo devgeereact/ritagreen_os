@@ -5,6 +5,7 @@ import { Logo } from "@/components/brand/Logo"
 import { Button } from "@/components/ui/button"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, SOCIALS } from "@/lib/company"
+import { openStorageNotice } from "@/components/public/CookieConsent"
 
 /**
  * The two ways in, one per audience.
@@ -141,6 +142,18 @@ export function PublicFooter() {
             <li><Link to="/privacy" className="hover:text-foreground">Privacy policy</Link></li>
             <li><Link to="/terms" className="hover:text-foreground">Terms</Link></li>
             <li><Link to="/cookies" className="hover:text-foreground">Cookies</Link></li>
+            <li><Link to="/data-request" className="hover:text-foreground">Your data</Link></li>
+            <li>
+              {/* Dismissing the notice used to be final — there was no way back
+                  to it. A preference you cannot revisit is not a preference. */}
+              <button
+                type="button"
+                onClick={openStorageNotice}
+                className="rounded-sm text-left hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                Storage notice
+              </button>
+            </li>
             <li><Link to="/login" className="hover:text-foreground">Member login</Link></li>
           </ul>
         </div>

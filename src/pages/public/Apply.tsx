@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -96,7 +97,17 @@ export default function Apply() {
 
         <label className="flex items-start gap-2 text-sm text-muted-foreground">
           <Checkbox checked={consent} onCheckedChange={(v) => setConsent(!!v)} className="mt-0.5" />
-          <span>I agree that RitaGreen may store these details and contact me about my application, per the privacy policy.</span>
+          <span>
+            I agree that RitaGreen may store these details and contact me about my
+            application, as described in the{" "}
+            {/* A Link, not plain text. Asking somebody to agree to a policy and
+                  then not letting them read it is not asking. A full page load
+                  would also throw away everything typed into the form. */}
+            <Link to="/privacy" className="font-medium text-primary hover:underline">
+              privacy notice
+            </Link>
+            .
+          </span>
         </label>
 
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

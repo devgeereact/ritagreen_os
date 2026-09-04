@@ -61,6 +61,13 @@ define('TWILIO_FROM', '');                               // e.g. '+447700900123'
 // Public base URL used to build shift-offer accept links sent by SMS.
 define('PUBLIC_BASE_URL', 'https://ritagreenservices.com');
 
+// Signs unsubscribe links, which have to work from an email client with no
+// session. Any long random string: `php -r "echo bin2hex(random_bytes(32));"`.
+// Left as CHANGE_ME, marketing email is refused rather than sent without a
+// working unsubscribe — a marketing list nobody can leave is worse than no
+// marketing list. Changing it invalidates every link already sent.
+define('APP_SECRET', 'CHANGE_ME');
+
 // WhatsApp via Twilio (uses the same TWILIO_SID/TWILIO_TOKEN above).
 // Your Twilio WhatsApp sender in E.164 WITHOUT the "whatsapp:" prefix; leave
 // blank to disable WhatsApp (offers/reminders fall back to SMS).

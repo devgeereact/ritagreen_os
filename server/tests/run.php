@@ -679,6 +679,26 @@ check('panic precision is untouched', rg_round_coord(51.5074456, 6), 51.507446);
 check('null stays null', rg_round_coord(null, 3), null);
 check('zero survives rounding', rg_round_coord(0.0, 3), 0.0);
 
+group('rg_unsubscribe_token');
+
+$secret = 'a-long-server-side-secret';
+$t = rg_unsubscribe_token('sam@example.com', $secret);
+
+check('is a sha256 hex digest', strlen($t), 64);
+check('is stable for the same address', rg_unsubscribe_token('sam@example.com', $secret), $t);
+check('case in the address does not matter', rg_unsubscribe_token('Sam@Example.com', $secret), $t);
+check('surrounding whitespace does not either', rg_unsubscribe_token('  sam@example.com ', $secret), $t);
+check('a different address is a different token', rg_unsubscribe_token('other@example.com', $secret) === $t, false);
+check('a different secret is a different token', rg_unsubscribe_token('sam@example.com', 'other') === $t, false);
+
+check('a good token validates', rg_unsubscribe_valid('sam@example.com', $t, $secret), true);
+check('as does the address in any case', rg_unsubscribe_valid('SAM@example.com', $t, $secret), true);
+check('a token for someone else does not', rg_unsubscribe_valid('other@example.com', $t, $secret), false);
+check('nor a token under another secret', rg_unsubscribe_valid('sam@example.com', $t, 'other'), false);
+// Both of these would otherwise be an unsubscribe link that works for everyone.
+check('an empty token never validates', rg_unsubscribe_valid('sam@example.com', '', $secret), false);
+check('nor does an unset secret', rg_unsubscribe_valid('sam@example.com', $t, ''), false);
+
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";

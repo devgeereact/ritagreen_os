@@ -98,7 +98,17 @@ export default function Register() {
                 <div className="grid gap-2"><Label htmlFor="role_applied">Role you're after</Label><Input id="role_applied" name="role_applied" placeholder="e.g. Carer, SIA guard" /></div>
                 <label className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Checkbox checked={consent} onCheckedChange={(v) => setConsent(!!v)} className="mt-0.5" />
-                  <span>I agree that RitaGreen may store these details and contact me, per the privacy policy.</span>
+                  <span>
+                    I agree that RitaGreen may store these details and contact me about
+                    registering, as described in the{" "}
+                    {/* A Link, not plain text. Asking somebody to agree to a policy and
+                  then not letting them read it is not asking. A full page load
+                  would also throw away everything typed into the form. */}
+                    <Link to="/privacy" className="font-medium text-primary hover:underline">
+                      privacy notice
+                    </Link>
+                    .
+                  </span>
                 </label>
                 <Button type="submit" disabled={submitting}>{submitting ? "Submitting…" : "Register"}</Button>
               </form>
