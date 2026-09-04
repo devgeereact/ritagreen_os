@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  157 done · 13 partial · 3 to do · 173 tracked
+`#######################.`  158 done · 13 partial · 3 to do · 174 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -27,7 +27,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 12 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `############` | 7 | 0 | 0 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 17 | 3 | 1 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 18 | 3 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
 
@@ -220,9 +220,10 @@ Milestone 8 · 7 done, 0 partial, 0 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 17 done, 3 partial, 1 to do
+Milestone 9 · 18 done, 3 partial, 1 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
+- [x] Approved deletion removes the document itself — _A hard delete used to remove the files row and leave the bytes on disk under a random name: gone from the system, still on the server, no longer findable. governance.php now unlinks it and audits it. Archive keeps the bytes, which is what makes it recoverable. Verified end to end against a local database_
 - [x] Archiving actually hides the record — _Every list and count query for the newly soft-deletable tables filters on deleted_at. An archive that leaves the row visible is not an archive_
 - [x] Audit log — _Migration 009 adds entity_type, entity_id, before_json, after_json, reason, ip and user_agent, plus three indexes. audit() keeps its signature so all existing call sites work unchanged and gain IP and agent automatically_
 - [x] Consent log

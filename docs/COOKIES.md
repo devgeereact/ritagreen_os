@@ -66,7 +66,10 @@ logs, `rate_limits` records IP addresses for a day, and `audit_log`, `consent_lo
 ## Consent control
 
 There is nothing optional to consent to, so the site shows a notice rather than a choice — see
-`src/components/public/CookieConsent.tsx`, which explains the reasoning in full. It carries a
+`src/components/public/CookieConsent.tsx`, which explains the reasoning in full. It renders on
+the marketing site and, through `src/layouts/BareLayout.tsx`, on the sign-in, registration,
+password-reset and shift-offer pages, which previously had no footer, no legal links and no
+notice at all — including the page that writes the session token. It carries a
 version so that adding an optional category re-asks rather than inheriting an old
 acknowledgement, and it can be reopened from the footer.
 

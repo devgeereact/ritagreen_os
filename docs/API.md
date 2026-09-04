@@ -1033,6 +1033,12 @@ contact, consent, messages and notifications, and it lists what it deliberately 
 `not_included`: the audit log, file contents, server logs and backups. Every export writes a row
 to `export_log` and an `audit_log` entry.
 
+**An approved hard deletion of a file now removes the file.** `governance.php` reads
+`stored_name` before the row goes, then unlinks it from `server/uploads/` and audits it. A row
+deleted with the bytes left on disk under a random name is the worst of both: gone from the
+system, still on the server, and no longer findable. An *archive* keeps the bytes deliberately —
+that is what makes it recoverable.
+
 **Erasure does not bypass the approval workflow.** It anonymises `contact_enquiries` and
 `service_requests`, which have no ongoing basis, and surfaces everything filed against the
 person under `needs_approval` for `governance.php?action=request_deletion`, which requires a

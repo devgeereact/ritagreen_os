@@ -197,7 +197,7 @@ Open items:
 | Item | Evidence | Severity |
 |---|---|---|
 | `user_2fa.secret` is stored unencrypted | `server/schema.sql` | P2. Database access already implies compromise, but it makes the second factor forgeable |
-| Uploaded file bytes are never deleted | `server/files.php` soft-deletes the row; `unlink` appears only in `backup.php` | P2 |
+| Uploaded file bytes survive a soft delete | `server/files.php` sets `deleted_at` only. An approved hard deletion now unlinks the file (`server/governance.php`), but an archived one keeps the bytes by design | P3, and correct: an archive is meant to be recoverable |
 | `certificates.php?action=verify` allows enumeration of learner names by certificate id | the file's own header says so | P2. Rate limited at 30 per 10 minutes |
 | `employment_contracts.access_token` grants contract access with no login | migration 010 | P2. **LEGAL/OWNER:** confirm intended |
 | Exception messages reach `error_log` and may contain personal data | `server/lib.php` | P3 |

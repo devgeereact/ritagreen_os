@@ -147,10 +147,33 @@ if (method() === 'POST' && $action === 'decide_deletion') {
         if (!$hasDeletedAt) fail("Records in $table cannot be archived; they have no deleted_at.", 409);
         $stmt = $conn->prepare("UPDATE $table SET deleted_at = NOW() WHERE id = ?");
     } else {
+        // A hard delete of a file row has to take the bytes with it. Removing
+        // the row and leaving the document on disk under a random name is not a
+        // deletion, it is a deletion that cannot be found again -- the worst of
+        // both. Read the stored name first, because the row is about to go.
+        if ($table === 'files') {
+            $q = $conn->prepare('SELECT stored_name FROM files WHERE id = ? LIMIT 1');
+            $q->bind_param('i', $entityId);
+            $q->execute();
+            $f = $q->get_result()->fetch_assoc();
+            $storedName = $f ? (string) $f['stored_name'] : '';
+        }
         $stmt = $conn->prepare("DELETE FROM $table WHERE id = ?");
     }
     $stmt->bind_param('i', $entityId);
     $stmt->execute();
+
+    // Only after the row is gone, and only for a name we read from the
+    // database -- never one from a request. basename() is belt and braces
+    // against a stored_name that ever stopped being 32 hex characters.
+    if ($table === 'files' && $req['disposition'] === 'delete' && !empty($storedName)) {
+        $path = __DIR__ . '/uploads/' . basename($storedName);
+        if (is_file($path)) {
+            @unlink($path);
+            audit($conn, $uid, 'file.unlink', "#$entityId", 'file', $entityId, null, null,
+                'Approved deletion: the document itself was removed from disk.');
+        }
+    }
 
     $stmt = $conn->prepare('UPDATE deletion_requests SET status = "completed", decided_by = ?, decided_at = NOW(), decision_note = ?, completed_at = NOW() WHERE id = ?');
     $stmt->bind_param('isi', $uid, $noteVal, $id);

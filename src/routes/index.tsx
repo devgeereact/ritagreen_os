@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 
 import PublicLayout from "@/layouts/PublicLayout"
+import BareLayout from "@/layouts/BareLayout"
 import RequireAuth from "@/auth/RequireAuth"
 import ErrorPage from "@/pages/ErrorPage"
 
@@ -134,15 +135,22 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // 🔐 AUTH
-  { path: "/login", element: page(<Login />), errorElement: <ErrorPage /> },
-  { path: "/forgot", element: page(<ForgotPassword />), errorElement: <ErrorPage /> },
-  { path: "/reset/:token", element: page(<ResetPassword />), errorElement: <ErrorPage /> },
-  { path: "/register", element: page(<Register />), errorElement: <ErrorPage /> },
-  { path: "/auth/google/callback", element: page(<GoogleCallback />), errorElement: <ErrorPage /> },
+  // 🔐 AUTH — under BareLayout, which carries the legal links and the storage
+  // notice these pages previously had no way of showing.
+  {
+    element: <BareLayout />,
+    errorElement: <ErrorPage />,
+    children: [
+      { path: "/login", element: page(<Login />) },
+      { path: "/forgot", element: page(<ForgotPassword />) },
+      { path: "/reset/:token", element: page(<ResetPassword />) },
+      { path: "/register", element: page(<Register />) },
+      { path: "/auth/google/callback", element: page(<GoogleCallback />) },
 
-  // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
-  { path: "/offer/:token", element: page(<Offer />), errorElement: <ErrorPage /> },
+      // 📲 PUBLIC SHIFT OFFER (worker accepts/declines from an SMS link, no login)
+      { path: "/offer/:token", element: page(<Offer />) },
+    ],
+  },
 
   // 🏢 CLIENT PORTAL (client-role accounts)
   {

@@ -796,6 +796,11 @@
           "name": "Privacy documentation",
           "status": "done",
           "note": "docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review"
+        },
+        {
+          "name": "Approved deletion removes the document itself",
+          "status": "done",
+          "note": "A hard delete used to remove the files row and leave the bytes on disk under a random name: gone from the system, still on the server, no longer findable. governance.php now unlinks it and audits it. Archive keeps the bytes, which is what makes it recoverable. Verified end to end against a local database"
         }
       ]
     },
