@@ -17,8 +17,39 @@ export const COMPANY = {
   emergencyPhoneHref: "tel:+447377563859",
   email: "hello@ritagreenservices.com",
   hours: "Mon–Fri, 9am–5pm · 24hr line for urgent cover",
-  registeredAddress: "London, United Kingdom", // TODO: set full registered office address
+
+  // ---- Identity shown on the legal pages -----------------------------------
+  //
+  // These three are the controller's identity in the privacy notice. Empty
+  // means "not confirmed yet", and the notice says so in place of the value
+  // rather than quietly leaving a gap — a missing registered office reads as an
+  // oversight, a stated one that is wrong is worse, and a blank that announces
+  // itself is the only honest third option.
+
+  // OWNER TO CONFIRM: the full registered office address from the Companies
+  // House record for 12528439. Do not paste an operating address here.
+  registeredAddress: "",
+
+  // OWNER TO CONFIRM: the ICO registration reference (ZA/ZB…). The
+  // Accreditations page already tells the public that records are handled with
+  // "ICO registration", so this is a claim the site is making either way.
+  icoNumber: "",
+
+  // Where data-protection questions go. Currently the general inbox; a
+  // dedicated address would be better once somebody owns it.
+  privacyEmail: "hello@ritagreenservices.com",
 } as const
+
+/**
+ * Are the legal pages still awaiting a solicitor's sign-off?
+ *
+ * While true, the legal pages carry a short line saying so. Set it to false
+ * after review — that is the whole flip, and it is deliberately one line so it
+ * is not forgotten. The previous version printed a permanent notice telling
+ * visitors the policy was an unreviewed template with unconfirmed placeholders,
+ * which is not a caveat, it is a reason not to publish.
+ */
+export const LEGAL_REVIEW_PENDING = true
 
 // Billing details rendered on invoice/quote PDFs. FILL THESE before sending real
 // invoices — a UK VAT invoice must show the VAT number, and clients pay against

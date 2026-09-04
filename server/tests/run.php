@@ -699,6 +699,36 @@ check('nor a token under another secret', rg_unsubscribe_valid('sam@example.com'
 check('an empty token never validates', rg_unsubscribe_valid('sam@example.com', '', $secret), false);
 check('nor does an unset secret', rg_unsubscribe_valid('sam@example.com', $t, ''), false);
 
+group('rg_retention_due / rg_retention_action');
+
+// The important case: no period set means nothing happens. All eight seeded
+// policies are NULL, so this is what the sweep does on the day it ships.
+check('a null period is never due', rg_retention_due('2010-01-01', null, '2026-09-04'), false);
+check('nor is a zero period', rg_retention_due('2010-01-01', 0, '2026-09-04'), false);
+check('nor a negative one', rg_retention_due('2010-01-01', -6, '2026-09-04'), false);
+
+// Nor does a record with nothing to count from.
+check('a null anchor is never due', rg_retention_due(null, 12, '2026-09-04'), false);
+check('an empty anchor is never due', rg_retention_due('', 12, '2026-09-04'), false);
+check('a zero date is never due', rg_retention_due('0000-00-00', 12, '2026-09-04'), false);
+check('an unparseable anchor is never due', rg_retention_due('not a date', 12, '2026-09-04'), false);
+
+check('past the period', rg_retention_due('2024-01-01', 12, '2026-09-04'), true);
+check('inside the period', rg_retention_due('2026-06-01', 12, '2026-09-04'), false);
+check('exactly on the day counts', rg_retention_due('2025-09-04', 12, '2025-09-04'), false);
+check('the day it falls due', rg_retention_due('2024-09-04', 12, '2025-09-04'), true);
+check('the day before it does not', rg_retention_due('2024-09-05', 12, '2025-09-04'), false);
+// Month arithmetic across a year boundary, and out of a long month.
+check('crosses a year end', rg_retention_due('2025-11-30', 6, '2026-05-31'), true);
+check('72 months is six years', rg_retention_due('2020-01-01', 72, '2026-09-04'), true);
+check('and not five', rg_retention_due('2021-10-01', 72, '2026-09-04'), false);
+
+check('review passes through', rg_retention_action('review'), 'review');
+check('archive passes through', rg_retention_action('archive'), 'archive');
+check('delete passes through', rg_retention_action('delete'), 'delete');
+check('anything else asks a person', rg_retention_action('destroy'), 'review');
+check('and so does an empty value', rg_retention_action(''), 'review');
+
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";

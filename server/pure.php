@@ -159,6 +159,40 @@ function rg_unsubscribe_token(string $email, string $secret): string
     return hash_hmac('sha256', 'unsubscribe:' . mb_strtolower(trim($email)), $secret);
 }
 
+/**
+ * Is a record past its retention period?
+ *
+ * Pure, so the arithmetic that decides whether somebody's record is disposed of
+ * can be tested without a database and read without running anything.
+ *
+ * A NULL period is not zero. It means the business has not set one yet, and the
+ * answer is "no, and do not ask again" — a policy with no period must never be
+ * read as "delete immediately", which is the failure mode that would turn an
+ * unfinished configuration into data loss.
+ */
+function rg_retention_due(?string $anchorDate, ?int $retainMonths, string $today): bool
+{
+    if ($retainMonths === null || $retainMonths <= 0) return false;
+    if ($anchorDate === null || $anchorDate === '' || $anchorDate === '0000-00-00') return false;
+    $anchor = strtotime($anchorDate);
+    if ($anchor === false) return false;
+    $due = strtotime("+$retainMonths months", $anchor);
+    return $due !== false && $due <= strtotime($today);
+}
+
+/**
+ * What the sweep should do with a record that is past its period.
+ *
+ * 'review' raises it for a person to look at. 'archive' hides it but keeps it.
+ * 'delete' is a request, not an act: it goes to the approval workflow. Anything
+ * unrecognised falls back to 'review', because the safe reading of a value we
+ * do not understand is "ask somebody".
+ */
+function rg_retention_action(string $configured): string
+{
+    return in_array($configured, ['review', 'archive', 'delete'], true) ? $configured : 'review';
+}
+
 /** Constant-time check of an unsubscribe token. */
 function rg_unsubscribe_valid(string $email, string $token, string $secret): bool
 {

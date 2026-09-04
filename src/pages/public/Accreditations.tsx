@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { PageHeader, Section, SectionAlt, CtaBand } from "@/components/public/section"
 import { TrustStrip } from "@/components/public/marketing"
 import { useSeo } from "@/hooks/use-seo"
+import { COMPANY } from "@/lib/company"
 
 const TRUST = [
   "CQC-aligned",
@@ -65,7 +66,13 @@ const ITEMS = [
   {
     icon: Lock,
     name: "GDPR & data protection",
-    body: "Client and worker records are handled under UK GDPR and the Data Protection Act 2018, with clear retention, access controls and ICO registration.",
+    // The reference is published in the privacy notice. Saying "ICO
+    // registration" on a marketing page while the notice called the reference
+    // an unconfirmed placeholder was the site contradicting itself about a
+    // verifiable fact.
+    body: COMPANY.icoNumber
+      ? `Client and worker records are handled under UK GDPR and the Data Protection Act 2018, with clear retention, access controls, and ICO registration ${COMPANY.icoNumber}.`
+      : "Client and worker records are handled under UK GDPR and the Data Protection Act 2018, with a written retention policy per record type, access controls, an audit trail, and four-eyes approval before an employment record can be deleted.",
   },
 ]
 

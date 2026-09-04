@@ -11,13 +11,54 @@ import { saveAs } from "file-saver"
 export const API_BASE = ""
 
 const TOKEN_KEY = "rgos_token"
+const TOKEN_ISSUED_KEY = "rgos_token_issued"
+
+// The server expires a token after 30 days (see issue_token in auth.php). The
+// browser had no matching rule, so a token sat in local storage indefinitely
+// and was only discarded once a call came back 401. On a shared device that is
+// a valid-looking credential lying around long after anyone stopped using it.
+const TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token) return null
+  const issued = Number(localStorage.getItem(TOKEN_ISSUED_KEY) ?? 0)
+  // An unstamped token predates this and is trusted until the server says
+  // otherwise; a stamped one that has run out is dropped here.
+  if (issued > 0 && Date.now() - issued > TOKEN_MAX_AGE_MS) {
+    setToken(null)
+    return null
+  }
+  return token
 }
+
 export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token)
-  else localStorage.removeItem(TOKEN_KEY)
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token)
+    localStorage.setItem(TOKEN_ISSUED_KEY, String(Date.now()))
+  } else {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_ISSUED_KEY)
+  }
+}
+
+/**
+ * Drop the service worker's cached API responses.
+ *
+ * The worker app caches me.php and notifications.php for 12 hours so it still
+ * shows a worker their shifts and compliance status with no signal. Signing out
+ * cleared the token and left that cache alone, so the next person to open the
+ * app on a shared phone could be shown the previous worker's compliance record.
+ * Best-effort: the Cache API is unavailable in some contexts and a failure here
+ * must not stop somebody signing out.
+ */
+export async function purgeCachedApiReads(): Promise<void> {
+  try {
+    if (typeof caches === "undefined") return
+    await caches.delete("worker-reads")
+  } catch {
+    /* ignore */
+  }
 }
 
 export class ApiError extends Error {

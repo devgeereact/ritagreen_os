@@ -10,6 +10,7 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import { DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
+import { LocationNotice } from "@/components/worker/LocationNotice"
 
 type MeData = {
   worker: { id: number; name: string; role: string; division: string; status: string; right_to_work: boolean }
@@ -87,6 +88,9 @@ export default function WorkerApp() {
       </header>
 
       <main className="space-y-5 p-4">
+        {/* Above the shifts, so it is read before the first clock-in rather
+            than found afterwards. */}
+        <LocationNotice />
         {loading && <LoadingBlock rows={4} />}
         {error && <ErrorBlock message={error} onRetry={reload} />}
 

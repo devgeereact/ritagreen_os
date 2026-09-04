@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { api, getToken, setToken } from "@/lib/api"
+import { api, getToken, setToken, purgeCachedApiReads } from "@/lib/api"
 
 // The seven roles enforced across RitaGreenOS. Server-side checks are the
 // source of truth; this is used only to shape the UI.
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         setToken(null)
         setUser(null)
+        void purgeCachedApiReads()
       })
       .finally(() => setLoading(false))
   }, [])
@@ -87,6 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null)
     setUser(null)
+    // Signing out has to take the cached reads with it, or the next person to
+    // pick up the device still sees the last worker's shifts and compliance.
+    void purgeCachedApiReads()
   }
 
   function hasRole(...roles: Role[]) {
