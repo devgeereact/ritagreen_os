@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import type { Timesheet, Worker } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
@@ -47,6 +48,10 @@ function hm(minutes: number): string {
 }
 
 export default function Timesheets() {
+  // Reading is staff-wide; logging hours and approving them are office-only on
+  // the server. Same rule as Timetable, which reads the same endpoint.
+  const { hasRole } = useAuth()
+  const canManage = hasRole("super_admin", "admin", "manager")
   const { data, loading, error, reload } = useApi<Data>("timesheets.php")
   const [open, setOpen] = useState(false)
   const [approving, setApproving] = useState<number | null>(null)
@@ -96,7 +101,7 @@ export default function Timesheets() {
               <Download className="mr-1 size-4" /> Export payroll CSV
             </Button>
           )}
-          <NewEntryDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+          {canManage && <NewEntryDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
         </div>
       </div>
 
@@ -130,7 +135,7 @@ export default function Timesheets() {
             <EmptyBlock
               title="No timesheets yet"
               hint="Log a worker's hours for a day. Managers can then approve them for payroll."
-              action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Add entry</Button>}
+              action={canManage ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Add entry</Button> : undefined}
             />
           ) : (
             <Card>
@@ -160,7 +165,7 @@ export default function Timesheets() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {t.status === "pending" && (
+                        {canManage && t.status === "pending" && (
                           <Button size="sm" variant="outline" onClick={() => approve(t.id)} disabled={approving === t.id}>
                             <Check className="mr-1 size-4" /> Approve
                           </Button>

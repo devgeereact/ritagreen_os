@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { LogOut, MapPin, LogIn, LogOut as ClockOut, TriangleAlert, ShieldCheck, ShieldX, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ function when(dt: string) {
 }
 
 export default function WorkerApp() {
+  useDocumentTitle("My shifts — RitaGreen Services")
   const { logout } = useAuth()
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApi<MeData>("me.php")

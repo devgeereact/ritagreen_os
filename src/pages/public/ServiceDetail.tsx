@@ -1,3 +1,4 @@
+import { createElement } from "react"
 import { Link, useParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, Check, Phone, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,6 @@ export default function ServiceDetail() {
   if (!found) return <NotFoundPublic />
   const { division, service } = found
   const related = division.services.filter((s) => s.slug !== service.slug)
-  const Icon = divisionIcon(division.id)
 
   return (
     <>
@@ -57,7 +57,11 @@ export default function ServiceDetail() {
               className="grid size-14 shrink-0 place-items-center rounded-2xl ring-1 ring-inset ring-black/5"
               style={{ backgroundColor: accentTint(division.accent, 0.14), color: division.accent }}
             >
-              <Icon className="size-7" strokeWidth={1.75} />
+              {/* createElement, not `const Icon = divisionIcon(...)`: the icon is
+                  selected from a fixed table, never created, but a capitalised
+                  local reads to react-hooks/static-components as a component
+                  defined during render. */}
+              {createElement(divisionIcon(division.id), { className: "size-7", strokeWidth: 1.75 })}
             </span>
             <div>
               <p className="eyebrow">{division.name}</p>
@@ -154,7 +158,7 @@ export default function ServiceDetail() {
               className="grid size-11 place-items-center rounded-xl ring-1 ring-inset ring-black/5"
               style={{ backgroundColor: accentTint(division.accent, 0.14), color: division.accent }}
             >
-              <Icon className="size-5" strokeWidth={1.75} />
+              {createElement(divisionIcon(division.id), { className: "size-5", strokeWidth: 1.75 })}
             </span>
             <h3 className="mt-4 text-lg font-semibold">Get a quote for {service.name.toLowerCase()}</h3>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
+import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
 import type { Job, Client } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
@@ -53,6 +54,10 @@ const PRIORITY_VARIANT: Record<Job["priority"], "destructive" | "secondary" | "o
 }
 
 export default function Jobs() {
+  // Reading jobs is staff-wide; creating one, and the clients.php lookup the
+  // dialog needs, are office-only on the server.
+  const { hasRole } = useAuth()
+  const canCreate = hasRole("super_admin", "admin", "manager")
   const { data, loading, error, reload } = useApi<{ jobs: Job[] }>("jobs.php")
   const [q, setQ] = useState("")
   const [filter, setFilter] = useState<"all" | Job["status"]>("all")
@@ -83,7 +88,7 @@ export default function Jobs() {
             Care visits, cleans, guard shifts and courses, on one work-order spine.
           </p>
         </div>
-        <NewJobDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        {canCreate && <NewJobDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -115,7 +120,7 @@ export default function Jobs() {
         <EmptyBlock
           title="No jobs yet"
           hint="Raise your first work order — care visit, clean, guard shift or course."
-          action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New job</Button>}
+          action={canCreate ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New job</Button> : undefined}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { canAccess, isStaff, isClientAccount, isWorkerAccount, rolesFor, OFFICE, STAFF } from "@/lib/access"
+import { canAccess, homeFor, isStaff, isClientAccount, isWorkerAccount, rolesFor, OFFICE, STAFF } from "@/lib/access"
 import type { Role, User } from "@/providers/auth-provider"
 
 // The permission map decides what the interface offers. It is not the security
@@ -189,6 +189,39 @@ describe("canAccess", () => {
     const client = account("client")
     for (const path of ["/app/help", "/app/profile", "/app/notifications"]) {
       expect(canAccess(client, path)).toBe(false)
+    }
+  })
+})
+
+describe("homeFor", () => {
+  it("sends a client account to the portal", () => {
+    expect(homeFor(account("client"))).toBe("/portal")
+    // A client_id decides it even when the role does not say "client".
+    expect(homeFor(account("employee", { client_id: 4 }))).toBe("/portal")
+  })
+
+  it("sends a worker-linked account to the worker app", () => {
+    expect(homeFor(account("employee", { worker_id: 9 }))).toBe("/m")
+  })
+
+  it("sends internal staff to the office", () => {
+    for (const role of ["super_admin", "admin", "manager", "trainer", "editor", "employee"] as Role[]) {
+      expect(homeFor(account(role))).toBe("/app")
+    }
+  })
+
+  it("prefers the portal when an account is linked to both", () => {
+    // Rare, but it must be decided rather than left to ordering: a client
+    // contact who also holds a worker record is a client first.
+    expect(homeFor(account("client", { client_id: 1, worker_id: 2 }))).toBe("/portal")
+  })
+
+  it("only ever lands somewhere the account may actually go", () => {
+    for (const role of ALL_ROLES) {
+      for (const extra of [{}, { client_id: 1 }, { worker_id: 1 }]) {
+        const user = account(role, extra)
+        expect(canAccess(user, homeFor(user))).toBe(true)
+      }
     }
   })
 })

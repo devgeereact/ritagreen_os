@@ -42,26 +42,22 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Reports but does not block. 19 errors remain in application code, down
-      # from 27: the production-readiness audit cleared the two `any`s, the
-      # unused expression, two dead template components, and scoped
-      # react-refresh/only-export-components off the VENDORED shadcn primitives
-      # in src/components/ui (upstream ships Button beside buttonVariants; the
-      # rule still applies to everything we write).
+      # Blocking, at zero. It reported 27 errors, then 19, and now none.
       #
-      # What is left is React 19's new hook ruleset -- set-state-in-effect,
-      # static-components, refs, purity -- on code that works. static-components
-      # in particular is a false positive here: divisionIcon() SELECTS a
-      # module-level lucide component from a lookup table, it does not create
-      # one, so no state is reset. Clearing the rest means restructuring effects,
-      # which changes runtime behaviour and needs its own change with its own
-      # testing, not a tidy-up inside an audit.
+      # The last 19 were React 19's hook ruleset on working code, and were
+      # cleared by changing the code rather than the rules: the unreferenced
+      # FullCalendar template under src/components/calendar was deleted (it read
+      # a ref during render, so its own title never updated); icons are rendered
+      # with createElement() where a capitalised local read as a component
+      # defined during render; effects no longer set state synchronously in
+      # Scheduling, Verify, the auth provider and the theme toggle; homeFor(),
+      # openStorageNotice() and PageLoader moved out of the modules that mix them
+      # with components; and the vendored sidebar skeleton derives its width from
+      # useId() instead of Math.random().
       #
-      # The baseline is tracked as "ESLint baseline clean" in docs/STATUS.json.
-      # Flip continue-on-error to false, and add --max-warnings 0, once it is zero.
+      # --max-warnings 0 so a warning cannot quietly become the new baseline.
       - name: Lint
-        run: npm run lint
-        continue-on-error: true
+        run: npm run lint -- --max-warnings 0
 
       - name: Test
         run: npm test

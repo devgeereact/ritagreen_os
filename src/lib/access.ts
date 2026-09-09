@@ -114,6 +114,19 @@ export function isWorkerAccount(user: Pick<User, "worker_id">): boolean {
   return Boolean(user.worker_id)
 }
 
+/**
+ * Where a user lands after login, or on hitting the app, by account type.
+ *
+ * Here rather than in auth-provider.tsx: a module that exports both components
+ * and plain functions loses fast refresh, and this is the same question as
+ * isClientAccount()/isWorkerAccount() above — it belongs beside them.
+ */
+export function homeFor(user: Pick<User, "role" | "client_id" | "worker_id">): string {
+  if (isClientAccount(user)) return "/portal"
+  if (isWorkerAccount(user)) return "/m"
+  return "/app"
+}
+
 /** May this user open this path? Unknown paths are allowed; the server still decides. */
 export function canAccess(
   user: Pick<User, "role" | "client_id" | "worker_id"> | null,

@@ -5,7 +5,7 @@ import { BadgeCheck, XCircle, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageHeader, Section } from "@/components/public/section"
-import { api, API_BASE, ApiError } from "@/lib/api"
+import { api, API_BASE } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
 
 type Certificate = {
@@ -29,39 +29,60 @@ export default function Verify() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [query, setQuery] = useState(id ?? "")
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<Certificate | null>(null)
-  const [notFound, setNotFound] = useState(false)
-  const [qr, setQr] = useState("")
+
+  // One state value, stamped with the id it belongs to.
+  //
+  // It was three (`loading`, `result`, `notFound`), two of which had to be reset
+  // synchronously inside the effect when the URL carried no id — the cascading
+  // render react-hooks warns about. Stamping the outcome with its id lets the
+  // "nothing to show" case be derived at render instead, and stops a previous
+  // certificate's card showing for a moment while the next one is fetched.
+  type Lookup =
+    | { id: string; status: "loading" }
+    | { id: string; status: "found"; certificate: Certificate }
+    | { id: string; status: "missing" }
+  const [lookup, setLookup] = useState<Lookup | null>(null)
+  const [qr, setQr] = useState<{ id: string; url: string } | null>(null)
+
+  const current = id && lookup?.id === id ? lookup : null
+  const result = current?.status === "found" ? current.certificate : null
+  const loading = current?.status === "loading"
+  const notFound = current?.status === "missing"
+  const qrUrl = result && qr?.id === result.id ? qr.url : ""
 
   useEffect(() => {
-    if (!result) {
-      setQr("")
-      return
-    }
+    if (!result) return
+    let alive = true
     QRCode.toDataURL(`${window.location.origin}/verify/${result.id}`)
-      .then(setQr)
-      .catch(() => setQr(""))
+      .then((url) => {
+        if (alive) setQr({ id: result.id, url })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
   }, [result])
 
   useEffect(() => {
-    if (!id) {
-      setResult(null)
-      setNotFound(false)
-      return
-    }
-    setLoading(true)
-    setNotFound(false)
+    if (!id) return
+    let alive = true
+    // Queued as a microtask rather than set inline: an effect body that calls
+    // setState synchronously renders twice before the browser paints.
+    void Promise.resolve().then(() => {
+      if (alive) setLookup({ id, status: "loading" })
+    })
     api<{ certificate: Certificate }>(`certificates.php?action=verify&id=${encodeURIComponent(id)}`, {
       auth: false,
     })
-      .then((res) => setResult(res.certificate))
-      .catch((err) => {
-        setResult(null)
-        if (err instanceof ApiError && err.status === 404) setNotFound(true)
-        else setNotFound(true)
+      .then((res) => {
+        if (alive) setLookup({ id, status: "found", certificate: res.certificate })
       })
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (alive) setLookup({ id, status: "missing" })
+      })
+    return () => {
+      alive = false
+    }
   }, [id])
 
   function onSubmit(e: React.FormEvent) {
@@ -105,9 +126,9 @@ export default function Verify() {
                   <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
                   <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
                 </dl>
-                {qr && (
+                {qrUrl && (
                   <div className="text-center">
-                    <img src={qr} alt="Verification QR code" className="size-28 rounded-lg border bg-white p-1.5" />
+                    <img src={qrUrl} alt="Verification QR code" className="size-28 rounded-lg border bg-white p-1.5" />
                     <p className="mt-1 text-[10px] text-muted-foreground">Scan to verify</p>
                   </div>
                 )}

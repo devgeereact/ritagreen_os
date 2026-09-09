@@ -19,6 +19,8 @@ import { useAuth } from "@/providers/auth-provider"
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { UserDropdown } from "@/components/UserDropdown"
+import { titleFor } from "@/lib/app-routes"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 
 export default function AppLayout() {
   const [scrolled, setScrolled] = useState(false)
@@ -38,6 +40,9 @@ export default function AppLayout() {
     window.addEventListener("scroll", onScroll)
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
+
+  const page = titleFor(pathname)
+  useDocumentTitle(page ? `${page} — RitaGreen OS` : "RitaGreen OS")
 
   // Handle responsive sidebar
   useEffect(() => {

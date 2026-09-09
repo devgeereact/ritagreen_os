@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { Cookie, X } from "lucide-react"
+import { STORAGE_NOTICE_EVENT } from "@/lib/storage-notice"
 
 const STORAGE_KEY = "rg-storage-notice"
 
@@ -12,11 +13,6 @@ const STORAGE_KEY = "rg-storage-notice"
  * something the visitor never saw. Keep it in step with docs/COOKIES.md.
  */
 export const NOTICE_VERSION = "2026-09-04"
-
-/** Reopen the notice — the footer link calls this. */
-export function openStorageNotice() {
-  window.dispatchEvent(new CustomEvent("rg:storage-notice"))
-}
 
 type Ack = { version: string; at: string }
 
@@ -68,8 +64,8 @@ export function CookieConsent() {
       setReturnFocus(true)
       setOpen(true)
     }
-    window.addEventListener("rg:storage-notice", reopen)
-    return () => window.removeEventListener("rg:storage-notice", reopen)
+    window.addEventListener(STORAGE_NOTICE_EVENT, reopen)
+    return () => window.removeEventListener(STORAGE_NOTICE_EVENT, reopen)
   }, [])
 
   const dismiss = useCallback(() => {

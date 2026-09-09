@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom"
-import { useAuth, homeFor, type Role } from "@/providers/auth-provider"
-import { canAccess } from "@/lib/access"
+import { useAuth, type Role } from "@/providers/auth-provider"
+import { canAccess, homeFor } from "@/lib/access"
 
 // Gate for the authenticated surfaces.
 //

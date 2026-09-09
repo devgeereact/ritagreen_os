@@ -1,11 +1,11 @@
 import { lazy, Suspense, type ReactElement } from "react"
 import { createBrowserRouter } from "react-router-dom"
-import { Loader2 } from "lucide-react"
 
 import PublicLayout from "@/layouts/PublicLayout"
 import BareLayout from "@/layouts/BareLayout"
 import RequireAuth from "@/auth/RequireAuth"
 import ErrorPage from "@/pages/ErrorPage"
+import { PageLoader } from "@/routes/page-loader"
 
 // The home page stays eager: it is the first paint for most visitors, and
 // making it wait on a second round trip would cost exactly the metric this
@@ -90,15 +90,6 @@ const Profile = lazy(() => import("@/pages/app/Profile"))
 const Help = lazy(() => import("@/pages/app/Help"))
 const Notifications = lazy(() => import("@/pages/app/Notifications"))
 const SmokeTest = lazy(() => import("@/pages/app/SmokeTest"))
-
-// Suspense fallback while a lazily-loaded page chunk arrives.
-function PageLoader() {
-  return (
-    <div className="flex h-full min-h-[60vh] w-full items-center justify-center">
-      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-    </div>
-  )
-}
 
 // Wrap a lazily-loaded page in a Suspense boundary. Named `cms` when only the
 // internal app was lazy; the public pages are lazy now too.

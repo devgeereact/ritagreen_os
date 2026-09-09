@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { AlertTriangle, ShieldAlert, UserX, TrendingDown, Activity } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useApi } from "@/hooks/use-api"
@@ -37,7 +37,10 @@ export default function Insights() {
     workers.reload(); compliance.reload(); clients.reload(); jobs.reload(); invoices.reload()
   }
 
-  const now = Date.now()
+  // Captured once for the life of the component rather than read on every
+  // render: reading the clock during render makes the component non-idempotent,
+  // and the scores below would shift under a re-render that changed nothing.
+  const [now] = useState(() => Date.now())
 
   // ---- Workforce deployability / no-show risk ----
   const workerRisk = useMemo<Scored<Worker>[]>(() => {

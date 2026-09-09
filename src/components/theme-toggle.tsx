@@ -2,7 +2,6 @@
 
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -12,15 +11,13 @@ import {
 } from "@/components/ui/tooltip"
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme()
+  // `resolvedTheme` is undefined until next-themes has read the stored
+  // preference, which is the same signal the usual `mounted` flag carries —
+  // without a state update fired from an effect on every mount. It also means
+  // the placeholder reflects the real thing being waited for.
+  const { resolvedTheme, setTheme } = useTheme()
 
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
+  if (!resolvedTheme) {
     return (
       <Button variant="ghost" size="icon"
        className="rounded-full opacity-0">
@@ -29,7 +26,7 @@ export function ThemeToggle() {
     )
   }
 
-  const isDark = theme === "dark"
+  const isDark = resolvedTheme === "dark"
 
   return (
     <TooltipProvider>

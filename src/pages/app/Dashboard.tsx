@@ -31,7 +31,11 @@ const DIVISION_TABS = [
 ]
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
+  // OpsToday reads scheduling.php, invoices.php and enquiries.php, all of which
+  // are office-only on the server. Without this the panels rendered a 403 as an
+  // empty state, which reads as "nothing to do" rather than "not yours to see".
+  const isOffice = hasRole("super_admin", "admin", "manager")
   const [division, setDivision] = useState("all")
   const { data, loading, error, reload } = useApi<DashboardSummary>(
     `dashboard.php?division=${division}`,
@@ -131,7 +135,7 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <OpsToday />
+          {isOffice && <OpsToday />}
         </>
       )}
     </div>

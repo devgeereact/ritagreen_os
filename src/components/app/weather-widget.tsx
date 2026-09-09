@@ -1,3 +1,4 @@
+import { createElement } from "react"
 import {
   Sun,
   Cloud,
@@ -62,7 +63,10 @@ export function WeatherWidget() {
 
   if (error) return null // not configured / unreachable — stay out of the way
 
-  const Icon = data ? iconFor(data.main) : Cloud
+  // createElement rather than `const Icon = …; <Icon />`. The icon is SELECTED
+  // from a fixed set of lucide components, never created, but assigning one to a
+  // capitalised local reads to react-hooks/static-components as a component
+  // defined during render. This says what is actually happening.
   const tone = data ? TONE[data.advisory.level] : TONE.ok
 
   return (
@@ -75,7 +79,9 @@ export function WeatherWidget() {
         ) : data ? (
           <>
             <div className="flex items-center gap-4">
-              <Icon className="size-10 shrink-0 text-primary" />
+              {createElement(data ? iconFor(data.main) : Cloud, {
+                className: "size-10 shrink-0 text-primary",
+              })}
               <div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold">

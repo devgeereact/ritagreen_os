@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useAuth, homeFor } from "@/providers/auth-provider"
+import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
+import { homeFor } from "@/lib/access"
 import { useSeo } from "@/hooks/use-seo"
 
 export default function Login() {

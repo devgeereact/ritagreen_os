@@ -23,13 +23,6 @@ export type User = {
   must_setup_2fa?: boolean
 }
 
-// Where a user lands after login / on hitting the app, by account type.
-export function homeFor(user: Pick<User, "role" | "client_id" | "worker_id">): string {
-  if (user.role === "client" || user.client_id) return "/portal"
-  if (user.worker_id) return "/m"
-  return "/app"
-}
-
 type AuthContextValue = {
   user: User | null
   loading: boolean
@@ -45,15 +38,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Whether we are resolving a session is knowable at the first render: either a
+  // token is stored or it is not. Starting at `true` and immediately setting it
+  // false inside the effect cost every signed-out visitor a render of the
+  // loading state, and is the cascading-render pattern react-hooks warns about.
+  const [loading, setLoading] = useState(() => getToken() !== null)
 
   // On boot, if a token exists, resolve the current user.
   useEffect(() => {
-    const token = getToken()
-    if (!token) {
-      setLoading(false)
-      return
-    }
+    if (!getToken()) return
     api<{ user: User }>("auth.php?action=me")
       .then((res) => setUser(res.user))
       .catch(() => {

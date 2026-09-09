@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import FullCalendar from "@fullcalendar/react"
 import dayGridPlugin from "@fullcalendar/daygrid"
 import timeGridPlugin from "@fullcalendar/timegrid"
@@ -51,22 +51,33 @@ export default function Scheduling() {
   const [shifts, setShifts] = useState<Shift[]>([])
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const load = useCallback(async (from: string, to: string) => {
-    setError(null)
-    try {
-      const res = await api<{ shifts: Shift[] }>(`scheduling.php?from=${from}&to=${to}`)
-      setShifts(res.shifts)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load the rota.")
-    }
-  }, [])
-
+  // One fetch path, driven by the visible range and a manual refresh counter.
+  //
+  // It was a `load()` callback invoked from the effect body, which sets state
+  // synchronously inside the effect, and had no cancellation: paging the
+  // calendar quickly could let an earlier response land after a later one and
+  // paint the wrong week. The `alive` flag closes that.
   useEffect(() => {
-    if (range) load(range.from, range.to)
-  }, [range, load])
+    if (!range) return
+    let alive = true
+    api<{ shifts: Shift[] }>(`scheduling.php?from=${range.from}&to=${range.to}`)
+      .then((res) => {
+        if (!alive) return
+        setShifts(res.shifts)
+        setError(null)
+      })
+      .catch((err) => {
+        if (!alive) return
+        setError(err instanceof ApiError ? err.message : "Could not load the rota.")
+      })
+    return () => {
+      alive = false
+    }
+  }, [range, refreshKey])
 
-  const reload = () => range && load(range.from, range.to)
+  const reload = () => setRefreshKey((k) => k + 1)
 
   function onDatesSet(arg: DatesSetArg) {
     const from = isoDate(arg.start)

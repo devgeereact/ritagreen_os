@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useApi } from "@/hooks/use-api"
+import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
 import type {
   ComplianceItem,
@@ -59,6 +60,13 @@ const STATUS_META: Record<
 }
 
 export default function Compliance() {
+  // /app/compliance is open to trainer and employee as well as the office, but
+  // insurance.php and references.php are office-only on the server. Offering
+  // those tabs to a trainer led straight to an error block, so they are hidden
+  // rather than shown and refused.
+  const { hasRole } = useAuth()
+  const isOffice = hasRole("super_admin", "admin", "manager")
+
   return (
     <div className="space-y-6">
       <div>
@@ -71,18 +79,22 @@ export default function Compliance() {
       <Tabs defaultValue="credentials">
         <TabsList>
           <TabsTrigger value="credentials">Credentials</TabsTrigger>
-          <TabsTrigger value="insurance">Insurance</TabsTrigger>
-          <TabsTrigger value="references">References</TabsTrigger>
+          {isOffice && <TabsTrigger value="insurance">Insurance</TabsTrigger>}
+          {isOffice && <TabsTrigger value="references">References</TabsTrigger>}
         </TabsList>
         <TabsContent value="credentials" className="mt-6">
           <CredentialsTab />
         </TabsContent>
-        <TabsContent value="insurance" className="mt-6">
-          <InsuranceTab />
-        </TabsContent>
-        <TabsContent value="references" className="mt-6">
-          <ReferencesTab />
-        </TabsContent>
+        {isOffice && (
+          <TabsContent value="insurance" className="mt-6">
+            <InsuranceTab />
+          </TabsContent>
+        )}
+        {isOffice && (
+          <TabsContent value="references" className="mt-6">
+            <ReferencesTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )

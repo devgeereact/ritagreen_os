@@ -65,9 +65,14 @@ import { api } from "@/lib/api"
 
 // Poll the mailbox for unread count to badge the Inbox nav item. Silent on
 // failure (e.g. IMAP not configured) so the sidebar never breaks.
-function useInboxUnread(): number {
+//
+// Only for accounts that may open the Inbox. inbox.php is office-only, so this
+// polled a 403 every 60 seconds for every trainer, editor and employee, filling
+// their console with errors for a badge they never see.
+function useInboxUnread(mayOpenInbox: boolean): number {
   const [count, setCount] = useState(0)
   useEffect(() => {
+    if (!mayOpenInbox) return
     let alive = true
     const load = () =>
       api<{ unread: number }>("inbox.php?action=unread")
@@ -79,7 +84,7 @@ function useInboxUnread(): number {
       alive = false
       clearInterval(id)
     }
-  }, [])
+  }, [mayOpenInbox])
   return count
 }
 
@@ -160,8 +165,8 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 }
 
 export function AppSidebar({ onHoverChange, ...props }: AppSidebarProps) {
-  const unread = useInboxUnread()
   const { user } = useAuth()
+  const unread = useInboxUnread(canAccess(user, "/app/inbox"))
   // Hide what this account cannot open. The route guard reads the same map, so a
   // visible link always leads somewhere the user is allowed to be.
   const groups = NAV_GROUPS

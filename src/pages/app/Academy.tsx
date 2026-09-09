@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
 import { api, aiDraft, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import type { Programme } from "@/lib/types"
 import { DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
@@ -45,6 +46,10 @@ const STATUS_VARIANT: Record<Programme["status"], "default" | "secondary" | "out
 }
 
 export default function Academy() {
+  // Trainers may read and enrol; creating and publishing a programme is office
+  // plus editor on the server, so the action is hidden from everyone else.
+  const { hasRole } = useAuth()
+  const canAuthor = hasRole("super_admin", "admin", "manager", "editor")
   const { data, loading, error, reload } = useApi<{ programmes: Programme[] }>("academy.php")
   const [open, setOpen] = useState(false)
   const programmes = data?.programmes ?? []
@@ -58,7 +63,7 @@ export default function Academy() {
             Courses, learners and certificates. Completed learners get a verifiable certificate.
           </p>
         </div>
-        <NewProgrammeDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        {canAuthor && <NewProgrammeDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
       </div>
 
       {loading && <LoadingBlock rows={5} />}
@@ -67,7 +72,7 @@ export default function Academy() {
         <EmptyBlock
           title="No programmes yet"
           hint="Create your first course. You can draft the description with AI."
-          action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New programme</Button>}
+          action={canAuthor ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New programme</Button> : undefined}
         />
       )}
 

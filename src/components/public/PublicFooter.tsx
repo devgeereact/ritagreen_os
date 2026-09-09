@@ -5,7 +5,7 @@ import { Logo } from "@/components/brand/Logo"
 import { Button } from "@/components/ui/button"
 import { DIVISIONS } from "@/lib/divisions"
 import { COMPANY, SOCIALS } from "@/lib/company"
-import { openStorageNotice } from "@/components/public/CookieConsent"
+import { openStorageNotice } from "@/lib/storage-notice"
 
 /**
  * The two ways in, one per audience.

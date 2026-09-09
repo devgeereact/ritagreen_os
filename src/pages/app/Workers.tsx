@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Worker, Skill } from "@/lib/types"
 import { shortDate, gbp } from "@/lib/format"
@@ -47,6 +48,10 @@ const ROLES = [
 ]
 
 export default function Workers() {
+  // Trainer and employee may read this page; only the office may onboard, and
+  // workers.php enforces that. Hide the action rather than fail the form.
+  const { hasRole } = useAuth()
+  const canOnboard = hasRole("super_admin", "admin", "manager")
   const { data, loading, error, reload } = useApi<{ workers: Worker[] }>("workers.php")
   const [q, setQ] = useState("")
   const [open, setOpen] = useState(false)
@@ -68,7 +73,7 @@ export default function Workers() {
             One workforce across four divisions, fully checked before first shift.
           </p>
         </div>
-        <NewWorkerDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        {canOnboard && <NewWorkerDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
       </div>
 
       <div className="relative max-w-sm">
@@ -82,7 +87,7 @@ export default function Workers() {
         <EmptyBlock
           title="No workers yet"
           hint="Onboard your first worker. Right-to-work and DBS are captured up front."
-          action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Onboard worker</Button>}
+          action={canOnboard ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Onboard worker</Button> : undefined}
         />
       )}
 
