@@ -197,6 +197,23 @@ home rather than to a dead end. The map mirrors the `require_role()` calls in `s
 Until this landed, `RequireAuth` accepted a `roles` prop that no route ever passed, so all
 three authenticated surfaces were gated identically on "logged in".
 
+**Every authenticated surface names itself.** The public site sets its title through
+`useSeo()`; `/app`, `/portal` and `/m` set nothing at all, so each of them kept whichever
+`<title>` the last public page had left in place — the browser tab, the history entry and a
+screen reader's page announcement all said the marketing home page's title. `useDocumentTitle()`
+(`src/hooks/use-document-title.ts`) now sets it: `AppLayout` derives the name from
+`titleFor()` in `src/lib/app-routes.ts`, and the portal and worker app pass their own.
+
+**A guard belongs above the read, not just above the write.** Twenty endpoints role-gated their
+POST branches and left every GET on `require_auth()` alone, so any logged-in account — a client
+portal login and a worker's own login included — could list the whole client base, every
+applicant, the full rota and the entire workforce's compliance state by calling the PHP file
+directly. The guard now sits immediately after `require_auth()` in each of them, above every
+branch, and `server/tests/guards.php` fails the suite if an endpoint returns anything between
+`require_auth()` and its first authorisation call. Endpoints that genuinely serve any
+authenticated account are named there with the reason, and each scopes its own query to the
+caller.
+
 **Role is not sufficient on its own.** A worker's login is an ordinary account with
 `users.worker_id` set, and a client portal login has `users.client_id` set, so either may hold
 a role such as `employee`. Anything gated on "internal staff" must therefore check the link,

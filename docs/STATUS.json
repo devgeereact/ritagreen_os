@@ -873,13 +873,13 @@
         },
         {
           "name": "CI quality gates",
-          "status": "partial",
-          "note": "typecheck, build, php -l and docs checks block; lint reports only"
+          "status": "done",
+          "note": "typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block"
         },
         {
           "name": "Automated tests",
           "status": "partial",
-          "note": "Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
+          "note": "Two dependency-free suites, both in CI: server/tests/run.php (308 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end"
         },
         {
           "name": "Exception messages withheld from callers",
@@ -893,8 +893,8 @@
         },
         {
           "name": "ESLint baseline clean",
-          "status": "todo",
-          "note": "27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done"
+          "status": "done",
+          "note": "0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks"
         },
         {
           "name": "Documentation consistency enforced in CI",

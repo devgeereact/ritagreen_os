@@ -99,6 +99,14 @@ third-party script, font, map or pixel and that stops being true: you then owe a
 control that keeps the script inert until the visitor agrees, an entry in `docs/COOKIES.md`, and
 a line in the privacy notice. See `src/components/public/CookieConsent.tsx`.
 
+**A guard goes above the read, not just above the write.** Twenty endpoints role-gated their
+POST branches and left every GET on `require_auth()` alone, so a client portal login could read
+the whole client base, every applicant, the rota and the workforce's compliance state by calling
+the PHP file directly. The guard now sits immediately after `require_auth()`, above every
+branch. `server/tests/guards.php` (in `npm run test:php`) fails if an endpoint returns anything
+between `require_auth()` and its first authorisation call; endpoints that really do serve any
+authenticated account are listed there with the reason.
+
 **Sensitive data is separated by zone, not by role alone.** `can_view_zone()` reads
 `zone_permissions` (migration 015), and it is enforced for `payroll`, `compliance` and `health`.
 A new endpoint that returns right-to-work state, DBS status, an SIA number or anything about
@@ -151,10 +159,9 @@ assertion (`dist/index.html`, `manifest.webmanifest`, `sw.js` present, **zero `*
 `php -l` across every PHP file, `php server/tests/run.php`, a check that `server/config.php` is
 not tracked, and `python3 scripts/docs_sync.py --check`.
 
-**Lint does not gate yet.** It is `continue-on-error: true` with ~19 remaining errors, nearly
-all React 19's new hook ruleset on working code. Do not add to the pile. Flip
-`continue-on-error` to `false` and add `--max-warnings 0` when it reaches zero — that is
-tracked as "ESLint baseline clean" in `docs/STATUS.json`.
+**Lint gates, at zero.** CI runs `eslint --max-warnings 0` and blocks. It was 33 errors, then
+27, then 19; the last of them were cleared by changing the code rather than the rules. Keep it
+there — a new error now fails the build, and the fix is the code, not a disable comment.
 
 **Adding a feature with data:**
 
@@ -178,7 +185,7 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
 ## 6. Current state
 
-157 done, 13 partial, 3 to do of 173 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+160 done, 12 partial, 2 to do of 174 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
 generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
@@ -205,6 +212,12 @@ never resolves and the app renders blank on every route. Only `react` is named, 
 **The workbox `globIgnores` patterns must be re-checked against `ls dist/assets` whenever
 chunking changes.** A glob that matches nothing fails silently; that is how 700 kB of office
 code previously re-entered the worker app's install.
+
+**Two registries describe the app's pages, and they answer different questions.**
+`src/lib/app-routes.ts` is the page list: label, path, icon, search keywords. The ⌘K palette is
+built from it and `titleFor()` names the browser tab from it, so a new page needs an entry there
+or it is unsearchable and its tab reads "RitaGreen OS". `src/components/app-sidebar.tsx` keeps
+its own tree because it groups differently and shortens labels to fit. Do not add a third.
 
 **`src/lib/access.ts` maps route → permitted roles** and is read by both `RequireAuth` and the
 sidebar. Add a route there when you add a route. It is a UX guard only — the server is the

@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  158 done · 13 partial · 3 to do · 174 tracked
+`#######################.`  160 done · 12 partial · 2 to do · 174 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `##########..` | 12 | 3 | 2 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 14 | 2 | 1 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,11 +35,13 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 12 done, 3 partial, 2 to do
+Milestone 0 · 14 done, 2 partial, 1 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
+- [x] CI quality gates — _typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
+- [x] ESLint baseline clean — _0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
@@ -49,10 +51,8 @@ Milestone 0 · 12 done, 3 partial, 2 to do
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
-- [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested_
-- [~] CI quality gates — _typecheck, build, php -l and docs checks block; lint reports only_
+- [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (308 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
 - [~] Documentation pack — _Milestone 0, in progress_
-- [ ] ESLint baseline clean — _27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done_
 - [ ] Migration production guard is meaningful on cPanel — _migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead_
 
 ### FOUNDATION — Foundation and person spine

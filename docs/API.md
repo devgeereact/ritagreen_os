@@ -192,10 +192,21 @@ already paid, already booked, duplicate email), `429` (rate limited), `498`
 `500`, `502` (upstream service failure), `503` (feature not configured).
 
 Uncaught exceptions and PHP errors are converted to JSON by the handlers at
-`lib.php:8-19`. Note that the exception handler interpolates the raw exception
-message into the response (`'Server error: ' . $e->getMessage()`,
-`lib.php:13`) irrespective of the `GK_DEBUG` constant, so internal detail can
-reach the caller on an unexpected failure.
+`lib.php:10-38`. The full detail is always written to the error log with a short
+reference; what reaches the caller depends on `GK_DEBUG`. With it on (local
+development) the response carries the exception message and its file and line.
+With it off (the server) the caller gets only `Server error. Quote reference
+<ref> if you report this.` and the matching `ref`.
+
+A status change against a record that does not exist returns **404**, not
+`{ok: true}`. `jobs.php` always did; `quotes.php`, `incidents.php`,
+`contracts.php`, `bookings.php`, `timesheets.php`, `references.php`,
+`invoices.php`, `ats.php`, `shift-templates.php` and `academy.php` did not, and
+reported success while writing an audit row for an id with nothing behind it.
+Repeating an action that has already been applied still returns 200: mysqli's
+`affected_rows` is 0 both for a missing row and for a value that was already
+what was written, so existence is confirmed separately (`row_exists()`,
+`lib.php`).
 
 ---
 
@@ -326,36 +337,36 @@ computed identically everywhere.
 
 | File | Purpose | Auth posture |
 |---|---|---|
-| `academy.php` | LMS: programmes, enrolments, certificate issue | Auth; reads any role, writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
-| `ai.php` | OpenRouter chat proxy | Auth, any role |
+| `academy.php` | LMS: programmes, enrolments, certificate issue | Office roles plus `trainer` and `editor` throughout, reads included; writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
+| `ai.php` | OpenRouter chat proxy | Staff |
 | `analytics.php` | Group BI aggregates | `super_admin`/`admin`/`manager` |
-| `api.php` | Items smoke test | Auth, any role |
-| `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else auth, writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
+| `api.php` | Items smoke test | Staff |
+| `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else office roles plus `trainer`, reads included; writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
 | `audit.php` | Audit-log viewer | `super_admin`/`admin` |
 | `auth.php` | Login, 2FA, sessions, reset, registration, Google SSO | **Mixed** — see §8 |
 | `backup.php` | Cron mysqldump | **CLI, or HTTP with `?key=ALERTS_KEY`** |
 | `blog.php` | Blog posts | **Public reads**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `bookings.php` | Cover requests | **POST with no action is public**; rest auth, writes `super_admin`/`admin`/`manager` |
+| `bookings.php` | Cover requests | **POST with no action is public**; rest office roles throughout, reads included |
 | `certificates.php` | Certificate verification and Open Badges | **Public** |
-| `clients.php` | CRM | Auth; reads any role, writes `super_admin`/`admin`/`manager` |
-| `comms.php` | Announcements | Auth; POST `super_admin`/`admin`/`manager` |
-| `compliance.php` | Credential register and audit packs | Auth; POST `super_admin`/`admin`/`manager` |
+| `clients.php` | CRM | Office roles throughout, reads included |
+| `comms.php` | Announcements | Staff to read; POST `super_admin`/`admin`/`manager` |
+| `compliance.php` | Credential register and audit packs | Staff **and** the `compliance` zone throughout, reads included; POST `super_admin`/`admin`/`manager` |
 | `contact.php` | Public enquiry form | **Public** |
-| `contracts.php` | Recurring contracts | Auth; writes `super_admin`/`admin`/`manager` |
-| `credit-notes.php` | Credit notes against invoices | Auth; POST `super_admin`/`admin`/`manager` |
-| `dashboard.php` | Command-centre summary | Auth, any role |
+| `contracts.php` | Recurring contracts | Office roles throughout, reads included |
+| `credit-notes.php` | Credit notes against invoices | Office roles throughout, reads included |
+| `dashboard.php` | Command-centre summary | Staff |
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
 | `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
 | `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts |
 | `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
 | `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
-| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest auth, writes `super_admin`/`admin`/`manager` |
+| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest office roles throughout, the mandate status read included |
 | `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager` |
 | `incidents.php` | Incidents and safeguarding | `super_admin`/`admin`/`manager` throughout, reads included |
-| `insurance.php` | Company insurance register | Auth; writes `super_admin`/`admin`/`manager` |
-| `invoices.php` | Invoicing | Auth; writes `super_admin`/`admin`/`manager` |
-| `jobs.php` | Work orders | Auth; status allows `employee`, create `super_admin`/`admin`/`manager` |
+| `insurance.php` | Company insurance register | Office roles throughout, reads included |
+| `invoices.php` | Invoicing | Office roles throughout, reads included |
+| `jobs.php` | Work orders | Staff to read; status allows `employee`, create `super_admin`/`admin`/`manager` |
 | `margin.php` | Pay-vs-charge reconciliation | `super_admin`/`admin`/`manager` |
 | `me.php` | Worker self-service (mobile PWA) | Auth **and** a linked `worker_id` |
 | `notifications.php` | Notification bell | Auth, any role |
@@ -363,16 +374,16 @@ computed identically everywhere.
 | `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager` |
 | `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager` |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
-| `quotes.php` | Quoting | Auth; writes `super_admin`/`admin`/`manager` |
-| `references.php` | Reference checks | Auth; writes `super_admin`/`admin`/`manager` |
+| `quotes.php` | Quoting | Office roles throughout, reads included |
+| `references.php` | Reference checks | Office roles throughout, reads included |
 | `reports.php` | Regulatory export packs | `super_admin`/`admin`/`manager` |
-| `scheduling.php` | Shifts, matching, dispatch | Auth; writes `super_admin`/`admin`/`manager` |
-| `shift-templates.php` | Recurring shift templates | Auth; writes `super_admin`/`admin`/`manager` |
-| `skills.php` | Skills catalogue | Auth; writes `super_admin`/`admin`/`manager` |
+| `scheduling.php` | Shifts, matching, dispatch | Office roles throughout, reads included |
+| `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
+| `skills.php` | Skills catalogue | Office roles throughout, reads included |
 | `testimonials.php` | Testimonials | **Public read**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `timesheets.php` | Time tracking | Auth; create allows `employee`, approve `super_admin`/`admin`/`manager` |
+| `timesheets.php` | Time tracking | Staff to read; create allows `employee`, approve `super_admin`/`admin`/`manager` |
 | `users.php` | User and role management | `super_admin`/`admin` |
-| `weather.php` | OpenWeather proxy with shift advisory | Auth, any role |
+| `weather.php` | OpenWeather proxy with shift advisory | Staff |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
 
 Throughout the tables below, "office roles" means
@@ -431,8 +442,8 @@ Smoke test proving React → PHP → MySQL. Reached only from the dev-only
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | Auth, any role | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
-| POST | Auth, any role | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars; throttled `smoke` 30/5 min |
+| GET | Staff | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
+| POST | Staff | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars; throttled `smoke` 30/5 min |
 
 Both verbs were fully public until this was closed. The POST was an
 unauthenticated, unthrottled write into the production database.
@@ -445,13 +456,13 @@ OpenRouter proxy. The API key stays server-side and never reaches the browser.
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| POST | Auth, any role | `{prompt, system?}` | `{reply}` |
+| POST | Staff | `{prompt, system?}` | `{reply}` |
 
 Returns 503 if `OR_API_KEY` is unset or `CHANGE_ME`, and 502 on any transport
 or upstream error. The model is `OR_MODEL` from `config.php`; `system` defaults
-to a RitaGreen-specific UK-English assistant prompt (`ai.php:18`). Any
-authenticated user of any role — including `client` and `employee` — can spend
-tokens through this endpoint.
+to a RitaGreen-specific UK-English assistant prompt (`ai.php:18`). Internal
+staff only (`require_staff`), so a client portal or worker login cannot spend
+tokens through it; any staff account can.
 
 ---
 
@@ -459,7 +470,7 @@ tokens through this endpoint.
 
 | Method | Auth | Query | Returns |
 |---|---|---|---|
-| GET | Auth, any role | `division` = `all`\|`care`\|`academy`\|`cleaning`\|`security` (invalid falls back to `all`) | Counts for programmes, enrolments, upcoming sessions, certificates and open shifts; outstanding invoice pence; revenue by division; up to 10 DBS/SIA expiries within 30 days |
+| GET | Staff | `division` = `all`\|`care`\|`academy`\|`cleaning`\|`security` (invalid falls back to `all`) | Counts for programmes, enrolments, upcoming sessions, certificates and open shifts; outstanding invoice pence; revenue by division; up to 10 DBS/SIA expiries within 30 days |
 
 ---
 
@@ -475,8 +486,8 @@ tokens through this endpoint.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{client, sites, rate_cards, financials}` where `financials` is quoted / invoiced / paid / outstanding pence |
-| GET | — | Auth, any role | — | `{clients}` with site count, pipeline stage and account manager |
+| GET | — (with `?id=`) | Office roles | `id` | `{client, sites, rate_cards, financials}` where `financials` is quoted / invoiced / paid / outstanding pence |
+| GET | — | Office roles | — | `{clients}` with site count, pipeline stage and account manager |
 | POST | `update` | Office roles | `id`; body `{stage?, status?, account_manager_id?, sla_response_hours?}` | `{ok: true}`; stage ∈ lead/qualified/proposal/won/lost, status ∈ active/prospect/paused |
 | POST | `rate_card` | Office roles | `id`; body `{division, role?, charge_pence}` | `{ok: true}` 201 |
 | POST | — | Office roles | body `{name, type?, contact_name?, email?, phone?}` | `{client}` 201; type ∈ care_home/nhs/landlord/event/private, created as `prospect` |
@@ -509,7 +520,7 @@ bare POST; `availability` and `pay` appear only in inline comments.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | `worker_id?` | `{skills}`, plus `{assigned: [skill_id]}` when `worker_id` is given |
+| GET | — | Office roles | `worker_id?` | `{skills}`, plus `{assigned: [skill_id]}` when `worker_id` is given |
 | POST | `set` | Office roles | `worker_id`; body `{skill_ids: []}` | `{ok: true}`; replaces the worker's whole skill set |
 | POST | — | Office roles | body `{name, category?}` | `{ok: true}` 201; category ∈ care/academy/cleaning/security/general, anything else coerced to `general` |
 
@@ -528,10 +539,10 @@ scheduling time.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `match` | Auth, any role | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
+| GET | `match` | Office roles | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
 | POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
 | POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open` |
-| GET | — | Auth, any role | `from`, `to` (default: current month) | `{shifts}` for the calendar |
+| GET | — | Office roles | `from`, `to` (default: current month) | `{shifts}` for the calendar |
 | POST | — | Office roles | body `{worker_id, title, client_id?, site_name?, starts_at, ends_at}` | `{shift}` 201; 409 on missing right-to-work, a lapsed required check, or an overlapping scheduled shift |
 
 ---
@@ -540,7 +551,7 @@ scheduling time.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{templates}` |
+| GET | — | Office roles | — | `{templates}` |
 | POST | `toggle` | Office roles | `id` | `{ok: true}`; flips `active` |
 | POST | `generate` | Office roles | `weeks` (clamped to 1–12, default 4) | `{created: n}`; creates open shifts from every active template, skipping duplicates by division + title + start time |
 | POST | — | Office roles | body `{title, division, client_id?, site_name?, weekday, start_time, end_time}` | `{ok: true}` 201; weekday is ISO 1–7, times `HH:MM` |
@@ -576,7 +587,7 @@ present, otherwise the shift's assigned worker.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{timesheets, totals: {pending_minutes, approved_minutes}}`, 300 most recent |
+| GET | — | Staff | — | `{timesheets, totals: {pending_minutes, approved_minutes}}`, 300 most recent |
 | POST | `approve` | Office roles | `id` | `{ok: true}` |
 | POST | — | Office roles + `employee` | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, end after start, maximum 16 hours |
 
@@ -615,8 +626,8 @@ and overtime are included.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{invoices, totals, aged}`; `aged.buckets` are current / 1–30 / 31–60 / 61–90 / 90+ days, `aged.items` is the chase list sorted worst-first |
-| POST | `pay` | Office roles | `id` | `{ok: true}`; marks the invoice paid |
+| GET | — | Office roles | — | `{invoices, totals, aged}`; `aged.buckets` are current / 1–30 / 31–60 / 61–90 / 90+ days, `aged.items` is the chase list sorted worst-first |
+| POST | `pay` | Office roles | `id` | `{ok: true}`; marks the invoice paid and sets `amount_paid_pence` to the total, as the Stripe and GoCardless confirmations do. **404** if there is no such invoice, **409** if a credit note has voided it, and `{ok: true}` without a second write if it is already paid |
 | POST | — | Office roles | body `{division, client_id?, net_pence}` | `{invoice}` 201 |
 
 Payment terms are 30 days (`invoices.php:11`). Invoice numbers are
@@ -635,7 +646,7 @@ mark invoices paid.
 
 | Method | Auth | Params | Returns |
 |---|---|---|---|
-| GET | Auth, any role | `invoice_id` | `{credit_notes}` |
+| GET | Office roles | `invoice_id` | `{credit_notes}` |
 | POST | Office roles | body `{invoice_id, amount_pence, reason?}` | `{ok: true, number}` 201 |
 
 The credit is capped at the invoice's remaining balance; crediting the full
@@ -648,7 +659,7 @@ remainder sets the invoice to `void` (`credit-notes.php:67`). Numbers are
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{quotes, totals: {open_pence, won_pence}}` |
+| GET | — | Office roles | — | `{quotes, totals: {open_pence, won_pence}}` |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ draft/sent/declined, and the update refuses to touch a quote already `accepted` |
 | POST | `accept` | Office roles | `id` | `{ok: true, invoice_number}` 201; creates a mirroring invoice and links it back. 409 if already accepted |
 | POST | — | Office roles | body `{title, division, net_pence, client_id?}` | `{quote}` 201 |
@@ -661,7 +672,7 @@ Numbers are `QUO-<year>-####`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{contracts, totals: {annual_active_pence}}` with `days_to_renewal` |
+| GET | — | Office roles | — | `{contracts, totals: {annual_active_pence}}` with `days_to_renewal` |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ active/expired/cancelled |
 | POST | `renew` | Office roles | `id`; body `{months}` | `{ok: true}`; months outside 1–60 is coerced to 12; extends from `GREATEST(end_date, CURDATE())` |
 | POST | — | Office roles | body `{title, division, rate_pence, frequency, start_date, end_date, client_id?, scope?, sla_hours?}` | `{contract}` 201 |
@@ -675,7 +686,7 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{jobs}`, emergency first then high then standard |
+| GET | — | Staff | — | `{jobs}`, emergency first then high then standard |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
 | POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201; type ∈ care_visit/clean/guard_shift/course/other |
 
@@ -688,7 +699,7 @@ The client-facing front door to cover.
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | — | **Public**, rate-limited | body `{contact_name, email, phone?, division, site_name?, detail, preferred_start?, preferred_end?, consent}` | `{ok: true}` 201; links to an existing client by email, writes a `consent_log` row, raises a broadcast notification and emails the office |
-| GET | — | Auth, any role | — | `{requests}`, 300 most recent |
+| GET | — | Office roles | — | `{requests}`, 300 most recent |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}` |
 | POST | `confirm` | Office roles | `id` | `{ok: true, shift_id}`; turns the request into an open shift and emails the requester. 409 if a shift already exists |
 
@@ -734,8 +745,8 @@ Clock-in, clock-out, check-in and panic are not here; they go through
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `pack` | Auth, any role | `worker_id` | `{worker, credentials, references, documents, generated_by, generated_at}` — the audit bundle a CQC or SIA ACS inspector asks for |
-| GET | — | Auth, any role | — | `{summary, items}` across every worker, soonest expiry first |
+| GET | `pack` | Staff + `compliance` zone | `worker_id` | `{worker, credentials, references, documents, generated_by, generated_at}` — the audit bundle a CQC or SIA ACS inspector asks for |
+| GET | — | Staff + `compliance` zone | — | `{summary, items}` across every worker, soonest expiry first |
 | POST | — | Office roles | body `{worker_id, type, number?, expiry?}` | `{ok: true}` 201 |
 
 `classify()` (`compliance.php:10`) buckets an expiry as `expired` (past),
@@ -757,7 +768,7 @@ login included — could read a named worker's whole vetting record by changing 
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | `worker_id` | `{references}` |
+| GET | — | Office roles | `worker_id` | `{references}` |
 | POST | `status` | Office roles | `id`; body `{status, gap_note?}` | `{ok: true}`; status ∈ requested/received/verified/gap_explained |
 | POST | — | Office roles | body `{worker_id, referee_name, referee_org?, relationship?, email?, phone?}` | `{ok: true}` 201 |
 
@@ -767,7 +778,7 @@ login included — could read a named worker's whole vetting record by changing 
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{policies, summary: {el_minimum_met, el_minimum_pence}}` |
+| GET | — | Office roles | — | `{policies, summary: {el_minimum_met, el_minimum_pence}}` |
 | POST | `delete` | Office roles | `id` | `{ok: true}`; soft delete |
 | POST | — | Office roles | body `{type, insurer, policy_no?, cover_pence?, start_date?, expiry?, notes?}` | `{ok: true}` 201 |
 
@@ -781,8 +792,8 @@ at least £5,000,000 of cover (`insurance.php:23`).
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{incident, actions}` |
-| GET | — | Auth, any role | — | `{incidents, summary}`, critical first, capped at 400 |
+| GET | — (with `?id=`) | Office roles | `id` | `{incident, actions}` |
+| GET | — | Office roles | — | `{incidents, summary}`, critical first, capped at 400 |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ open/investigating/actioned/closed |
 | POST | `add_action` | Office roles | `id`; body `{note}` | `{ok: true}` 201 |
 | POST | `action_done` | Office roles | `action_id`; body `{done}` | `{ok: true}` |
@@ -800,8 +811,8 @@ broadcast notification and email `MAIL_TO`. References are
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{programme, enrolments}` |
-| GET | — | Auth, any role | — | `{programmes}` with learner counts |
+| GET | — (with `?id=`) | Office roles plus `trainer`/`editor` | `id` | `{programme, enrolments}` |
+| GET | — | Office roles plus `trainer`/`editor` | — | `{programmes}` with learner counts |
 | POST | `enrol` | Office roles + `trainer` | body `{programme_id, learner_name}` | `{ok: true}` 201 |
 | POST | `complete` | Office roles + `trainer` | `enrolment_id` | `{ok: true, public_id}` 201; issues a certificate `RG-<year>-#####`. Idempotent — an enrolment that already holds a certificate returns the existing id with 200 (`academy.php:90`) |
 | POST | `publish` | Office roles + `editor` | `id`; body `{status}` | `{ok: true}`; status ∈ draft/published/archived |
@@ -896,8 +907,8 @@ Recruitment and onboarding.
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | — | **Public**, rate-limited | body `{name, email, phone?, role_applied?, division, consent}` | `{ok: true}` 201; creates an applicant with source `careers`, a `consent_log` row, a broadcast notification and an office email |
-| GET | — (with `?id=`) | Auth, any role | `id` | `{applicant, tasks}` |
-| GET | — | Auth, any role | — | `{applicants}`, 500 most recent |
+| GET | — (with `?id=`) | Office roles plus `trainer` | `id` | `{applicant, tasks}` |
+| GET | — | Office roles plus `trainer` | — | `{applicants}`, 500 most recent |
 | POST | `stage` | Office roles | `id`; body `{stage}` | `{ok: true}`; stage ∈ applied/screened/interview/vetting/offer/onboarded/rejected |
 | POST | `add_task` | Office roles | `id`; body `{label}` | `{ok: true}` 201 |
 | POST | `task_done` | Office roles | `task_id`; body `{done}` | `{ok: true}` |
@@ -942,7 +953,7 @@ are always reported as read (`notifications.php:42`).
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | Auth, any role | — | `{announcements}` — group-wide plus the caller's own division, 100 most recent |
+| GET | Staff | — | `{announcements}` — group-wide plus the caller's own division, 100 most recent |
 | POST | Office roles | `{audience?, title, body}` | `{announcement}` 201 |
 
 Audience ∈ all/care/academy/cleaning/security; body ≤ 5000 chars. Creating an
@@ -1038,6 +1049,17 @@ to `export_log` and an `audit_log` entry.
 deleted with the bytes left on disk under a random name is the worst of both: gone from the
 system, still on the server, and no longer findable. An *archive* keeps the bytes deliberately —
 that is what makes it recoverable.
+
+**An approved hard deletion says what went with it, and is refused until somebody agrees.**
+Several foreign keys onto `workers` and `people` are `ON DELETE CASCADE`, so approving one
+deletion also removes shifts, timesheets, certifications, references, skills and shift offers —
+some of which the business is obliged to keep after the employment ends. The schema's cascade is
+unchanged; what changed is that it can no longer be triggered blind. `decide_deletion` counts the
+cascading children from the live foreign keys before deleting anything and, when there are any,
+returns **409** with a `cascade` map instead of proceeding. Sending the same decision again with
+`confirm_cascade: true` carries it out; the request stays open in the meantime, so rejecting it
+and asking for an *archive* — which cascades nothing — remains available. Either way the counts
+go into the audit entry and the response's `cascaded` field.
 
 **Erasure does not bypass the approval workflow.** It anonymises `contact_enquiries` and
 `service_requests`, which have no ongoing basis, and surfaces everything filed against the
@@ -1184,7 +1206,7 @@ Direct Debit via the Billing Requests flow. Raw HTTPS, no SDK. Sandbox unless
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | `webhook` | **None — HMAC verified** | Raw body; `Webhook-Signature` header | `{ok: true}` |
-| GET | `status` | Auth, any role | `client_id` | `{mandate}` or `{mandate: null}` |
+| GET | `status` | Office roles | `client_id` | `{mandate}` or `{mandate: null}` |
 | POST | `setup` | Office roles | body `{client_id}` | `{url}` — the hosted mandate authorisation page |
 | POST | `complete` | Office roles | body `{mandate}` (the local mandate row id) | `{status}` — `active` or `pending` |
 | POST | `charge` | Office roles | body `{invoice_id}` | `{ok: true, status}` |
@@ -1246,7 +1268,7 @@ site and times) is enumerable by anyone who can guess a token, though the
 
 | Method | Auth | Params | Returns |
 |---|---|---|---|
-| GET | Auth, any role | `city?` (default `London,GB`) | `{city, units, temp, feels_like, main, description, icon, humidity, wind_mph, advisory, fetched_at}` |
+| GET | Staff | `city?` (default `London,GB`) | `{city, units, temp, feels_like, main, description, icon, humidity, wind_mph, advisory, fetched_at}` |
 
 The OpenWeather key stays server-side. 503 if `OPENWEATHER_API_KEY` is unset or
 `CHANGE_ME`. The `city` parameter is constrained to `^[A-Za-z .,'-]+$` and 60
@@ -1351,8 +1373,8 @@ stays stable and comparable.
 
 | Endpoint | Purpose | Auth |
 |---|---|---|
-| `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff to read; office to write. See §54a |
-| `verifications.php` | The generalised verification lifecycle for every other credential | Staff to read; office to write |
+| `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff **and** the `compliance` zone to read; office to write. See §54a |
+| `verifications.php` | The generalised verification lifecycle for every other credential | Staff **and** the `compliance` zone to read; office to write |
 | `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own; staff see all |
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
 | `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
