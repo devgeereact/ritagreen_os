@@ -6,6 +6,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The sales ledger. Reads were unguarded; the writes below already were.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 const PAYMENT_TERMS_DAYS = 30;
@@ -71,7 +73,21 @@ if ($action === 'pay' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('An invoice is required.');
-    $stmt = $conn->prepare('UPDATE invoices SET status = "paid" WHERE id = ?');
+
+    // Three outcomes worth telling apart. It reported success for all of them:
+    // a mistyped id, an invoice a credit note has voided, and a real payment.
+    $stmt = $conn->prepare('SELECT status FROM invoices WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $invoice = $stmt->get_result()->fetch_assoc();
+    if (!$invoice) fail('Invoice not found.', 404);
+    if ($invoice['status'] === 'void') fail('That invoice has been voided by a credit note.', 409);
+    if ($invoice['status'] === 'paid') json_out(['ok' => true]);   // already settled
+
+    // amount_paid_pence is set here as payments.php and gocardless.php both set
+    // it on their own confirmations. Marking an invoice paid by hand left it at
+    // zero, so the same invoice read as paid in one column and unpaid in another.
+    $stmt = $conn->prepare('UPDATE invoices SET status = "paid", amount_paid_pence = total_pence WHERE id = ?');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     audit($conn, (int) $user['id'], 'invoice.paid', "#$id");

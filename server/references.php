@@ -41,6 +41,10 @@ if (method() === 'POST' && ($_GET['action'] ?? '') === 'status') {
     $stmt = $conn->prepare('UPDATE worker_references SET status = ?, gap_note = ? WHERE id = ?');
     $stmt->bind_param('ssi', $status, $gapVal, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'worker_references', $id, false)) {
+        fail('Reference not found.', 404);
+    }
     audit($conn, (int) $user['id'], 'reference.status', "ref #$id -> $status");
     json_out(['ok' => true]);
 }

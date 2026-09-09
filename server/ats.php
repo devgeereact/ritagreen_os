@@ -81,6 +81,10 @@ if (method() === 'POST' && $action === '') {
 
 // Everything else is staff-only.
 $user = require_auth($conn);
+// Applicant records are personal data. /app/ats is office plus trainer in
+// src/lib/access.ts; the reads below enforced nothing. The public POST above
+// stays unauthenticated on purpose.
+require_role($user, 'super_admin', 'admin', 'manager', 'trainer');
 
 if (method() === 'GET' && isset($_GET['id'])) {
     $id = (int) $_GET['id'];
@@ -133,6 +137,9 @@ if ($action === 'stage' && method() === 'POST') {
     $prev->bind_param('i', $id);
     $prev->execute();
     $was = $prev->get_result()->fetch_assoc()['stage'] ?? null;
+    // No row means no applicant. Without this the stage change reported success
+    // and wrote an audit entry against an id that does not exist.
+    if ($was === null) fail('Applicant not found.', 404);
 
     $stmt = $conn->prepare('UPDATE applicants SET stage = ? WHERE id = ?');
     $stmt->bind_param('si', $stage, $id);

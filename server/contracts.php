@@ -7,6 +7,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Contract terms and annualised values. Reads were unguarded.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 // Annualised value of a contract, in pence, for pipeline totals.
@@ -46,6 +48,8 @@ if ($action === 'status' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE contracts SET status = ? WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'contracts', $id)) fail('Contract not found.', 404);
     audit($conn, (int) $user['id'], 'contract.status', "#$id -> $status");
     json_out(['ok' => true]);
 }

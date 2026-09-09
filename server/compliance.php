@@ -6,6 +6,13 @@ require __DIR__ . '/lib.php';
 require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
+// Everything in this file is the vetting record: credential status, DBS and
+// SIA numbers, expiry dates and deployment verdicts. Internal staff only, and
+// staff is not enough on its own -- it takes the compliance zone as well.
+// Hoisted above every branch because only the pack action carried it, so any
+// authenticated account could list the whole workforce's compliance state.
+require_staff($user);
+if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
 
 // Classify an expiry date into a RAG status + days remaining. The implementation
 // lives in pure.php so it is shared with expiry-alerts.php and can be tested
@@ -20,14 +27,7 @@ function classify(?string $expiry): array
 // in one bundle: identity + right-to-work, every credential with status, the
 // reference checks, and the documents on file. The client turns this into a PDF.
 if (method() === 'GET' && ($_GET['action'] ?? '') === 'pack') {
-    // The pack is one worker's identity, right-to-work state, DBS/SIA numbers
-    // and expiry dates. It sits above the first require_role in this file, so
-    // without this line any authenticated account -- including a client login
-    // or a worker's own login -- could read it for any worker_id.
-    require_staff($user);
-    // And staff is not enough on its own: the pack is the whole vetting record,
-    // so it takes the compliance zone. Configurable in Settings, not hard-coded.
-    if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
+    // Staff and the compliance zone are already required at the top of the file.
     $workerId = (int) ($_GET['worker_id'] ?? 0);
     if ($workerId <= 0) fail('A worker is required.');
 

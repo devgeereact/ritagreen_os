@@ -9,6 +9,8 @@ require __DIR__ . '/lib.php';
 // verbs were fully open, so anyone on the internet could insert unbounded rows
 // into `items` on the production database.
 $user = require_auth($conn);
+// Diagnostic data, reached only from the staff-only /app/smoke-test page.
+require_staff($user);
 
 if (method() === 'GET') {
     $res = $conn->query('SELECT id, name, created_at FROM items ORDER BY id DESC LIMIT 100');

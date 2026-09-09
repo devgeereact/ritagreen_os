@@ -6,6 +6,11 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The whole CRM: every client, their contacts, and per-client financials.
+// Only the GET branches lacked this -- the writes below already carry it -- so
+// any authenticated account, a client portal login included, could list every
+// other client and read their invoiced and outstanding totals.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 // Single client + its sites + rate cards + a financial summary.

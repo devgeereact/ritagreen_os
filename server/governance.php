@@ -141,6 +141,7 @@ if (method() === 'POST' && $action === 'decide_deletion') {
     if ($table === null) fail('That kind of record can no longer be removed here.', 409);
 
     $entityId = (int) $req['entity_id'];
+    $cascade = [];
     if ($req['disposition'] === 'archive') {
         // Soft delete where the table supports it, which is everywhere it matters.
         $hasDeletedAt = $conn->query("SHOW COLUMNS FROM $table LIKE 'deleted_at'")->num_rows > 0;
@@ -157,6 +158,30 @@ if (method() === 'POST' && $action === 'decide_deletion') {
             $q->execute();
             $f = $q->get_result()->fetch_assoc();
             $storedName = $f ? (string) $f['stored_name'] : '';
+        }
+        // What else goes with it, and who agreed to that.
+        //
+        // Several foreign keys onto workers and people are ON DELETE CASCADE, so
+        // approving one deletion also removes shifts, timesheets, certifications
+        // and references. Some of those the business is required to keep --
+        // payroll and working-time records outlive the employment they belong to
+        // -- and none of it was visible: the approver saw one record named in the
+        // request and the rest went without trace.
+        //
+        // The schema's cascade is not changed here; what changes is that nobody
+        // can trigger it without being told first. An approval with collateral is
+        // refused once, with the counts, and only proceeds when the approver
+        // sends it back with confirm_cascade. Archiving cascades nothing and is
+        // unaffected, which is the point: it is usually the right answer.
+        $cascade = cascade_counts($conn, $table, $entityId);
+        if ($cascade && empty($data['confirm_cascade'])) {
+            json_out([
+                'error' => 'That deletion would take other records with it. Review the list, then '
+                    . 'send the decision again with confirm_cascade set — or reject it and request '
+                    . 'an archive instead, which keeps them.',
+                'cascade' => $cascade,
+                'confirm_with' => 'confirm_cascade',
+            ], 409);
         }
         $stmt = $conn->prepare("DELETE FROM $table WHERE id = ?");
     }
@@ -179,9 +204,18 @@ if (method() === 'POST' && $action === 'decide_deletion') {
     $stmt->bind_param('isi', $uid, $noteVal, $id);
     $stmt->execute();
 
-    audit($conn, $uid, 'deletion.' . $req['disposition'], "{$req['entity_type']} #$entityId ({$req['entity_label']})",
-        $req['entity_type'], $entityId, ['existed' => true], ['disposition' => $req['disposition']], $req['reason']);
-    json_out(['ok' => true, 'status' => 'completed', 'disposition' => $req['disposition']]);
+    $cascadeDetail = $cascade ? ' cascaded: ' . implode(', ', array_map(
+        static fn(string $t, int $n): string => "$t $n", array_keys($cascade), $cascade
+    )) : '';
+    audit($conn, $uid, 'deletion.' . $req['disposition'], "{$req['entity_type']} #$entityId ({$req['entity_label']})$cascadeDetail",
+        $req['entity_type'], $entityId, ['existed' => true],
+        ['disposition' => $req['disposition']] + ($cascade ? ['cascaded' => $cascade] : []), $req['reason']);
+    json_out([
+        'ok' => true,
+        'status' => 'completed',
+        'disposition' => $req['disposition'],
+        'cascaded' => $cascade,
+    ]);
 }
 
 // ---- Export log ------------------------------------------------------------

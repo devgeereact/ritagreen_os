@@ -21,6 +21,9 @@ $action = $_GET['action'] ?? '';
 
 // Compliance data: internal staff only.
 require_staff($user);
+// And staff is not enough: a right-to-work check is vetting evidence, so it
+// takes the compliance zone too. Editor is staff and does not hold it.
+if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
 
 const RTW_METHODS = ['online_share_code', 'manual_document', 'idsp_digital', 'other'];
 const RTW_OUTCOMES = ['pending', 'valid', 'invalid', 'requires_follow_up'];

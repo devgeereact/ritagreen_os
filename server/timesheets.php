@@ -6,6 +6,9 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Timesheets are other people's hours and pay-bearing records. Internal staff
+// only; the worker app records its own time through field.php.
+require_staff($user);
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {
@@ -38,6 +41,8 @@ if ($action === 'approve' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE timesheets SET status = "approved", approved_by = ? WHERE id = ?');
     $stmt->bind_param('ii', $uid, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'timesheets', $id)) fail('Timesheet entry not found.', 404);
     audit($conn, $uid, 'timesheet.approve', "#$id");
     json_out(['ok' => true]);
 }

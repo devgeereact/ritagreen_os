@@ -514,6 +514,77 @@ function next_seq(mysqli $conn, string $key): int
     return (int) $conn->insert_id;
 }
 
+/**
+ * Does this row exist? Used to tell "nothing changed" from "nothing there".
+ *
+ * mysqli's affected_rows is 0 both when an UPDATE matched no row AND when it
+ * matched one whose value was already what was written, so a bare affected_rows
+ * check would 404 an idempotent re-click. Ask only when nothing changed:
+ *
+ *     $stmt->execute();
+ *     if ($stmt->affected_rows === 0 && !row_exists($conn, 'quotes', $id)) {
+ *         fail('Quote not found.', 404);
+ *     }
+ *
+ * Without it a status change against a deleted or mistyped id returned
+ * {"ok": true} and wrote an audit entry for a record that does not exist.
+ *
+ * $table is a code literal at every call site and never user input. It cannot be
+ * bound, so it must stay that way -- see docs/RULES.md rule 4.
+ */
+function row_exists(mysqli $conn, string $table, int $id, bool $respectSoftDelete = true): bool
+{
+    $sql = "SELECT id FROM `$table` WHERE id = ?";
+    if ($respectSoftDelete) $sql .= ' AND deleted_at IS NULL';
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    return (bool) $stmt->get_result()->fetch_assoc();
+}
+
+/**
+ * How many rows would go with this one, per table, if it were deleted now.
+ *
+ * Read from the live foreign keys rather than a hand-kept list, so it cannot
+ * drift out of step with the schema. Only ON DELETE CASCADE children are
+ * counted: SET NULL keeps the row and loses the link, which is a different
+ * thing and not data loss.
+ *
+ * Call BEFORE the delete. Returns [table => count], omitting empty ones.
+ */
+function cascade_counts(mysqli $conn, string $table, int $id): array
+{
+    $stmt = $conn->prepare(
+        'SELECT k.TABLE_NAME, k.COLUMN_NAME
+         FROM information_schema.KEY_COLUMN_USAGE k
+         JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+           ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+          AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+         WHERE k.CONSTRAINT_SCHEMA = DATABASE()
+           AND k.REFERENCED_TABLE_NAME = ?
+           AND r.DELETE_RULE = "CASCADE"'
+    );
+    $stmt->bind_param('s', $table);
+    $stmt->execute();
+    $children = [];
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) $children[] = $row;
+
+    $counts = [];
+    foreach ($children as $child) {
+        // Both names come from information_schema, never from a request, and
+        // neither can be bound. See docs/RULES.md rule 4.
+        $childTable = (string) $child['TABLE_NAME'];
+        $childColumn = (string) $child['COLUMN_NAME'];
+        $q = $conn->prepare("SELECT COUNT(*) FROM `$childTable` WHERE `$childColumn` = ?");
+        $q->bind_param('i', $id);
+        $q->execute();
+        $n = (int) $q->get_result()->fetch_row()[0];
+        if ($n > 0) $counts[$childTable] = $n;
+    }
+    return $counts;
+}
+
 // ----- Marketing consent -----
 //
 // There is no marketing_preferences table. consent_log already records

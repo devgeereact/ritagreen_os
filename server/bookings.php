@@ -70,6 +70,9 @@ if (method() === 'POST' && $action === '') {
 
 // Everything else is staff-only.
 $user = require_auth($conn);
+// Cover requests carry the requesting contact's name, email and phone. The
+// public POST above is deliberately unauthenticated; reading the queue is not.
+require_role($user, 'super_admin', 'admin', 'manager');
 
 if (method() === 'GET') {
     $res = $conn->query(
@@ -97,6 +100,8 @@ if ($action === 'status' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE service_requests SET status = ? WHERE id = ?');
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'service_requests', $id)) fail('Request not found.', 404);
     audit($conn, (int) $user['id'], 'booking.status', "#$id -> $status");
     json_out(['ok' => true]);
 }

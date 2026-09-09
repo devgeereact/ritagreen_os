@@ -20,6 +20,9 @@ require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
 require_staff($user);
+// As in right-to-work.php: verification records are vetting evidence, so they
+// take the compliance zone as well as a staff account.
+if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
 $action = $_GET['action'] ?? '';
 
 const VERIFY_SUBJECTS = ['certification', 'licence', 'document', 'reference', 'qualification', 'other'];

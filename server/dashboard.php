@@ -3,7 +3,10 @@
 // GET /dashboard.php?division=all|care|academy|cleaning|security -> DashboardSummary
 require __DIR__ . '/lib.php';
 
-require_auth($conn);
+$user = require_auth($conn);
+// Group-wide operational and financial totals. Internal staff only: the read
+// was open to any logged-in account, including a client portal login.
+require_staff($user);
 if (method() !== 'GET') fail('Method not allowed.', 405);
 
 $division = $_GET['division'] ?? 'all';

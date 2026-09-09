@@ -12,6 +12,9 @@ require __DIR__ . '/lib.php';
 require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
+// The rota names workers, clients and sites. Reads were guarded by nothing but
+// a login, so a client portal or worker account could pull the whole schedule.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 // Latest expiry of a still-relevant cert on the compliance register, so a valid

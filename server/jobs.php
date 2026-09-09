@@ -6,6 +6,9 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Jobs name clients and sites. Internal staff only -- the reads were open to
+// any logged-in account, which includes client portal and worker logins.
+require_staff($user);
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {

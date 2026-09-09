@@ -118,6 +118,10 @@ if ($action === 'webhook' && method() === 'POST') {
 
 // ----- Staff-only below -----
 $user = require_auth($conn);
+// Said staff-only and enforced nothing: ?action=status reads a named client's
+// mandate, so any logged-in account -- a client portal login included -- could
+// walk client_id and read every Direct Debit on the system.
+require_role($user, 'super_admin', 'admin', 'manager');
 if (!gc_configured()) fail('Direct Debit is not set up yet. Add GC_ACCESS_TOKEN to config.php.', 503);
 
 if ($action === 'status' && method() === 'GET') {

@@ -5,6 +5,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Internal announcements. A client portal or worker login is not the team.
+require_staff($user);
 
 if (method() === 'GET') {
     // A user sees group-wide announcements plus those for their division.

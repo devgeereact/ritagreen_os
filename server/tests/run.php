@@ -15,6 +15,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../pure.php';
 require_once __DIR__ . '/../pay-lib.php';
+// Source-level authorisation check. Needs no database and no config.php, so it
+// runs in the same suite. See the file for the invariant it protects.
+require_once __DIR__ . '/guards.php';
 
 $passed = 0;
 $failures = [];
@@ -728,6 +731,16 @@ check('archive passes through', rg_retention_action('archive'), 'archive');
 check('delete passes through', rg_retention_action('delete'), 'delete');
 check('anything else asks a person', rg_retention_action('destroy'), 'review');
 check('and so does an empty value', rg_retention_action(''), 'review');
+
+// ---------------------------------------------------------------------------
+group('endpoint guards');
+
+[$guardChecked, $guardProblems] = guard_check_endpoints();
+check('every endpoint was inspected', $guardChecked > 40, true);
+foreach ($guardProblems as $problem) {
+    check($problem, false, true);
+}
+check('no endpoint reads before it authorises', $guardProblems, []);
 
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);

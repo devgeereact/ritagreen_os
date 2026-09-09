@@ -7,8 +7,11 @@
 // GET /weather.php?city=London,GB  ->  { city, temp, ... , advisory: {level, note} }
 require __DIR__ . '/lib.php';
 
-// Internal tool — logged-in staff only.
-require_auth($conn);
+// Internal tool — logged-in staff only, which now means what it says. It was
+// require_auth() alone, so a client portal or worker login could spend the
+// OpenWeather quota on arbitrary city lookups.
+$user = require_auth($conn);
+require_staff($user);
 if (method() !== 'GET') fail('Method not allowed.', 405);
 
 if (!defined('OPENWEATHER_API_KEY') || OPENWEATHER_API_KEY === 'CHANGE_ME' || OPENWEATHER_API_KEY === '') {

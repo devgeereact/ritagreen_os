@@ -9,6 +9,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Group insurance policies and cover levels. Reads were unguarded.
+require_role($user, 'super_admin', 'admin', 'manager');
 
 // Classify an expiry date into a RAG status + days remaining (mirrors compliance.php).
 function classify_ins(?string $expiry): array

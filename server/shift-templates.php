@@ -7,6 +7,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Recurring shift patterns, reached only from Scheduling.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {
@@ -31,7 +33,9 @@ if ($action === 'toggle' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A template is required.');
+    // The value always flips, so affected_rows is 0 only when there is no row.
     $conn->query('UPDATE shift_templates SET active = 1 - active WHERE id = ' . $id);
+    if ($conn->affected_rows === 0) fail('Template not found.', 404);
     audit($conn, (int) $user['id'], 'template.toggle', "#$id");
     json_out(['ok' => true]);
 }
