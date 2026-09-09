@@ -5,7 +5,7 @@ import { BadgeCheck, XCircle, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PageHeader, Section } from "@/components/public/section"
-import { api, API_BASE } from "@/lib/api"
+import { api, API_BASE, ApiError } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
 
 type Certificate = {
@@ -41,6 +41,7 @@ export default function Verify() {
     | { id: string; status: "loading" }
     | { id: string; status: "found"; certificate: Certificate }
     | { id: string; status: "missing" }
+    | { id: string; status: "unavailable" }
   const [lookup, setLookup] = useState<Lookup | null>(null)
   const [qr, setQr] = useState<{ id: string; url: string } | null>(null)
 
@@ -48,6 +49,10 @@ export default function Verify() {
   const result = current?.status === "found" ? current.certificate : null
   const loading = current?.status === "loading"
   const notFound = current?.status === "missing"
+  // A certificate that could not be checked is not a certificate that does not
+  // exist. Both used to say "No certificate found", so somebody holding a
+  // genuine certificate on a dropped connection was told it was not real.
+  const unavailable = current?.status === "unavailable"
   const qrUrl = result && qr?.id === result.id ? qr.url : ""
 
   useEffect(() => {
@@ -77,8 +82,10 @@ export default function Verify() {
       .then((res) => {
         if (alive) setLookup({ id, status: "found", certificate: res.certificate })
       })
-      .catch(() => {
-        if (alive) setLookup({ id, status: "missing" })
+      .catch((err) => {
+        if (!alive) return
+        const genuinely404 = err instanceof ApiError && err.status === 404
+        setLookup({ id, status: genuinely404 ? "missing" : "unavailable" })
       })
     return () => {
       alive = false
@@ -160,6 +167,19 @@ export default function Verify() {
                   Open Badge (JSON)
                 </a>
               </div>
+            </div>
+          )}
+
+          {!loading && unavailable && (
+            <div className="surface overflow-hidden border-warning/30 animate-fade-up">
+              <div className="flex items-center gap-3 border-b border-warning/20 bg-warning/10 px-6 py-4 text-warning">
+                <XCircle className="size-6" />
+                <span className="font-semibold">Could not check this certificate</span>
+              </div>
+              <p className="p-6 text-sm leading-relaxed text-muted-foreground">
+                We could not reach the verification service. This does not mean the certificate is
+                invalid — check your connection and try again, or contact us.
+              </p>
             </div>
           )}
 

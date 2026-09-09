@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
 import { Eye, EyeOff } from "lucide-react"
 import { Logo } from "@/components/brand/Logo"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ export default function Login() {
     noindex: true,
   })
 
-  const { login } = useAuth()
+  const { login, user, loading: sessionLoading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from || "/app"
@@ -83,6 +83,14 @@ export default function Login() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Somebody already signed in has no business on the sign-in form: it offered
+  // to authenticate an account that already was, and its Sign in button issued a
+  // second session for the same person. Send them where they belong. Below the
+  // hooks, so the order of calls never changes between renders.
+  if (!sessionLoading && user) {
+    return <Navigate to={from && from !== "/app" ? from : homeFor(user)} replace />
   }
 
   return (
