@@ -144,6 +144,8 @@ if ($m === 'POST' && ($action === 'create' || $action === 'update')) {
         if ($conn->errno === 1062) fail('A post with this URL slug already exists.');
         fail('Could not update the post.');
     }
+    // affected_rows is 0 when nothing in the post changed, so only ask then.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'blog_posts', $id)) fail('Post not found.', 404);
     audit($conn, (int) $user['id'], 'blog.update', "#$id $slug");
     json_out(['ok' => true]);
 }
@@ -151,9 +153,10 @@ if ($m === 'POST' && ($action === 'create' || $action === 'update')) {
 if ($m === 'POST' && $action === 'delete') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A post is required.');
-    $stmt = $conn->prepare('UPDATE blog_posts SET deleted_at = NOW() WHERE id = ?');
+    $stmt = $conn->prepare('UPDATE blog_posts SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'blog_posts', $id, false)) fail('Post not found.', 404);
     audit($conn, (int) $user['id'], 'blog.delete', "#$id");
     json_out(['ok' => true]);
 }

@@ -66,6 +66,8 @@ if ($action === 'renew' && method() === 'POST') {
     );
     $stmt->bind_param('ii', $months, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'contracts', $id)) fail('Contract not found.', 404);
     audit($conn, (int) $user['id'], 'contract.renew', "#$id +{$months}m");
     json_out(['ok' => true]);
 }
@@ -89,6 +91,11 @@ if (method() === 'POST') {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) fail('Start and end must be dates.');
     if ($end < $start) fail('The end date must be after the start date.');
     if ($rate < 0) fail('Rate cannot be negative.');
+
+    // A client_id that does not exist reached the INSERT and came back as a
+    // foreign-key 500 with the constraint name in it, plus a logged exception,
+    // for what is only a stale id from a page left open.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
 
     $scopeVal = $scope !== '' ? $scope : null;
     $stmt = $conn->prepare(

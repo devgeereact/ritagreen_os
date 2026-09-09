@@ -65,6 +65,11 @@ if (method() === 'POST') {
     if (!in_array($type, ['care_visit', 'clean', 'guard_shift', 'course', 'other'], true)) fail('Invalid type.');
     if (!in_array($priority, ['emergency', 'high', 'standard'], true)) fail('Invalid priority.');
 
+    // A client_id that does not exist reached the INSERT and came back as a
+    // foreign-key 500 with the constraint name in it, plus a logged exception,
+    // for what is only a stale id from a page left open.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
+
     $scheduledVal = $scheduled !== '' ? date('Y-m-d H:i:s', strtotime($scheduled)) : null;
     $notesVal = $notes !== '' ? $notes : null;
 

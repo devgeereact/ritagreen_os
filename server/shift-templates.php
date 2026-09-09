@@ -106,6 +106,11 @@ if (method() === 'POST') {
     if ($weekday < 1 || $weekday > 7) fail('Choose a weekday.');
     if (!preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end)) fail('Times must be HH:MM.');
 
+    // A client_id that does not exist reached the INSERT and came back as a
+    // foreign-key 500 with the constraint name in it, plus a logged exception,
+    // for what is only a stale id from a page left open.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
+
     $siteVal = $site !== '' ? $site : null;
     $stmt = $conn->prepare(
         'INSERT INTO shift_templates (title, division, client_id, site_name, weekday, start_time, end_time)

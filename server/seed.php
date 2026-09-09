@@ -62,11 +62,21 @@ if ($reset) {
         'incident_actions', 'incidents', 'credit_notes', 'invoices', 'quotes',
         'contracts', 'jobs', 'rate_cards', 'service_requests', 'sites',
         'clients', 'workers', 'contact_enquiries', 'notifications', 'files',
+        // Hang off people rather than workers, so they outlive a reset that
+        // only clears the employment tables and leave the spine inconsistent.
+        'person_services', 'right_to_work_checks', 'verifications', 'leave_records',
     ] as $table) {
         run($conn, "DELETE FROM $table");
     }
     // Keep the seeded super admin; clear the fixture logins around it.
     run($conn, "DELETE FROM users WHERE email LIKE '%@local.invalid'");
+    // And the people nothing points at any more. Without this every --reset
+    // left the previous run's identities behind, and `people` grew each time.
+    run($conn, 'DELETE p FROM people p
+                LEFT JOIN users u      ON u.person_id = p.id
+                LEFT JOIN workers w    ON w.person_id = p.id
+                LEFT JOIN applicants a ON a.person_id = p.id
+                WHERE u.id IS NULL AND w.id IS NULL AND a.id IS NULL');
     run($conn, 'SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -88,9 +98,15 @@ $staff = [
     ['Eddie Editor',   'editor@local.invalid',   'editor',   null],
     ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning'],
 ];
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division) VALUES (?, ?, ?, ?, ?)');
+// Every identity is created through find_or_create_person(), the same call the
+// application uses. Migration 004 made users.person_id, workers.person_id and
+// applicants.person_id NOT NULL, and these inserts still named none of them --
+// so seeding a migrated database failed outright with "Field 'person_id'
+// doesn't have a default value", which is every developer's database.
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, person_id) VALUES (?, ?, ?, ?, ?, ?)');
 foreach ($staff as [$name, $email, $role, $division]) {
-    $ins->bind_param('sssss', $name, $email, $password, $role, $division);
+    $personId = find_or_create_person($conn, $name, $email);
+    $ins->bind_param('sssssi', $name, $email, $password, $role, $division, $personId);
     $ins->execute();
 }
 echo "  users        " . count($staff) . "\n";
@@ -139,14 +155,17 @@ $workers = [
 ];
 $ins = $conn->prepare(
     'INSERT INTO workers (name, email, phone, role, division, status, right_to_work,
-                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye")'
+                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type, person_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye", ?)'
 );
 $workerIds = [];
+$workerPersonIds = [];
 foreach ($workers as $w) {
-    $ins->bind_param('ssssssissssi', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11]);
+    $personId = find_or_create_person($conn, $w[0], $w[1], $w[2]);
+    $ins->bind_param('ssssssissssii', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11], $personId);
     $ins->execute();
     $workerIds[$w[0]] = $conn->insert_id;
+    $workerPersonIds[$w[0]] = $personId;
 }
 // A statutory-style entitlement in hours, so the leave balance means something.
 // 28 days at 7.5 hours is 210; part-time workers get less, which is the point of
@@ -155,15 +174,19 @@ $conn->query('UPDATE workers SET holiday_hours = 210 WHERE holiday_hours = 0');
 echo "  workers      " . count($workers) . " (mixed compliance: valid, expiring, expired, no RTW)\n";
 
 // A worker login, so /m can be exercised. Linked to Amara Chen.
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, worker_id) VALUES (?, ?, ?, "employee", "care", ?)');
+// Deliberately the same person_id as the worker record, not a new person: a
+// worker and their login are one human, and the fixtures have to demonstrate
+// that or they teach the opposite of the rule.
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, worker_id, person_id) VALUES (?, ?, ?, "employee", "care", ?, ?)');
 $wname = 'Amara Chen'; $wemail = 'amara.login@local.invalid';
-$ins->bind_param('sssi', $wname, $wemail, $password, $workerIds['Amara Chen']);
+$ins->bind_param('sssii', $wname, $wemail, $password, $workerIds['Amara Chen'], $workerPersonIds['Amara Chen']);
 $ins->execute();
 
 // A client portal login, so /portal can be exercised.
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, client_id) VALUES (?, ?, ?, "client", ?)');
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, client_id, person_id) VALUES (?, ?, ?, "client", ?, ?)');
 $cname = 'Priya Nair'; $cemail = 'priya@local.invalid';
-$ins->bind_param('sssi', $cname, $cemail, $password, $clientIds['Oakleaf Care Home']);
+$cpid = find_or_create_person($conn, $cname, $cemail);
+$ins->bind_param('sssii', $cname, $cemail, $password, $clientIds['Oakleaf Care Home'], $cpid);
 $ins->execute();
 echo "  portal login 1 client, 1 worker\n";
 
@@ -232,9 +255,10 @@ $applicants = [
     ['Nadia Rahman',  'nadia@local.invalid',  '07700900204', 'Care assistant',  'care',     'vetting'],
     ['Omar Diallo',   'omar@local.invalid',   '07700900205', 'Security officer','security', 'offer'],
 ];
-$ins = $conn->prepare('INSERT INTO applicants (name, email, phone, role_applied, division, stage, source) VALUES (?, ?, ?, ?, ?, ?, "seed")');
+$ins = $conn->prepare('INSERT INTO applicants (name, email, phone, role_applied, division, stage, source, person_id) VALUES (?, ?, ?, ?, ?, ?, "seed", ?)');
 foreach ($applicants as $a) {
-    $ins->bind_param('ssssss', $a[0], $a[1], $a[2], $a[3], $a[4], $a[5]);
+    $personId = find_or_create_person($conn, $a[0], $a[1], $a[2]);
+    $ins->bind_param('ssssssi', $a[0], $a[1], $a[2], $a[3], $a[4], $a[5], $personId);
     $ins->execute();
 }
 echo "  applicants   " . count($applicants) . "\n";
@@ -292,7 +316,12 @@ foreach ([
     $ins->execute();
 }
 
-$ref = 'INC-' . date('Y') . '-0001';
+// Through next_seq(), not hard-coded: the fixture used to write INC-<year>-0001
+// directly and leave the counter at zero, so the first incident anybody filed on
+// a freshly seeded database drew 0001 again and died on the unique index with a
+// 500. See docs/RULES.md — next_seq() for any sequence, no exceptions.
+$year = date('Y');
+$ref = sprintf('INC-%s-%04d', $year, next_seq($conn, "incident-$year"));
 $ins = $conn->prepare(
     'INSERT INTO incidents (ref, division, type, severity, title, detail, client_id, site_name, worker_id, status, occurred_at)
      VALUES (?, "cleaning", "near_miss", "medium", ?, ?, ?, ?, ?, "open", ?)'

@@ -156,6 +156,9 @@ if ($action === 'add_task' && method() === 'POST') {
     $id = (int) ($_GET['id'] ?? 0);
     $label = trim((string) (body()['label'] ?? ''));
     if ($id <= 0 || $label === '') fail('An applicant and task label are required.');
+    // Without this the INSERT trips the foreign key and the caller gets a 500
+    // and a logged exception for what is only a mistyped id.
+    if (!row_exists($conn, 'applicants', $id)) fail('Applicant not found.', 404);
     $stmt = $conn->prepare('INSERT INTO onboarding_tasks (applicant_id, label) VALUES (?, ?)');
     $stmt->bind_param('is', $id, $label);
     $stmt->execute();
@@ -170,6 +173,10 @@ if ($action === 'task_done' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE onboarding_tasks SET done = ? WHERE id = ?');
     $stmt->bind_param('ii', $done, $tid);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'onboarding_tasks', $tid, false)) {
+        fail('Task not found.', 404);
+    }
     json_out(['ok' => true]);
 }
 

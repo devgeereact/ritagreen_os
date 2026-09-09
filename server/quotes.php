@@ -99,6 +99,11 @@ if (method() === 'POST') {
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Invalid division.');
     if ($net <= 0) fail('Enter a net amount greater than zero.');
 
+    // Check the parents before drawing a number: a stale id reached the INSERT
+    // and came back as a foreign-key 500 with the constraint name in it, having
+    // already burnt a sequence value on a record that was never written.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
+
     $vat = (int) round($net * 0.20);
     $total = $net + $vat;
     $year = date('Y');

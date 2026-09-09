@@ -114,6 +114,11 @@ if (method() === 'POST') {
     $number = sprintf('INV-%s-%04d', $year, $seq);
     $dueDate = date('Y-m-d', strtotime('+' . PAYMENT_TERMS_DAYS . ' days'));
 
+    // A client_id that does not exist reached the INSERT and came back as a
+    // foreign-key 500 with the constraint name in it, plus a logged exception,
+    // for what is only a stale id from a page left open.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
+
     $stmt = $conn->prepare(
         'INSERT INTO invoices (number, client_id, division, net_pence, vat_pence, total_pence, status, due_date)
          VALUES (?, ?, ?, ?, ?, ?, "sent", ?)'

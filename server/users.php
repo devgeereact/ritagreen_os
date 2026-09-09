@@ -41,6 +41,8 @@ if ($action === 'deactivate' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    // Already deactivated is not an error; no such account is.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'users', $id, false)) fail('User not found.', 404);
     // Revoke their tokens so access stops immediately.
     $del = $conn->prepare('DELETE FROM tokens WHERE user_id = ?');
     $del->bind_param('i', $id);

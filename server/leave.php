@@ -265,6 +265,10 @@ if (method() === 'POST' && $action === 'return') {
     $stmt = $conn->prepare('UPDATE leave_records SET return_to_work_on = ?, return_to_work_note = ? WHERE id = ?');
     $stmt->bind_param('ssi', $on, $noteVal, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'leave_records', $id, false)) {
+        fail('Leave record not found.', 404);
+    }
 
     audit($conn, (int) $user['id'], 'leave.return_to_work', "#$id", 'leave', $id, null, ['return_to_work_on' => $on]);
     json_out(['ok' => true]);

@@ -174,9 +174,11 @@ if ($action === 'delete' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A file is required.');
-    $stmt = $conn->prepare('UPDATE files SET deleted_at = NOW() WHERE id = ?');
+    // Already-deleted is not an error, but no such file is.
+    $stmt = $conn->prepare('UPDATE files SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'files', $id, false)) fail('File not found.', 404);
     audit($conn, (int) $user['id'], 'file.delete', "#$id");
     json_out(['ok' => true]);
 }

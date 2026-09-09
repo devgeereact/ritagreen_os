@@ -70,6 +70,8 @@ if ($action === 'availability' && method() === 'POST') {
     );
     $stmt->bind_param('iiiisi', $days, $nights, $weekends, $radius, $postcodeVal, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'workers', $id)) fail('Worker not found.', 404);
     audit($conn, (int) $user['id'], 'worker.availability', "worker #$id");
     json_out(['ok' => true]);
 }
@@ -89,7 +91,10 @@ if ($action === 'pay' && method() === 'POST') {
     $prev = $conn->prepare('SELECT pay_rate_pence, pay_type FROM workers WHERE id = ? AND deleted_at IS NULL');
     $prev->bind_param('i', $id);
     $prev->execute();
-    $was = $prev->get_result()->fetch_assoc() ?: [];
+    $was = $prev->get_result()->fetch_assoc();
+    // No row means no worker. Without this a pay change against a mistyped id
+    // reported success and wrote an audit entry with an empty before-state.
+    if (!$was) fail('Worker not found.', 404);
 
     $stmt = $conn->prepare('UPDATE workers SET pay_rate_pence = ?, pay_type = ? WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('isi', $rate, $type, $id);
