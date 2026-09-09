@@ -70,8 +70,12 @@ database; see migration 004 and its precondition.
 record is linked to it, and `ats.php` `onboard` / `from_learner` were rewritten to use
 `find_or_create_person()` and read identity back from `people`. The `workers` row still carries
 denormalised `name`/`email`/`phone` columns beside `person_id`; treat `people` as the truth and
-never introduce a new path that writes identity from anywhere else. See `docs/BLUEPRINT.md`,
-"The identity defect".
+never introduce a new path that writes identity from anywhere else. `server/seed.php` is one of
+those paths and did not: it inserted users, workers and applicants with no `person_id` at all,
+so seeding a database with migration 004 applied — every developer's — failed outright with
+"Field 'person_id' doesn't have a default value". It goes through `find_or_create_person()` now,
+and a worker's login shares the worker's person rather than making a second one. See
+`docs/BLUEPRINT.md`, "The identity defect".
 
 **PHP is deployed by hand.** `.github/workflows/deploy.yml` uploads `dist/` only and explicitly
 excludes `*.php`, `config.php` and `.htaccess`. Never add `dangerous-clean-slate` — it would

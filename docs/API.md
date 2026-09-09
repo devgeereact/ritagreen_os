@@ -4,12 +4,16 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- **57 HTTP endpoint files.** Verified against the tree at `server/`.
+- **54 application endpoint files**, counted from the tree at `server/`. Four more are
+  reachable over HTTP but are cron scripts, not part of the application: `backup.php`,
+  `expiry-alerts.php`, `retention-sweep.php` and `send-queued-mail.php` each need
+  `?key=ALERTS_KEY` and otherwise run from the command line. 58 files answer an HTTP request in
+  total.
 - Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
   database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
-- Three command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`
-  and `backfill-people.php`. Each refuses to run outside the CLI. See `docs/ARCHITECTURE.md`
-  §7a and §10.
+- Four command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`,
+  `backfill-people.php` and `create-admin.php`. Each refuses to run outside the CLI. See
+  `docs/ARCHITECTURE.md` §7a and §10.
 
 ---
 
@@ -198,15 +202,33 @@ development) the response carries the exception message and its file and line.
 With it off (the server) the caller gets only `Server error. Quote reference
 <ref> if you report this.` and the matching `ref`.
 
-A status change against a record that does not exist returns **404**, not
-`{ok: true}`. `jobs.php` always did; `quotes.php`, `incidents.php`,
-`contracts.php`, `bookings.php`, `timesheets.php`, `references.php`,
-`invoices.php`, `ats.php`, `shift-templates.php` and `academy.php` did not, and
-reported success while writing an audit row for an id with nothing behind it.
+A mutation against a record that does not exist returns **404**, not
+`{ok: true}`. Twenty-five did not: every `?action=` handler was probed with an
+id of 999999, and the ones that reported success while writing an audit row for
+an id with nothing behind it now do not. They were `quotes.php`,
+`incidents.php` (both `status` and `action_done`), `contracts.php` (`status` and
+`renew`), `bookings.php`, `timesheets.php`, `references.php`, `invoices.php`,
+`ats.php` (`stage`, `task_done`, `add_task`), `shift-templates.php`,
+`academy.php`, `clients.php` (`update` and `rate_card`), `enquiries.php`,
+`leave.php`, `users.php`, `workers.php` (`availability` and `pay`),
+`files.php`, `blog.php` and `testimonials.php`. `jobs.php` always did it
+correctly and is the pattern the rest now follow.
+
+Eight let a parent id that does not exist reach the INSERT, so a foreign-key
+violation surfaced as a **500** with the constraint name in it and a logged
+exception, for what is only a stale id from a page left open:
+`ats.php?action=add_task`, `clients.php?action=rate_card`, and the create paths
+of `invoices.php`, `quotes.php`, `contracts.php`, `jobs.php`,
+`shift-templates.php` and `incidents.php` (which takes a worker as well as a
+client). Each checks its parents first and returns 404. In `quotes.php` and
+`incidents.php` the check also runs *before* `next_seq()`, so a rejected request
+no longer burns a quote or incident number on a record that was never written.
+
 Repeating an action that has already been applied still returns 200: mysqli's
 `affected_rows` is 0 both for a missing row and for a value that was already
 what was written, so existence is confirmed separately (`row_exists()`,
-`lib.php`).
+`lib.php`). Soft deletes follow the same rule — deleting an already-deleted
+record is not an error, deleting one that never existed is.
 
 ---
 
@@ -1486,4 +1508,4 @@ have been removed from the table below.
 | `bookings.php:5` | Says the status route sets `quoted`/`declined`; the code also accepts `new` (`bookings.php:87`) |
 | `invoices.php:2` | Says "manual reconciliation — no card processor wired yet"; Stripe (`payments.php`) and GoCardless (`gocardless.php`) both mark invoices paid |
 | `config.sample.php:51` | Calls `OPENWEATHER_API_KEY` "read only by a future `weather.php`"; `weather.php` exists and uses it |
-| `server/README.md` | Its endpoint table lists 8 of the 47 endpoint files. Treat this document as the reference instead |
+| `server/README.md` | Its endpoint table lists 8 of the 54 endpoint files. Treat this document as the reference instead |

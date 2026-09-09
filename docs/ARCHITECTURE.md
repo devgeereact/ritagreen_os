@@ -10,7 +10,7 @@
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 55 flat endpoint files, no framework, no router, no Composer
+server/*.php — 54 flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
 MySQL / MariaDB on cPanel shared hosting (host = localhost)
@@ -196,6 +196,12 @@ home rather than to a dead end. The map mirrors the `require_role()` calls in `s
 
 Until this landed, `RequireAuth` accepted a `roles` prop that no route ever passed, so all
 three authenticated surfaces were gated identically on "logged in".
+
+**A failure to check is not a failure to exist.** `/verify` told a visitor whose connection had
+dropped that their certificate could not be found, because a transport error and a genuine 404
+set the same state. They are separate outcomes now, and only a real 404 says the certificate is
+not there. `/login` also stopped offering the sign-in form to somebody already signed in, which
+issued a second session for the same person; it redirects to `homeFor()` instead.
 
 **Every authenticated surface names itself.** The public site sets its title through
 `useSeo()`; `/app`, `/portal` and `/m` set nothing at all, so each of them kept whichever
