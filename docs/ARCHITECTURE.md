@@ -53,7 +53,7 @@ cache, no mutation layer and no optimistic update.
 | Client portal | `/portal` | Client accounts |
 | Worker app | `/m` | Worker accounts |
 
-`homeFor()` in `src/providers/auth-provider.tsx` routes a user to their surface after login:
+`homeFor()` in `src/lib/access.ts` routes a user to their surface after login:
 a `client` role or a `client_id` goes to `/portal`, a `worker_id` goes to `/m`, everyone else
 to `/app`.
 
@@ -302,7 +302,7 @@ schema.sql                       the baseline
   ↓
 migrate.php --go                 applies 001–003, stops at 004
   ↓
-backfill-people.php --go         creates people, links every record
+backfill-people.php --go         links anything unlinked; a no-op once it is
   ↓
 migrate.php --go                 004 now passes its precondition and applies
 ```

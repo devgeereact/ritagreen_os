@@ -48,7 +48,10 @@ must be installed on the developer's machine. Everything else is in the reposito
 
 **Goal:** one human, one record, forever. Unblocks everything after it.
 
-**Status: applied and verified locally. Not yet applied to production.**
+**Status: applied and verified locally. Production is at migration 019** — the deployment
+record for 2026-09-03 in `docs/CHANGELOG.md` says the live database was at 18 applied with 0
+pending and that 019 was applied that day, so **020 is the only one outstanding there.** That
+count comes from the deployment record, not from a check against the live database.
 
 The full chain runs from scratch against MariaDB: schema imported, migrations 001–003 applied,
 fixtures seeded, backfill run, 004 applied once its precondition passes. Verified: 22 people
@@ -58,11 +61,15 @@ API answers correctly against the migrated database, including all four access r
 
 Remaining before this milestone is complete:
 
-- Rewrite `ats.php` `onboard` and `from_learner` to link rather than copy
-- Assign payroll numbers to existing active workers
+- ~~Rewrite `ats.php` `onboard` and `from_learner` to link rather than copy~~ — done, and
+  `server/seed.php` goes through `find_or_create_person()` too. Verified: an application
+  onboarded and then re-submitted through `from_learner` produces one `people` row, two
+  applicant rows and one worker, all pointing at it
+- Assign payroll numbers to existing active workers. `next_payroll_no()` runs on onboarding, so
+  only workers created before it exists are missing one — ten of the ten local fixtures
 - The unified person profile in the interface, replacing the separate applicant and worker views
 - Link `enrolments` by hand as the Academy module is rebuilt — they carry only a learner name
-- Apply to production, after a restore-tested backup
+- Apply migration 020 to production, after a restore-tested backup
 
 - `server/migrations/` established, numbered and applied in order
 - `people` table — the identity

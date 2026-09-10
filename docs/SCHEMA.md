@@ -280,8 +280,14 @@ Keys: `KEY idx_action (action)`.
 
 Named atomic sequences. `next_seq()` in `lib.php` increments `val` in one
 statement, so concurrent invoice, quote and certificate creates never collide.
+Verified: 24 invoices raised in parallel produced 24 unique numbers.
 Key format is e.g. `invoice-2026` (`schema.sql:73-75`).
 `CREATE` at `schema.sql:76`.
+
+**Every document number comes from here, including in fixtures.** `server/seed.php` used to
+write the incident ref `INC-<year>-0001` by hand and leave `val` at zero, so the first incident
+filed on a freshly seeded database drew 0001 again and died on `uniq_inc_ref`. A number written
+around this table is a collision waiting for the next writer.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -1619,6 +1625,11 @@ stops with a count and a remedy rather than failing mid-chain.
 It sets `STRICT_ALL_TABLES` for its own session rather than trusting the server's `sql_mode`:
 without strict mode MySQL coerces every unlinked `person_id` to 0, leaving the spine quietly
 wrong instead of loudly unfinished.
+
+**Once 004 is applied, anything that inserts one of these rows must supply a `person_id`.**
+`server/seed.php` did not, and stopped working entirely against a migrated database — the
+documented local setup path, broken by a migration nobody thought to re-check it against. Every
+insert of a worker, applicant or user goes through `find_or_create_person()`.
 
 `enrolments` is deliberately excluded — it carries only a `learner_name`, with no email or
 phone to match on, so those rows are linked by hand as the Academy module is rebuilt. Forcing

@@ -7,6 +7,133 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Security — authorisation on reads (2026-09-09)
+
+Found by probing all 54 endpoints with a token for each of the seven roles, before and after,
+against a local database with the seeded fixtures.
+
+- **Twenty endpoints role-gated their POST branches and left every GET on `require_auth()`
+  alone.** Reproduced with the seeded client portal login: it could read the whole client base
+  with per-client financials (`clients.php`), every applicant's name, email and phone
+  (`ats.php`), the entire workforce's compliance state (`compliance.php`), the full rota with
+  worker names and client sites (`scheduling.php`), and other clients' cover requests
+  (`bookings.php`). A worker's own login had the same reach. `src/lib/access.ts` said it mirrored
+  these `require_role()` calls; for reads there were none to mirror. The guard now sits
+  immediately after `require_auth()` in each file, above every branch
+- **`gocardless.php?action=status`** said "staff only below" and enforced nothing, so any
+  logged-in account could walk `client_id` and read every Direct Debit mandate
+- **`right-to-work.php` and `verifications.php`** took `require_staff()` but no zone check, so
+  the `editor` role — which holds `compliance.can_view = 0` — could read DBS and right-to-work
+  evidence. Both now take the zone, as `compliance.php`'s audit pack already did
+- **`weather.php`** said "logged-in staff only" in a comment and enforced nothing
+- `server/tests/guards.php` locks the invariant: no endpoint may return anything between
+  `require_auth()` and its first authorisation call. Endpoints that genuinely serve any
+  authenticated account are listed there with the reason, and each scopes its query to the
+  caller. Negative-tested by removing the `clients.php` guard, which fails the suite
+- Endpoints returning 200 to a client or worker login: **18 → 0**
+
+### Fixed — mutations that reported success for nothing (2026-09-09)
+
+Every `?action=` handler probed with an id of 999999.
+
+- **Twenty-five returned `{"ok": true}`** for a record that does not exist, and wrote an audit
+  entry against the id. `jobs.php` alone confirmed existence first, and is the pattern the rest
+  now follow through `row_exists()`. Repeating an action already applied still returns 200:
+  `affected_rows` is 0 both for a missing row and an unchanged value, so existence is checked
+  separately. Deleting an already-deleted record is not an error; deleting one that never
+  existed is
+- **Eight let a parent id reach the INSERT** and came back as a foreign-key 500 with the
+  constraint name in it, plus a logged exception, for what is only a stale id from an open page.
+  In `quotes.php` and `incidents.php` the check now runs *before* `next_seq()`, so a rejected
+  request no longer burns a quote or incident number on a record that was never written
+- **`invoices.php?action=pay`** reported success for a missing invoice, would mark an invoice a
+  credit note had voided as paid, and left `amount_paid_pence` at zero while Stripe and
+  GoCardless both set it. Now 404, 409 and an idempotent 200, and it sets the column
+
+### Fixed — the CLI tools could not tell production from a laptop (2026-09-10)
+
+The footgun recorded in the 2026-09-03 deployment notes, and worse than it looked.
+
+- `migrate.php`, `seed.php` and `backfill-people.php` decided "local" from `DB_HOST`. On cPanel
+  the production database is `localhost` too, so the live system read as local:
+  `migrate.php --go` skipped `--production` and the typed-name confirmation, and
+  **`seed.php --confirm --reset` would have emptied clients, workers, invoices and twenty more
+  tables on the real database.** `config.php` now declares `RG_ENV`, read through
+  `rg_is_local_database()`, and a config that does not declare it counts as production. Verified
+  both ways: with `RG_ENV=production`, seed and backfill refuse and migrate demands
+  `--production` and the database name typed in full
+- **`backfill-people.php --go` was not safe to run twice.** It inserted a fresh person for every
+  group regardless of existing links, repointed every record at the duplicate and orphaned the
+  original — along with the right-to-work checks, verifications, eligibility and leave records
+  still hanging off it. Both the quickstart and the production runbook run it after a seed, by
+  which time everything is already linked. It now leaves linked rows alone and gives an unlinked
+  row its group's existing person; a group pointing at two different people is reported, never
+  merged. Verified: `--go` on a linked database creates nothing, and an artificially unlinked
+  login rejoins its worker's person rather than making a second
+- **`seed.php` could not run at all** against a database with migration 004 applied, which is
+  every developer's: it inserted users, workers and applicants with no `person_id` while 004
+  makes the column `NOT NULL`. The documented setup path, broken. Every identity now goes
+  through `find_or_create_person()`, and a worker's login shares the worker's person. It also
+  wrote the incident ref `INC-<year>-0001` by hand and left the counter at zero, so the first
+  incident anybody filed on a fresh database collided on the unique index; and `--reset` never
+  cleared `people`, so the spine grew on every reset
+
+### Changed — the interface stops offering what the server refuses (2026-09-09)
+
+- The Command Centre's live panels read three office-only endpoints and rendered each 403 as an
+  empty state, so "not yours to see" read as "nothing to do" for every trainer, editor and
+  employee
+- The sidebar polled office-only `inbox.php` every 60 seconds for accounts that cannot open it
+- Settings appeared in the app footer and account menu for roles bounced off it; Compliance
+  offered Insurance and References tabs that led straight to an error block; Workers, Timesheets,
+  Academy and Jobs offered create and approve actions ending in 403
+- **Nothing behind the login set a document title.** `/app`, `/portal` and `/m` all kept
+  whichever `<title>` the last public page left behind, so the browser tab, the history entry and
+  a screen reader's page announcement read as the marketing home page
+- **`/verify` told a visitor whose connection had dropped that their certificate did not
+  exist** — a transport failure and a genuine 404 set the same state. Only a 404 says that now
+- **`/login` rendered the sign-in form to somebody already signed in**, and its button issued a
+  second session for the same person
+
+### Changed — ESLint at zero, and blocking (2026-09-09)
+
+From 33 errors to none, by changing the code rather than the rules. CI runs
+`eslint --max-warnings 0` and blocks.
+
+- `src/components/calendar` was an unreferenced FullCalendar template. It read a ref during
+  render, so its own toolbar title never updated, and its dialog reset form state from an effect.
+  Deleted
+- Scheduling's loader set state synchronously from an effect body and had no cancellation, so
+  paging the calendar quickly could let an earlier response land after a later one and paint the
+  wrong week
+- Verify held three states, two reset synchronously in an effect; one value stamped with its id
+  replaces them, and a previous certificate can no longer show while the next is fetched
+- The auth provider started `loading` at true and set it false in the effect; the theme toggle's
+  `mounted` flag is next-themes' `resolvedTheme`; icons render through `createElement`;
+  `homeFor()`, `openStorageNotice()` and `PageLoader` moved out of the modules that mixed them
+  with components; the vendored sidebar skeleton derives its width from `useId()` rather than
+  `Math.random()`, which made it twitch on every re-render
+
+### Verified (2026-09-09)
+
+Direct exercise against a local MariaDB with migrations 001–020 applied, not only static checks.
+
+- Journeys end to end: public application → ATS → onboard → worker on one `people` row;
+  deployment gate refusing an unvetted worker and opening once evidence is filed; overlapping
+  shift refused; invoice → credit note → void → pay with VAT and boundary cases; login, logout,
+  token expiry, password reset, rate limiting; 2FA setup, enable, gated login, disable; data
+  request → subject access export → erasure → two-person deletion approval; retention sweep dry
+  run; per-file document access
+- Concurrency: 24 invoices raised in parallel produced 24 unique numbers; six concurrent onboards
+  of one applicant produced one 201, five 409s and exactly one `people` row
+- Four-eyes on deletion confirmed with an admin requester: they cannot approve *or* reject their
+  own request
+- An approved hard deletion now discloses its cascade and is refused until acknowledged. Several
+  foreign keys onto `workers` and `people` are `ON DELETE CASCADE`, so approving one deletion
+  also removes shifts, timesheets, certifications and references — some of which have to be kept
+  after the employment ends. The schema is unchanged; `decide_deletion` counts the children from
+  the live foreign keys, returns 409 with the counts, and proceeds only on `confirm_cascade`
+
 ### Deployed — production (2026-09-03)
 
 - Migration 019 applied to `devgeereact_ritagreen_os` after a fresh dump to

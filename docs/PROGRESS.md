@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  160 done · 12 partial · 2 to do · 174 tracked
+`#######################.`  162 done · 12 partial · 1 to do · 175 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,8 +17,8 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 14 | 2 | 1 |
-| FOUNDATION — Foundation and person spine | 1 | `############` | 16 | 1 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 15 | 2 | 0 |
+| FOUNDATION — Foundation and person spine | 1 | `############` | 17 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 10 | 0 | 0 |
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 14 done, 2 partial, 1 to do
+Milestone 0 · 15 done, 2 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -45,6 +45,7 @@ Milestone 0 · 14 done, 2 partial, 1 to do
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
+- [x] Migration production guard is meaningful on cPanel — _Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name_
 - [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
 - [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
@@ -53,13 +54,13 @@ Milestone 0 · 14 done, 2 partial, 1 to do
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (308 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
 - [~] Documentation pack — _Milestone 0, in progress_
-- [ ] Migration production guard is meaningful on cPanel — _migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead_
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 16 done, 1 partial, 0 to do
+Milestone 1 · 17 done, 1 partial, 0 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
+- [x] Backfill is safe to run twice — _backfill-people.php --go inserted a fresh person for every group regardless of existing links, repointed every record at the duplicate and orphaned the original with its right-to-work checks, verifications, eligibility and leave records. Both the quickstart and the production runbook run it after a seed, when everything is already linked. It now leaves linked rows alone and gives an unlinked row its group's existing person; a group pointing at two different people is reported, never merged. Verified: --go on a linked database creates nothing and relinks nothing, and an artificially unlinked login rejoins its worker's person rather than making a second_
 - [x] Constrain columns added by later ALTER passes — _Migration 014 adds the six missing foreign keys. ON DELETE SET NULL throughout: a deleted user must not take their audit entries with them, which is the opposite of what an audit log is for_
 - [x] Extend soft delete to records that cascade — _Migration 013 adds deleted_at to applicants, invoices, incidents, timesheets and shifts, plus updated_at on timesheets and the missing index on shifts.client_id. Every list and count query now filters on it_
 - [x] Local development environment — _npm run dev:api plus a local MariaDB, verified end to end: login, workers.php, compliance.php, and all four access restrictions returning 403/401 against a real database_

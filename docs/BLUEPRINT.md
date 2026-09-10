@@ -192,6 +192,13 @@ Verified against a real database: two applications, an onboarding and a login cr
 human produce **one** person record, carrying two applications, one employment record and one
 login. Before the fix that was three or four separate identities.
 
+Two paths were still outside the spine afterwards, and both are closed now. `server/seed.php`
+inserted users, workers and applicants with no `person_id` at all — which stopped being merely
+inconsistent once migration 004 made the column `NOT NULL`, at which point seeding a migrated
+database failed outright. And `server/backfill-people.php --go` inserted a fresh person for
+every group regardless of existing links, so running it a second time duplicated every identity
+it had created the first time. A rule the tooling does not follow is a rule that comes back.
+
 #### One person, one service
 
 `workers.division ENUM('care','academy','cleaning','security')` — a single value.

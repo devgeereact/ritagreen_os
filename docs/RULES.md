@@ -13,9 +13,10 @@ engine derives eligibility from evidence and rules. If a status can be typed in,
 typed in wrongly and then trusted.
 
 **2. A person exists once.**
-Never copy identity fields between tables to create a related record. Link with `person_id`.
-This rule exists because `server/ats.php` currently breaks it and produces up to three copies
-of the same human.
+Never copy identity fields between tables to create a related record. Link with `person_id`,
+through `find_or_create_person()`. This rule exists because `server/ats.php` used to break it
+and produce up to three copies of the same human, and because `server/seed.php` was still
+writing identity outside the spine long after `ats.php` stopped.
 
 **3. Never hard-delete an employment record.**
 Workers, people, clients, certificates, documents and audit entries are soft-deleted via
@@ -44,9 +45,12 @@ real value in `.md`, `.example`, a comment, a commit message or a CI log.
 There are currently no `VITE_*` variables and no `.env`, and all third-party API calls are
 proxied server-side. Preserve that. A key placed in the frontend is a published key.
 
-**9. Every mutating endpoint checks the role server-side.**
-Client-side gating is a user-experience convenience and nothing more. Read endpoints need role
-checks too — several currently lack them.
+**9. Every endpoint checks the role server-side, before it reads as well as before it writes.**
+Client-side gating is a user-experience convenience and nothing more. The guard goes immediately
+after `require_auth()`, above every branch — not beside the writes. Twenty endpoints gated their
+POST branches and left every GET open, so a client portal login could read the whole client base
+and the entire workforce's compliance state. `server/tests/guards.php` now fails the suite if an
+endpoint returns anything between `require_auth()` and its first authorisation call.
 
 **10. Prepared statements, always.**
 Every query goes through `mysqli` prepared statements with bound parameters. No string
@@ -68,6 +72,19 @@ The Vite proxy defaults to the local PHP API. Reaching production requires setti
 migration against anything but a local database. This rule exists because the default used to
 be production, so every developer was one query away from editing live workforce records.
 
+**13a. Which database it is, is declared — never inferred.**
+`config.php` carries `define('RG_ENV', 'local'|'production')`, and `migrate.php`, `seed.php` and
+`backfill-people.php` read it through `rg_is_local_database()`. They used to infer it from
+`DB_HOST`, and on cPanel the production database is `localhost` too — so the live system read as
+local and `seed.php --confirm --reset` would have emptied it. A `config.php` that does not
+declare it counts as production: the cost of being wrong that way is a refusal, not a restore.
+
+**13b. A tool that can be run twice must be safe to run twice.**
+`backfill-people.php --go` created a fresh person for every group regardless of existing links,
+repointing every record at the duplicate and orphaning the original with its right-to-work
+checks and leave records. Both the quickstart and the production runbook run it after a seed.
+Before a script writes, it checks what is already there.
+
 **14. Schema changes are numbered migrations.**
 New work goes in `server/migrations/NNN-description.sql`, applied in order and recorded.
 `server/schema.sql` stays as the from-scratch baseline. The current single re-runnable
@@ -85,8 +102,10 @@ exclusion list in `.github/workflows/deploy.yml` is deliberate and correct.
 Never commit to `main` directly. Push to `main` deploys to production.
 
 **18. CI must be green before merge.**
-Typecheck, build, both test suites, `php -l` across every PHP file, and the documentation
-consistency check. Lint reports but does not yet block; see `docs/STATUS.json`.
+Typecheck, `eslint --max-warnings 0`, both test suites, build, the build-output assertion,
+`php -l` across every PHP file, the committed-`config.php` guard and the documentation
+consistency check. Every one of them blocks. Lint reached zero by changing the code, not by
+loosening the rules — keep it that way, and fix the code rather than adding a disable comment.
 
 **18a. Domain logic goes in `server/pure.php`, and gets a test.**
 If a function is a function of its arguments, it belongs there rather than inside an endpoint,

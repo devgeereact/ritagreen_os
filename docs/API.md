@@ -1403,7 +1403,7 @@ stays stable and comparable.
 | `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
 | `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
 | `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `?key=ALERTS_KEY` |
-| `migrate.php`, `seed.php`, `backfill-people.php` | Schema and fixtures | **CLI only.** Refuse to run over HTTP at all |
+| `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` | Schema, fixtures and the first administrator | **CLI only.** Refuse to run over HTTP at all. `migrate.php`, `seed.php` and `backfill-people.php` additionally read `RG_ENV` from `config.php` to decide what they may do; a config that does not declare it counts as production |
 
 Two auth mechanisms here are neither a bearer token nor a role, and are worth stating plainly:
 

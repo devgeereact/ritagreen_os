@@ -55,6 +55,14 @@ Reaching production needs an explicit `RG_API_TARGET` and prints a warning. It u
 default, which meant every developer was one query away from editing live workforce records.
 **Never run a migration against anything but a local database.**
 
+**`config.php` declares which database it is, and the CLI tools believe it, not `DB_HOST`.**
+`define('RG_ENV', 'local')` or `'production'`, read through `rg_is_local_database()`. They used
+to infer it from the host, and on cPanel the production database is `localhost` too — so the live
+system read as local: `migrate.php --go` skipped the typed-name confirmation and
+`seed.php --confirm --reset` would have emptied clients, workers and invoices on it. A
+`config.php` without the constant counts as production, because the cost of being wrong that way
+is a refusal rather than a restore from backup.
+
 **Two schema mechanisms, and you need both.** `server/schema.sql` is the from-scratch baseline
 — one re-runnable file organised in "build passes", where later
 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier `CREATE TABLE` statements *in
@@ -70,7 +78,14 @@ database; see migration 004 and its precondition.
 record is linked to it, and `ats.php` `onboard` / `from_learner` were rewritten to use
 `find_or_create_person()` and read identity back from `people`. The `workers` row still carries
 denormalised `name`/`email`/`phone` columns beside `person_id`; treat `people` as the truth and
-never introduce a new path that writes identity from anywhere else. `server/seed.php` is one of
+never introduce a new path that writes identity from anywhere else. `server/backfill-people.php --go` is safe to run twice: it leaves rows that
+already carry a `person_id` alone and gives an unlinked row the person its group already has.
+It was not — it inserted a fresh person for every group regardless, repointed every record at
+the duplicate, and orphaned the original along with the right-to-work checks, verifications,
+eligibility and leave records still hanging off it. Both the quickstart and the production
+runbook run it after a seed, by which time everything is already linked.
+
+`server/seed.php` is another of
 those paths and did not: it inserted users, workers and applicants with no `person_id` at all,
 so seeding a database with migration 004 applied — every developer's — failed outright with
 "Field 'person_id' doesn't have a default value". It goes through `find_or_create_person()` now,
@@ -193,13 +208,19 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
-verification, and the deployment gate — are **built and verified against a local database, and
-not yet applied to production**. Migrations `001`–`020` exist in `server/migrations/`; applying
-them to the live database is the outstanding step and is a deliberate, separate act. Read
-`docs/ROADMAP.md` for what each milestone still owes before it is called complete.
+verification, and the deployment gate — are **built and verified against a local database**.
+Migrations `001`–`020` exist in `server/migrations/` and all twenty are applied locally. The
+deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
+pending and that 019 was applied that day, so **`020` is the only one outstanding there** — but
+that is the record talking, not a check against the live database. Confirm with
+`php server/migrate.php --status` on the server before acting on it.
 
-What is left is concentrated in PLATFORM (the lint baseline, tooling), EMPLOYMENT and
-GOVERNANCE. Check `docs/PROGRESS.md` rather than assuming from this paragraph.
+The PHP tier is **not** deployed by the pipeline: `deploy.yml` uploads `dist/` only and excludes
+`*.php`. A change to `server/` reaches production only when somebody uploads it, and shipping the
+frontend ahead of it means the interface changes while the API does not.
+
+What is left is concentrated in EMPLOYMENT and GOVERNANCE. Check `docs/PROGRESS.md` rather than
+assuming from this paragraph.
 
 ## 7. Frontend traps
 

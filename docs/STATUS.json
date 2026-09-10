@@ -29,6 +29,11 @@
           "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
         },
         {
+          "name": "Backfill is safe to run twice",
+          "status": "done",
+          "note": "backfill-people.php --go inserted a fresh person for every group regardless of existing links, repointed every record at the duplicate and orphaned the original with its right-to-work checks, verifications, eligibility and leave records. Both the quickstart and the production runbook run it after a seed, when everything is already linked. It now leaves linked rows alone and gives an unlinked row its group's existing person; a group pointing at two different people is reported, never merged. Verified: --go on a linked database creates nothing and relinks nothing, and an artificially unlinked login rejoins its worker's person rather than making a second"
+        },
+        {
           "name": "Person de-duplication migration",
           "status": "done",
           "note": "server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)"
@@ -938,8 +943,8 @@
         },
         {
           "name": "Migration production guard is meaningful on cPanel",
-          "status": "todo",
-          "note": "migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead"
+          "status": "done",
+          "note": "Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name"
         },
         {
           "name": "No third-party requests from the public site",

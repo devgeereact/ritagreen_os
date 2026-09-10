@@ -52,7 +52,7 @@ mysql -u root ritagreen_os_dev < server/schema.sql
 cp server/config.local.php.example server/config.php   # edit if your MySQL user differs
 php server/migrate.php --go            # applies 001-003, stops at 004
 npm run seed -- --confirm
-php server/backfill-people.php --go    # creates people, links every record
+php server/backfill-people.php --go    # links anything not already linked; safe to re-run
 php server/migrate.php --go            # 004 now passes its precondition
 
 # Every day: two terminals
@@ -95,7 +95,7 @@ src/
   providers/            auth context
 server/
   lib.php               the shared kernel every endpoint requires
-  *.php                 55 endpoints, one per resource
+  *.php                 54 endpoints, one per resource
   schema.sql            the database, as a single re-runnable file
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
@@ -121,8 +121,9 @@ Two scripts are cron-driven and refuse HTTP access without a key:
 Push to `main`. GitHub Actions runs `npm ci`, `npm run build` and uploads `dist/` over FTPS.
 PHP files, `config.php` and `.htaccess` are excluded from the upload by design.
 
-CI runs typecheck, lint, build, `php -l` across every PHP file and a documentation consistency
-check on every pull request.
+CI runs typecheck, `eslint --max-warnings 0`, both test suites, build, a build-output assertion
+(no source maps ship), `php -l` across every PHP file, a guard against a committed `config.php`
+and a documentation consistency check on every pull request. All of them block.
 
 ## Contributing
 

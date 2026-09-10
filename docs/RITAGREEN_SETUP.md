@@ -92,7 +92,7 @@ a rename as in scope, and treat "RitaGreen Services" as *the first tenant*, not 
 
 ### Current Product
 
-A single React 19 SPA served as static files from cPanel shared hosting, talking to 55 flat PHP
+A single React 19 SPA served as static files from cPanel shared hosting, talking to 54 flat PHP
 8.4 endpoint files in `server/` over the same domain, backed by MySQL/MariaDB. No framework, no
 router, no Composer, no Node on the host. It runs the whole of one UK services company across
 four divisions — **Care, Academy, Cleaning, Security** — as one workforce database.
@@ -106,7 +106,7 @@ Four surfaces, one bundle, one domain (`ritagreenservices.com`):
 | Client portal | `/portal` | Client accounts | 1 page, scoped by `users.client_id` |
 | Worker app | `/m` | Worker accounts | 1 page, scoped by `users.worker_id` |
 
-`homeFor()` in `src/providers/auth-provider.tsx` routes each account to its surface after login.
+`homeFor()` in `src/lib/access.ts` routes each account to its surface after login.
 
 ### Business Goals
 
@@ -214,7 +214,7 @@ a stale figure written down is a figure that gets trusted.
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 55 flat endpoint files, no framework, no router, no Composer
+server/*.php — 54 flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
 MySQL / MariaDB on cPanel shared hosting (host = localhost)
@@ -230,12 +230,12 @@ MySQL / MariaDB on cPanel shared hosting (host = localhost)
 | Auth | Opaque bearer tokens (32 random bytes, SHA-256 stored, 30-day expiry), bcrypt cost 12, hand-rolled RFC 6238 TOTP, device/session list with per-session revoke, rate limiting, Google SSO matched on verified email only, idle lock screen, `MANDATORY_2FA` flag |
 | Mail | Nothing in a web request opens an SMTP socket. `queue_mail()` writes to `email_queue`; `send-queued-mail.php` drains it on cron, claims each row, logs every attempt including skips. Three sends stay synchronous by design: panic alert, password reset, interactive mailbox reply |
 | Cron-only | `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` — refused over HTTP without `?key=` matching `ALERTS_KEY` |
-| CLI-only | `migrate.php`, `seed.php`, `backfill-people.php` — refuse HTTP entirely |
+| CLI-only | `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` — refuse HTTP entirely |
 | Config | 43 `define()` constants in `server/config.php`, gitignored, hand-placed on the server. `config.sample.php` is the tracked template. **No `.env`, no `VITE_*`, nothing secret in the bundle** |
 | Deploy | Push to `main` → GitHub Actions → `npm ci` → `npm run build` → FTPS upload of `dist/` **only**. PHP, `config.php` and `.htaccess` excluded by design; `dangerous-clean-slate` must never be added (rule 16) |
 | Dev | `npm run dev` (Vite, port 5122, `strictPort`) + `npm run dev:api` (`php -S 127.0.0.1:8122 -t server`). Proxy target from `RG_API_TARGET`, defaults local, warns when overridden (rule 13) |
-| Tests | `server/tests/run.php` (254 assertions, no database, no Composer) and `src/lib/__tests__/access.test.ts` (24 assertions over the permission map) |
-| CI | typecheck, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Lint reports but does not block |
+| Tests | `server/tests/run.php` (308 assertions, no database, no Composer — pure logic plus `server/tests/guards.php`, which fails if any endpoint returns before it authorises) and two vitest files, `src/lib/__tests__/access.test.ts` and `app-routes.test.ts` (37 tests over the permission map, `homeFor()` and the page registry) |
+| CI | typecheck, `eslint --max-warnings 0`, both test suites, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Every one of them blocks |
 
 **Hard host constraints — treat as inputs to every recommendation:**
 - No Node on the host. The build happens locally or in CI and ships as static artifacts.
@@ -305,7 +305,7 @@ corrected against a real database.
 
 ### API Documentation
 
-55 flat endpoint files in `server/`. Dispatch is by HTTP method plus `?action=`. Full detail in
+54 flat endpoint files in `server/`. Dispatch is by HTTP method plus `?action=`. Full detail in
 `docs/API.md`. Grouped:
 
 | Group | Files |
@@ -320,7 +320,7 @@ corrected against a real database.
 | Files and reporting | `files.php` · `reports.php` · `analytics.php` · `dashboard.php` · `action-centre.php` |
 | Governance | `audit.php` · `gdpr.php` · `governance.php` · `insurance.php` · `system-health.php` · `backup.php` |
 | AI | `ai.php` — OpenRouter proxied server-side so the key never reaches the browser |
-| Tooling | `migrate.php` · `seed.php` · `backfill-people.php` · `api.php` |
+| Tooling | `migrate.php` · `seed.php` · `backfill-people.php` · `create-admin.php` · `api.php` |
 
 ### Repository
 
@@ -335,10 +335,10 @@ src/
 server/
   lib.php               the kernel every endpoint requires
   pure.php              testable domain logic
-  *.php                 55 endpoints, one per resource
+  *.php                 54 endpoints, one per resource
   migrations/           001–018
   schema.sql            the from-scratch baseline
-  tests/run.php         254 assertions, no database
+  tests/run.php         308 assertions, no database
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
 ```
@@ -577,17 +577,15 @@ From `docs/PROGRESS.md`, generated from `docs/STATUS.json`: **151 done · 14 par
 
 **Everything still open, in full — do not plan around a rosier picture:**
 
-- Automated tests are partial: 254 server assertions and 24 access-map assertions; **endpoints
-  and React components are untested.**
-- CI quality gates are partial: typecheck, build, `php -l` and docs checks block; **lint reports
-  only**, with 27 ESLint errors remaining (8 `react-hooks/set-state-in-effect`, 7
-  `react-refresh/only-export-components`, 4 `react-hooks/refs`, 3 `react-hooks/static-components`,
-  2 `no-explicit-any`, 2 `react-hooks/purity`, 1 `no-unused-expressions`) — all of which change
-  runtime behaviour to fix.
-- **The migration production guard does not fire on cPanel.** `migrate.php` treats
-  `DB_HOST=localhost` as local, but on shared hosting the production database *is* localhost. Gate
-  on database name or an explicit environment constant. This is a live footgun and it gets worse
-  with tenants.
+- Automated tests are partial: 308 server assertions and 37 vitest tests; **endpoints and React
+  components have no automated coverage of their own.** The endpoint sweep that found the
+  authorisation and 404 defects was run by hand against a local database, and only its invariant
+  — no endpoint returns before it authorises — is locked in `server/tests/guards.php`.
+- CI quality gates now all block, lint included, at zero errors.
+- ~~**The migration production guard does not fire on cPanel.**~~ **Fixed.** It was inferred
+  from `DB_HOST`, and on shared hosting the production database *is* localhost — so the live
+  system read as local. `config.php` now declares `RG_ENV`, read through
+  `rg_is_local_database()`, and a config without it counts as production.
 - Soft delete is missing on some records that must not be lost.
 - Compliance status is read-only where it matters, but **older screens still show raw DBS/SIA
   fields**.
@@ -713,7 +711,7 @@ and the blast radius of one bad migration. If it does not, sequence the move so 
 keeps working throughout, and cost it honestly — including the fact that the deploy pipeline
 uploads `dist/` over FTPS today and PHP is placed by hand.
 
-Do not propose a rewrite as the opening move. 55 endpoints, 18 migrations and 278 assertions of
+Do not propose a rewrite as the opening move. 54 endpoints, 20 migrations and 308 assertions of
 tested behaviour are an asset.
 
 ## PHASE 9 — BRAND REPOSITIONING
@@ -928,7 +926,7 @@ with evidence, and for refusing the work when the answer is no.
 | Client portal | `/portal` | Client accounts | Cover requests, assigned workers, invoices, raising an issue |
 | Worker app | `/m` | Worker accounts | Own compliance, shifts, open shifts to claim, clock in and out, payslip |
 
-One React bundle serves all four. `homeFor()` in `src/providers/auth-provider.tsx` sends an
+One React bundle serves all four. `homeFor()` in `src/lib/access.ts` sends an
 account to its own surface after login: a `client` role or a `client_id` to `/portal`, a
 `worker_id` to `/m`, everyone else to `/app`. The 17 public pages are eager-imported so first
 paint is fast; the 34 CMS pages are `lazy()` behind a Suspense boundary, so a public visitor
@@ -989,7 +987,7 @@ cp server/config.local.php.example server/config.php
 # 3. The migration chain, in the only order that works
 php server/migrate.php --go            # applies 001–003, stops at 004 on its precondition
 npm run seed -- --confirm              # fixtures with a deliberate spread of compliance states
-php server/backfill-people.php --go    # creates people, links every record
+php server/backfill-people.php --go    # links anything not already linked; safe to re-run
 php server/migrate.php --go            # 004 now passes its precondition and applies
 
 # 4. Two processes, every day
@@ -1044,9 +1042,10 @@ hand, so a frontend deploy can never disturb it.
 6. **Create the uploads directory** and confirm a direct request to `/uploads/<stored_name>` is
    refused.
 7. **Add the cron jobs** (see D11). Each refuses HTTP without `?key=` matching `ALERTS_KEY`.
-8. **Apply migrations**, after a restore-tested backup (rule 15). Note the live footgun recorded
-   in Part B §5: `migrate.php` treats `DB_HOST=localhost` as local, and on shared hosting the
-   production database *is* localhost, so the `--production` guard never fires.
+8. **Apply migrations**, after a restore-tested backup (rule 15). Set `define('RG_ENV',
+   'production');` in the server's `config.php` first — `migrate.php` reads that, not `DB_HOST`,
+   and will then refuse `--go` without `--production` and the database name typed in full. A
+   `config.php` without the constant is treated as production, so the guard holds either way.
 9. **Deploy the frontend** by pushing to `main`.
 
 **Frontend deploy.** GitHub Actions runs `npm ci`, `npm run build`, then
@@ -1750,7 +1749,7 @@ their own endpoints; and the places the TypeScript types and the SQL disagree.
 
 ## D10. The API at a glance
 
-55 HTTP endpoint files plus four libraries and three CLI tools. Auth posture in one table; full
+54 application endpoint files, four key-gated cron scripts, four libraries and four CLI tools. Auth posture in one table; full
 routes, parameters and return shapes in `docs/API.md`.
 
 | Endpoint | Auth posture |
@@ -1785,7 +1784,7 @@ routes, parameters and return shapes in `docs/API.md`.
 | `forms-intake.php` | **Webhook: shared secret in `X-RitaGreen-Secret`, no bearer token.** Views staff only |
 | `notifications.php` · `dashboard.php` · `ai.php` · `weather.php` · `api.php` | Auth, any role |
 | `expiry-alerts.php` · `send-queued-mail.php` · `backup.php` | **Cron.** CLI, or HTTP with `?key=` matching `ALERTS_KEY` |
-| `migrate.php` · `seed.php` · `backfill-people.php` | **CLI only.** They refuse to run over HTTP at all |
+| `migrate.php` · `seed.php` · `backfill-people.php` · `create-admin.php` | **CLI only.** They refuse to run over HTTP at all |
 
 **Four auth mechanisms are in use, and they are not interchangeable:** a bearer token; a shared
 secret compared with `hash_equals` (`forms-intake.php`, the cron scripts); an unguessable
@@ -1822,7 +1821,7 @@ eligible for Security" for cleaners.
 | Route table | `src/routes/index.tsx` | Every route in one file. Public eager, CMS lazy |
 | Permission map | `src/lib/access.ts` | Path prefix → roles, plus the staff/worker/client predicates. Read by the guard **and** the sidebar |
 | Guard | `src/auth/RequireAuth.tsx` | Redirects to the user's own home, not to a dead end |
-| Auth context | `src/providers/auth-provider.tsx` | The `Role` union, `homeFor()`, token handling |
+| Auth context | `src/providers/auth-provider.tsx` | The `Role` union and token handling. `homeFor()` sits in `src/lib/access.ts`, beside the other account-kind helpers |
 | Fetch hook | `src/hooks/use-api.ts` | A hand-rolled GET hook with a monotonic request-id guard, so a slow earlier response cannot overwrite a faster later one. No cache, no mutation layer, no optimistic update |
 | Divisions | `src/lib/divisions.ts` | Single source for names, taglines, audiences, assurances, services and accents — drives the mega-menu, the services pages, the home page and the footer |
 | Types | `src/lib/types.ts` | Including `Person`, `EligibilityVerdict`, `RequirementState`, `RightToWorkCheck`, `AuditEntry`, `QueuedEmail` |
@@ -1848,11 +1847,11 @@ component — use the token**, and never invent a fourth colour for a compliance
 | `npm run typecheck` | `tsc -b --force` over the referenced strict config | Yes |
 | `npm run build` | Vite production build, plus a source-map assertion | Yes |
 | `npm run test:php` | `server/tests/run.php` — **254 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
-| `npm test` | `src/lib/__tests__/access.test.ts` — 24 assertions over the permission map, including that a client or worker account cannot reach `/app` | Yes |
+| `npm test` | `src/lib/__tests__/access.test.ts` and `app-routes.test.ts` — 37 tests over the permission map (including that a client or worker account cannot reach `/app`), `homeFor()`, and the page registry behind the ⌘K palette and the browser tab title | Yes |
 | `php -l` | Every PHP file | Yes |
 | Config guard | Fails if `server/config.php` is committed | Yes |
 | `python3 scripts/docs_sync.py --check` | `PROGRESS.md` matches `STATUS.json`, and **every backticked source path in `TRACEABILITY.md` resolves**, so a fabricated path fails CI | Yes |
-| `npm run lint` | ESLint | **No — reports only.** 27 errors remain; all change runtime behaviour to fix |
+| `npm run lint` | ESLint, `--max-warnings 0` | **Yes.** At zero, from 33. It stopped being advisory once the last 19 were cleared |
 
 Both test suites are dependency-free — no PHPUnit, no Composer — because the production host
 cannot install packages, and a suite that only runs on one machine stops being run.
@@ -1900,7 +1899,7 @@ with a reason.
 | To turn self-registration into a login | It creates an applicant |
 | To let a non-super-admin create a super admin, or anyone deactivate themselves | 403 and 409 |
 | To reveal whether an email address exists | `forgot` always returns ok |
-| To run `migrate.php`, `seed.php` or `backfill-people.php` over HTTP | CLI only |
+| To run `migrate.php`, `seed.php`, `backfill-people.php` or `create-admin.php` over HTTP | CLI only |
 | To run a cron script over HTTP without the key | `hash_equals` against `ALERTS_KEY`; unset or `CHANGE_ME` refuses everything |
 | To apply a migration by default | Dry run is the default; `--go` applies; a non-local database also needs `--production` and a typed database name |
 | To apply migration 004 before the backfill | Its precondition stops with the count and the remedy |

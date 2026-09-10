@@ -12,9 +12,15 @@ every backticked source path resolves, so a fabricated path fails CI.
 **Test column:** two suites exist, both dependency-free and both run in CI.
 `server/tests/run.php` covers the pure server logic — credential expiry banding, the
 staff/worker/client distinction, field status, pay premiums — with no database and no
-`server/config.php`. `src/lib/__tests__/access.test.ts` covers the client permission map. Most rows
-still read _none_; the compliance engine rows in particular must not stay that way, see
+`server/config.php`, and carries `server/tests/guards.php`, which fails if any endpoint returns
+before it authorises. On the client, `src/lib/__tests__/access.test.ts` covers the permission map
+and `homeFor()`, and `src/lib/__tests__/app-routes.test.ts` the page registry. Most rows still
+read _none_; the compliance engine rows in particular must not stay that way, see
 `docs/ROADMAP.md` Milestone 2.
+
+**"unapplied" means production.** Migrations 001–020 are applied and verified against a local
+database. None has been applied to the live one, which is a separate deliberate act — see
+`docs/ROADMAP.md`.
 
 ---
 
@@ -22,8 +28,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| A person exists once | `people` (migration 001, unapplied) | `server/backfill-people.php` | planned | `server/tests/run.php` (matching) |
-| A person may serve several services | `person_services` (migration 001, unapplied) | planned | planned | none |
+| A person exists once | `people` (migration 001, unapplied in production) | `find_or_create_person()` in `server/lib.php`, `server/backfill-people.php`, `server/seed.php` | `src/pages/app/Workers.tsx` | `server/tests/run.php` (matching) |
+| A person may serve several services | `person_services` (migration 001, unapplied in production) | `server/compliance.php` `?action=eligibility_all` | `src/components/app/eligibility-dialog.tsx` | `server/tests/run.php` (evaluation) |
 | Candidate becomes worker without duplication | `applicants.worker_id` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Staff and workers authenticate | `users`, `tokens` | `server/auth.php` | `src/pages/auth/Login.tsx` | none |
 | Privileged accounts use 2FA | `user_2fa` | `server/auth.php` | `src/components/app/force-2fa.tsx` | none |
@@ -31,11 +37,14 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Idle sessions lock | — | `server/auth.php` | `src/components/app/lock-screen.tsx` | none |
 | Roles restrict what staff can do | `roles`, `users.role` | `require_role()` in `server/lib.php` | `src/auth/RequireAuth.tsx` | none |
 | Staff, worker and client accounts are distinguished | `users.worker_id`, `users.client_id` | `is_staff()` in `server/pure.php` | `src/lib/access.ts` | both suites |
-| Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx` | none |
+| Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx`, `src/components/global-search.tsx`, `src/layouts/Footer.tsx` | `src/lib/__tests__/access.test.ts` |
 | A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | `src/lib/__tests__/access.test.ts` |
 | Per-service scoping is enforced | `users.scope_to_division` | `service_scope()` in `server/lib.php` | `src/lib/access.ts` | none |
 | Sensitive zones are separately permissioned | `zone_permissions` | `can_view_zone()` in `server/lib.php` | planned settings screen | none |
+| Reading a record is authorised, not just writing it | — | every endpoint, immediately after `require_auth()` | `src/lib/access.ts` | `server/tests/guards.php` |
+| Navigation and page actions match what the server allows | — | — | `src/lib/access.ts`, `src/lib/app-routes.ts` | `src/lib/__tests__/access.test.ts`, `src/lib/__tests__/app-routes.test.ts` |
+| Every authenticated page names itself | — | — | `useDocumentTitle()` in `src/hooks/use-document-title.ts` | `src/lib/__tests__/app-routes.test.ts` (`titleFor`) |
 
 ## Recruitment
 
@@ -59,7 +68,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Evidence can be produced per worker | `files`, `certifications` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | References are checked | `worker_references` | `server/references.php` | `src/pages/app/Workers.tsx` | none |
 | Company insurance is current | `insurance` | `server/insurance.php` | `src/pages/app/Compliance.tsx` | none |
-| Requirements are configurable per service | `compliance_rules` (migration 003, unapplied) | planned | planned rule builder | none |
+| Requirements are configurable per service | `compliance_rules` (migration 003, unapplied in production) | `rg_load_rules()` in `server/compliance-lib.php` | planned rule builder | `server/tests/run.php` (evaluation) |
 | Requirements carry a weight | planned | planned | planned | none |
 | Eligibility is calculated, with a reason | planned storage | `rg_evaluate_eligibility()` in `server/pure.php` | planned | `server/tests/run.php` |
 | Requirements carry a weight that decides blocking | planned storage | `server/pure.php` | planned | `server/tests/run.php` |
@@ -90,7 +99,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied) | planned, on `next_seq()` in `server/lib.php` | planned | none |
+| Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied in production) | `next_payroll_no()` in `server/lib.php`, called by `server/ats.php` on onboarding | `src/pages/app/Workers.tsx` | none |
 | Employment contracts have a lifecycle | `employment_contracts` | planned endpoint | planned | none |
 | Written-statement particulars are structured | `employment_contracts` fields | planned endpoint | planned | none |
 | Leave and absence are recorded | `leave_records` | `server/leave.php` | planned | `server/tests/run.php` (balance) |
