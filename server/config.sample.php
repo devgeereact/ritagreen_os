@@ -5,6 +5,16 @@
 // config.php is gitignored and must NEVER be committed: it holds the DB
 // password and the OpenRouter key. Only api.php/auth.php/etc require it.
 
+// ----- Which database is this? -----
+// Declared, never guessed. seed.php, migrate.php and backfill-people.php decide
+// what they are allowed to do from this constant. They used to read DB_HOST,
+// and on cPanel the production database is on localhost — so the live system
+// looked local, `migrate.php --go` skipped the typed-name confirmation, and
+// `seed.php --confirm --reset` would have emptied clients, workers and invoices
+// on the real database. A config.php without this constant is treated as
+// production, which is the safe way to be wrong.
+define('RG_ENV', 'production');
+
 // ----- Error display -----
 // Flip GK_DEBUG to true only while debugging. In production errors are logged
 // (check cPanel error_log) but never shown, so nothing leaks to callers.

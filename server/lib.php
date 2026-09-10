@@ -552,6 +552,35 @@ function row_exists(mysqli $conn, string $table, int $id, bool $respectSoftDelet
  *
  * Call BEFORE the delete. Returns [table => count], omitting empty ones.
  */
+/**
+ * Is this a local development database?
+ *
+ * Declared in config.php as RG_ENV, never inferred from DB_HOST. On cPanel the
+ * PRODUCTION database is also on localhost, so the host answers "local" for the
+ * live system — which meant `seed.php --confirm --reset` would have emptied the
+ * client, worker and invoice tables of the real database, and `migrate.php --go`
+ * would have applied DDL to it with neither --production nor the typed-name
+ * confirmation. Both guards were written believing localhost meant a laptop.
+ *
+ * A config.php that predates RG_ENV is treated as production. Failing closed is
+ * the only safe default for scripts that can wipe tables: the cost of being
+ * wrong is a refusal and a one-line edit, not a restore from backup.
+ */
+function rg_is_local_database(): bool
+{
+    return defined('RG_ENV') && RG_ENV === 'local';
+}
+
+/** What to tell somebody whose config.php has not declared where it points. */
+function rg_env_hint(): string
+{
+    if (defined('RG_ENV')) return '';
+    return "config.php does not define RG_ENV, so this is treated as production.\n"
+        . "Add one of these to server/config.php:\n"
+        . "  define('RG_ENV', 'local');       // a development database on your own machine\n"
+        . "  define('RG_ENV', 'production');  // the live database\n";
+}
+
 function cascade_counts(mysqli $conn, string $table, int $id): array
 {
     $stmt = $conn->prepare(

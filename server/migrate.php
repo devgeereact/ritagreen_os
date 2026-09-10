@@ -29,8 +29,10 @@ $go = in_array('--go', $args, true);
 $statusOnly = in_array('--status', $args, true);
 $productionFlag = in_array('--production', $args, true);
 
-$localHosts = ['localhost', '127.0.0.1', '::1'];
-$isLocal = in_array(DB_HOST, $localHosts, true);
+// Declared in config.php, not inferred from DB_HOST: on cPanel the production
+// database is on localhost too, so host-sniffing called the live system local
+// and waved --go straight through. See rg_is_local_database() in lib.php.
+$isLocal = rg_is_local_database();
 
 $dir = __DIR__ . '/migrations';
 if (!is_dir($dir)) exit("No migrations directory at $dir\n");
@@ -101,7 +103,8 @@ if (!$go) {
 // Applying to production is deliberate, and confirmed by typing the name.
 if (!$isLocal) {
     if (!$productionFlag) {
-        exit("REFUSED: " . DB_HOST . " is not a local database. Add --production if you mean it.\n");
+        exit("REFUSED: " . DB_NAME . " is not declared as a local database. Add --production if you mean it.\n"
+            . rg_env_hint());
     }
     echo "You are about to migrate a NON-LOCAL database: " . DB_NAME . "\n";
     echo "MySQL DDL is not transactional. Take a restore-tested backup first.\n";

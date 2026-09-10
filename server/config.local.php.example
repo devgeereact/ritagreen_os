@@ -14,6 +14,13 @@
 // Every outbound integration below is deliberately disabled. A local run must
 // not be able to email a real worker, charge a real card, or text anyone.
 
+// ----- Which database is this? -----
+// Declared, never guessed. seed.php, migrate.php and backfill-people.php all
+// used to read DB_HOST to decide, and on cPanel the PRODUCTION database is on
+// localhost too — so the live system looked local and `seed.php --reset` would
+// have emptied it. A config.php without this constant is treated as production.
+define('RG_ENV', 'local');
+
 // ----- Error display -----
 // On locally: you want the stack trace. Never true on the server.
 define('GK_DEBUG', true);

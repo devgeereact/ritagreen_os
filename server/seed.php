@@ -23,10 +23,15 @@ $args = array_slice($argv, 1);
 $confirmed = in_array('--confirm', $args, true);
 $reset = in_array('--reset', $args, true);
 
-// Guard 1: never a remote database. This is the whole point of the script.
-$localHosts = ['localhost', '127.0.0.1', '::1'];
-if (!in_array(DB_HOST, $localHosts, true)) {
-    exit("REFUSED: DB_HOST is '" . DB_HOST . "'. seed.php only runs against a local database.\n");
+// Guard 1: never anything but a declared local database. This is the whole point
+// of the script, and it used to ask DB_HOST — which is 'localhost' on the cPanel
+// production host as well. --reset empties clients, workers, invoices and
+// twenty more tables, so that guard was one misplaced config.php away from
+// wiping the live system. RG_ENV is declared, and an undeclared config is
+// treated as production.
+if (!rg_is_local_database()) {
+    exit("REFUSED: " . DB_NAME . " is not declared as a local database. seed.php only ever runs against one.\n"
+        . rg_env_hint());
 }
 
 // Guard 2: never silently. Show what is about to be written to, and to where.
