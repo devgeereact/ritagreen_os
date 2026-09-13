@@ -169,6 +169,32 @@ Equal times are refused rather than guessed at. The timesheet endpoint used to r
 case as "the end time must be after the start time", so a business built on waking nights and
 night guarding could not record a night, while `shifts` had stored overnight spans all along.
 
+**A pay rate is dated.** `worker_pay_rates` (migration 022) is the history; `workers.pay_rate_pence`
+is only the current figure, for the profile and for costing a new shift. `pay_compute()` prices
+every entry at the rate in force on the day it was worked. It read the current rate, so a rise
+re-priced every period the worker had ever done and no closed period could be reproduced.
+Anything new that values past work reads the history, not the column.
+
+**A premium belongs to an hour, not to an entry.** `rg_premium_segments()` in `server/pure.php`
+splits a worked interval minute by minute and carries every band in force at that moment — a
+Saturday at 22:00 is both weekend and night — and `pay_entry()` pays the dearest *configured*
+band, so which one wins lives in `pay_rules` rather than in code. The previous model took one
+premium for the whole entry from its start hour: a 05:00–13:00 shift was paid night for all
+eight hours, and a Friday 20:00 → Saturday 04:00 shift night for all eight and weekend for none.
+
+**`bank_holidays` is generated, not typed.** `rg_bank_holidays()` computes the standard eight for
+a year and migration 023 seeds to 2035 from it. The table is still the source of truth, because
+one-off holidays are announced rather than derived. Never hand-type dates into a money table: the
+table held 2026 only and every 2027 bank holiday would have paid flat.
+
+**The pay floor is configuration and it is empty.** `pay_floors` (migration 024) flags a rate
+below it and never blocks a run. It is a floor, not the National Minimum Wage — NMW has age bands
+and `workers` holds no date of birth. Same rule as retention periods: do not put a figure in code.
+
+**The pay PDF is titled GROSS PAY, not PAYSLIP,** and says so in its footer. There is no PAYE, NI,
+pension or net figure anywhere in the system, and no tax code or NI number in the schema to
+compute them from. Do not retitle it until there is.
+
 **Anything that turns hours into money reads `deleted_at`.** `pay_compute()` did not, so a
 soft-deleted timesheet was still paid. Archiving is the disposal route this system has; a query
 that ignores it converts an archive into a silent liability.

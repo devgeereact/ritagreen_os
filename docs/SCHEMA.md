@@ -144,7 +144,7 @@ Fifty tables. One line each.
 |---|---|
 | `timesheets` | Worked time, as claimed and then approved or rejected. |
 | `pay_rules` | Uplift multipliers for night, weekend, bank holiday, overtime. |
-| `bank_holidays` | England and Wales bank-holiday calendar. |
+| `bank_holidays` | England and Wales bank-holiday calendar, seeded to 2035. |
 | `contracts` | Recurring service agreements with rate and SLA. |
 
 ### Commercial (5)
@@ -529,6 +529,49 @@ paid. There is still **no link to the `shift`** the time was worked on: hours
 are recorded independently of the rota and of the clock events in
 `shift_events`, so the three are reconciled by eye rather than by the database.
 
+### `worker_pay_rates`
+
+A worker's pay rate over time. `CREATE` in `server/migrations/022`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `rate_pence` | INT | no | — | |
+| `pay_type` | ENUM('paye','umbrella') | no | 'paye' | |
+| `effective_from` | DATE | no | — | First day this rate applies. A rate has no end date — the next row's `effective_from` ends it, which makes an overlap impossible to express |
+| `set_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `note` | VARCHAR(255) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `UNIQUE KEY uniq_worker_effective (worker_id, effective_from)`,
+`KEY idx_wpr_lookup (worker_id, effective_from)`.
+
+`workers.pay_rate_pence` remains the **current** rate, for the profile screen and
+for costing a new shift. This table is the history behind it, and `pay_compute()`
+reads it per timesheet entry. Before it existed the engine read the current rate,
+so a rise re-priced every period the worker had ever worked and no closed period
+could be reproduced. Migration 022 backfills every worker at `2000-01-01`,
+deliberately far enough back that every pay run already produced returns exactly
+the same figures.
+
+### `pay_floors`
+
+A configured minimum hourly rate, by date. `CREATE` in `server/migrations/024`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `effective_from` | DATE | no | — | Primary key |
+| `rate_pence` | INT | no | — | |
+| `label` | VARCHAR(120) | no | '' | |
+| `set_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+
+**Empty by default**, the same reasoning as retention periods: an unset floor
+checks nothing, and a wrong floor in code is worse than no floor. A floor, not
+the National Minimum Wage — NMW has age bands and an apprentice rate, and
+`workers` holds no date of birth — so `pay_compute()` flags a row below it
+(`below_floor`) and never blocks the run.
+
 ### `announcements`
 
 Broadcasts to staff. `CREATE` at `schema.sql:235`.
@@ -734,7 +777,23 @@ England and Wales calendar. `CREATE` at `schema.sql:439`.
 | `holiday_date` | DATE | no | — | Primary key |
 | `name` | VARCHAR(80) | no | — | |
 
-Seeded with 2026 only — see §5.
+Seeded to the end of **2035** by migration 023. It held 2026 only, and
+`pay_load_bank_holidays()` returns what it finds, so from 2027-01-01 every bank
+holiday would silently have paid flat rate instead of the configured 2×
+multiplier.
+
+Those rows are generated, not typed: `rg_bank_holidays()` in `server/pure.php`
+computes the standard eight for a year (Easter by the anonymous Gregorian
+algorithm, not `easter_days()`, which needs `ext-calendar` a host may not have),
+and `server/tests/run.php` checks it reproduces the eight 2026 rows this table
+already held — substitute days included — plus the published 2027 dates and the
+2022 Christmas-on-a-Sunday case, where Boxing Day keeps the Monday and Christmas
+moves to the Tuesday.
+
+The table stays the source of truth rather than the function. One-off holidays
+happen — the 2022 Jubilee and the 2023 Coronation were announced, not derived —
+and are inserted alongside. Scotland and Northern Ireland differ; operating
+there needs a nation column before it needs more rows.
 
 ### `credit_notes`
 
@@ -1513,7 +1572,8 @@ guarantee structural.
 by webhook. Without a unique key, a replayed or duplicated webhook inserts a
 second payment row for the same real-world payment.
 
-**`bank_holidays` runs out at the end of 2026** (`schema.sql:444-452`). See §5.
+~~**`bank_holidays` runs out at the end of 2026.**~~ Fixed by migration 023,
+which seeds to the end of 2035 from the tested `rg_bank_holidays()` generator.
 
 **No expiry on `shift_offers`** (`schema.sql:790`). The `expired` status exists
 but no timestamp drives it; there is also no unique key on

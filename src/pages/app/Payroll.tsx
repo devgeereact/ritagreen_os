@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Banknote, Clock, Plane, Download, FileText } from "lucide-react"
+import { Banknote, Clock, Plane, Download, FileText, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,9 +39,9 @@ export default function Payroll() {
         `payroll.php?action=payslip&worker_id=${workerId}&from=${from}&to=${to}`,
       )
       payslipPdf(slip)
-      toast.success("Payslip generated.")
+      toast.success("Gross pay statement generated.")
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not generate the payslip.")
+      toast.error(err instanceof ApiError ? err.message : "Could not generate the statement.")
     } finally {
       setSlipBusy(null)
     }
@@ -138,6 +138,12 @@ export default function Payroll() {
                       <TableCell className="text-right">{r.hours.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {r.pay_rate_pence > 0 ? `${gbp(r.pay_rate_pence)}/hr` : <span className="text-destructive">No rate</span>}
+                        {r.rate_changed && (
+                          <div className="text-xs text-muted-foreground">rate changed in period</div>
+                        )}
+                        {r.below_floor && (
+                          <div className="text-xs font-medium text-destructive">below pay floor</div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{gbp(r.base_pence)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{gbp(r.premium_pence)}</TableCell>
@@ -150,7 +156,7 @@ export default function Payroll() {
                           onClick={() => payslip(r.worker_id)}
                           disabled={slipBusy === r.worker_id}
                         >
-                          <FileText className="mr-1 size-4" /> Payslip
+                          <FileText className="mr-1 size-4" /> Statement
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -163,6 +169,24 @@ export default function Payroll() {
           {data.rows.some((r) => r.pay_rate_pence === 0) && (
             <p className="text-sm text-destructive">
               Some workers have no pay rate set — their pay shows as £0. Set rates on the Workers page.
+            </p>
+          )}
+
+          {data.rows.some((r) => r.below_floor) && data.floor_pence !== null && (
+            <p className="flex items-start gap-2 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Some workers are paid below the configured floor of {gbp(data.floor_pence)}/hr. The floor
+                is a single figure and does not know age bands or apprentice rates, so check the worker
+                rather than assuming the rate is unlawful — and check it is not simply a typo.
+              </span>
+            </p>
+          )}
+
+          {data.rows.some((r) => r.rate_changed) && (
+            <p className="text-sm text-muted-foreground">
+              A rate changed inside this period for one or more workers. Each shift is paid at the rate
+              in force on the day it was worked; the rate column shows the latest of them.
             </p>
           )}
         </>

@@ -77,4 +77,5 @@ json_out([
     'rows' => $out['workers'],
     'totals' => $totals,
     'rules' => $out['rules'],
+    'floor_pence' => $out['floor_pence'],
 ]);

@@ -181,56 +181,134 @@ check('rejects a partial date', pay_valid_date('2026-03'), false);
 check('rejects trailing text', pay_valid_date("2026-03-01' OR 1=1"), false);
 
 // ---------------------------------------------------------------------------
+group('rg_bank_holidays');
+
+// The table held eight rows for 2026 and nothing after, so from 2027 every bank
+// holiday would have paid flat rate instead of the configured multiplier. These
+// eight are the rows the project already had on file for 2026, so the generator
+// is checked against data that was trusted before it existed.
+$y2026 = rg_bank_holidays(2026);
+check('2026 has eight', count($y2026), 8);
+check("2026 New Year's Day", $y2026['2026-01-01'] ?? null, "New Year's Day");
+check('2026 Good Friday', $y2026['2026-04-03'] ?? null, 'Good Friday');
+check('2026 Easter Monday', $y2026['2026-04-06'] ?? null, 'Easter Monday');
+check('2026 Early May', $y2026['2026-05-04'] ?? null, 'Early May bank holiday');
+check('2026 Spring', $y2026['2026-05-25'] ?? null, 'Spring bank holiday');
+check('2026 Summer', $y2026['2026-08-31'] ?? null, 'Summer bank holiday');
+check('2026 Christmas Day', $y2026['2026-12-25'] ?? null, 'Christmas Day');
+check('2026 Boxing Day substitute', $y2026['2026-12-28'] ?? null, 'Boxing Day (substitute)');
+
+// 2027, as published for England and Wales.
+$y2027 = rg_bank_holidays(2027);
+check('2027 Good Friday', $y2027['2027-03-26'] ?? null, 'Good Friday');
+check('2027 Easter Monday', $y2027['2027-03-29'] ?? null, 'Easter Monday');
+check('2027 Early May', $y2027['2027-05-03'] ?? null, 'Early May bank holiday');
+check('2027 Spring', $y2027['2027-05-31'] ?? null, 'Spring bank holiday');
+check('2027 Summer', $y2027['2027-08-30'] ?? null, 'Summer bank holiday');
+
+// Christmas Day on a Sunday is the case that gets the names the wrong way round:
+// Boxing Day keeps the Monday and Christmas is the one that moves to Tuesday.
+// This is what actually happened in 2022.
+$y2022 = rg_bank_holidays(2022);
+check('2022 Boxing Day keeps its Monday', $y2022['2022-12-26'] ?? null, 'Boxing Day');
+check('2022 Christmas moves to the Tuesday', $y2022['2022-12-27'] ?? null, 'Christmas Day (substitute)');
+check('2022 New Year substitutes to the Monday', $y2022['2022-01-03'] ?? null, "New Year's Day (substitute)");
+
+// Christmas on a Saturday pushes both.
+$y2027d = rg_bank_holidays(2027);
+check('Christmas on a Saturday moves to Monday', $y2027d['2027-12-27'] ?? null, 'Christmas Day (substitute)');
+check('and Boxing Day to the Tuesday', $y2027d['2027-12-28'] ?? null, 'Boxing Day (substitute)');
+
+// Eight every year, whatever the weekdays do, and never two on one date.
+foreach (range(2020, 2040) as $y) {
+    if (count(rg_bank_holidays($y)) !== 8) {
+        check("every year has eight ($y)", count(rg_bank_holidays($y)), 8);
+    }
+}
+check('every year from 2020 to 2040 has eight', true, true);
+
+// Easter, against published dates.
+check('Easter 2026', rg_easter_sunday(2026), '2026-04-05');
+check('Easter 2027', rg_easter_sunday(2027), '2027-03-28');
+check('Easter 2024', rg_easter_sunday(2024), '2024-03-31');
+check('Easter 2038 is a late one', rg_easter_sunday(2038), '2038-04-25');
+
+// ---------------------------------------------------------------------------
 group('pay_entry');
 
 // Every one of these sums used to live inside pay_compute()'s result loop, which
 // takes a mysqli and so could not be tested without a database. On a payroll
 // system that meant base pay, the overtime split, the premium application and
 // both roundings had no test at all.
-$standard = ['key' => 'standard', 'mult' => 1.0];
-$night = ['key' => 'night', 'mult' => 1.30];
-$bh = ['key' => 'bank_holiday', 'mult' => 2.00];
+$rules = ['night' => 1.30, 'weekend' => 1.25, 'bank_holiday' => 2.00, 'overtime' => 1.50];
+$seg = static fn(string $k, int $m): array => [['keys' => $k === 'standard' ? [] : [$k], 'minutes' => $m]];
 
 // £12.50/hr, eight hours, nothing special about the day.
-$e = pay_entry(1250, 480, 0.0, $standard, 1.5);
+$e = pay_entry(1250, $seg('standard', 480), 0.0, $rules);
 check('plain day: hours', $e['hours'], 8.0);
 check('plain day: base', $e['base_pence'], 10000);
 check('plain day: gross equals base', $e['gross_pence'], 10000);
 check('plain day: no overtime', $e['overtime_hours'], 0.0);
+check('plain day: premium label', $e['premium'], 'standard');
 
 // A night premium lifts gross but never base -- base is what the hours are worth
 // before any uplift, and premium_pence is the difference between the two.
-$e = pay_entry(1250, 480, 0.0, $night, 1.5);
+$e = pay_entry(1250, $seg('night', 480), 0.0, $rules);
 check('night: base is unchanged', $e['base_pence'], 10000);
 check('night: gross carries the uplift', $e['gross_pence'], 13000);
 
+// A shift that runs from a weekday night into a Saturday is paid night for the
+// part that is night and weekend for the part that is weekend. The old model
+// paid night on all eight hours and weekend on none.
+$mixed = [['keys' => ['night'], 'minutes' => 240], ['keys' => ['weekend'], 'minutes' => 240]];
+$e = pay_entry(1000, $mixed, 0.0, $rules);
+check('mixed shift: four hours night at 1.3, four weekend at 1.25', $e['gross_pence'], 5200 + 5000);
+check('mixed shift: base ignores premiums', $e['base_pence'], 8000);
+check('mixed shift: labelled by the dearest band', $e['premium'], 'night');
+check('mixed shift: breakdown shows both', $e['breakdown'], ['night' => 4.0, 'weekend' => 4.0]);
+
+// A minute can be both weekend and night. The dearest configured band pays --
+// with the defaults that is night at 1.30, ahead of weekend at 1.25 -- and
+// changing the multipliers changes which one wins, without touching code.
+$both = [['keys' => ['weekend', 'night'], 'minutes' => 480]];
+check('weekend and night together pays the dearer', pay_entry(1000, $both, 0.0, $rules)['gross_pence'], 10400);
+check('and says which one it was', pay_entry(1000, $both, 0.0, $rules)['premium'], 'night');
+$weekendRich = ['night' => 1.10, 'weekend' => 1.60, 'bank_holiday' => 2.00, 'overtime' => 1.50];
+check('reconfigured, weekend wins instead', pay_entry(1000, $both, 0.0, $weekendRich)['premium'], 'weekend');
+
 // The weekly threshold splits a single entry. 36 hours already worked, then an
 // 8-hour day: 4 hours at normal rate, 4 at overtime.
-$e = pay_entry(1000, 480, 36.0, $standard, 1.5);
+$e = pay_entry(1000, $seg('standard', 480), 36.0, $rules);
 check('split entry: normal part', $e['normal_hours'], 4.0);
 check('split entry: overtime part', $e['overtime_hours'], 4.0);
 check('split entry: gross', $e['gross_pence'], 4000 + 6000);
 check('split entry: base ignores the split', $e['base_pence'], 8000);
 
 // Exactly on the threshold is not yet overtime.
-check('40 hours exactly is not overtime', pay_entry(1000, 480, 32.0, $standard, 1.5)['overtime_hours'], 0.0);
-check('one minute past is', pay_entry(1000, 480, 32.1, $standard, 1.5)['overtime_hours'] > 0, true);
+check('40 hours exactly is not overtime', pay_entry(1000, $seg('standard', 480), 32.0, $rules)['overtime_hours'], 0.0);
+check('past it is', pay_entry(1000, $seg('standard', 480), 32.5, $rules)['overtime_hours'] > 0, true);
 
 // Wholly beyond the threshold: every hour of the entry is overtime.
-$e = pay_entry(1000, 480, 40.0, $standard, 1.5);
+$e = pay_entry(1000, $seg('standard', 480), 40.0, $rules);
 check('wholly overtime: no normal hours', $e['normal_hours'], 0.0);
 check('wholly overtime: gross', $e['gross_pence'], 12000);
 
 // Overtime never pays less than the premium it displaces: a bank-holiday hour
 // does not get cheaper by being the forty-first of the week.
-$e = pay_entry(1000, 480, 40.0, $bh, 1.5);
+$e = pay_entry(1000, $seg('bank_holiday', 480), 40.0, $rules);
 check('the higher of overtime and premium wins', $e['gross_pence'], 16000);
 
+// The threshold can fall inside a segment rather than between two.
+$e = pay_entry(1000, $seg('night', 480), 38.0, $rules);
+check('threshold inside a segment: normal part', $e['normal_hours'], 2.0);
+check('threshold inside a segment: overtime part', $e['overtime_hours'], 6.0);
+check('threshold inside a segment: gross', $e['gross_pence'], 2600 + 9000);
+
 // Rounding happens once per entry, on pence.
-$e = pay_entry(1337, 90, 0.0, $standard, 1.5);
+$e = pay_entry(1337, $seg('standard', 90), 0.0, $rules);
 check('part hours round to whole pence', $e['gross_pence'], 2006); // 1.5 x 1337 = 2005.5
-check('a zero-length entry is worth nothing', pay_entry(1250, 0, 0.0, $standard, 1.5)['gross_pence'], 0);
-check('no rate means no pay', pay_entry(0, 480, 0.0, $night, 1.5)['gross_pence'], 0);
+check('a zero-length entry is worth nothing', pay_entry(1250, [], 0.0, $rules)['gross_pence'], 0);
+check('no rate means no pay', pay_entry(0, $seg('night', 480), 0.0, $rules)['gross_pence'], 0);
 
 // ---------------------------------------------------------------------------
 group('pay_holiday');
@@ -260,27 +338,56 @@ check('a period ending on a Sunday stays put', pay_week_scan_end('2026-10-04'), 
 check('a Monday end scans on six days', pay_week_scan_end('2026-09-28'), '2026-10-04');
 
 // ---------------------------------------------------------------------------
-group('pay_day_premium');
+group('rg_premium_segments');
 
-$rules = ['night' => 1.30, 'weekend' => 1.25, 'bank_holiday' => 2.00, 'overtime' => 1.50];
-$noHols = [];
-$hols = ['2026-12-25' => 'Christmas Day'];
+// Premiums were decided for a whole entry from its START hour and its work_date.
+// That was defensible while a shift could not cross midnight, and stopped being
+// so the moment overnight entries were allowed.
+$bh = ['2026-12-25' => true];
 
-// 2026-03-04 is a Wednesday; 2026-03-07 a Saturday.
-check('weekday daytime is standard', pay_day_premium($rules, '2026-03-04', '09:00', $noHols)['key'], 'standard');
-check('standard pays flat', pay_day_premium($rules, '2026-03-04', '09:00', $noHols)['mult'], 1.0);
-check('weekend', pay_day_premium($rules, '2026-03-07', '09:00', $noHols)['key'], 'weekend');
-check('night starts at 20:00', pay_day_premium($rules, '2026-03-04', '20:00', $noHols)['key'], 'night');
-check('19:00 is not night', pay_day_premium($rules, '2026-03-04', '19:00', $noHols)['key'], 'standard');
-check('early morning is night', pay_day_premium($rules, '2026-03-04', '05:00', $noHols)['key'], 'night');
-check('06:00 is not night', pay_day_premium($rules, '2026-03-04', '06:00', $noHols)['key'], 'standard');
-check('bank holiday', pay_day_premium($rules, '2026-12-25', '09:00', $hols)['key'], 'bank_holiday');
+// 2026-09-10 is a Thursday, 2026-09-11 a Friday, 2026-09-12 a Saturday.
+$plain = rg_premium_segments('2026-09-10', '09:00', 480, $bh);
+check('a plain weekday day is one segment', count($plain), 1);
+check('carrying no premium', $plain[0]['keys'], []);
+check('for the whole shift', $plain[0]['minutes'], 480);
 
-// Where several premiums apply, the best one wins — the worker is not paid the
-// lesser rate because two happened to coincide.
-check('bank holiday beats night', pay_day_premium($rules, '2026-12-25', '22:00', $hols)['key'], 'bank_holiday');
-check('night beats weekend', pay_day_premium($rules, '2026-03-07', '22:00', $noHols)['key'], 'night');
-check('and pays the higher multiplier', pay_day_premium($rules, '2026-03-07', '22:00', $noHols)['mult'], 1.30);
+// The old model gave this night for all eight hours because it started at five.
+$early = rg_premium_segments('2026-09-10', '05:00', 480, $bh);
+check('an 05:00 start is night only until six', $early[0]['keys'], ['night']);
+check('for one hour', $early[0]['minutes'], 60);
+check('then nothing', $early[1]['keys'], []);
+check('for the remaining seven', $early[1]['minutes'], 420);
+
+// The old model gave this no night premium at all, because it started at six.
+$evening = rg_premium_segments('2026-09-10', '18:00', 480, $bh);
+check('an 18:00 start carries nothing until eight', $evening[0]['keys'], []);
+check('for two hours', $evening[0]['minutes'], 120);
+check('then night', $evening[1]['keys'], ['night']);
+check('for six', $evening[1]['minutes'], 360);
+
+// The case the overnight fix created: Friday night into Saturday morning. The
+// old model paid night on all eight hours and weekend on none.
+$intoSat = rg_premium_segments('2026-09-11', '20:00', 480, $bh);
+check('Friday 20:00 starts as night', $intoSat[0]['keys'], ['night']);
+check('for four hours', $intoSat[0]['minutes'], 240);
+check('then weekend and night together at midnight', $intoSat[1]['keys'], ['weekend', 'night']);
+check('for four hours', $intoSat[1]['minutes'], 240);
+
+// A bank holiday outranks both, and only for the part that is one.
+$intoBh = rg_premium_segments('2026-12-24', '20:00', 480, $bh);
+check('Christmas Eve night is night', $intoBh[0]['keys'], ['night']);
+check('until Christmas Day starts', $intoBh[1]['keys'], ['bank_holiday', 'night']);
+check('for the rest of the shift', $intoBh[1]['minutes'], 240);
+
+// A whole Saturday is weekend throughout, night window included: weekend
+// outranks night, so there is no segment boundary at 20:00.
+$sat = rg_premium_segments('2026-09-12', '18:00', 480, $bh);
+check('a Saturday evening starts as weekend alone', $sat[0]['keys'], ['weekend']);
+check('for two hours', $sat[0]['minutes'], 120);
+check('then weekend and night from 20:00', $sat[1]['keys'], ['weekend', 'night']);
+check('for six', $sat[1]['minutes'], 360);
+
+check('a zero-length entry has no segments', rg_premium_segments('2026-09-10', '09:00', 0, $bh), []);
 
 // ---------------------------------------------------------------------------
 // The compliance engine. This decides whether a person may legally be sent to

@@ -529,7 +529,7 @@ above their handlers.
 |---|---|---|---|---|
 | GET | — | **Staff only** (`require_staff`) | — | `{workers}` with compliance and availability fields for every non-deleted worker. `pay_rate_pence`, `pay_type` and `holiday_hours` are returned only to `super_admin`, `admin` and `manager`; they are stripped from the response for every other account |
 | POST | `availability` | Office roles | `id`; body `{avail_days, avail_nights, avail_weekends, travel_radius_mi, home_postcode}` | `{ok: true}` |
-| POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type}` | `{ok: true}`; pay type ∈ paye/umbrella |
+| POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type, effective_from?, note?}` | `{ok: true, effective_from}`; pay type ∈ paye/umbrella. Writes a row to `worker_pay_rates` (migration 022) so payroll can price past work at the rate that was in force then; a second change on the same date replaces the first. `effective_from` defaults to today and may be backdated. `workers.pay_rate_pence` — the current rate, shown on the profile and used to cost a new shift — only moves when the change takes effect today or earlier, so a rise dated next month does not change what today costs |
 | POST | — | Office roles | body `{name, email?, phone?, role?, division?, right_to_work?, pay_rate_pence?, pay_type?}` | `{worker}` 201; role ∈ carer/nurse/cleaner/guard/trainer, created as `onboarding` |
 
 Until this was gated, any authenticated user — a `client`-role portal login
@@ -668,10 +668,33 @@ gross has to ask the same question.
 Only `approved` timesheets are included, and `pay_compute()` excludes archived
 timesheets and archived workers: a soft-deleted entry used to be paid anyway.
 
-The money itself is computed by two pure functions, `pay_entry()` (one entry:
-base, the overtime split, the premium application, both roundings) and
-`pay_holiday()` (rolled-up accrual), both tested in `server/tests/run.php`.
+The money itself is computed by pure functions tested in `server/tests/run.php`:
+`rg_premium_segments()` (pure.php — splits a worked interval into ordered
+premium bands), `pay_entry()` (base, the overtime split, the premium
+application, both roundings) and `pay_holiday()` (rolled-up accrual).
 `pay_compute()` does the querying and calls them.
+
+**Each entry is paid at the rate in force on the day it was worked**, from
+`worker_pay_rates` (migration 022), falling back to `workers.pay_rate_pence`
+where no history row exists. It read the current rate, so giving somebody a rise
+re-priced every period they had ever worked and a closed period could not be
+reproduced. A row whose rate moved mid-period carries `rate_changed: true` and
+reports the latest rate.
+
+**Premiums are paid per worked interval, not per entry.** `rg_premium_segments()`
+classifies every minute by the bands in force at that moment — a minute can be
+both weekend and night — and `pay_entry()` pays the dearest configured band for
+each segment. Previously one premium was chosen for the whole entry from its
+start hour and `work_date`, which meant a 05:00–13:00 shift was paid night for
+all eight hours and a Friday 20:00 → Saturday 04:00 shift was paid night for all
+eight and weekend for none. Each payslip line now carries a `breakdown` of hours
+per band.
+
+**`floor_pence`** is the configured pay floor in force (`pay_floors`, migration
+024), or null when none is set — which is the default. A row paid under it
+carries `below_floor: true`. It is a floor, not the National Minimum Wage: NMW
+has age bands and an apprentice rate and `workers` holds no date of birth, so it
+flags rather than blocks.
 
 **Overtime counts the whole ISO week, not the part of it inside the period.**
 The 40-hour threshold is weekly, so `pay_compute()` scans from the Monday of the
@@ -684,7 +707,7 @@ September run saw forty and paid no overtime at all.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `payslip` | `worker_id`, `from`, `to` | `{worker, period, lines, totals}` |
+| GET | `payslip` | `worker_id`, `from`, `to` | `{worker, period, lines, totals}`. The PDF it feeds is titled **GROSS PAY**, not PAYSLIP: there is no PAYE, NI, pension or net figure in the system and no tax code or NI number in the schema to compute them from, so calling it a payslip would invite reliance on it as the itemised pay statement an employer owes |
 | GET | — | `from`, `to` | `{period, rows, totals, rules}` — the full pay run |
 
 Both write an `audit_log` entry (`payroll.php:41`, `69`).

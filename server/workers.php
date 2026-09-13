@@ -76,16 +76,22 @@ if ($action === 'availability' && method() === 'POST') {
     json_out(['ok' => true]);
 }
 
-// Set a worker's pay rate + type. POST /workers.php?action=pay&id=N {pay_rate_pence, pay_type}
+// Set a worker's pay rate + type.
+// POST /workers.php?action=pay&id=N {pay_rate_pence, pay_type, effective_from?, note?}
 if ($action === 'pay' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     $data = body();
     $rate = (int) ($data['pay_rate_pence'] ?? 0);
     $type = trim((string) ($data['pay_type'] ?? 'paye'));
+    // A rise starts on a date. Defaults to today; a backdated correction says so.
+    $effective = trim((string) ($data['effective_from'] ?? '')) ?: date('Y-m-d');
+    $note = trim((string) ($data['note'] ?? ''));
     if ($id <= 0) fail('A worker is required.');
     if ($rate < 0) fail('Pay rate cannot be negative.');
     if (!in_array($type, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $effective)) fail('The effective date must be YYYY-MM-DD.');
+    if (mb_strlen($note) > 255) fail('That note is too long.');
     // Read the current values first: an audit entry that cannot say what the pay
     // rate was before is not much of an audit entry.
     $prev = $conn->prepare('SELECT pay_rate_pence, pay_type FROM workers WHERE id = ? AND deleted_at IS NULL');
@@ -96,13 +102,33 @@ if ($action === 'pay' && method() === 'POST') {
     // reported success and wrote an audit entry with an empty before-state.
     if (!$was) fail('Worker not found.', 404);
 
-    $stmt = $conn->prepare('UPDATE workers SET pay_rate_pence = ?, pay_type = ? WHERE id = ? AND deleted_at IS NULL');
-    $stmt->bind_param('isi', $rate, $type, $id);
-    $stmt->execute();
+    // The history row is what payroll reads for work done on or after that date
+    // (migration 022); workers.pay_rate_pence stays as the current rate for the
+    // profile screen and for costing a new shift. Both move together, so they
+    // cannot drift apart.
+    //
+    // REPLACE rather than INSERT: a second change on the same day is a
+    // correction of the first, not a second rate nobody can order.
+    $noteVal = $note !== '' ? $note : null;
+    $uid = (int) $user['id'];
+    $hist = $conn->prepare(
+        'REPLACE INTO worker_pay_rates (worker_id, rate_pence, pay_type, effective_from, set_by, note)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $hist->bind_param('iissis', $id, $rate, $type, $effective, $uid, $noteVal);
+    $hist->execute();
+
+    // The denormalised current rate only moves when the change starts today or
+    // earlier. A rise dated next month must not change what today costs.
+    if ($effective <= date('Y-m-d')) {
+        $stmt = $conn->prepare('UPDATE workers SET pay_rate_pence = ?, pay_type = ? WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('isi', $rate, $type, $id);
+        $stmt->execute();
+    }
 
     [$before, $after] = audit_diff($was, ['pay_rate_pence' => $rate, 'pay_type' => $type], ['pay_rate_pence', 'pay_type']);
-    audit($conn, (int) $user['id'], 'worker.pay', "worker #$id", 'worker', $id, $before, $after);
-    json_out(['ok' => true]);
+    audit($conn, $uid, 'worker.pay', "worker #$id from $effective", 'worker', $id, $before, $after);
+    json_out(['ok' => true, 'effective_from' => $effective]);
 }
 
 if (method() === 'POST') {
@@ -137,6 +163,18 @@ if (method() === 'POST') {
     $stmt->bind_param('issssssiis', $personId, $payrollNo, $name, $email, $phone, $role, $division, $rtw, $payRate, $payType);
     $stmt->execute();
     $id = $conn->insert_id;
+
+    // Open the rate history at the start, so payroll has a rate in force for the
+    // worker's first shift rather than falling back to the denormalised column.
+    $uid = (int) $user['id'];
+    $today = date('Y-m-d');
+    $openingNote = 'Rate on joining';
+    $hist = $conn->prepare(
+        'INSERT INTO worker_pay_rates (worker_id, rate_pence, pay_type, effective_from, set_by, note)
+         VALUES (?, ?, ?, ?, ?, ?)'
+    );
+    $hist->bind_param('iissis', $id, $payRate, $payType, $today, $uid, $openingNote);
+    $hist->execute();
 
     audit($conn, (int) $user['id'], 'worker.create', $name, 'worker', (int) $id,
         null, ['person_id' => $personId, 'payroll_no' => $payrollNo, 'role' => $role, 'division' => $division]);

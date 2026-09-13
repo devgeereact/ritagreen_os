@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { COMPANY, BILLING } from "@/lib/company"
 import { DIVISION_LABELS } from "@/lib/format"
-import type { Invoice, Quote, CompliancePack, Payslip } from "@/lib/types"
+import type { Invoice, Quote, CompliancePack, Payslip, PayslipLine } from "@/lib/types"
 
 const GREEN: [number, number, number] = [46, 125, 50]
 const INK: [number, number, number] = [34, 49, 31]
@@ -260,6 +260,19 @@ export function compliancePackPdf(pack: CompliancePack): void {
 }
 
 // Worker payslip for one pay period.
+/**
+ * How a line's premium reads on the statement.
+ *
+ * A shift can now span more than one band — a Friday night running into a
+ * Saturday is part night and part weekend — so a single word would misdescribe
+ * it. Shows the hours in each.
+ */
+function premiumLabel(l: PayslipLine): string {
+  const bands = Object.entries(l.breakdown ?? {}).filter(([k]) => k !== "standard")
+  if (bands.length === 0) return "—"
+  return bands.map(([k, h]) => `${k.replace("_", " ")} ${h}h`).join(", ")
+}
+
 export function payslipPdf(slip: Payslip): void {
   const doc = new jsPDF({ unit: "pt", format: "a4" })
   const W = doc.internal.pageSize.getWidth()
@@ -271,9 +284,14 @@ export function payslipPdf(slip: Payslip): void {
   doc.setFont("helvetica", "bold").setFontSize(24)
   doc.text("RitaGreen", M, 48)
   doc.setFont("helvetica", "normal").setFontSize(9)
-  doc.text("Payslip", M, 66)
+  doc.text("Gross pay statement", M, 66)
   doc.setFont("helvetica", "bold").setFontSize(16)
-  doc.text("PAYSLIP", W - M, 48, { align: "right" })
+  // Not "PAYSLIP". This document shows gross pay only: there is no PAYE, no
+  // National Insurance, no pension and no net figure anywhere in the system, and
+  // no tax code or NI number in the schema to compute them from. A document
+  // titled PAYSLIP is one a worker is entitled to rely on as the itemised pay
+  // statement their employer owes them, and this is not that.
+  doc.text("GROSS PAY", W - M, 48, { align: "right" })
   doc.setFont("helvetica", "normal").setFontSize(10)
   doc.text(`${slip.period.from} → ${slip.period.to}`, W - M, 66, { align: "right" })
 
@@ -297,7 +315,7 @@ export function payslipPdf(slip: Payslip): void {
             l.work_date,
             `${l.start_time}–${l.end_time}`,
             l.hours.toFixed(2),
-            l.premium,
+            premiumLabel(l),
             l.overtime_hours ? l.overtime_hours.toFixed(2) : "—",
             money(l.gross_pence),
           ])
@@ -330,9 +348,16 @@ export function payslipPdf(slip: Payslip): void {
   const H = doc.internal.pageSize.getHeight()
   doc.setFontSize(8).setTextColor(...MUTED)
   doc.text(
-    `${COMPANY.legalName} · This payslip is provisional until confirmed in the pay run.`,
+    `${COMPANY.legalName} · Provisional until confirmed in the pay run.`,
     W / 2,
-    H - 24,
+    H - 34,
+    { align: "center" },
+  )
+  doc.text(
+    "Gross pay before deductions. This is not an itemised pay statement: it shows no tax, "
+    + "National Insurance or pension, and no net pay.",
+    W / 2,
+    H - 22,
     { align: "center" },
   )
 

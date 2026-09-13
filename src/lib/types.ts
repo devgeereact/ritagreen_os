@@ -125,6 +125,10 @@ export type PayRunRow = {
   gross_pence: number
   holiday_hours: number
   holiday_pay_pence: number
+  /** The worker's rate moved inside the period, so pay_rate_pence is the latest of them. */
+  rate_changed: boolean
+  /** Paid below the configured pay floor. False whenever no floor is set. */
+  below_floor: boolean
 }
 
 export type PayRun = {
@@ -138,6 +142,8 @@ export type PayRun = {
     holiday_pay_pence: number
   }
   rules: Record<string, number>
+  /** The pay floor in force, or null when none is configured. See migration 024. */
+  floor_pence: number | null
 }
 
 export type PayslipLine = {
@@ -145,7 +151,10 @@ export type PayslipLine = {
   start_time: string
   end_time: string
   hours: number
+  /** The dearest premium band the shift touched; `breakdown` is what earned the money. */
   premium: string
+  /** Hours per premium band. A shift running from a weekday night into a Saturday has two. */
+  breakdown: Record<string, number>
   overtime_hours: number
   gross_pence: number
 }

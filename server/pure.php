@@ -253,6 +253,143 @@ function rg_shift_minutes(string $workDate, string $startTime, string $endTime):
     return (int) round(($end->getTimestamp() - $start->getTimestamp()) / 60);
 }
 
+// ------------------------------------------------------------- bank holidays
+
+/**
+ * Easter Sunday for a year, as YYYY-MM-DD. Anonymous Gregorian algorithm.
+ *
+ * Not easter_days(): that needs ext-calendar, which cPanel may not have, and a
+ * pay run must not depend on which PHP extensions a host happened to compile.
+ */
+function rg_easter_sunday(int $year): string
+{
+    $a = $year % 19;
+    $b = intdiv($year, 100);
+    $c = $year % 100;
+    $d = intdiv($b, 4);
+    $e = $b % 4;
+    $f = intdiv($b + 8, 25);
+    $g = intdiv($b - $f + 1, 3);
+    $h = (19 * $a + $b - $d - $g + 15) % 30;
+    $i = intdiv($c, 4);
+    $k = $c % 4;
+    $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
+    $m = intdiv($a + 11 * $h + 22 * $l, 451);
+    $month = intdiv($h + $l - 7 * $m + 114, 31);
+    $day = (($h + $l - 7 * $m + 114) % 31) + 1;
+    return sprintf('%04d-%02d-%02d', $year, $month, $day);
+}
+
+/**
+ * England and Wales bank holidays for a year, as [date => name].
+ *
+ * The table had eight rows for 2026 and nothing after, so from 2027 every bank
+ * holiday would silently have paid flat rate instead of the configured
+ * multiplier — a money defect with a date on it and nobody watching for it.
+ * Typing future dates into a money table by hand is how that happens again, so
+ * the standard set is computed.
+ *
+ * Computed, not authoritative. `bank_holidays` remains the source of truth,
+ * because one-off holidays do happen — the 2022 Jubilee and the 2023 Coronation
+ * were both announced, not derived — and those are inserted alongside these.
+ *
+ * Substitution: a fixed-date holiday falling at a weekend moves to the next
+ * weekday not already taken, which is why Christmas on a Saturday pushes Boxing
+ * Day to the Tuesday.
+ */
+function rg_bank_holidays(int $year): array
+{
+    $easter = strtotime(rg_easter_sunday($year));
+    $days = [
+        date('Y-m-d', strtotime('-2 day', $easter)) => 'Good Friday',
+        date('Y-m-d', strtotime('+1 day', $easter)) => 'Easter Monday',
+        date('Y-m-d', strtotime("first monday of may $year")) => 'Early May bank holiday',
+        date('Y-m-d', strtotime("last monday of may $year")) => 'Spring bank holiday',
+        date('Y-m-d', strtotime("last monday of august $year")) => 'Summer bank holiday',
+    ];
+
+    // Fixed dates, each taking the next free weekday if it lands at a weekend.
+    //
+    // The pair in December is ordered rather than fixed. Normally Christmas Day
+    // is placed first and Boxing Day follows it. But when Christmas Day falls on
+    // a Sunday, Boxing Day is already on the Monday and keeps it, and Christmas
+    // is the one that moves to the Tuesday -- which is what happened in 2022.
+    // Placing Christmas first in that year would put the two names on each
+    // other's days. Both days are bank holidays either way, so pay is right
+    // regardless; the names are not.
+    $december = (int) date('N', strtotime("$year-12-25")) === 7
+        ? [["$year-12-26", 'Boxing Day'], ["$year-12-25", 'Christmas Day']]
+        : [["$year-12-25", 'Christmas Day'], ["$year-12-26", 'Boxing Day']];
+
+    foreach (array_merge([["$year-01-01", "New Year's Day"]], $december) as [$date, $name]) {
+        $ts = strtotime($date);
+        $substituted = false;
+        while ((int) date('N', $ts) >= 6 || isset($days[date('Y-m-d', $ts)])) {
+            $ts = strtotime('+1 day', $ts);
+            $substituted = true;
+        }
+        $days[date('Y-m-d', $ts)] = $name . ($substituted ? ' (substitute)' : '');
+    }
+
+    ksort($days);
+    return $days;
+}
+
+/**
+ * Split a worked interval into ordered premium segments, at minute granularity.
+ *
+ * Premiums used to be decided for a whole entry from its START hour and its
+ * work_date alone. That was defensible while a shift could not cross midnight.
+ * It stopped being defensible the moment overnight entries were allowed:
+ *
+ *   Friday 20:00 to Saturday 04:00 — night on all eight hours, weekend on none,
+ *   even though six of those hours are Saturday.
+ *   05:00 to 13:00 — night on all eight hours, because it started at five, when
+ *   only the first hour is inside the night window.
+ *   18:00 to 02:00 — no night premium at all, because it started at six.
+ *
+ * Each minute carries every category in force at that moment, not one: a
+ * Saturday at 22:00 is both weekend and night. Which of them pays is not decided
+ * here, because that depends on the configured multipliers and this function
+ * does not know them — pay_entry() takes the dearest, which is what the previous
+ * behaviour did and keeps the choice in configuration rather than in code.
+ *
+ * Consecutive minutes carrying the same categories are coalesced, and the
+ * segments come back in time order so overtime can be taken from the end of the
+ * shift.
+ *
+ * Minute granularity rather than boundary arithmetic: an entry is at most 16
+ * hours, so this is under a thousand iterations, and there are no off-by-one
+ * boundary cases to get wrong.
+ *
+ * @param array<string,bool> $bankHols keyed YYYY-MM-DD
+ * @return list<array{keys:list<string>,minutes:int}>
+ */
+function rg_premium_segments(string $workDate, string $startTime, int $minutes, array $bankHols): array
+{
+    if ($minutes <= 0) return [];
+    $start = strtotime("$workDate $startTime");
+    if ($start === false) return [];
+
+    $segments = [];
+    for ($m = 0; $m < $minutes; $m++) {
+        $at = $start + $m * 60;
+        $day = date('Y-m-d', $at);
+        $hour = (int) date('G', $at);
+        $dow = (int) date('N', $at);
+
+        $keys = [];
+        if (isset($bankHols[$day])) $keys[] = 'bank_holiday';
+        if ($dow >= 6) $keys[] = 'weekend';
+        if ($hour >= 20 || $hour < 6) $keys[] = 'night';
+
+        $last = count($segments) - 1;
+        if ($last >= 0 && $segments[$last]['keys'] === $keys) $segments[$last]['minutes']++;
+        else $segments[] = ['keys' => $keys, 'minutes' => 1];
+    }
+    return $segments;
+}
+
 // ---------------------------------------------------------- compliance engine
 
 /**
