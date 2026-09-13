@@ -415,7 +415,7 @@
         {
           "name": "Shifts, templates and recurrence",
           "status": "done",
-          "note": "Creating was the whole of it: a shift could not be reassigned, taken off somebody or cancelled, so a worker falling ill left a wrong row on the rota with no route out but the database. scheduling.php now carries assign, unassign and cancel, each behind the same deployment gate and clash check as creating, and Scheduling opens a shift on click. has_clash() ignores archived shifts and the shift being moved, so a shift no longer clashes with itself."
+          "note": "Creating was the whole of it: a shift could not be reassigned, taken off somebody or cancelled, so a worker falling ill left a wrong row on the rota with no route out but the database. scheduling.php now carries assign, unassign and cancel, each behind the same deployment gate and clash check as creating, and Scheduling opens a shift on click. has_clash() ignores archived shifts and the shift being moved, so a shift no longer clashes with itself. Template generation created shifts in the past: the weekday offset is 0 when today is the template's own weekday, so generating on a Monday afternoon produced that morning's 09:00 shift. Past occurrences are skipped, and the duplicate guard now respects deleted_at, which was silently blocking a slot's regeneration."
         },
         {
           "name": "Smart matching on skills and availability",
@@ -424,7 +424,7 @@
         {
           "name": "Shift broadcast with token acceptance",
           "status": "done",
-          "note": "shift_offers, SMS link, no login required"
+          "note": "shift_offers, SMS link, no login required. Accepting now runs the gate; a refusal expires the offer, audits shift.blocked and notifies the office. Broadcast is rate-limited: each one sends a chargeable message per eligible worker and nothing stopped it being replayed."
         },
         {
           "name": "Field events: clock in/out, check-in, panic, signature",
@@ -444,7 +444,7 @@
         {
           "name": "Single reusable deployment eligibility gate",
           "status": "done",
-          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned"
+          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned Reusable, but three paths did not reuse it. Matching and broadcast ran the legacy worker_compliant() (hard-coded DBS/SIA) while assignment ran the configured rule set, so Find eligible offered a nurse with an expired NMC registration whom assigning then refused; the legacy pair is deleted. Accepting an SMS offer and claiming a shift in the worker app tested division only -- verified against a local database, a worker scheduled 08:00-16:00 accepted an overlapping 09:00-17:00 shift through /m and ended up on both. Both now call rg_claim_check()."
         },
         {
           "name": "Four-eyes approval on high-risk actions",

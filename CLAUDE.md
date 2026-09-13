@@ -143,6 +143,17 @@ timezone anywhere. DATETIME columns (`shifts.starts_at`, work dates) hold litera
 are unaffected; TIMESTAMP columns are converted on read, so on a server that was not already UTC
 an existing `created_at` now reads as the UTC instant it always was.
 
+**`rg_deployment_check()` is the only gate, and three paths used to dodge it.**
+`server/compliance-lib.php` also holds `rg_shift_clash()` and `rg_claim_check()` — the clash test
+lives there rather than in `scheduling.php` precisely because an endpoint cannot be required by
+another endpoint, which is how `offer.php` and `me.php` ended up with no clash test at all. Any
+new path that puts a worker on a shift calls `rg_claim_check()`. A worker accepting an SMS offer
+and a worker claiming a shift in the app both tested division and nothing else: a worker
+scheduled 08:00–16:00 accepted an overlapping 09:00–17:00 shift through `/m` and ended up on
+both. Matching and broadcast separately ran a legacy `worker_compliant()` — hard-coded DBS/SIA —
+so "Find eligible" offered a nurse with a lapsed NMC registration whom assigning then refused.
+That legacy pair is deleted; do not reintroduce a second opinion about who may work.
+
 **Hours are the payroll zone, not just "internal".** `server/timesheets.php` and
 `server/payroll.php` both take `can_view_zone($conn, $user, 'payroll')` on top of the role
 check, above every branch. `require_staff()` alone was not a narrowing: an editor, a trainer and

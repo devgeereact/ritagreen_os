@@ -3,8 +3,11 @@
 // from an SMS link, no login required. The token in the link is the secret.
 // GET  /offer.php?token=XXXX            -> { offer: {...}, shift: {...} }
 // POST /offer.php?token=XXXX {action}   -> action = "accept" | "decline"
+// An accept runs the same deployment gate and clash check as the office screen;
+// a refusal expires the offer, audits shift.blocked and tells the office.
 // First worker to accept claims the shift atomically; later accepts get "filled".
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $token = trim((string) ($_GET['token'] ?? ''));
 if ($token === '' || !preg_match('/^[a-f0-9]{40}$/', $token)) fail('Invalid offer link.', 404);
@@ -56,6 +59,34 @@ if (method() === 'POST') {
     }
 
     if ($act === 'accept') {
+        // The deployment gate, before the claim.
+        //
+        // A broadcast goes out to workers who were eligible at the moment it was
+        // sent, and the link stays live afterwards. Nothing re-asked on the way
+        // in, so a worker whose DBS lapsed between the text and the reply was
+        // booked by replying, and one who had picked up an overlapping shift in
+        // the meantime was booked over the top of it -- while the office screen
+        // refused both with a 409. rg_deployment_check() calls itself "the
+        // single gate every assignment path must call"; this path did not.
+        $claim = rg_claim_check($conn, $workerId, $shiftId);
+        if (!$claim['ok']) {
+            $stmt = $conn->prepare('UPDATE shift_offers SET status = "expired", responded_at = NOW() WHERE id = ?');
+            $stmt->bind_param('i', $offerId);
+            $stmt->execute();
+            audit($conn, null, 'shift.blocked', "offer accept, worker #$workerId: " . $claim['reason']);
+            notify(
+                $conn, null, 'An offer could not be accepted',
+                $row['worker'] . ' tried to accept "' . $row['title'] . '" — ' . $claim['reason'],
+                'shift', '/app/scheduling'
+            );
+            json_out([
+                'result' => 'blocked',
+                // Addressed to the worker reading it on their phone, so it says
+                // what to do rather than only what is wrong.
+                'message' => rtrim($claim['reason'], '.') . '. Please contact the office.',
+            ], 409);
+        }
+
         // Atomic claim: only succeeds if the shift is still open.
         $stmt = $conn->prepare('UPDATE shifts SET worker_id = ?, status = "scheduled" WHERE id = ? AND status = "open"');
         $stmt->bind_param('ii', $workerId, $shiftId);

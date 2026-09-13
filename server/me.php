@@ -5,6 +5,7 @@
 // GET  /me.php?action=payslip&from=&to= -> own payslip for a period
 // Clock-in/out, check-in and panic go through field.php (it reads worker_id off the token).
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 $workerId = $user['worker_id'] !== null ? (int) $user['worker_id'] : 0;
@@ -44,6 +45,20 @@ if ($action === 'accept' && method() === 'POST') {
     $stmt->execute();
     $w = $stmt->get_result()->fetch_assoc();
     if (!$w || $w['division'] !== $shift['division']) fail('This shift is not for your division.', 403);
+
+    // The deployment gate, before the claim.
+    //
+    // Matching divisions was the whole test. A worker with a lapsed DBS could
+    // claim a care shift from the app, and one already booked elsewhere could
+    // claim a shift overlapping it -- verified against a local database: a
+    // worker scheduled 08:00-16:00 accepted an overlapping 09:00-17:00 shift
+    // here and ended up on both, while the office screen refused the same
+    // assignment with a 409.
+    $claim = rg_claim_check($conn, $workerId, $shiftId);
+    if (!$claim['ok']) {
+        audit($conn, (int) $user['id'], 'shift.blocked', "app accept, worker #$workerId: " . $claim['reason']);
+        fail($claim['reason'], 409);
+    }
 
     // Atomic claim.
     $stmt = $conn->prepare('UPDATE shifts SET worker_id = ?, status = "scheduled" WHERE id = ? AND status = "open"');

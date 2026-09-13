@@ -561,15 +561,34 @@ guards live in `worker_compliant()` and `has_clash()`; both consult
 `certifications` as well as the DBS/SIA columns on the worker row, so a valid
 check recorded in Compliance counts at scheduling time.
 
-`has_clash()` excludes archived shifts and the shift being reassigned, so a
-shift never clashes with itself and a soft-deleted booking never blocks a slot.
-The calendar read excludes archived shifts for the same reason.
+**One gate, everywhere.** `rg_deployment_check()` in `compliance-lib.php` calls
+itself "the single gate every assignment path must call", and three paths did
+not call it. Matching and broadcast used a legacy `worker_compliant()` — the
+hard-coded DBS-for-care / SIA-for-security pair — while assignment consulted the
+configured rule set, so the two gave different answers: with a nurse's NMC
+registration expired (mandatory for care in `compliance_rules`, invisible to the
+legacy check) "Find eligible" listed the worker and assigning them was refused.
+The legacy pair is deleted. `rg_shift_clash()` moved to `compliance-lib.php` for
+the same reason — `scheduling.php` is an endpoint and cannot be required — and
+excludes archived shifts and the shift being reassigned, so a shift never
+clashes with itself and a soft-deleted booking never blocks a slot. The calendar
+read excludes archived shifts too.
+
+**The two self-service paths are gated by `rg_claim_check()`.** A worker
+accepting an SMS offer (`offer.php`) and a worker claiming an open shift in the
+app (`me.php?action=accept`) both went straight to the atomic claim: division
+was the only test. Verified against a local database — a worker already
+scheduled 08:00–16:00 accepted an overlapping 09:00–17:00 shift through `/m` and
+ended up on both, and a carer with a lapsed DBS was booked by replying to the
+text. Both now run the deployment check and the clash check first, audit
+`shift.blocked` with the reason, and in the offer case expire the offer and tell
+the office.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `match` | Office roles | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
+| GET | `match` | Office roles | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. Eligibility is `rg_deployment_check()`, the same gate assignment uses. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
 | POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
-| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open` |
+| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open`. Rate-limited (12 per 10 minutes) — every broadcast sends a chargeable message per worker and nothing stopped the same shift being sent round repeatedly |
 | GET | — | Office roles | `from`, `to` (default: current month) | `{shifts}` for the calendar |
 | POST | `assign` | Office roles | `id`, body `{worker_id}` | `{ok, status, worker, division}`; fills an open shift or moves a scheduled one. Runs the same deployment gate and clash check as creating, so a refusal carries the blocking requirements. 409 on a completed shift |
 | POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; takes the worker off and returns the shift to `open` so it can be broadcast. 409 if nobody is on it |

@@ -20,55 +20,12 @@ $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
-// Latest expiry of a still-relevant cert on the compliance register, so a valid
-// SIA/DBS recorded in Compliance counts at scheduling time.
-function max_cert_expiry(mysqli $conn, int $workerId, string $like): ?string
-{
-    $stmt = $conn->prepare(
-        'SELECT MAX(expiry) AS e FROM certifications
-         WHERE worker_id = ? AND type LIKE ? AND expiry IS NOT NULL'
-    );
-    $stmt->bind_param('is', $workerId, $like);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    return $row && $row['e'] ? $row['e'] : null;
-}
-
-// Is a worker compliant to work in their division as of today?
-function worker_compliant(mysqli $conn, array $w): bool
-{
-    if (!$w['right_to_work']) return false;
-    $today = date('Y-m-d');
-    if ($w['division'] === 'security') {
-        $sia = $w['sia_expiry'];
-        $certSia = max_cert_expiry($conn, (int) $w['id'], '%SIA%');
-        if ($certSia && (!$sia || $certSia > $sia)) $sia = $certSia;
-        if (!$sia || $sia < $today) return false;
-    }
-    if ($w['division'] === 'care') {
-        $dbs = $w['dbs_expiry'];
-        $certDbs = max_cert_expiry($conn, (int) $w['id'], '%DBS%');
-        if ($certDbs && (!$dbs || $certDbs > $dbs)) $dbs = $certDbs;
-        if ($dbs && $dbs < $today) return false;
-    }
-    return true;
-}
-
-// Does this worker have an overlapping scheduled shift?
-function has_clash(mysqli $conn, int $workerId, string $startSql, string $endSql, int $exceptShiftId = 0): bool
-{
-    // $exceptShiftId is the shift being reassigned: a shift must not be found to
-    // clash with itself. Archived rows are excluded because an archived booking
-    // is not a booking, and one left behind would block the slot forever.
-    $stmt = $conn->prepare(
-        'SELECT id FROM shifts
-         WHERE worker_id = ? AND status = "scheduled" AND deleted_at IS NULL
-           AND id <> ? AND starts_at < ? AND ends_at > ? LIMIT 1'
-    );
-    $stmt->bind_param('iiss', $workerId, $exceptShiftId, $endSql, $startSql);
-    $stmt->execute();
-    return (bool) $stmt->get_result()->fetch_assoc();
-}
+// The legacy compliance pair -- worker_compliant() and max_cert_expiry() -- used
+// to live here: a hard-coded DBS-for-care / SIA-for-security test that matching
+// and broadcast consulted while assignment consulted the configured rule set.
+// Two gates, two answers for the same worker. Everything now calls
+// rg_deployment_check() in compliance-lib.php, so they are gone rather than left
+// for the next person to reach for.
 
 // Load a shift for a lifecycle change, or fail with the reason.
 function load_shift_for_change(mysqli $conn, int $id): array
@@ -134,11 +91,20 @@ if ($action === 'match' && method() === 'GET') {
     $stmt->execute();
     $res = $stmt->get_result();
 
+    // rg_deployment_check(), not the legacy worker_compliant().
+    //
+    // The two answer from different rule sources: worker_compliant() is the
+    // hard-coded DBS-for-care / SIA-for-security pair, while assignment consults
+    // the configured rule set. Verified against a local database: with a nurse's
+    // NMC registration expired -- mandatory for care in compliance_rules, and
+    // invisible to worker_compliant() -- "Find eligible" listed Bola Adeyemi and
+    // assigning him was refused. The office was being offered workers it could
+    // not book, and broadcast was texting them an offer they could not accept.
     $eligible = [];
     while ($w = $res->fetch_assoc()) {
-        if (!worker_compliant($conn, $w)) continue;
         if (!(int) $w['available']) continue;
-        if (has_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
+        if (!rg_deployment_check($conn, (int) $w['id'], $division)['eligible']) continue;
+        if (rg_shift_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
         $eligible[] = [
             'id' => (int) $w['id'], 'name' => $w['name'], 'role' => $w['role'],
             'home_postcode' => $w['home_postcode'], 'travel_radius_mi' => (int) $w['travel_radius_mi'],
@@ -155,6 +121,10 @@ if ($action === 'open' && method() === 'POST') {
     $title = trim((string) ($data['title'] ?? ''));
     $division = trim((string) ($data['division'] ?? ''));
     $clientId = isset($data['client_id']) && $data['client_id'] !== '' ? (int) $data['client_id'] : null;
+    // migration 014 added fk_shifts_client, so a stale id from a page left open
+    // reached the INSERT and came back as a 500 carrying the constraint name and
+    // the database name. shift-templates.php and jobs.php both already ask.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
     $site = trim((string) ($data['site_name'] ?? ''));
     $starts = trim((string) ($data['starts_at'] ?? ''));
     $ends = trim((string) ($data['ends_at'] ?? ''));
@@ -180,6 +150,9 @@ if ($action === 'open' && method() === 'POST') {
 // ---------- Broadcast an open shift to eligible workers ----------
 if ($action === 'broadcast' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
+    // Every broadcast sends a chargeable message to every eligible worker in the
+    // division. Nothing stopped the same shift being broadcast over and over.
+    rate_limit($conn, 'broadcast', 12, 600);
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A shift is required.');
 
@@ -196,17 +169,24 @@ if ($action === 'broadcast' && method() === 'POST') {
     $bucket = shift_bucket($startTs);
     $availCol = 'avail_' . $bucket;
 
-    $res = $conn->query(
-        'SELECT id, name, phone, division, right_to_work, dbs_expiry, sia_expiry, ' . $availCol . ' AS available
+    // The division is bound rather than escaped into the string: not injectable
+    // as it stood, but rule 4 says prepared statements always, and the column
+    // name beside it is the only thing here that cannot be.
+    $stmt = $conn->prepare(
+        'SELECT id, name, phone, division, ' . $availCol . ' AS available
          FROM workers
-         WHERE deleted_at IS NULL AND status != "inactive" AND division = "' . $conn->real_escape_string($shift['division']) . '"'
+         WHERE deleted_at IS NULL AND status != "inactive" AND division = ?'
     );
+    $stmt->bind_param('s', $shift['division']);
+    $stmt->execute();
+    $res = $stmt->get_result();
     $when = date('D j M, H:i', $startTs);
     $count = 0;
     while ($w = $res->fetch_assoc()) {
         if (!(int) $w['available']) continue;
-        if (!worker_compliant($conn, $w)) continue;
-        if (has_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
+        // The same gate as match and assign -- see the note on the match branch.
+        if (!rg_deployment_check($conn, (int) $w['id'], $shift['division'])['eligible']) continue;
+        if (rg_shift_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
 
         $token = bin2hex(random_bytes(20));
         $stmt = $conn->prepare('INSERT INTO shift_offers (shift_id, worker_id, token) VALUES (?, ?, ?)');
@@ -283,7 +263,7 @@ if (in_array($action, ['assign', 'unassign', 'cancel'], true) && method() === 'P
             ],
         ], 409);
     }
-    if (has_clash($conn, $workerId, $shift['starts_at'], $shift['ends_at'], $id)) {
+    if (rg_shift_clash($conn, $workerId, $shift['starts_at'], $shift['ends_at'], $id)) {
         fail($w['name'] . ' is already booked for an overlapping shift.', 409);
     }
 
@@ -339,6 +319,10 @@ if (method() === 'POST') {
     $workerId = (int) ($data['worker_id'] ?? 0);
     $title = trim((string) ($data['title'] ?? ''));
     $clientId = isset($data['client_id']) && $data['client_id'] !== '' ? (int) $data['client_id'] : null;
+    // migration 014 added fk_shifts_client, so a stale id from a page left open
+    // reached the INSERT and came back as a 500 carrying the constraint name and
+    // the database name. shift-templates.php and jobs.php both already ask.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
     $site = trim((string) ($data['site_name'] ?? ''));
     $starts = trim((string) ($data['starts_at'] ?? ''));
     $ends = trim((string) ($data['ends_at'] ?? ''));
@@ -387,7 +371,7 @@ if (method() === 'POST') {
 
     $startSql = date('Y-m-d H:i:s', $startTs);
     $endSql = date('Y-m-d H:i:s', $endTs);
-    if (has_clash($conn, $workerId, $startSql, $endSql)) {
+    if (rg_shift_clash($conn, $workerId, $startSql, $endSql)) {
         fail($w['name'] . ' is already booked for an overlapping shift.', 409);
     }
 

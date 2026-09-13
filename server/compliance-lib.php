@@ -248,3 +248,73 @@ function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = nul
     $verdict['worker'] = $w['name'];
     return $verdict;
 }
+
+/**
+ * Is this worker already booked over this window?
+ *
+ * Lived in scheduling.php, which is an endpoint and cannot be required, so the
+ * two paths that fill a shift without going through the office screen -- a
+ * worker accepting an SMS offer (offer.php) and a worker claiming an open shift
+ * in the app (me.php) -- had no way to ask and did not.
+ *
+ * $exceptShiftId is the shift being reassigned: a shift must not clash with
+ * itself. Archived rows are excluded, because an archived booking is not a
+ * booking and one left behind would block the slot forever.
+ */
+function rg_shift_clash(mysqli $conn, int $workerId, string $startSql, string $endSql, int $exceptShiftId = 0): bool
+{
+    $stmt = $conn->prepare(
+        'SELECT id FROM shifts
+         WHERE worker_id = ? AND status = "scheduled" AND deleted_at IS NULL
+           AND id <> ? AND starts_at < ? AND ends_at > ? LIMIT 1'
+    );
+    $stmt->bind_param('iiss', $workerId, $exceptShiftId, $endSql, $startSql);
+    $stmt->execute();
+    return (bool) $stmt->get_result()->fetch_assoc();
+}
+
+/**
+ * May this worker take this specific shift?
+ *
+ * rg_deployment_check() answers "may they work at all"; this adds "and are they
+ * free". Every path that puts a worker on a shift must call it -- the office
+ * screen did, and the two self-service paths did not, so a worker whose DBS had
+ * lapsed since the broadcast was booked by replying to the text, and one who had
+ * since taken an overlapping shift was booked over the top of it. Verified
+ * against a local database: a worker already scheduled 08:00-16:00 accepted an
+ * overlapping 09:00-17:00 shift through /m and ended up on both.
+ *
+ * Returns the shift row alongside the verdict so the caller need not load it
+ * twice.
+ *
+ * @return array{ok:bool,reason:string,shift:?array,gate:?array}
+ */
+function rg_claim_check(mysqli $conn, int $workerId, int $shiftId): array
+{
+    $stmt = $conn->prepare(
+        'SELECT id, worker_id, division, title, starts_at, ends_at, status
+         FROM shifts WHERE id = ? AND deleted_at IS NULL'
+    );
+    $stmt->bind_param('i', $shiftId);
+    $stmt->execute();
+    $shift = $stmt->get_result()->fetch_assoc();
+    if (!$shift) {
+        return ['ok' => false, 'reason' => 'That shift no longer exists.', 'shift' => null, 'gate' => null];
+    }
+
+    $gate = rg_deployment_check($conn, $workerId, $shift['division']);
+    if (!$gate['eligible']) {
+        return ['ok' => false, 'reason' => $gate['reason'], 'shift' => $shift, 'gate' => $gate];
+    }
+
+    if (rg_shift_clash($conn, $workerId, $shift['starts_at'], $shift['ends_at'], $shiftId)) {
+        return [
+            'ok' => false,
+            'reason' => 'You are already booked for an overlapping shift.',
+            'shift' => $shift,
+            'gate' => $gate,
+        ];
+    }
+
+    return ['ok' => true, 'reason' => '', 'shift' => $shift, 'gate' => $gate];
+}

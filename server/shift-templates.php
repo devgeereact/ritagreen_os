@@ -57,8 +57,21 @@ if ($action === 'generate' && method() === 'POST') {
          VALUES (NULL, ?, ?, ?, ?, ?, ?, "open")'
     );
     // Guard against re-generating the same open shift (same template signature + datetime).
+    //
+    // deleted_at was not considered, so an archived shift blocked its own slot
+    // from ever being regenerated -- the row is invisible everywhere else and
+    // silently suppressed the replacement here.
+    //
+    // The signature is still division + title + start time rather than the
+    // template it came from, because shifts carries no template_id. Two active
+    // templates with the same title, division and time therefore still collapse
+    // into one shift; that needs a column, so it is written down rather than
+    // half-fixed here.
     $dupe = $conn->prepare(
-        'SELECT id FROM shifts WHERE division = ? AND title = ? AND starts_at = ? AND status = "open" LIMIT 1'
+        'SELECT id FROM shifts
+         WHERE division = ? AND title = ? AND starts_at = ? AND status = "open"
+           AND deleted_at IS NULL
+         LIMIT 1'
     );
 
     for ($wk = 0; $wk < $weeks; $wk++) {
@@ -73,6 +86,14 @@ if ($action === 'generate' && method() === 'POST') {
             if (strtotime($endsAt) <= strtotime($startsAt)) {
                 $endsAt = date('Y-m-d H:i:s', strtotime($endsAt . ' +1 day')); // overnight
             }
+
+            // Never generate into the past.
+            //
+            // The weekday offset is 0 when today IS the template's weekday, so
+            // generating on a Monday afternoon created that Monday's 09:00 shift
+            // retroactively -- an open shift nobody could ever work, sitting on
+            // the rota needing cover for a morning that had already gone.
+            if (strtotime($startsAt) <= time()) continue;
 
             // Locals (bind_param needs variables, not array elements).
             $clientId = $t['client_id'] !== null ? (int) $t['client_id'] : null;
