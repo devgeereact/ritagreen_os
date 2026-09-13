@@ -129,7 +129,9 @@ export default function FieldOps() {
                     <TableCell className="text-muted-foreground">{s.client || s.site_name || "—"}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Badge variant={STATUS_META[s.field_status].variant}>{STATUS_META[s.field_status].label}</Badge>
+                        <Badge variant={STATUS_META[s.field_status]?.variant ?? "outline"}>
+                          {STATUS_META[s.field_status]?.label ?? s.field_status}
+                        </Badge>
                         {s.panic && <AlertOctagon className="size-4 text-destructive" />}
                       </div>
                     </TableCell>
@@ -152,12 +154,21 @@ const EVENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = 
 }
 
 function TimelineDialog({ shift, onOpenChange }: { shift: FieldShift | null; onOpenChange: (o: boolean) => void }) {
-  const { data, loading } = useApi<{ events: ShiftEvent[] }>(shift ? `field.php?shift_id=${shift.id}` : null, [shift?.id])
+  const { data, loading } = useApi<{ events: ShiftEvent[]; location_withheld: boolean }>(
+    shift ? `field.php?shift_id=${shift.id}` : null,
+    [shift?.id],
+  )
   return (
     <Dialog open={!!shift} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{shift?.title} — field log</DialogTitle></DialogHeader>
         {loading && <LoadingBlock rows={3} />}
+        {data?.location_withheld && (
+          <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+            Locations are not shown on your account. Where a colleague physically was is
+            employment-record detail, kept to the office.
+          </p>
+        )}
         {data && (
           data.events.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">No field events recorded yet.</p>

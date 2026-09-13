@@ -382,7 +382,7 @@ computed identically everywhere.
 | `dashboard.php` | Command-centre summary | Staff |
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
 | `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
-| `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts |
+| `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts; coordinates additionally need the `employment` zone |
 | `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
 | `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
@@ -595,8 +595,8 @@ Field operations: the office live board and the worker's clock-in/panic trail.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag |
-| GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events}` — the shift timeline |
+| GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag. Includes completed shifts — the filter listed only `scheduled` and `open`, so a shift vanished from the day the moment it was clocked out. One grouped query for every shift's events, not one per shift |
+| GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events, location_withheld}` — the shift timeline. **`lat`/`lng` are nulled unless the caller holds the `employment` zone, or it is their own trail.** `docs/PRIVACY.md` records the location as personal data about the worker; nothing asked anything about it, so a content editor could open the board, click any shift and read a named colleague's coordinates to six decimal places |
 | POST | — | Staff for any shift; a worker **only for a shift assigned to them** | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403 |
 
 `kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `note`, `task`,
@@ -746,7 +746,7 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 |---|---|---|---|---|
 | GET | — | Staff | — | `{jobs}`, emergency first then high then standard, 500 most recent. Includes `notes`, which were collected on creation and previously never returned |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
-| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201; type ∈ care_visit/clean/guard_shift/course/other |
+| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201, read back from the row so `client` and `created_at` are real. Type ∈ care_visit/clean/guard_shift/course/other. `title` capped at 190 to match the column; an unreadable `scheduled_for` is now a 400 rather than being stored as `1970-01-01 00:00:00` |
 
 ---
 

@@ -1,7 +1,9 @@
 <?php
 // §8 Field operations & service delivery.
 // GET  /field.php?action=live              -> today's shifts with on-site status (office board)
-// GET  /field.php?shift_id=N               -> { events:[...] } timeline for a shift
+// GET  /field.php?shift_id=N               -> { events:[...], location_withheld } timeline for a shift
+//   lat/lng are returned to the worker whose trail it is, and to roles holding the
+//   'employment' zone. Everyone else gets the timeline with the coordinates nulled.
 // POST /field.php {shift_id, kind, note?, lat?, lng?, signer?} -> log a field event
 //   kind: clock_in | clock_out | check_in | panic | note | task | signoff
 require __DIR__ . '/lib.php';
@@ -32,28 +34,55 @@ if ($action === 'live' && method() === 'GET') {
     // The office board: every shift today, with worker and client names on it.
     require_staff($user);
     $today = date('Y-m-d');
+    // "completed" belongs on today's board.
+    //
+    // Clocking out sets shifts.status = 'completed' further down this file, and
+    // this filter listed only scheduled and open -- so a shift finished at 14:00
+    // disappeared from the day at 14:00, and STATUS_META.completed in FieldOps
+    // was unreachable. A duty manager needs to see what has already been done
+    // today, not only what has not. Cancelled stays off it.
     $stmt = $conn->prepare(
         'SELECT s.id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status,
                 w.name AS worker, c.name AS client
          FROM shifts s
          LEFT JOIN workers w ON w.id = s.worker_id
          LEFT JOIN clients c ON c.id = s.client_id
-         WHERE DATE(s.starts_at) = ? AND s.status IN ("scheduled","open")
+         WHERE DATE(s.starts_at) = ? AND s.deleted_at IS NULL
+           AND s.status IN ("scheduled","open","completed")
          ORDER BY s.starts_at'
     );
     $stmt->bind_param('s', $today);
     $stmt->execute();
     $res = $stmt->get_result();
+
+    $rows = [];
+    while ($s = $res->fetch_assoc()) $rows[] = $s;
+
+    // One query for every shift's events, not one per shift. The loop ran a
+    // separate SELECT for each row, with the id interpolated rather than bound.
+    $kindsByShift = [];
+    if ($rows) {
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        $ev = $conn->prepare("SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks)");
+        $ev->bind_param(str_repeat('i', count($ids)), ...$ids);
+        $ev->execute();
+        $evRes = $ev->get_result();
+        while ($row = $evRes->fetch_assoc()) {
+            $kindsByShift[(int) $row['shift_id']][] = $row['kind'];
+        }
+    }
+
     $shifts = [];
-    while ($s = $res->fetch_assoc()) {
-        $kinds = [];
-        $e = $conn->query('SELECT kind FROM shift_events WHERE shift_id = ' . (int) $s['id']);
-        while ($ev = $e->fetch_assoc()) $kinds[] = $ev['kind'];
+    foreach ($rows as $s) {
+        $kinds = $kindsByShift[(int) $s['id']] ?? [];
         $shifts[] = [
             'id' => (int) $s['id'], 'title' => $s['title'], 'division' => $s['division'],
             'site_name' => $s['site_name'], 'client' => $s['client'], 'worker' => $s['worker'],
             'starts_at' => $s['starts_at'], 'ends_at' => $s['ends_at'],
-            'field_status' => $s['status'] === 'open' ? 'unfilled' : field_status($kinds, $s['starts_at'], $s['ends_at']),
+            'field_status' => $s['status'] === 'open'
+                ? 'unfilled'
+                : ($s['status'] === 'completed' ? 'completed' : field_status($kinds, $s['starts_at'], $s['ends_at'])),
             'panic' => in_array('panic', $kinds, true),
         ];
     }
@@ -66,6 +95,26 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
     if (!is_staff($user) && !shift_belongs_to($conn, $user, $sid)) {
         fail('You do not have access to this.', 403);
     }
+
+    // Where somebody physically was is not ordinary operational detail.
+    //
+    // docs/PRIVACY.md records shift_events location as personal data about the
+    // worker, and nothing here asked anything about it: is_staff() is true for
+    // editor, trainer and employee, and access.ts grants /app/field to all of
+    // STAFF, so a content editor could open the board, click any shift and read
+    // a named colleague's coordinates to six decimal places. The timeline is
+    // still useful to them -- who clocked in, when, what was noted -- so the
+    // coordinates are withheld rather than the whole trail, the same way
+    // workers.php withholds a pay rate from a profile it still returns.
+    //
+    // The 'employment' zone, not 'compliance': migration 015 grants compliance to
+    // trainer and employee as well, which would leave the gate excluding only the
+    // content role, and where a person physically was is employment-record
+    // detail rather than a vetting credential. Employment is the office alone.
+    //
+    // A worker always sees their own trail in full: it is their own location.
+    $ownTrail = !is_staff($user);
+    $seesLocation = $ownTrail || can_view_zone($conn, $user, 'employment');
     $stmt = $conn->prepare(
         'SELECT e.id, e.kind, e.note, e.lat, e.lng, e.signer, e.created_at, w.name AS worker
          FROM shift_events e LEFT JOIN workers w ON w.id = e.worker_id
@@ -77,9 +126,13 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
     $events = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
+        if (!$seesLocation) {
+            $row['lat'] = null;
+            $row['lng'] = null;
+        }
         $events[] = $row;
     }
-    json_out(['events' => $events]);
+    json_out(['events' => $events, 'location_withheld' => !$seesLocation]);
 }
 
 if (method() === 'POST') {

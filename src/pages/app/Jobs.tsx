@@ -39,13 +39,22 @@ import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const STATUSES: Job["status"][] = ["booked", "assigned", "in_progress", "done", "cancelled"]
-const TYPES = [
+// A type implies a division, except "Other", which implies nothing.
+//
+// `other` used to be mapped to `care` and the division was never shown, so an
+// "Other" cleaning or security work order was filed under Healthcare & Care with
+// nothing on screen to say so. Choosing a type still fills the division in --
+// that convenience was worth keeping -- but the field is visible and editable,
+// and "Other" leaves whatever is already selected alone.
+const TYPES: { value: string; label: string; division: string | null }[] = [
   { value: "care_visit", label: "Care visit", division: "care" },
   { value: "clean", label: "Clean", division: "cleaning" },
   { value: "guard_shift", label: "Guard shift", division: "security" },
   { value: "course", label: "Course", division: "academy" },
-  { value: "other", label: "Other", division: "care" },
+  { value: "other", label: "Other", division: null },
 ]
+
+const DIVISIONS = ["care", "academy", "cleaning", "security"] as const
 
 const PRIORITY_VARIANT: Record<Job["priority"], "destructive" | "secondary" | "outline"> = {
   emergency: "destructive",
@@ -104,6 +113,7 @@ export default function Jobs() {
             <button
               key={s}
               onClick={() => setFilter(s)}
+              aria-pressed={filter === s}
               className={
                 "rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors " +
                 (filter === s
@@ -197,14 +207,20 @@ function NewJobDialog({
 }) {
   const { data } = useApi<{ clients: Client[] }>(open ? "clients.php" : null, [open])
   const [type, setType] = useState("care_visit")
+  const [division, setDivision] = useState("care")
   const [priority, setPriority] = useState("standard")
   const [clientId, setClientId] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  function chooseType(next: string) {
+    setType(next)
+    const implied = TYPES.find((t) => t.value === next)?.division
+    if (implied) setDivision(implied)
+  }
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-    const division = TYPES.find((t) => t.value === type)?.division ?? "care"
     const payload = {
       title: String(form.get("title") || "").trim(),
       type,
@@ -240,7 +256,7 @@ function NewJobDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New work order</DialogTitle>
-          <DialogDescription>The type sets the division automatically.</DialogDescription>
+          <DialogDescription>Choosing a type fills in the division; change it if it is wrong.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
@@ -250,10 +266,21 @@ function NewJobDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="type">Type</Label>
-              <Select value={type} onValueChange={setType}>
+              <Select value={type} onValueChange={chooseType}>
                 <SelectTrigger id="type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="division">Division</Label>
+              <Select value={division} onValueChange={setDivision}>
+                <SelectTrigger id="division"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DIVISIONS.map((d) => (
+                    <SelectItem key={d} value={d}>{DIVISION_LABELS[d] ?? d}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
