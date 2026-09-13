@@ -254,6 +254,41 @@ function rg_shift_minutes(string $workDate, string $startTime, string $endTime):
 }
 
 /**
+ * Remove an unpaid break from a shift's premium segments.
+ *
+ * Nothing recorded a break at all, so gross hours were paid door to door and a
+ * twelve-hour shift with an unpaid half hour was paid twelve hours.
+ *
+ * The break is taken proportionally across the bands rather than from one end,
+ * because nothing records WHEN it was taken. For a shift sitting in a single
+ * band -- most of them -- proportional and exact are the same answer. For a
+ * shift that crosses one, it splits the deduction the way the shift itself
+ * splits, which is the fairest thing available without asking the worker to
+ * record break times as well.
+ *
+ * A break at or beyond the whole shift leaves nothing payable rather than going
+ * negative; the caller decides whether that is an error.
+ *
+ * @param list<array{keys:list<string>,minutes:int}> $segments
+ * @return list<array{keys:list<string>,minutes:float}>
+ */
+function rg_deduct_break(array $segments, int $breakMinutes): array
+{
+    if ($breakMinutes <= 0) return $segments;
+    $total = 0;
+    foreach ($segments as $seg) $total += $seg['minutes'];
+    if ($total <= 0) return [];
+    if ($breakMinutes >= $total) return [];
+
+    $factor = ($total - $breakMinutes) / $total;
+    $out = [];
+    foreach ($segments as $seg) {
+        $out[] = ['keys' => $seg['keys'], 'minutes' => $seg['minutes'] * $factor];
+    }
+    return $out;
+}
+
+/**
  * Is there an unacknowledged panic alert on this shift?
  *
  * The board derived its panic flag from "is there a panic event", so once one

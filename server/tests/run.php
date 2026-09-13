@@ -181,6 +181,36 @@ check('rejects a partial date', pay_valid_date('2026-03'), false);
 check('rejects trailing text', pay_valid_date("2026-03-01' OR 1=1"), false);
 
 // ---------------------------------------------------------------------------
+group('rg_deduct_break');
+
+// Nothing recorded a break at all, so gross hours were paid door to door: a
+// twelve-hour shift with an unpaid half hour was paid twelve hours.
+$oneBand = [['keys' => ['night'], 'minutes' => 480]];
+check('no break changes nothing', rg_deduct_break($oneBand, 0), $oneBand);
+check('a negative break changes nothing', rg_deduct_break($oneBand, -30), $oneBand);
+check('a break comes off a single band exactly', rg_deduct_break($oneBand, 30)[0]['minutes'], 450.0);
+
+// Taken proportionally, because nothing records WHEN the break was taken. For a
+// shift crossing a band it splits the deduction the way the shift splits.
+$two = [['keys' => ['night'], 'minutes' => 240], ['keys' => ['weekend'], 'minutes' => 240]];
+$cut = rg_deduct_break($two, 60);
+check('proportional across two equal bands, first', $cut[0]['minutes'], 210.0);
+check('proportional across two equal bands, second', $cut[1]['minutes'], 210.0);
+check('and the total is right', $cut[0]['minutes'] + $cut[1]['minutes'], 420.0);
+
+// Uneven bands keep their proportions: 600 night + 120 standard, less 30.
+$uneven = [['keys' => ['night'], 'minutes' => 600], ['keys' => [], 'minutes' => 120]];
+$cut = rg_deduct_break($uneven, 30);
+check('uneven bands keep their shape, night', $cut[0]['minutes'], 575.0);
+check('uneven bands keep their shape, standard', $cut[1]['minutes'], 115.0);
+
+// A break that swallows the shift leaves nothing payable rather than going
+// negative; the caller decides whether that is an error.
+check('a break equal to the shift pays nothing', rg_deduct_break($oneBand, 480), []);
+check('a break longer than the shift pays nothing', rg_deduct_break($oneBand, 600), []);
+check('no segments, nothing to deduct from', rg_deduct_break([], 30), []);
+
+// ---------------------------------------------------------------------------
 group('rg_panic_open');
 
 // The board used in_array('panic', $kinds), so once an alert was raised the

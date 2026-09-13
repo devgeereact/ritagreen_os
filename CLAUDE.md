@@ -195,6 +195,19 @@ and `workers` holds no date of birth. Same rule as retention periods: do not put
 pension or net figure anywhere in the system, and no tax code or NI number in the schema to
 compute them from. Do not retitle it until there is.
 
+**Pay is on `minutes - break_minutes`.** `timesheets.minutes` is the clock span including the
+break; `rg_deduct_break()` takes the break proportionally out of the premium bands, because
+nothing records when it was taken. There was no break column at all, so gross hours were paid
+door to door.
+
+**Holiday accrual is informational and nothing pays it.** 12.07% of hours worked, never added to
+gross, never written back, and separate from the leave balance — `leave_records` is never read by
+the pay path, so taking leave produces no pay. Not a double payment; not a payment. Say which one
+you mean before changing either.
+
+**`pay_type` branches nothing.** An `umbrella` worker is calculated exactly as PAYE. The Payroll
+page subtotals them and says so; do not read the gross total as a PAYE figure.
+
 **Anything that turns hours into money reads `deleted_at`.** `pay_compute()` did not, so a
 soft-deleted timesheet was still paid. Archiving is the disposal route this system has; a query
 that ignores it converts an archive into a silent liability.
@@ -296,9 +309,9 @@ generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` 
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
 verification, and the deployment gate — are **built and verified against a local database**.
-Migrations `001`–`028` exist in `server/migrations/` and all twenty-eight are applied locally. The
+Migrations `001`–`030` exist in `server/migrations/` and all thirty are applied locally. The
 deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
-pending and that 019 was applied that day, so **`020` through `028` are outstanding there** — but
+pending and that 019 was applied that day, so **`020` through `030` are outstanding there** — but
 that is the record talking, not a check against the live database. Confirm with
 `php server/migrate.php --status` on the server before acting on it.
 

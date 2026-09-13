@@ -33,7 +33,7 @@ import {
 import { useApi } from "@/hooks/use-api"
 import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
-import type { Job, Client } from "@/lib/types"
+import type { Job, Client, Worker } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
@@ -62,6 +62,9 @@ const DIVISIONS = ["care", "academy", "cleaning", "security"] as const
  */
 const NO_CLIENT = "none"
 
+/** Same reason as NO_CLIENT: Radix needs a real value for "nobody". */
+const NO_WORKER = "none"
+
 const PRIORITY_VARIANT: Record<Job["priority"], "destructive" | "secondary" | "outline"> = {
   emergency: "destructive",
   high: "secondary",
@@ -79,6 +82,21 @@ export default function Jobs() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Job | null>(null)
   const [archiving, setArchiving] = useState<Job | null>(null)
+  const workers = useApi<{ workers: Worker[] }>(canCreate ? "workers.php" : null, [canCreate])
+
+  async function assign(job: Job, workerId: string) {
+    try {
+      const r = await api<{ job: Job }>(`jobs.php?action=assign&id=${job.id}`, {
+        method: "POST",
+        body: { worker_id: workerId === NO_WORKER ? null : Number(workerId) },
+      })
+      toast.success(r.job.assignee ? `Assigned to ${r.job.assignee}.` : "Unassigned.")
+      reload()
+    } catch (err) {
+      // A refusal here is the deployment gate, and it names the reason.
+      toast.error(err instanceof ApiError ? err.message : "Could not assign the job.")
+    }
+  }
 
   const jobs = data?.jobs ?? []
   const filtered = jobs.filter(
@@ -168,6 +186,7 @@ export default function Jobs() {
                 <TableHead>Job</TableHead>
                 <TableHead>Division</TableHead>
                 <TableHead>Client</TableHead>
+                <TableHead>Assigned to</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Scheduled</TableHead>
                 <TableHead>Status</TableHead>
@@ -187,6 +206,26 @@ export default function Jobs() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{DIVISION_LABELS[j.division] ?? j.division}</TableCell>
                   <TableCell className="text-muted-foreground">{j.client || "—"}</TableCell>
+                  <TableCell>
+                    {canCreate ? (
+                      <Select
+                        value={j.assigned_to ? String(j.assigned_to) : NO_WORKER}
+                        onValueChange={(v) => assign(j, v)}
+                      >
+                        <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_WORKER}>Nobody</SelectItem>
+                          {(workers.data?.workers ?? [])
+                            .filter((w) => w.division === j.division)
+                            .map((w) => (
+                              <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-muted-foreground">{j.assignee || "—"}</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={PRIORITY_VARIANT[j.priority]} className="capitalize">{j.priority}</Badge>
                   </TableCell>
@@ -225,7 +264,7 @@ export default function Jobs() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     No jobs match the filters.
                   </TableCell>
                 </TableRow>

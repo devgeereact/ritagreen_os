@@ -510,7 +510,9 @@ Worked time, as claimed and then decided on; the input to payroll.
 | `work_date` | DATE | no | — | The date the shift **starts**; an `end_time` at or before `start_time` means it crossed midnight |
 | `start_time` | TIME | no | — | |
 | `end_time` | TIME | no | — | |
-| `minutes` | INT | no | 0 | Denormalised duration, computed by `rg_shift_minutes()` |
+| `shift_id` | INT | yes | NULL | FK → `shifts(id)` **ON DELETE SET NULL**. The rota entry these hours were worked on, when there was one. Nullable on purpose: hours are recorded for call-outs and cover arranged by phone that never had a shift. Migration 029 |
+| `minutes` | INT | no | 0 | Clock duration start to end, breaks included, computed by `rg_shift_minutes()` |
+| `break_minutes` | INT | no | 0 | Unpaid break. Pay is on `minutes - break_minutes`. Migration 029 |
 | `status` | ENUM('pending','approved','rejected') | no | 'pending' | `rejected` added by migration 021 |
 | `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL**. Who decided, whichever way |
 | `decided_at` | TIMESTAMP | yes | NULL | When. Migration 021 |
@@ -521,13 +523,16 @@ Worked time, as claimed and then decided on; the input to payroll.
 
 Keys: `KEY idx_worker_date (worker_id, work_date)`,
 `KEY idx_ts_approver (approved_by)`, `KEY idx_timesheets_deleted (deleted_at)`,
-`KEY idx_ts_status_date (status, work_date)`.
+`KEY idx_ts_status_date (status, work_date)`, `KEY idx_ts_shift (shift_id)`.
 
 Only `approved` rows reach pay, and `pay_compute()` in `pay-lib.php` also
 excludes rows with `deleted_at` set — it did not, so an archived entry was still
-paid. There is still **no link to the `shift`** the time was worked on: hours
-are recorded independently of the rota and of the clock events in
-`shift_events`, so the three are reconciled by eye rather than by the database.
+paid. `shift_id` links the hours to the rota entry (migration 029), and the endpoint
+refuses a shift belonging to a different worker or one that already has a
+timesheet — the same shift could previously be claimed twice and paid twice with
+nothing showing it. Clock events in `shift_events` still do **not** become
+timesheets automatically: attendance and hours are recorded separately, and
+reconciling them is still a human job.
 
 ### `worker_pay_rates`
 
@@ -796,6 +801,16 @@ The table stays the source of truth rather than the function. One-off holidays
 happen — the 2022 Jubilee and the 2023 Coronation were announced, not derived —
 and are inserted alongside. Scotland and Northern Ireland differ; operating
 there needs a nation column before it needs more rows.
+
+### `jobs.assigned_to`
+
+`INT NULL`, FK → `workers(id)` **ON DELETE SET NULL** (migration 030).
+`jobs.status` has had `assigned` in its enum since the table was created and
+there was no assignee column anywhere, so the status was decorative: a job could
+be marked assigned with nothing recording who to. `jobs.php?action=assign` runs
+`rg_deployment_check()` before naming somebody — a work order is not a shift, but
+putting a named carer against a care visit is a deployment decision, and it would
+be odd for the rota to refuse what the job board allows.
 
 ### `credit_notes`
 

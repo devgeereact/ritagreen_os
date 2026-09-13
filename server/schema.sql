@@ -1020,3 +1020,27 @@ ALTER TABLE shifts
 -- and the only disposal available was a hard DELETE.
 ALTER TABLE shift_events ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
 ALTER TABLE shift_events ADD INDEX IF NOT EXISTS idx_se_deleted (deleted_at);
+
+-- An unpaid break, and the shift the hours belong to (migration 029).
+--
+-- Gross hours were paid door to door, so a twelve-hour shift with an unpaid half
+-- hour was paid twelve hours. And a timesheet had no link to the rota, so hours,
+-- shifts and clock events could only be reconciled by eye.
+--
+-- shift_id stays NULLABLE: hours are still recorded for work that never had a
+-- rota entry. The FK is SET NULL because a timesheet is a pay record and
+-- outlives the shift it came from -- losing the link is acceptable, losing the
+-- hours is not.
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS break_minutes INT NOT NULL DEFAULT 0 AFTER minutes;
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS shift_id INT NULL AFTER worker_id;
+ALTER TABLE timesheets ADD INDEX IF NOT EXISTS idx_ts_shift (shift_id);
+ALTER TABLE timesheets
+  ADD CONSTRAINT fk_ts_shift FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL;
+
+-- A work order can name who is doing it (migration 030). jobs.status has had
+-- 'assigned' in its enum since the table was created with no assignee column
+-- anywhere, so the status was decorative.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_to INT NULL AFTER client_id;
+ALTER TABLE jobs ADD INDEX IF NOT EXISTS idx_jobs_assignee (assigned_to, status);
+ALTER TABLE jobs
+  ADD CONSTRAINT fk_jobs_worker FOREIGN KEY (assigned_to) REFERENCES workers(id) ON DELETE SET NULL;

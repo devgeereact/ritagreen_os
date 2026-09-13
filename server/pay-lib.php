@@ -212,7 +212,7 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
                       ORDER BY r.effective_from DESC LIMIT 1),
                     w.pay_rate_pence
                 ) AS pay_rate_pence,
-                t.work_date, t.start_time, t.end_time, t.minutes
+                t.work_date, t.start_time, t.end_time, t.minutes, t.break_minutes
          FROM timesheets t JOIN workers w ON w.id = t.worker_id
          WHERE t.status = "approved" AND t.work_date BETWEEN ? AND ?
            AND t.deleted_at IS NULL AND w.deleted_at IS NULL'
@@ -231,9 +231,17 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
     while ($e = $res->fetch_assoc()) {
         $wid = (int) $e['worker_id'];
         $rate = (int) $e['pay_rate_pence'];
-        $hours = ((int) $e['minutes']) / 60.0;
+        // Payable minutes, not clock minutes: an unpaid break is time on the
+        // premises that is not time worked. Gross hours were paid door to door.
+        $payable = max(0, (int) $e['minutes'] - (int) $e['break_minutes']);
+        $hours = $payable / 60.0;
 
-        $segments = rg_premium_segments($e['work_date'], $e['start_time'], (int) $e['minutes'], $bankHols);
+        // The bands come from the clock time the worker was actually there;
+        // the break is then taken proportionally out of them.
+        $segments = rg_deduct_break(
+            rg_premium_segments($e['work_date'], $e['start_time'], (int) $e['minutes'], $bankHols),
+            (int) $e['break_minutes']
+        );
         $wkKey = $wid . '|' . date('oW', strtotime($e['work_date']));
         $priorWeek = $weekHours[$wkKey] ?? 0.0;
         $weekHours[$wkKey] = $priorWeek + $hours;
@@ -279,6 +287,7 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
         $lines[] = [
             'work_date' => $e['work_date'], 'start_time' => substr($e['start_time'], 0, 5),
             'end_time' => substr($e['end_time'], 0, 5), 'hours' => round($hours, 2),
+            'break_minutes' => (int) $e['break_minutes'],
             'premium' => $line['premium'], 'overtime_hours' => round($otHours, 2),
             // Hours per premium band, so a mixed shift can show why it was paid
             // what it was instead of carrying one misleading label.

@@ -137,7 +137,8 @@ export default function Timesheets() {
                       date: t.work_date,
                       start: t.start_time,
                       end: t.end_time,
-                      hours: (t.minutes / 60).toFixed(2),
+                      break_minutes: t.break_minutes,
+                      paid_hours: (Math.max(t.minutes - t.break_minutes, 0) / 60).toFixed(2),
                     })),
                 )
               }
@@ -254,7 +255,7 @@ export default function Timesheets() {
                     <TableHead>Division</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Hours</TableHead>
-                    <TableHead className="text-right">Duration</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -265,8 +266,20 @@ export default function Timesheets() {
                       <TableCell className="font-medium">{t.worker}</TableCell>
                       <TableCell className="text-muted-foreground">{DIVISION_LABELS[t.division] ?? t.division}</TableCell>
                       <TableCell className="text-muted-foreground">{shortDate(t.work_date)}</TableCell>
-                      <TableCell className="text-muted-foreground">{t.start_time}–{t.end_time}</TableCell>
-                      <TableCell className="text-right">{hm(t.minutes)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)}
+                        {t.shift_title && (
+                          <div className="text-xs text-muted-foreground">{t.shift_title}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {hm(Math.max(t.minutes - t.break_minutes, 0))}
+                        {t.break_minutes > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            less {t.break_minutes}m break
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={STATUS_BADGE[t.status]} className="capitalize">
                           {t.status}
@@ -392,6 +405,7 @@ function NewEntryDialog({
   const [date, setDate] = useState("")
   const [start, setStart] = useState("")
   const [end, setEnd] = useState("")
+  const [breakMinutes, setBreakMinutes] = useState("0")
   const [submitting, setSubmitting] = useState(false)
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -404,11 +418,17 @@ function NewEntryDialog({
     try {
       await api("timesheets.php", {
         method: "POST",
-        body: { worker_id: Number(workerId), work_date: date, start_time: start, end_time: end },
+        body: {
+          worker_id: Number(workerId),
+          work_date: date,
+          start_time: start,
+          end_time: end,
+          break_minutes: Number(breakMinutes) || 0,
+        },
       })
       toast.success("Timesheet logged.")
       onOpenChange(false)
-      setWorkerId(""); setDate(""); setStart(""); setEnd("")
+      setWorkerId(""); setDate(""); setStart(""); setEnd(""); setBreakMinutes("0")
       onCreated()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not log the timesheet.")
@@ -452,6 +472,21 @@ function NewEntryDialog({
               <Label htmlFor="end">End</Label>
               <Input id="end" type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
             </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="break">Unpaid break (minutes)</Label>
+            <Input
+              id="break"
+              type="number"
+              min={0}
+              step={5}
+              value={breakMinutes}
+              onChange={(e) => setBreakMinutes(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              An end time on or before the start is an overnight shift, not an error. Pay is on the
+              hours worked less the break.
+            </p>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitting}>

@@ -155,6 +155,8 @@ export type PayslipLine = {
   premium: string
   /** Hours per premium band. A shift running from a weekday night into a Saturday has two. */
   breakdown: Record<string, number>
+  /** Unpaid break already deducted from `hours`. */
+  break_minutes: number
   overtime_hours: number
   gross_pence: number
 }
@@ -353,7 +355,13 @@ export type Timesheet = {
   work_date: string
   start_time: string
   end_time: string
+  /** Clock minutes from start to end, breaks included. */
   minutes: number
+  /** Unpaid break. Pay is on `minutes - break_minutes`. */
+  break_minutes: number
+  /** The rota entry these hours were worked on, when there was one. */
+  shift_id: number | null
+  shift_title: string | null
   status: TimesheetStatus
   decided_at: string | null
   decision_note: string | null
@@ -437,6 +445,9 @@ export type Job = {
   status: "booked" | "assigned" | "in_progress" | "done" | "cancelled"
   scheduled_for: string | null
   notes: string | null
+  /** Who is doing it. `status: "assigned"` was decorative until this existed. */
+  assigned_to: number | null
+  assignee: string | null
   created_at: string
 }
 

@@ -653,13 +653,16 @@ worker's hours for every day on record.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}, truncated}`, 500 rows per read. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
+| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}, truncated}`, 500 rows per read. Totals are **payable** minutes (`minutes - break_minutes`), which is what the approval decision and the pay run act on. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
 | POST | `approve` | Office roles | `id` | `{ok: true}`; records `approved_by` and `decided_at` |
 | POST | `reject` | Office roles | `id`, body `{note}` | `{ok: true}`; the reason is required and stored in `decision_note`. Rejected hours are excluded from pay without deleting the claim |
-| POST | — | Office roles | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours |
+| POST | — | Office roles | body `{worker_id, work_date, start_time, end_time, break_minutes?, shift_id?}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours. `break_minutes` is unpaid time and must be shorter than the shift. `shift_id` links the hours to the rota entry — optional, because hours are recorded for call-outs that never had a shift, but when given it must be that worker's shift and that shift must not already have a timesheet, so the same shift cannot be claimed and paid twice |
 
 Minutes are computed server-side by `rg_shift_minutes()` in `pure.php`; the
-client cannot supply them. `work_date` is the date the shift **starts**: an end
+client cannot supply them. `minutes` is the clock span including any break;
+pay is on `minutes - break_minutes`. Nothing recorded a break at all before, so
+gross hours were paid door to door — a twelve-hour shift with an unpaid half
+hour was paid twelve hours. `work_date` is the date the shift **starts**: an end
 time at or before the start means the shift crosses midnight, so a waking night
 recorded as `22:00`–`06:00` is eight hours, not an error. Equal times are
 refused, because nothing distinguishes a mistake from a full 24-hour span. The
@@ -700,6 +703,23 @@ start hour and `work_date`, which meant a 05:00–13:00 shift was paid night for
 all eight hours and a Friday 20:00 → Saturday 04:00 shift was paid night for all
 eight and weekend for none. Each payslip line now carries a `breakdown` of hours
 per band.
+
+**An unpaid break is deducted proportionally across the premium bands**
+(`rg_deduct_break()`), because nothing records *when* the break was taken. For a
+shift sitting in one band — most of them — proportional and exact are the same
+answer.
+
+**Holiday accrual is rolled up and informational.** 12.07% of hours worked,
+valued at the rate those hours were paid at. It is not added to gross, is not
+written back anywhere, and is separate from the holiday balance on a worker's
+leave record: `leave_records` is never read by the pay path, so taking leave
+produces no pay here. There is no double payment, and no payment either — the
+two are different mechanisms and the Payroll page now says so.
+
+**`pay_type` does not branch anything.** An `umbrella` worker is calculated
+exactly as PAYE, premiums and overtime included, and sits inside the same gross
+total. The Payroll page subtotals them and says so rather than letting the figure
+read as PAYE.
 
 **`floor_pence`** is the configured pay floor in force (`pay_floors`, migration
 024), or null when none is set — which is the default. A row paid under it
@@ -805,6 +825,7 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 | GET | — | Staff | `client_id?`, `status?` | `{jobs, truncated}`, emergency first then high then standard, 500 per read. Includes `notes`, which were collected on creation and previously never returned. `client_id` filters server-side — ClientDetail and Insights both fetched the whole list and filtered in the browser, which quietly computed against a truncated set |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
 | POST | `update` | Office roles | `id`; same body as create | `{job}`; corrects a work order in place. There was no edit at all, so a typo could only be fixed by cancelling and re-raising, which loses what was actually asked for |
+| POST | `assign` | Office roles | `id`; body `{worker_id}` (null to clear) | `{job}`; runs `rg_deployment_check()` first, so the job board cannot name somebody the rota would refuse. Moves `booked` → `assigned` and back; a job already `in_progress` or later keeps its status. `jobs.status` has had `assigned` in its enum since the table was created with no assignee column anywhere (migration 030) |
 | POST | `archive` | Office roles | `id` | `{ok: true}`; sets `deleted_at`. The column has existed since migration 013 and every query respected it — nothing ever set it |
 | POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201, read back from the row so `client` and `created_at` are real. Type ∈ care_visit/clean/guard_shift/course/other. `title` capped at 190 to match the column; an unreadable `scheduled_for` is a 400 rather than being stored as `1970-01-01 00:00:00`. Create and update share one validator so they cannot drift |
 

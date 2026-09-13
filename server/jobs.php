@@ -5,7 +5,9 @@
 // POST /jobs.php?action=status&id=12 {status} -> advance the pipeline
 // POST /jobs.php?action=update&id=12 {title?, division?, type?, priority?, client_id?, scheduled_for?, notes?}
 // POST /jobs.php?action=archive&id=12 -> soft delete
+// POST /jobs.php?action=assign&id=12 {worker_id|null} -> name who is doing it
 require __DIR__ . '/lib.php';
+require __DIR__ . '/compliance-lib.php';
 
 /** The vocabularies the jobs table accepts, in one place. */
 const JOB_DIVISIONS = ['care', 'academy', 'cleaning', 'security'];
@@ -68,8 +70,11 @@ function job_row(mysqli $conn, int $id): ?array
 {
     $stmt = $conn->prepare(
         'SELECT j.id, j.client_id, c.name AS client, j.division, j.type, j.title,
-                j.priority, j.status, j.scheduled_for, j.notes, j.created_at
-         FROM jobs j LEFT JOIN clients c ON c.id = j.client_id
+                j.priority, j.status, j.scheduled_for, j.notes, j.created_at,
+                j.assigned_to, w.name AS assignee
+         FROM jobs j
+         LEFT JOIN clients c ON c.id = j.client_id
+         LEFT JOIN workers w ON w.id = j.assigned_to
          WHERE j.id = ?'
     );
     $stmt->bind_param('i', $id);
@@ -78,6 +83,7 @@ function job_row(mysqli $conn, int $id): ?array
     if (!$row) return null;
     $row['id'] = (int) $row['id'];
     $row['client_id'] = $row['client_id'] !== null ? (int) $row['client_id'] : null;
+    $row['assigned_to'] = $row['assigned_to'] !== null ? (int) $row['assigned_to'] : null;
     return $row;
 }
 
@@ -113,8 +119,11 @@ if (method() === 'GET') {
     // the dialog closed.
     $stmt = $conn->prepare(
         'SELECT j.id, j.client_id, c.name AS client, j.division, j.type, j.title,
-                j.priority, j.status, j.scheduled_for, j.notes, j.created_at
-         FROM jobs j LEFT JOIN clients c ON c.id = j.client_id
+                j.priority, j.status, j.scheduled_for, j.notes, j.created_at,
+                j.assigned_to, w.name AS assignee
+         FROM jobs j
+         LEFT JOIN clients c ON c.id = j.client_id
+         LEFT JOIN workers w ON w.id = j.assigned_to
          WHERE ' . implode(' AND ', $where) . '
          ORDER BY FIELD(j.priority,"emergency","high","standard"), j.created_at DESC
          LIMIT ' . JOB_PAGE
@@ -126,6 +135,7 @@ if (method() === 'GET') {
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['client_id'] = $row['client_id'] !== null ? (int) $row['client_id'] : null;
+        $row['assigned_to'] = $row['assigned_to'] !== null ? (int) $row['assigned_to'] : null;
         $jobs[] = $row;
     }
     json_out(['jobs' => $jobs, 'truncated' => count($jobs) === JOB_PAGE]);
@@ -153,6 +163,49 @@ if ($action === 'update' && method() === 'POST') {
 
     [$before, $after] = audit_diff($was, $f, ['title', 'division', 'type', 'priority', 'client_id', 'scheduled_for', 'notes']);
     audit($conn, (int) $user['id'], 'job.update', "#$id", 'job', $id, $before, $after);
+    json_out(['job' => job_row($conn, $id)]);
+}
+
+if ($action === 'assign' && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A job is required.');
+    $job = job_row($conn, $id);
+    if (!$job) fail('Job not found.', 404);
+
+    $raw = body()['worker_id'] ?? null;
+    $workerId = ($raw === null || $raw === '') ? null : (int) $raw;
+
+    if ($workerId !== null) {
+        $stmt = $conn->prepare('SELECT id, name FROM workers WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('i', $workerId);
+        $stmt->execute();
+        $w = $stmt->get_result()->fetch_assoc();
+        if (!$w) fail('Worker not found.', 404);
+
+        // The same gate as putting somebody on a shift. A work order is not a
+        // shift, but naming a carer against a care visit is a deployment
+        // decision and it would be odd for the rota to refuse what the job board
+        // allows. The clash check does not apply: a job has no firm window.
+        $gate = rg_deployment_check($conn, $workerId, $job['division']);
+        if (!$gate['eligible']) {
+            audit($conn, (int) $user['id'], 'shift.blocked', "job #$id, worker #$workerId: " . $gate['reason']);
+            json_out(['error' => $w['name'] . ' cannot be deployed. ' . $gate['reason']], 409);
+        }
+    }
+
+    // Assigning moves a job off 'booked'; unassigning puts it back. Any later
+    // state -- in_progress, done, cancelled -- is left alone, because a job
+    // being reassigned mid-flight has not gone backwards.
+    $status = $job['status'];
+    if ($workerId !== null && $status === 'booked') $status = 'assigned';
+    if ($workerId === null && $status === 'assigned') $status = 'booked';
+
+    $stmt = $conn->prepare('UPDATE jobs SET assigned_to = ?, status = ? WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('isi', $workerId, $status, $id);
+    $stmt->execute();
+
+    audit($conn, (int) $user['id'], 'job.assign', $workerId === null ? "#$id unassigned" : "#$id to worker #$workerId", 'job', $id);
     json_out(['job' => job_row($conn, $id)]);
 }
 

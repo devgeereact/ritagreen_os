@@ -1,7 +1,7 @@
 <?php
 // Timesheets & time tracking.
 // GET  /timesheets.php?from=&to=&worker_id=&status=  -> { timesheets: [...], totals: {...} }
-// POST /timesheets.php {worker_id, work_date, start_time, end_time} -> add entry
+// POST /timesheets.php {worker_id, work_date, start_time, end_time, break_minutes?, shift_id?}
 // POST /timesheets.php?action=approve&id=5           -> approve (manager+)
 // POST /timesheets.php?action=reject&id=5  {note}    -> reject with a reason (manager+)
 //
@@ -65,11 +65,13 @@ if (method() === 'GET') {
 
     $sql =
         'SELECT t.id, t.worker_id, w.name AS worker, w.division, t.work_date, t.start_time,
-                t.end_time, t.minutes, t.status, t.decided_at, t.decision_note,
+                t.end_time, t.minutes, t.break_minutes, t.status, t.decided_at, t.decision_note,
+                t.shift_id, s.title AS shift_title,
                 u.name AS decided_by
          FROM timesheets t
          JOIN workers w ON w.id = t.worker_id
          LEFT JOIN users u ON u.id = t.approved_by
+         LEFT JOIN shifts s ON s.id = t.shift_id
          WHERE ' . $clause . '
          ORDER BY t.work_date DESC, t.start_time DESC
          LIMIT ' . TIMESHEET_PAGE;
@@ -83,6 +85,8 @@ if (method() === 'GET') {
         $row['id'] = (int) $row['id'];
         $row['worker_id'] = (int) $row['worker_id'];
         $row['minutes'] = (int) $row['minutes'];
+        $row['break_minutes'] = (int) $row['break_minutes'];
+        $row['shift_id'] = $row['shift_id'] !== null ? (int) $row['shift_id'] : null;
         $timesheets[] = $row;
     }
 
@@ -95,7 +99,7 @@ if (method() === 'GET') {
     // disagreed with the count action-centre.php shows for the same thing.
     $totals = ['pending_minutes' => 0, 'approved_minutes' => 0, 'rejected_minutes' => 0];
     $sumStmt = $conn->prepare(
-        'SELECT t.status, SUM(t.minutes) AS mins
+        'SELECT t.status, SUM(GREATEST(t.minutes - t.break_minutes, 0)) AS mins
          FROM timesheets t
          JOIN workers w ON w.id = t.worker_id
          WHERE ' . $clause . '
@@ -166,18 +170,46 @@ if (method() === 'POST') {
     if ($minutes <= 0) fail('The end time must differ from the start time.');
     if ($minutes > 16 * 60) fail('An entry cannot be longer than 16 hours.');
 
+    // An unpaid break is time on the premises that is not time worked.
+    $break = (int) ($data['break_minutes'] ?? 0);
+    if ($break < 0) fail('A break cannot be negative.');
+    if ($break >= $minutes) fail('The break cannot be as long as the shift.');
+
     $stmt = $conn->prepare('SELECT id FROM workers WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $workerId);
     $stmt->execute();
     if (!$stmt->get_result()->fetch_assoc()) fail('Worker not found.', 404);
 
+    // Optional link to the rota entry these hours were worked on (migration 029).
+    // Hours are still recorded for work that never had a shift -- a call-out, a
+    // cover arranged by phone -- so this stays nullable; when it IS given it has
+    // to be that worker's shift, or the link says something untrue.
+    $shiftId = isset($data['shift_id']) && $data['shift_id'] !== '' ? (int) $data['shift_id'] : null;
+    if ($shiftId !== null) {
+        $stmt = $conn->prepare('SELECT worker_id FROM shifts WHERE id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('i', $shiftId);
+        $stmt->execute();
+        $shift = $stmt->get_result()->fetch_assoc();
+        if (!$shift) fail('Shift not found.', 404);
+        if ((int) $shift['worker_id'] !== $workerId) fail('That shift belongs to a different worker.', 409);
+
+        // One claim per shift. Without this the same shift could be claimed
+        // twice and paid twice, and nothing would show it.
+        $stmt = $conn->prepare('SELECT id FROM timesheets WHERE shift_id = ? AND deleted_at IS NULL LIMIT 1');
+        $stmt->bind_param('i', $shiftId);
+        $stmt->execute();
+        if ($stmt->get_result()->fetch_assoc()) fail('That shift already has a timesheet.', 409);
+    }
+
     $stmt = $conn->prepare(
-        'INSERT INTO timesheets (worker_id, work_date, start_time, end_time, minutes) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO timesheets (worker_id, shift_id, work_date, start_time, end_time, minutes, break_minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
-    $stmt->bind_param('isssi', $workerId, $date, $start, $end, $minutes);
+    $stmt->bind_param('iisssii', $workerId, $shiftId, $date, $start, $end, $minutes, $break);
     $stmt->execute();
 
-    audit($conn, (int) $user['id'], 'timesheet.create', "worker #$workerId $date $start-$end");
+    $detail = "worker #$workerId $date $start-$end" . ($break > 0 ? " less {$break}m break" : '');
+    audit($conn, (int) $user['id'], 'timesheet.create', $detail);
     json_out(['ok' => true], 201);
 }
 

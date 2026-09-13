@@ -47,6 +47,15 @@ export default function Payroll() {
     }
   }
 
+  // Umbrella workers are calculated identically to PAYE: pay-lib.php never
+  // branches on pay_type, so they sit inside the same gross total with nothing
+  // saying so. Subtotalled here rather than in the API, because it is a
+  // presentation question and the rows already carry the type.
+  const umbrella = (data?.rows ?? []).reduce(
+    (acc, r) => (r.pay_type === "umbrella" ? { count: acc.count + 1, gross: acc.gross + r.gross_pence } : acc),
+    { count: 0, gross: 0 },
+  )
+
   function exportRun() {
     if (!data || data.rows.length === 0) return
     exportCsv(
@@ -56,6 +65,7 @@ export default function Payroll() {
         division: DIVISION_LABELS[r.division] ?? r.division,
         pay_type: r.pay_type,
         hours: r.hours.toFixed(2),
+        rate_changed_in_period: r.rate_changed ? "yes" : "no",
         rate: (r.pay_rate_pence / 100).toFixed(2),
         base: (r.base_pence / 100).toFixed(2),
         premiums: (r.premium_pence / 100).toFixed(2),
@@ -101,7 +111,28 @@ export default function Payroll() {
             <StatCard icon={Clock} label="Total hours" value={data.totals.hours.toFixed(2)} />
             <StatCard icon={Banknote} label="Gross pay" value={gbp(data.totals.gross_pence)} tone="primary" />
             <StatCard icon={Banknote} label="Premiums" value={gbp(data.totals.premium_pence)} />
-            <StatCard icon={Plane} label="Holiday pay accrued" value={gbp(data.totals.holiday_pay_pence)} />
+            <StatCard icon={Plane} label="Holiday accrued" value={gbp(data.totals.holiday_pay_pence)} />
+          </div>
+
+          {/* Three things this page has to say plainly, because each of them is
+              a number somebody could act on wrongly. */}
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <p>
+              <strong className="font-medium text-foreground">Holiday accrued</strong> is rolled-up
+              accrual at 12.07% of the hours worked, shown for information. It is not included in
+              gross, is not paid by this run, and is counted separately from the holiday balance on
+              a worker&rsquo;s leave record — taking leave produces no pay here, because leave is not
+              a timesheet.
+            </p>
+            {umbrella.count > 0 && (
+              <p>
+                <strong className="font-medium text-foreground">{umbrella.count} umbrella worker
+                {umbrella.count === 1 ? " is" : "s are"}</strong> included above, at{" "}
+                {gbp(umbrella.gross)} of the gross. They are calculated exactly as PAYE — premiums,
+                overtime and all — because nothing here branches on pay type. Check that is what you
+                want before treating this total as a PAYE figure.
+              </p>
+            )}
           </div>
 
           {data.rows.length === 0 ? (
