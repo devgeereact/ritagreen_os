@@ -82,6 +82,14 @@ const SWEEPABLE = [
         'table' => 'applicants', 'anchor' => 'updated_at', 'label' => 'name',
         'where' => "stage = 'rejected'", 'entity' => 'applicant',
     ],
+    'attendance_events' => [
+        // Clock-in and clock-out times, check calls, location and signature
+        // names. Anchored on when the event happened; there is nothing later to
+        // anchor on, and an attendance record is only useful for as long as a
+        // pay query or an incident might reach back to it.
+        'table' => 'shift_events', 'anchor' => 'created_at', 'label' => 'kind',
+        'entity' => null,
+    ],
     'worker_employment' => [
         'table' => 'workers', 'anchor' => 'left_on', 'label' => 'name',
         'where' => 'left_on IS NOT NULL', 'entity' => 'worker',

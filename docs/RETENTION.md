@@ -48,6 +48,7 @@ record with no anchor date is never due.
 | `right_to_work_check` | Right-to-work checks after employment ends | `right_to_work_checks` | **OWNER** — leaving date, or check date | **LEGAL** — against Home Office guidance | review | As above | Compliance | Not yet mapped in the sweep |
 | `leave_records` | Holiday and absence, including sickness | `leave_records` | **OWNER** | **LEGAL** — against Acas guidance | review | As above | HR | Not yet mapped |
 | `timesheets` | Timesheets and pay records | `timesheets` | Work date | **LEGAL** — payroll record-keeping | review | As above | Finance | Not yet mapped |
+| `attendance_events` | Attendance, check calls and location | `shift_events` | Event time | Location is the most intrusive thing recorded about a worker day to day | review | Not set | Operations | Mapped (028) |
 | `incidents` | Incidents, including RIDDOR-reportable and safeguarding | `incidents` | Occurrence date | **LEGAL** — health and safety, and safeguarding, which can be very long | review | As above | Compliance | Not yet mapped |
 | `training_records` | Training and certificates | `enrolments`, `certificates` | Completion date | **LEGAL** — sector requirements | review | As above | Academy | Not yet mapped |
 | `audit_log` | Accountability record | `audit_log` | Entry date | **LEGAL** — long enough to answer a question about a decision | review | As above | Governance | Not yet mapped |

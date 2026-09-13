@@ -214,6 +214,12 @@ for bulk screening. It wrote a `person_services` row per worker, so "Find eligib
 200-worker division performed 200 writes on a GET, and broadcast did it again. `rg_load_rules()`
 is memoised per request for the same reason.
 
+**Location reads are audited; location rows can be archived.** `shift_events` is personal data
+about the worker (`docs/PRIVACY.md`) and had neither: no retention policy at all and no
+`deleted_at`, so the only disposal available was a hard DELETE. Migration 028 adds both, and
+`field.php` records `field.location_read` when it actually releases coordinates — not when a
+worker opens their own trail, which would be noise rather than accountability.
+
 **Retention periods are configuration, and they are all NULL.** `server/retention-sweep.php`
 reports by default, acts only with `--go`, acts only where a period is set, and never
 hard-deletes. Do not put a period in code. See `docs/RETENTION.md`.
@@ -290,9 +296,9 @@ generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` 
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
 verification, and the deployment gate — are **built and verified against a local database**.
-Migrations `001`–`027` exist in `server/migrations/` and all twenty-seven are applied locally. The
+Migrations `001`–`028` exist in `server/migrations/` and all twenty-eight are applied locally. The
 deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
-pending and that 019 was applied that day, so **`020` through `027` are outstanding there** — but
+pending and that 019 was applied that day, so **`020` through `028` are outstanding there** — but
 that is the record talking, not a check against the live database. Confirm with
 `php server/migrate.php --status` on the server before acting on it.
 

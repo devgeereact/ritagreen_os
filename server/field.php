@@ -69,7 +69,9 @@ if ($action === 'live' && method() === 'GET') {
         $marks = implode(',', array_fill(0, count($ids), '?'));
         // Ordered, because rg_panic_open() reads the sequence: a shift can be
         // raised, acknowledged and raised again.
-        $ev = $conn->prepare("SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks) ORDER BY id");
+        $ev = $conn->prepare(
+            "SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks) AND deleted_at IS NULL ORDER BY id"
+        );
         $ev->bind_param(str_repeat('i', count($ids)), ...$ids);
         $ev->execute();
         $evRes = $ev->get_result();
@@ -123,7 +125,7 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
     $stmt = $conn->prepare(
         'SELECT e.id, e.kind, e.note, e.lat, e.lng, e.signer, e.created_at, w.name AS worker
          FROM shift_events e LEFT JOIN workers w ON w.id = e.worker_id
-         WHERE e.shift_id = ? ORDER BY e.created_at'
+         WHERE e.shift_id = ? AND e.deleted_at IS NULL ORDER BY e.created_at'
     );
     $stmt->bind_param('i', $sid);
     $stmt->execute();
@@ -136,6 +138,19 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
             $row['lng'] = null;
         }
         $events[] = $row;
+    }
+    // Reading somebody's movements is a privileged act on personal data, and
+    // only the write was audited. Recorded when the coordinates were actually
+    // released, and not for a worker reading their own trail -- an audit line
+    // every time somebody opens their own app is noise, not accountability.
+    if ($seesLocation && !$ownTrail && $events) {
+        $withCoords = 0;
+        foreach ($events as $e) {
+            if ($e['lat'] !== null || $e['lng'] !== null) $withCoords++;
+        }
+        if ($withCoords > 0) {
+            audit($conn, (int) $user['id'], 'field.location_read', "shift #$sid ($withCoords located events)", 'shift', $sid);
+        }
     }
     json_out(['events' => $events, 'location_withheld' => !$seesLocation]);
 }
@@ -189,7 +204,10 @@ if (method() === 'POST') {
     // clock events feed timesheets, the hours.
     if ($kind === 'clock_in' || $kind === 'clock_out' || $kind === 'panic_ack') {
         $stmt = $conn->prepare(
-            'SELECT kind FROM shift_events WHERE shift_id = ? AND kind IN ("clock_in","clock_out","panic","panic_ack") ORDER BY id'
+            'SELECT kind FROM shift_events
+              WHERE shift_id = ? AND deleted_at IS NULL
+                AND kind IN ("clock_in","clock_out","panic","panic_ack")
+              ORDER BY id'
         );
         $stmt->bind_param('i', $shiftId);
         $stmt->execute();

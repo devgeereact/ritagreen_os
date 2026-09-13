@@ -106,8 +106,8 @@ if (method() === 'GET') {
     // My upcoming shifts.
     $stmt = $conn->prepare(
         'SELECT s.id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status, c.name AS client,
-                EXISTS(SELECT 1 FROM shift_events e WHERE e.shift_id = s.id AND e.kind = "clock_in") AS clocked_in,
-                EXISTS(SELECT 1 FROM shift_events e WHERE e.shift_id = s.id AND e.kind = "clock_out") AS clocked_out
+                EXISTS(SELECT 1 FROM shift_events e WHERE e.shift_id = s.id AND e.deleted_at IS NULL AND e.kind = "clock_in") AS clocked_in,
+                EXISTS(SELECT 1 FROM shift_events e WHERE e.shift_id = s.id AND e.deleted_at IS NULL AND e.kind = "clock_out") AS clocked_out
          FROM shifts s LEFT JOIN clients c ON c.id = s.client_id
          WHERE s.worker_id = ? AND s.ends_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
          ORDER BY s.starts_at LIMIT 50'
