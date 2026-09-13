@@ -91,6 +91,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 | A work order names who is doing it | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
 | An unpaid break is not paid | `timesheets` | `rg_deduct_break()` in `server/pure.php` | `src/pages/app/Timesheets.tsx` | `server/tests/run.php` |
 | Hours can be traced to the shift worked | `timesheets`, `shifts` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
+| A worker can see their own hours and pay | `timesheets` | `server/me.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | A pay rate is priced as at the date worked | `worker_pay_rates` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
 | Premiums follow the worked interval | `pay_rules`, `bank_holidays` | `rg_premium_segments()` in `server/pure.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
 | Bank holidays are known beyond this year | `bank_holidays` | `rg_bank_holidays()` in `server/pure.php` | — | `server/tests/run.php` |

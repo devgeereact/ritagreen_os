@@ -35,12 +35,15 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import { useAuth } from "@/providers/auth-provider"
 import { Textarea } from "@/components/ui/textarea"
-import type { Timesheet, TimesheetStatus, Worker } from "@/lib/types"
+import type { Shift, Timesheet, TimesheetStatus, Worker } from "@/lib/types"
 import { shortDate, monthBounds, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 type Totals = { pending_minutes: number; approved_minutes: number; rejected_minutes: number }
 type Data = { timesheets: Timesheet[]; totals: Totals; truncated: boolean }
+
+/** Radix Select needs a real value for "none"; translated to null for the server. */
+const NO_SHIFT = "none"
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
@@ -406,7 +409,19 @@ function NewEntryDialog({
   const [start, setStart] = useState("")
   const [end, setEnd] = useState("")
   const [breakMinutes, setBreakMinutes] = useState("0")
+  const [shiftId, setShiftId] = useState(NO_SHIFT)
   const [submitting, setSubmitting] = useState(false)
+
+  // The worker's rota for that day, so hours can be tied to the shift they were
+  // worked on. Only asked for once both the worker and the date are known —
+  // before that there is nothing to look up.
+  const rota = useApi<{ shifts: Shift[] }>(
+    open && workerId && date ? `scheduling.php?from=${date}&to=${date}` : null,
+    [open, workerId, date],
+  )
+  const theirShifts = (rota.data?.shifts ?? []).filter(
+    (sh) => sh.worker_id === Number(workerId) && sh.status !== "cancelled",
+  )
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -424,11 +439,12 @@ function NewEntryDialog({
           start_time: start,
           end_time: end,
           break_minutes: Number(breakMinutes) || 0,
+          shift_id: shiftId === NO_SHIFT ? null : Number(shiftId),
         },
       })
       toast.success("Timesheet logged.")
       onOpenChange(false)
-      setWorkerId(""); setDate(""); setStart(""); setEnd(""); setBreakMinutes("0")
+      setWorkerId(""); setDate(""); setStart(""); setEnd(""); setBreakMinutes("0"); setShiftId(NO_SHIFT)
       onCreated()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not log the timesheet.")
@@ -486,6 +502,27 @@ function NewEntryDialog({
             <p className="text-xs text-muted-foreground">
               An end time on or before the start is an overnight shift, not an error. Pay is on the
               hours worked less the break.
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="shift">Shift (optional)</Label>
+            <Select value={shiftId} onValueChange={setShiftId} disabled={!workerId || !date}>
+              <SelectTrigger id="shift">
+                <SelectValue placeholder="Pick a worker and a date first" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SHIFT}>No linked shift</SelectItem>
+                {theirShifts.map((sh) => (
+                  <SelectItem key={sh.id} value={String(sh.id)}>
+                    {sh.title} · {sh.starts_at.slice(11, 16)}–{sh.ends_at.slice(11, 16)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {workerId && date && theirShifts.length === 0 && !rota.loading
+                ? "Nothing on the rota for them that day. Leave it unlinked — a call-out does not have a shift."
+                : "Linking the hours to the rota entry stops the same shift being claimed twice."}
             </p>
           </div>
           <DialogFooter>

@@ -871,8 +871,8 @@ whose `worker_id` is set; otherwise 403 (`me.php:11`).
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only |
-| POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
+| GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only. Scoped by the token — `worker_id` in the query string is ignored, verified. Shown in the worker app as "My hours this month"; it returned this all along and nothing called it |
+| POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. Runs `rg_claim_check()` first — the deployment gate and the clash check — so a worker with a lapsed credential, or one already booked over that window, is refused with the reason. Division was the only test. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
 | GET | — | — | `{worker, compliance, shifts, open_shifts}` |
 
 Clock-in, clock-out, check-in and panic are not here; they go through

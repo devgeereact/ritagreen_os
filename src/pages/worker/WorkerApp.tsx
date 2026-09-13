@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/providers/auth-provider"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
-import { DIVISION_LABELS } from "@/lib/format"
+import { DIVISION_LABELS, gbp, monthBounds } from "@/lib/format"
+import type { PayslipLine } from "@/lib/types"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
 import { LocationNotice } from "@/components/worker/LocationNotice"
 
@@ -199,9 +200,71 @@ export default function WorkerApp() {
                 </div>
               </section>
             )}
+
+            <MyHours />
           </>
         )}
       </main>
     </div>
+  )
+}
+
+/**
+ * The worker's own hours and pay for the current month.
+ *
+ * me.php?action=payslip has existed and returned this all along, scoped to the
+ * caller's own worker_id, and nothing anywhere called it — the same dead surface
+ * check_in was. Somebody being paid for these hours is the one person who should
+ * be able to see them without asking the office.
+ *
+ * Gross only, and it says so: there is no PAYE, National Insurance or pension
+ * anywhere in the system, so presenting this as take-home would be wrong.
+ */
+function MyHours() {
+  const { from, to } = monthBounds()
+  const { data, loading, error } = useApi<{ lines: PayslipLine[]; totals: { hours: number; gross_pence: number } }>(
+    `me.php?action=payslip&from=${from}&to=${to}`,
+    [from, to],
+  )
+
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold">My hours this month</h2>
+      {loading && <LoadingBlock rows={2} />}
+      {error && <p className="text-sm text-muted-foreground">Your hours could not be loaded.</p>}
+      {data && (
+        <Card>
+          <CardContent className="pt-5">
+            {data.lines.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No approved hours yet this month. Hours appear here once the office has approved them.
+              </p>
+            ) : (
+              <>
+                <ul className="space-y-1.5 text-sm">
+                  {data.lines.map((l, i) => (
+                    <li key={i} className="flex items-baseline justify-between gap-3">
+                      <span className="text-muted-foreground">
+                        {l.work_date} · {l.start_time}–{l.end_time}
+                        {l.break_minutes > 0 ? ` (less ${l.break_minutes}m)` : ""}
+                      </span>
+                      <span className="whitespace-nowrap font-medium">{l.hours.toFixed(2)}h</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 flex items-baseline justify-between border-t pt-3 text-sm">
+                  <span className="font-medium">{data.totals.hours.toFixed(2)} hours</span>
+                  <span className="font-bold">{gbp(data.totals.gross_pence)}</span>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Approved hours only, before tax and any other deductions. Ask the office if
+                  something looks wrong.
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </section>
   )
 }
