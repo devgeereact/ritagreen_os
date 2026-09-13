@@ -181,6 +181,67 @@ check('rejects a partial date', pay_valid_date('2026-03'), false);
 check('rejects trailing text', pay_valid_date("2026-03-01' OR 1=1"), false);
 
 // ---------------------------------------------------------------------------
+group('pay_entry');
+
+// Every one of these sums used to live inside pay_compute()'s result loop, which
+// takes a mysqli and so could not be tested without a database. On a payroll
+// system that meant base pay, the overtime split, the premium application and
+// both roundings had no test at all.
+$standard = ['key' => 'standard', 'mult' => 1.0];
+$night = ['key' => 'night', 'mult' => 1.30];
+$bh = ['key' => 'bank_holiday', 'mult' => 2.00];
+
+// £12.50/hr, eight hours, nothing special about the day.
+$e = pay_entry(1250, 480, 0.0, $standard, 1.5);
+check('plain day: hours', $e['hours'], 8.0);
+check('plain day: base', $e['base_pence'], 10000);
+check('plain day: gross equals base', $e['gross_pence'], 10000);
+check('plain day: no overtime', $e['overtime_hours'], 0.0);
+
+// A night premium lifts gross but never base -- base is what the hours are worth
+// before any uplift, and premium_pence is the difference between the two.
+$e = pay_entry(1250, 480, 0.0, $night, 1.5);
+check('night: base is unchanged', $e['base_pence'], 10000);
+check('night: gross carries the uplift', $e['gross_pence'], 13000);
+
+// The weekly threshold splits a single entry. 36 hours already worked, then an
+// 8-hour day: 4 hours at normal rate, 4 at overtime.
+$e = pay_entry(1000, 480, 36.0, $standard, 1.5);
+check('split entry: normal part', $e['normal_hours'], 4.0);
+check('split entry: overtime part', $e['overtime_hours'], 4.0);
+check('split entry: gross', $e['gross_pence'], 4000 + 6000);
+check('split entry: base ignores the split', $e['base_pence'], 8000);
+
+// Exactly on the threshold is not yet overtime.
+check('40 hours exactly is not overtime', pay_entry(1000, 480, 32.0, $standard, 1.5)['overtime_hours'], 0.0);
+check('one minute past is', pay_entry(1000, 480, 32.1, $standard, 1.5)['overtime_hours'] > 0, true);
+
+// Wholly beyond the threshold: every hour of the entry is overtime.
+$e = pay_entry(1000, 480, 40.0, $standard, 1.5);
+check('wholly overtime: no normal hours', $e['normal_hours'], 0.0);
+check('wholly overtime: gross', $e['gross_pence'], 12000);
+
+// Overtime never pays less than the premium it displaces: a bank-holiday hour
+// does not get cheaper by being the forty-first of the week.
+$e = pay_entry(1000, 480, 40.0, $bh, 1.5);
+check('the higher of overtime and premium wins', $e['gross_pence'], 16000);
+
+// Rounding happens once per entry, on pence.
+$e = pay_entry(1337, 90, 0.0, $standard, 1.5);
+check('part hours round to whole pence', $e['gross_pence'], 2006); // 1.5 x 1337 = 2005.5
+check('a zero-length entry is worth nothing', pay_entry(1250, 0, 0.0, $standard, 1.5)['gross_pence'], 0);
+check('no rate means no pay', pay_entry(0, 480, 0.0, $night, 1.5)['gross_pence'], 0);
+
+// ---------------------------------------------------------------------------
+group('pay_holiday');
+
+// 12.07% of worked hours, valued at base rate.
+$h = pay_holiday(100.0, 1000);
+check('accrues 12.07 per cent', round($h['hours'], 4), 12.07);
+check('valued at base rate', $h['pence'], 12070);
+check('nothing worked accrues nothing', pay_holiday(0.0, 1250)['pence'], 0);
+
+// ---------------------------------------------------------------------------
 group('pay week scan');
 
 // Overtime is a weekly threshold, so a pay period cutting through a week has to

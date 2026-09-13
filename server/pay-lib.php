@@ -72,6 +72,65 @@ function pay_week_scan_end(string $to): string
     return date('Y-m-d', strtotime('sunday this week', strtotime($to)));
 }
 
+/**
+ * The money for one timesheet entry. Pure, so it can be tested.
+ *
+ * All of the arithmetic used to live inside pay_compute()'s result loop, which
+ * takes a mysqli and is therefore untestable without a database -- so base pay,
+ * the overtime split, the premium application and both roundings had no test at
+ * all on a payroll system. Splitting the sums out changes no behaviour; it makes
+ * them checkable.
+ *
+ * $priorWeekHours is what this worker has already worked in the same ISO week.
+ * Overtime applies to the part of THIS entry that crosses the weekly threshold,
+ * so an entry can be part normal and part overtime.
+ *
+ * Money is pence, rounded once per entry. Hours stay floats: they are a
+ * quantity, not an amount.
+ *
+ * @param array{key:string,mult:float} $premium from pay_day_premium()
+ * @return array{hours:float,normal_hours:float,overtime_hours:float,base_pence:int,gross_pence:int}
+ */
+function pay_entry(int $ratePence, int $minutes, float $priorWeekHours, array $premium, float $overtimeMult): array
+{
+    $hours = $minutes / 60.0;
+
+    $normalHours = $hours;
+    $otHours = 0.0;
+    if ($priorWeekHours + $hours > PAY_OT_WEEKLY_THRESHOLD) {
+        $normalHours = max(0.0, PAY_OT_WEEKLY_THRESHOLD - $priorWeekHours);
+        $otHours = $hours - $normalHours;
+    }
+
+    // Overtime never pays less than the day premium it displaces: a bank-holiday
+    // hour does not become cheaper by being the forty-first of the week.
+    $otMult = max($overtimeMult, $premium['mult']);
+
+    return [
+        'hours' => $hours,
+        'normal_hours' => $normalHours,
+        'overtime_hours' => $otHours,
+        'base_pence' => (int) round($ratePence * $hours),
+        'gross_pence' => (int) round($ratePence * ($normalHours * $premium['mult'] + $otHours * $otMult)),
+    ];
+}
+
+/**
+ * Rolled-up holiday accrual for a worked total, valued at base rate.
+ *
+ * Note for whoever owns the pay rules: this accrues on ALL worked hours
+ * including those paid at overtime, and values them at base rather than at
+ * average pay, which understates the statutory figure. That is the existing
+ * behaviour, pinned here rather than changed.
+ *
+ * @return array{hours:float,pence:int}
+ */
+function pay_holiday(float $workedHours, int $ratePence): array
+{
+    $hours = $workedHours * PAY_HOLIDAY_RATE;
+    return ['hours' => $hours, 'pence' => (int) round($ratePence * $hours)];
+}
+
 // Compute per-entry pay across approved timesheets in range.
 // Returns ['workers' => [aggregate...], 'lines' => [entry breakdowns], 'rules' => [...]].
 function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = null): array
@@ -110,20 +169,15 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
         $priorWeek = $weekHours[$wkKey] ?? 0.0;
         $weekHours[$wkKey] = $priorWeek + $hours;
 
-        $normalHours = $hours;
-        $otHours = 0.0;
-        if ($priorWeek + $hours > PAY_OT_WEEKLY_THRESHOLD) {
-            $normalHours = max(0.0, PAY_OT_WEEKLY_THRESHOLD - $priorWeek);
-            $otHours = $hours - $normalHours;
-        }
-        $otMult = max($rules['overtime'], $prem['mult']);
+        $line = pay_entry($rate, (int) $e['minutes'], $priorWeek, $prem, $rules['overtime']);
+        $otHours = $line['overtime_hours'];
 
         // Outside the period: it has filled the week's threshold above, which is
         // the whole reason it was read, and it belongs to a different pay run.
         if ($e['work_date'] < $from || $e['work_date'] > $to) continue;
 
-        $gross = (int) round($rate * ($normalHours * $prem['mult'] + $otHours * $otMult));
-        $base = (int) round($rate * $hours);
+        $gross = $line['gross_pence'];
+        $base = $line['base_pence'];
 
         if (!isset($workers[$wid])) {
             $workers[$wid] = [
@@ -145,9 +199,9 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
     }
 
     foreach ($workers as &$w) {
-        $holHours = $w['hours'] * PAY_HOLIDAY_RATE;
-        $w['holiday_hours'] = round($holHours, 2);
-        $w['holiday_pay_pence'] = (int) round($w['pay_rate_pence'] * $holHours);
+        $hol = pay_holiday($w['hours'], $w['pay_rate_pence']);
+        $w['holiday_hours'] = round($hol['hours'], 2);
+        $w['holiday_pay_pence'] = $hol['pence'];
         $w['premium_pence'] = $w['gross_pence'] - $w['base_pence'];
         $w['hours'] = round($w['hours'], 2);
     }

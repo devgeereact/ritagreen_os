@@ -649,6 +649,11 @@ gross has to ask the same question.
 Only `approved` timesheets are included, and `pay_compute()` excludes archived
 timesheets and archived workers: a soft-deleted entry used to be paid anyway.
 
+The money itself is computed by two pure functions, `pay_entry()` (one entry:
+base, the overtime split, the premium application, both roundings) and
+`pay_holiday()` (rolled-up accrual), both tested in `server/tests/run.php`.
+`pay_compute()` does the querying and calls them.
+
 **Overtime counts the whole ISO week, not the part of it inside the period.**
 The 40-hour threshold is weekly, so `pay_compute()` scans from the Monday of the
 week containing `from` to the Sunday of the week containing `to`
