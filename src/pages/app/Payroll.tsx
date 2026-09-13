@@ -17,22 +17,13 @@ import {
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import type { PayRun, Payslip } from "@/lib/types"
-import { gbp, DIVISION_LABELS } from "@/lib/format"
+import { gbp, monthBounds, DIVISION_LABELS } from "@/lib/format"
 import { exportCsv } from "@/lib/csv"
 import { payslipPdf } from "@/lib/pdf"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
-// First and last day of the current month, as YYYY-MM-DD.
-function monthRange(): { from: string; to: string } {
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  return { from: iso(first), to: iso(last) }
-}
-
 export default function Payroll() {
-  const init = monthRange()
+  const init = monthBounds()
   const [from, setFrom] = useState(init.from)
   const [to, setTo] = useState(init.to)
   const { data, loading, error, reload } = useApi<PayRun>(

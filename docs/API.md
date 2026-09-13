@@ -394,16 +394,16 @@ computed identically everywhere.
 | `notifications.php` | Notification bell | Auth, any role |
 | `offer.php` | Shift offer accept/decline from an SMS link | **Public, token in the URL is the secret** |
 | `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager` |
-| `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager` |
+| `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager`, and the `payroll` zone |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
 | `quotes.php` | Quoting | Office roles throughout, reads included |
 | `references.php` | Reference checks | Office roles throughout, reads included |
 | `reports.php` | Regulatory export packs | `super_admin`/`admin`/`manager` |
-| `scheduling.php` | Shifts, matching, dispatch | Office roles throughout, reads included |
+| `scheduling.php` | Shifts, matching, dispatch, lifecycle | Office roles throughout, reads included |
 | `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
 | `skills.php` | Skills catalogue | Office roles throughout, reads included |
 | `testimonials.php` | Testimonials | **Public read**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `timesheets.php` | Time tracking | Staff to read; create allows `employee`, approve `super_admin`/`admin`/`manager` |
+| `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve and reject `super_admin`/`admin`/`manager` |
 | `users.php` | User and role management | `super_admin`/`admin` |
 | `weather.php` | OpenWeather proxy with shift advisory | Staff |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
@@ -553,11 +553,14 @@ catalogue rather than an error.
 
 ## 16. `scheduling.php`
 
-Shift creation, smart matching and dispatch. Compliance and clash guards live
-in `worker_compliant()` (`scheduling.php:31`) and `has_clash()`
-(`scheduling.php:51`); both consult `certifications` as well as the DBS/SIA
-columns on the worker row, so a valid check recorded in Compliance counts at
-scheduling time.
+Shift creation, lifecycle, smart matching and dispatch. Compliance and clash
+guards live in `worker_compliant()` and `has_clash()`; both consult
+`certifications` as well as the DBS/SIA columns on the worker row, so a valid
+check recorded in Compliance counts at scheduling time.
+
+`has_clash()` excludes archived shifts and the shift being reassigned, so a
+shift never clashes with itself and a soft-deleted booking never blocks a slot.
+The calendar read excludes archived shifts for the same reason.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
@@ -565,6 +568,9 @@ scheduling time.
 | POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
 | POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open` |
 | GET | — | Office roles | `from`, `to` (default: current month) | `{shifts}` for the calendar |
+| POST | `assign` | Office roles | `id`, body `{worker_id}` | `{ok, status, worker, division}`; fills an open shift or moves a scheduled one. Runs the same deployment gate and clash check as creating, so a refusal carries the blocking requirements. 409 on a completed shift |
+| POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; takes the worker off and returns the shift to `open` so it can be broadcast. 409 if nobody is on it |
+| POST | `cancel` | Office roles | `id` | `{ok, status: "cancelled"}`; the row stays on the rota as a record, drawn muted. 409 on a completed shift |
 | POST | — | Office roles | body `{worker_id, title, client_id?, site_name?, starts_at, ends_at}` | `{shift}` 201; 409 on missing right-to-work, a lapsed required check, or an overlapping scheduled shift |
 
 ---
@@ -607,20 +613,38 @@ present, otherwise the shift's assigned worker.
 
 ## 19. `timesheets.php`
 
+Hours are what pay is calculated from, so every branch sits behind
+`can_view_zone($conn, $user, 'payroll')` as well as `require_staff()`. Staff
+alone was not a narrowing: an editor, a trainer or an employee could read every
+worker's hours for every day on record.
+
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Staff | — | `{timesheets, totals: {pending_minutes, approved_minutes}}`, 300 most recent |
-| POST | `approve` | Office roles | `id` | `{ok: true}` |
-| POST | — | Office roles + `employee` | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, end after start, maximum 16 hours |
+| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}}`, 500 most recent in range. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected` |
+| POST | `approve` | Office roles | `id` | `{ok: true}`; records `approved_by` and `decided_at` |
+| POST | `reject` | Office roles | `id`, body `{note}` | `{ok: true}`; the reason is required and stored in `decision_note`. Rejected hours are excluded from pay without deleting the claim |
+| POST | — | Office roles | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours |
 
-Minutes are computed server-side from the times; the client cannot supply them.
+Minutes are computed server-side by `rg_shift_minutes()` in `pure.php`; the
+client cannot supply them. `work_date` is the date the shift **starts**: an end
+time at or before the start means the shift crosses midnight, so a waking night
+recorded as `22:00`–`06:00` is eight hours, not an error. Equal times are
+refused, because nothing distinguishes a mistake from a full 24-hour span. The
+calculation is explicitly UTC, matching the rest of the system, so a night
+spanning a British Summer Time change is not adjusted for it.
 
 ---
 
 ## 20. `payroll.php`
 
-Both routes require office roles and a valid `from`/`to` pair with
-`from <= to`. Only `approved` timesheets are included.
+Both routes require office roles, the `payroll` zone
+(`can_view_zone($conn, $user, 'payroll')`) and a valid `from`/`to` pair with
+`from <= to`. The zone check mirrors `workers.php`, which already hides a single
+worker's `pay_rate_pence` behind it -- the endpoint returning every worker's
+gross has to ask the same question.
+
+Only `approved` timesheets are included, and `pay_compute()` excludes archived
+timesheets and archived workers: a soft-deleted entry used to be paid anyway.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
@@ -708,7 +732,7 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Staff | — | `{jobs}`, emergency first then high then standard |
+| GET | — | Staff | — | `{jobs}`, emergency first then high then standard, 500 most recent. Includes `notes`, which were collected on creation and previously never returned |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
 | POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201; type ∈ care_visit/clean/guard_shift/course/other |
 

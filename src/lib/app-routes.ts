@@ -45,17 +45,16 @@ export type Destination = {
 export const DESTINATIONS: Destination[] = [
   { label: "Command centre", path: "/app", icon: LayoutDashboard, group: "Operations", keywords: "dashboard home overview" },
   { label: "Scheduling", path: "/app/scheduling", icon: CalendarRange, group: "Operations", keywords: "shifts rota cover assign" },
-  { label: "Timetable", path: "/app/timetable", icon: CalendarRange, group: "Operations", keywords: "calendar week" },
-  { label: "Jobs", path: "/app/jobs", icon: Briefcase, group: "Operations", keywords: "vacancies roles" },
+  { label: "Jobs", path: "/app/jobs", icon: Briefcase, group: "Operations", keywords: "work orders visits cleans guard shifts courses" },
   { label: "Field operations", path: "/app/field", icon: MapPin, group: "Operations", keywords: "clock in check calls panic on site" },
-  { label: "Timesheets", path: "/app/timesheets", icon: Clock, group: "Operations", keywords: "hours worked approve" },
+  { label: "Timesheets", path: "/app/timesheets", icon: Clock, group: "Operations", keywords: "hours worked approve timetable time tracking" },
+  { label: "Payroll", path: "/app/payroll", icon: Banknote, group: "Operations", keywords: "pay wages payslips gross premiums holiday accrual" },
   { label: "Incidents", path: "/app/incidents", icon: AlertTriangle, group: "Operations", keywords: "complaints safeguarding accidents" },
 
   { label: "Workers", path: "/app/workers", icon: Users, group: "People", keywords: "staff carers guards cleaners workforce" },
   { label: "Compliance", path: "/app/compliance", icon: ShieldCheck, group: "People", keywords: "dbs sia expiry right to work eligibility" },
   { label: "Recruitment", path: "/app/ats", icon: ClipboardList, group: "People", keywords: "ats applicants candidates hiring onboarding" },
   { label: "Academy", path: "/app/academy", icon: GraduationCap, group: "People", keywords: "training courses learners certificates" },
-  { label: "Payroll", path: "/app/payroll", icon: Banknote, group: "People", keywords: "pay wages payslips" },
 
   { label: "Clients", path: "/app/clients", icon: Building2, group: "Clients & money", keywords: "accounts customers sites" },
   { label: "Enquiries", path: "/app/enquiries", icon: Inbox, group: "Clients & money", keywords: "leads contact form" },

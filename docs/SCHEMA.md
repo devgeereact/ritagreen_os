@@ -142,7 +142,7 @@ Fifty tables. One line each.
 
 | Table | Purpose |
 |---|---|
-| `timesheets` | Worked time awaiting approval. |
+| `timesheets` | Worked time, as claimed and then approved or rejected. |
 | `pay_rules` | Uplift multipliers for night, weekend, bank holiday, overtime. |
 | `bank_holidays` | England and Wales bank-holiday calendar. |
 | `contracts` | Recurring service agreements with rate and SLA. |
@@ -500,24 +500,34 @@ status instead.
 
 ### `timesheets`
 
-Worked time awaiting approval; the input to payroll.
-`CREATE` at `schema.sql:218`.
+Worked time, as claimed and then decided on; the input to payroll.
+`CREATE` at `schema.sql:228`, patched by migrations 013, 014 and 021.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | `id` | INT AUTO_INCREMENT | no | — | Primary key |
 | `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
-| `work_date` | DATE | no | — | |
+| `work_date` | DATE | no | — | The date the shift **starts**; an `end_time` at or before `start_time` means it crossed midnight |
 | `start_time` | TIME | no | — | |
 | `end_time` | TIME | no | — | |
-| `minutes` | INT | no | 0 | Denormalised duration |
-| `status` | ENUM('pending','approved') | no | 'pending' | |
-| `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `minutes` | INT | no | 0 | Denormalised duration, computed by `rg_shift_minutes()` |
+| `status` | ENUM('pending','approved','rejected') | no | 'pending' | `rejected` added by migration 021 |
+| `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL**. Who decided, whichever way |
+| `decided_at` | TIMESTAMP | yes | NULL | When. Migration 021 |
+| `decision_note` | VARCHAR(255) | yes | NULL | Why. Required by the endpoint on a rejection. Migration 021 |
 | `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | Migration 014 |
+| `deleted_at` | TIMESTAMP | yes | NULL | Migration 013 |
 
 Keys: `KEY idx_worker_date (worker_id, work_date)`,
-`KEY idx_ts_approver (approved_by)`. No `deleted_at`, no `updated_at`, no link
-to the `shift` the time was worked on.
+`KEY idx_ts_approver (approved_by)`, `KEY idx_timesheets_deleted (deleted_at)`,
+`KEY idx_ts_status_date (status, work_date)`.
+
+Only `approved` rows reach pay, and `pay_compute()` in `pay-lib.php` also
+excludes rows with `deleted_at` set — it did not, so an archived entry was still
+paid. There is still **no link to the `shift`** the time was worked on: hours
+are recorded independently of the rota and of the clock events in
+`shift_events`, so the three are reconciled by eye rather than by the database.
 
 ### `announcements`
 
@@ -1295,7 +1305,7 @@ The ones where that is a real problem:
 | `invoices` | A financial record. `void` covers cancellation, but an accidental `DELETE` is unrecoverable, and it **cascades to `credit_notes`** (`schema.sql:475`), destroying the credit trail with it. |
 | `quotes` | Commercial record with a unique document number from `counters`; deleting one leaves a permanent gap with no record of why. |
 | `credit_notes` | A refund record. Cascade-deleted along with its invoice. |
-| `timesheets` | The evidentiary basis for what a worker was paid. No soft delete, no `updated_at`, so an edit or removal after approval leaves no trace. |
+| `timesheets` | The evidentiary basis for what a worker was paid. Soft delete (013) and `updated_at` (014) exist; migration 021 adds `decided_at` and `decision_note`, so a decision now records who, when and why. An amendment to the times themselves still leaves no before-and-after. |
 | `incidents` | Accident, RIDDOR and safeguarding records carry statutory retention duties. A hard delete is a compliance failure, and it **cascades to `incident_actions`** (`schema.sql:591`). |
 | `certifications` | Evidence that a worker was cleared to work on a given date. Cascade-deleted with the worker (`schema.sql:148`). |
 | `worker_references` | Vetting evidence. Cascade-deleted with the worker (`schema.sql:401`). |

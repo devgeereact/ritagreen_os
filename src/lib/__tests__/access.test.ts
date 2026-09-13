@@ -104,6 +104,20 @@ describe("rolesFor", () => {
     expect(rolesFor("/app/incidents")).toEqual(OFFICE)
   })
 
+  // Hours are what pay is calculated from, so the screens showing them are
+  // payroll screens. server/migrations/015 gives the payroll zone to the office
+  // alone, and server/timesheets.php and server/payroll.php both enforce it.
+  // These three read as STAFF while the server let any internal account read
+  // every worker's hours, so the two layers agreed and both were wrong.
+  it("keeps other people's hours inside the payroll zone", () => {
+    for (const path of ["/app/timesheets", "/app/timetable", "/app/payroll"]) {
+      expect(rolesFor(path)).toEqual(OFFICE)
+      for (const role of ["editor", "trainer", "employee"] as const) {
+        expect(canAccess(account(role), path)).toBe(false)
+      }
+    }
+  })
+
   it("returns null for a path it does not govern", () => {
     expect(rolesFor("/about")).toBeNull()
   })

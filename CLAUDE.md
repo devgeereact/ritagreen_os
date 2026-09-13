@@ -133,6 +133,25 @@ somebody's health takes the zone check as well as `require_staff()`. `rg_file_re
 same job per file in `server/files.php` — being allowed to open the vault is not permission to
 open everything in it.
 
+**Hours are the payroll zone, not just "internal".** `server/timesheets.php` and
+`server/payroll.php` both take `can_view_zone($conn, $user, 'payroll')` on top of the role
+check, above every branch. `require_staff()` alone was not a narrowing: an editor, a trainer and
+an employee could each read every worker's hours for every day on record, while `workers.php`
+was carefully hiding a single pay rate behind the same zone. `src/lib/access.ts` mirrors it with
+`PAYROLL`, and `src/lib/__tests__/access.test.ts` pins it.
+
+**A shift that ends before it starts is a night shift.** `work_date` is the date the shift
+*starts*, so `22:00`–`06:00` is eight hours. `rg_shift_minutes()` in `server/pure.php` is the
+one place that decides this, and it is explicitly UTC rather than trusting the host's
+`date.timezone` — the same entry must not be worth different money on a laptop and on cPanel.
+Equal times are refused rather than guessed at. The timesheet endpoint used to reject the whole
+case as "the end time must be after the start time", so a business built on waking nights and
+night guarding could not record a night, while `shifts` had stored overnight spans all along.
+
+**Anything that turns hours into money reads `deleted_at`.** `pay_compute()` did not, so a
+soft-deleted timesheet was still paid. Archiving is the disposal route this system has; a query
+that ignores it converts an archive into a silent liability.
+
 **Retention periods are configuration, and they are all NULL.** `server/retention-sweep.php`
 reports by default, acts only with `--go`, acts only where a period is set, and never
 hard-deletes. Do not put a period in code. See `docs/RETENTION.md`.
@@ -209,9 +228,9 @@ generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` 
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
 verification, and the deployment gate — are **built and verified against a local database**.
-Migrations `001`–`020` exist in `server/migrations/` and all twenty are applied locally. The
+Migrations `001`–`021` exist in `server/migrations/` and all twenty-one are applied locally. The
 deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
-pending and that 019 was applied that day, so **`020` is the only one outstanding there** — but
+pending and that 019 was applied that day, so **`020` and `021` are outstanding there** — but
 that is the record talking, not a check against the live database. Confirm with
 `php server/migrate.php --status` on the server before acting on it.
 
@@ -237,6 +256,12 @@ never resolves and the app renders blank on every route. Only `react` is named, 
 **The workbox `globIgnores` patterns must be re-checked against `ls dist/assets` whenever
 chunking changes.** A glob that matches nothing fails silently; that is how 700 kB of office
 code previously re-entered the worker app's install.
+
+**`/app/timetable` is a redirect, not a page.** It was a second, worse copy of Timesheets —
+same endpoint, same totals, same table, same dialog, minus the CSV export and minus the role
+check on its "log time" button — named for a calendar it never was. The week view it implied is
+Scheduling's `timeGridWeek`. The route stays as a `<Navigate>` so old links still land
+somewhere; do not rebuild the page.
 
 **Two registries describe the app's pages, and they answer different questions.**
 `src/lib/app-routes.ts` is the page list: label, path, icon, search keywords. The ⌘K palette is

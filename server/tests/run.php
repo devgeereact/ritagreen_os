@@ -146,6 +146,32 @@ check('clocked in beats no-show', rg_field_status(['clock_in'], $start, $end, $a
 check('other events do not mask a no-show', rg_field_status(['note'], $start, $end, $at('2026-03-01 11:00:00')), 'no_show');
 
 // ---------------------------------------------------------------------------
+group('rg_shift_minutes');
+
+check('a plain day shift', rg_shift_minutes('2026-03-02', '09:00', '17:00'), 480);
+check('minutes are not lost', rg_shift_minutes('2026-03-02', '09:15', '17:45'), 510);
+
+// The defect this exists to catch: an end at or before the start was rejected
+// as "the end time must be after the start time", so a waking night or a night
+// guard -- the shifts this business actually runs -- could not be recorded at
+// all, while the shifts table had stored overnight spans all along.
+check('crosses midnight', rg_shift_minutes('2026-03-02', '22:00', '06:00'), 480);
+check('a twelve-hour waking night', rg_shift_minutes('2026-03-02', '20:00', '08:00'), 720);
+check('ends exactly at midnight', rg_shift_minutes('2026-03-02', '20:00', '00:00'), 240);
+check('starts at midnight', rg_shift_minutes('2026-03-02', '00:00', '08:00'), 480);
+
+// Equal times are ambiguous -- a zero-length entry or a full 24 hours -- so the
+// function refuses to guess and the caller rejects it.
+check('equal times are zero', rg_shift_minutes('2026-03-02', '09:00', '09:00'), 0);
+check('unparseable is zero', rg_shift_minutes('2026-03-02', 'not-a-time', '17:00'), 0);
+check('a UTC night is not shortened by BST', rg_shift_minutes('2026-03-28', '23:00', '07:00'), 480);
+
+// Deliberately UTC, and pinned here so it cannot drift with the host's
+// date.timezone: the night the clocks go forward is still counted as eight
+// hours. The whole system stores UTC, so this is consistent rather than
+// correct-in-wall-clock-terms, and that trade is documented on the function.
+
+// ---------------------------------------------------------------------------
 group('pay_valid_date');
 
 check('accepts an ISO date', pay_valid_date('2026-03-01'), true);

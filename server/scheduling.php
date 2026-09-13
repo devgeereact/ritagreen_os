@@ -5,6 +5,9 @@
 // POST /scheduling.php {worker_id, title, client_id?, site_name?, starts_at, ends_at}  -> assign a worker
 // POST /scheduling.php?action=open {title, division, client_id?, site_name?, starts_at, ends_at} -> open shift
 // POST /scheduling.php?action=broadcast&id=N  -> offer an open shift to eligible workers (SMS + in-app)
+// POST /scheduling.php?action=assign&id=N {worker_id} -> fill an open shift, or move it to someone else
+// POST /scheduling.php?action=unassign&id=N  -> return a scheduled shift to open
+// POST /scheduling.php?action=cancel&id=N    -> cancel a shift (the rota keeps the record)
 //
 // Guards: no double-booking; a worker with a lapsed required check (DBS for care,
 // SIA for security) or no right to work cannot be scheduled or matched.
@@ -52,15 +55,38 @@ function worker_compliant(mysqli $conn, array $w): bool
 }
 
 // Does this worker have an overlapping scheduled shift?
-function has_clash(mysqli $conn, int $workerId, string $startSql, string $endSql): bool
+function has_clash(mysqli $conn, int $workerId, string $startSql, string $endSql, int $exceptShiftId = 0): bool
 {
+    // $exceptShiftId is the shift being reassigned: a shift must not be found to
+    // clash with itself. Archived rows are excluded because an archived booking
+    // is not a booking, and one left behind would block the slot forever.
     $stmt = $conn->prepare(
         'SELECT id FROM shifts
-         WHERE worker_id = ? AND status = "scheduled" AND starts_at < ? AND ends_at > ? LIMIT 1'
+         WHERE worker_id = ? AND status = "scheduled" AND deleted_at IS NULL
+           AND id <> ? AND starts_at < ? AND ends_at > ? LIMIT 1'
     );
-    $stmt->bind_param('iss', $workerId, $endSql, $startSql);
+    $stmt->bind_param('iiss', $workerId, $exceptShiftId, $endSql, $startSql);
     $stmt->execute();
     return (bool) $stmt->get_result()->fetch_assoc();
+}
+
+// Load a shift for a lifecycle change, or fail with the reason.
+function load_shift_for_change(mysqli $conn, int $id): array
+{
+    if ($id <= 0) fail('A shift is required.');
+    $stmt = $conn->prepare(
+        'SELECT id, worker_id, division, title, starts_at, ends_at, status
+         FROM shifts WHERE id = ? AND deleted_at IS NULL'
+    );
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $shift = $stmt->get_result()->fetch_assoc();
+    if (!$shift) fail('Shift not found.', 404);
+    // A shift that has already been worked is a record, not a plan. Changing who
+    // was on it after the fact would contradict the field events and the
+    // timesheet already attached to it.
+    if ($shift['status'] === 'completed') fail('That shift is already complete.', 409);
+    return $shift;
 }
 
 // Classify a shift window into the availability bucket it needs.
@@ -196,6 +222,86 @@ if ($action === 'broadcast' && method() === 'POST') {
     json_out(['offered' => $count]);
 }
 
+// ---------- Shift lifecycle: assign, unassign, cancel ----------
+//
+// A shift could be created and broadcast and then never changed again. If the
+// worker fell ill, the client moved the booking or the shift was raised against
+// the wrong person, the rota had no answer: the row stayed, wrong, and the only
+// way out was the database. Creating is not the same as scheduling.
+if (in_array($action, ['assign', 'unassign', 'cancel'], true) && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    $shift = load_shift_for_change($conn, $id);
+    $uid = (int) $user['id'];
+
+    if ($action === 'cancel') {
+        if ($shift['status'] === 'cancelled') json_out(['ok' => true, 'status' => 'cancelled']);
+        $stmt = $conn->prepare('UPDATE shifts SET status = "cancelled" WHERE id = ?');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        audit($conn, $uid, 'shift.cancel', $shift['title'] . " (#$id)");
+        json_out(['ok' => true, 'status' => 'cancelled']);
+    }
+
+    if ($action === 'unassign') {
+        if ($shift['worker_id'] === null) fail('That shift has nobody on it.', 409);
+        // Back to open rather than cancelled: the work still needs covering, and
+        // an open shift is the thing broadcast can offer round.
+        $stmt = $conn->prepare('UPDATE shifts SET worker_id = NULL, status = "open" WHERE id = ?');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        audit($conn, $uid, 'shift.unassign', "worker #{$shift['worker_id']} off shift #$id");
+        json_out(['ok' => true, 'status' => 'open']);
+    }
+
+    // assign — fill an open shift, or move a scheduled one to somebody else.
+    $workerId = (int) (body()['worker_id'] ?? 0);
+    if ($workerId <= 0) fail('A worker is required.');
+
+    $stmt = $conn->prepare(
+        'SELECT id, name, division FROM workers WHERE id = ? AND deleted_at IS NULL'
+    );
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+
+    // The same gate as creating a shift, for the same reason: who ends up on the
+    // rota is what matters, not which screen put them there.
+    $gate = rg_deployment_check($conn, $workerId, $w['division']);
+    if (!$gate['eligible']) {
+        audit($conn, $uid, 'shift.blocked', "worker #$workerId: " . $gate['reason']);
+        json_out([
+            'error' => $w['name'] . ' cannot be deployed. ' . $gate['reason'],
+            'eligibility' => [
+                'status' => $gate['status'],
+                'score' => $gate['score'],
+                'blocking' => array_map(
+                    static fn(array $b): array => ['requirement' => $b['label'], 'reason' => $b['reason']],
+                    $gate['blocking']
+                ),
+            ],
+        ], 409);
+    }
+    if (has_clash($conn, $workerId, $shift['starts_at'], $shift['ends_at'], $id)) {
+        fail($w['name'] . ' is already booked for an overlapping shift.', 409);
+    }
+
+    // The shift takes the worker's division: a cleaner covering a cleaning shift
+    // keeps it cleaning, and an open shift raised under the wrong one is
+    // corrected by the assignment rather than left to disagree with its worker.
+    $division = $w['division'];
+    $stmt = $conn->prepare(
+        'UPDATE shifts SET worker_id = ?, division = ?, status = "scheduled" WHERE id = ?'
+    );
+    $stmt->bind_param('isi', $workerId, $division, $id);
+    $stmt->execute();
+
+    $was = $shift['worker_id'] !== null ? "from worker #{$shift['worker_id']} " : '';
+    audit($conn, $uid, 'shift.assign', "shift #$id {$was}to worker #$workerId");
+    json_out(['ok' => true, 'status' => 'scheduled', 'worker' => $w['name'], 'division' => $division]);
+}
+
 // ---------- Calendar read ----------
 if (method() === 'GET') {
     $from = $_GET['from'] ?? date('Y-m-01');
@@ -209,7 +315,8 @@ if (method() === 'GET') {
          FROM shifts s
          LEFT JOIN workers w ON w.id = s.worker_id
          LEFT JOIN clients c ON c.id = s.client_id
-         WHERE s.starts_at >= ? AND s.starts_at < DATE_ADD(?, INTERVAL 1 DAY)
+         WHERE s.deleted_at IS NULL
+           AND s.starts_at >= ? AND s.starts_at < DATE_ADD(?, INTERVAL 1 DAY)
          ORDER BY s.starts_at'
     );
     $stmt->bind_param('ss', $from, $to);

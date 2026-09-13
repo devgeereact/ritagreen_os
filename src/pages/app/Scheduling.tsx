@@ -4,7 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid"
 import timeGridPlugin from "@fullcalendar/timegrid"
 import interactionPlugin from "@fullcalendar/interaction"
 import type { DatesSetArg } from "@fullcalendar/core"
-import { Plus, Radio, Sparkles, CalendarPlus } from "lucide-react"
+import { Plus, Radio, Sparkles, CalendarPlus, UserMinus, Ban } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -30,7 +30,15 @@ import {
 import { api, ApiError } from "@/lib/api"
 import type { Shift, Client, Skill, MatchWorker, ShiftTemplate } from "@/lib/types"
 import { DIVISION_ACCENTS, DIVISION_LABELS } from "@/lib/format"
-import { ErrorBlock } from "@/components/app/state-block"
+import { ErrorBlock, LoadingBlock } from "@/components/app/state-block"
+
+/** "2026-09-10 20:00:00" -> "10 Sep 2026, 20:00". The API returns SQL datetimes. */
+function whenLabel(sql: string): string {
+  const [date, time] = sql.replace("T", " ").split(" ")
+  const d = new Date(`${date}T00:00:00Z`)
+  const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+  return `${day}, ${(time ?? "").slice(0, 5)}`
+}
 
 function isoDate(d: Date) {
   const y = d.getFullYear()
@@ -50,8 +58,13 @@ export default function Scheduling() {
   const [range, setRange] = useState<{ from: string; to: string } | null>(null)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+
+  /** Identifies the request the visible data should correspond to. */
+  const fetchKey = range ? `${range.from}|${range.to}|${refreshKey}` : null
 
   // One fetch path, driven by the visible range and a manual refresh counter.
   //
@@ -72,10 +85,19 @@ export default function Scheduling() {
         if (!alive) return
         setError(err instanceof ApiError ? err.message : "Could not load the rota.")
       })
+      .finally(() => {
+        if (alive) setLoadedKey(fetchKey)
+      })
     return () => {
       alive = false
     }
-  }, [range, refreshKey])
+  }, [range, refreshKey, fetchKey])
+
+  // Derived rather than a setState in the effect body: a request is outstanding
+  // whenever the range being shown is not the one that last came back.
+  const loading = fetchKey !== null && loadedKey !== fetchKey
+
+  const selected = shifts.find((s) => s.id === selectedId) ?? null
 
   const reload = () => setRefreshKey((k) => k + 1)
 
@@ -97,14 +119,29 @@ export default function Scheduling() {
 
   const openShifts = shifts.filter((s) => s.status === "open")
 
-  const events = shifts.map((s) => ({
-    id: String(s.id),
-    title: s.worker ? `${s.title} — ${s.worker}` : `OPEN — ${s.title}`,
-    start: s.starts_at.replace(" ", "T"),
-    end: s.ends_at.replace(" ", "T"),
-    backgroundColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#0C447C",
-    borderColor: s.status === "open" ? "#B7791F" : DIVISION_ACCENTS[s.division] ?? "#0C447C",
-  }))
+  // A cancelled shift stays in the data -- it is a record that the booking
+  // existed -- but it is drawn muted and struck through so it cannot be mistaken
+  // for cover that is still standing.
+  const events = shifts.map((s) => {
+    const cancelled = s.status === "cancelled"
+    const colour = cancelled
+      ? "#94A3B8"
+      : s.status === "open"
+        ? "#B7791F"
+        : DIVISION_ACCENTS[s.division] ?? "#0C447C"
+    return {
+      id: String(s.id),
+      title: cancelled
+        ? `CANCELLED — ${s.title}`
+        : s.worker
+          ? `${s.title} — ${s.worker}`
+          : `OPEN — ${s.title}`,
+      start: s.starts_at.replace(" ", "T"),
+      end: s.ends_at.replace(" ", "T"),
+      backgroundColor: colour,
+      borderColor: colour,
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -121,7 +158,8 @@ export default function Scheduling() {
         </div>
       </div>
 
-      {error && <ErrorBlock message={error} onRetry={reload} />}
+      {error && !loading && <ErrorBlock message={error} onRetry={reload} />}
+      {loading && shifts.length === 0 && <LoadingBlock rows={4} />}
 
       {openShifts.length > 0 && (
         <Card>
@@ -132,16 +170,21 @@ export default function Scheduling() {
             <div className="space-y-2">
               {openShifts.map((s) => (
                 <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-                  <div>
-                    <p className="text-sm font-medium">{s.title}</p>
+                  <button type="button" className="text-left" onClick={() => setSelectedId(s.id)}>
+                    <p className="text-sm font-medium underline-offset-4 hover:underline">{s.title}</p>
                     <p className="text-xs text-muted-foreground">
-                      {DIVISION_LABELS[s.division] ?? s.division} · {s.starts_at.slice(0, 16).replace("T", " ")}
+                      {DIVISION_LABELS[s.division] ?? s.division} · {whenLabel(s.starts_at)}
                       {s.site_name ? ` · ${s.site_name}` : ""}
                     </p>
+                  </button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setSelectedId(s.id)}>
+                      Assign
+                    </Button>
+                    <Button size="sm" onClick={() => broadcast(s.id)}>
+                      <Radio className="mr-1 size-4" /> Broadcast to eligible
+                    </Button>
                   </div>
-                  <Button size="sm" onClick={() => broadcast(s.id)}>
-                    <Radio className="mr-1 size-4" /> Broadcast to eligible
-                  </Button>
                 </div>
               ))}
             </div>
@@ -157,6 +200,10 @@ export default function Scheduling() {
           height="auto"
           events={events}
           datesSet={onDatesSet}
+          eventClick={(arg) => {
+            arg.jsEvent.preventDefault()
+            setSelectedId(Number(arg.event.id))
+          }}
           nowIndicator
           firstDay={1}
         />
@@ -164,6 +211,7 @@ export default function Scheduling() {
 
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#B7791F" }} /> open</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#94A3B8" }} /> cancelled</span>
         {Object.entries(DIVISION_ACCENTS).map(([id, color]) => (
           <span key={id} className="flex items-center gap-1.5 capitalize">
             <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -171,8 +219,204 @@ export default function Scheduling() {
           </span>
         ))}
       </div>
+
+      <ShiftDialog shift={selected} onClose={() => setSelectedId(null)} onChanged={reload} />
     </div>
   )
+}
+
+/**
+ * One shift, and the things that can be done to it after it exists.
+ *
+ * Scheduling could previously only create. If the worker fell ill, the client
+ * moved the booking or it went to the wrong person, the rota had no answer and
+ * the row stayed wrong. Assigning here runs the same deployment gate and clash
+ * check as creating does -- who ends up on the rota is what matters, not which
+ * screen put them there -- so a refusal arrives with the reason attached.
+ */
+function ShiftDialog({
+  shift,
+  onClose,
+  onChanged,
+}: {
+  shift: Shift | null
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [matches, setMatches] = useState<MatchWorker[] | null>(null)
+  const [matching, setMatching] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+
+  function close() {
+    setMatches(null)
+    setConfirmCancel(false)
+    onClose()
+  }
+
+  async function findEligible() {
+    if (!shift) return
+    setMatching(true)
+    setMatches(null)
+    try {
+      const q = new URLSearchParams({
+        action: "match",
+        division: shift.division,
+        starts_at: shift.starts_at,
+        ends_at: shift.ends_at,
+      })
+      const r = await api<{ workers: MatchWorker[] }>(`scheduling.php?${q.toString()}`)
+      setMatches(r.workers)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not match workers.")
+    } finally {
+      setMatching(false)
+    }
+  }
+
+  // One path for all three lifecycle actions: they differ only in what they send
+  // and what they say afterwards.
+  async function act(action: "assign" | "unassign" | "cancel", body: object, done: string) {
+    if (!shift) return
+    setBusy(true)
+    try {
+      await api(`scheduling.php?action=${action}&id=${shift.id}`, { method: "POST", body })
+      toast.success(done)
+      close()
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not update the shift.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const live = shift !== null && shift.status !== "cancelled" && shift.status !== "completed"
+
+  return (
+    <Dialog open={shift !== null} onOpenChange={(o) => !o && close()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        {shift && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{shift.title}</DialogTitle>
+              <DialogDescription>
+                {whenLabel(shift.starts_at)} to {whenLabel(shift.ends_at).split(", ")[1]} ·{" "}
+                {DIVISION_LABELS[shift.division] ?? shift.division}
+                {shift.client ? ` · ${shift.client}` : ""}
+                {shift.site_name ? ` · ${shift.site_name}` : ""}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant={shift.status === "cancelled" ? "outline" : "default"} className="capitalize">
+                {shift.status}
+              </Badge>
+              <span className="text-muted-foreground">
+                {shift.worker ? `Covered by ${shift.worker}` : "Nobody assigned"}
+              </span>
+            </div>
+
+            {live && (
+              <div className="grid gap-2 rounded-lg border p-3">
+                <div className="flex items-center justify-between">
+                  <Label>{shift.worker ? "Move to another worker" : "Assign a worker"}</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={findEligible} disabled={matching}>
+                    <Sparkles className="mr-1 size-3.5" /> {matching ? "Matching…" : "Find eligible"}
+                  </Button>
+                </div>
+                {matches === null ? (
+                  <p className="text-xs text-muted-foreground">
+                    Compliant, available and clash-free workers for this slot appear here.
+                  </p>
+                ) : matches.length === 0 ? (
+                  <p className="text-xs text-destructive">
+                    Nobody is eligible for this slot. Broadcast it, or widen the shift.
+                  </p>
+                ) : (
+                  <div className="grid gap-1">
+                    {matches.map((m) => (
+                      <button
+                        type="button"
+                        key={m.id}
+                        disabled={busy}
+                        onClick={() => act("assign", { worker_id: m.id }, `${m.name} is on this shift.`)}
+                        className="flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+                      >
+                        <span>{m.name} · <span className="text-muted-foreground">{m.role}</span></span>
+                        <Badge variant="outline">{m.upcoming_shifts} upcoming</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="gap-2 sm:justify-between">
+              {live ? (
+                <>
+                  <div className="flex gap-2">
+                    {shift.worker && (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => act("unassign", {}, "Shift is open again.")}
+                      >
+                        <UserMinus className="mr-1 size-4" /> Take off shift
+                      </Button>
+                    )}
+                    {shift.status === "open" && (
+                      <Button variant="outline" disabled={busy} onClick={() => void broadcastFrom(shift.id, onChanged, close)}>
+                        <Radio className="mr-1 size-4" /> Broadcast
+                      </Button>
+                    )}
+                  </div>
+                  {confirmCancel ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Cancel this shift?</span>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>
+                        Keep it
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => act("cancel", {}, "Shift cancelled.")}
+                      >
+                        {busy ? "Cancelling…" : "Yes, cancel"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)}>
+                      <Ban className="mr-1 size-4" /> Cancel shift
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {shift.status === "completed"
+                    ? "This shift has been worked. It is a record now, not a plan."
+                    : "This shift is cancelled. Create a new one to re-cover the slot."}
+                </p>
+              )}
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Broadcast from inside the shift dialog, then close it. */
+async function broadcastFrom(id: number, onChanged: () => void, close: () => void) {
+  try {
+    const r = await api<{ offered: number }>(`scheduling.php?action=broadcast&id=${id}`, { method: "POST", body: {} })
+    toast.success(`Offer sent to ${r.offered} eligible worker${r.offered === 1 ? "" : "s"}.`)
+    close()
+    onChanged()
+  } catch (err) {
+    toast.error(err instanceof ApiError ? err.message : "Could not broadcast.")
+  }
 }
 
 const WEEKDAYS = [

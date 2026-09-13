@@ -222,6 +222,37 @@ function rg_field_status(array $kinds, string $startsAt, string $endsAt, ?int $n
     return 'scheduled';
 }
 
+/**
+ * Worked minutes for a shift recorded as a start date plus two clock times.
+ *
+ * work_date is the date the shift STARTS. An end EARLIER than the start means
+ * the shift crosses midnight -- a waking night, a night guard -- so it belongs
+ * to the following day, not to an earlier moment on the same one. Treating that
+ * as an error meant a business that runs nights could not record a night, while
+ * the shifts table had stored overnight spans all along.
+ *
+ * Equal times are ambiguous: nothing distinguishes a mistake from a full 24-hour
+ * span, so this refuses to guess and returns 0. Unparseable times return 0 too.
+ * The caller decides what a zero or an implausible duration means.
+ *
+ * Computed in UTC, explicitly, because the rest of the system is: schema.sql
+ * sets time_zone = '+00:00' and every stored timestamp is UTC. Relying on the
+ * host's date.timezone instead would make the same entry worth different money
+ * on a laptop and on cPanel. One consequence worth stating plainly: a night
+ * spanning a British Summer Time change is NOT adjusted for it, so 23:00-07:00
+ * over the spring change counts as 8 hours, not the 7 the worker was on site.
+ */
+function rg_shift_minutes(string $workDate, string $startTime, string $endTime): int
+{
+    $utc = new DateTimeZone('UTC');
+    $start = date_create_immutable("$workDate $startTime", $utc);
+    $end = date_create_immutable("$workDate $endTime", $utc);
+    if ($start === false || $end === false) return 0;
+    if ($end == $start) return 0;
+    if ($end < $start) $end = $end->modify('+1 day');
+    return (int) round(($end->getTimestamp() - $start->getTimestamp()) / 60);
+}
+
 // ---------------------------------------------------------- compliance engine
 
 /**

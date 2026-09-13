@@ -327,6 +327,15 @@ export type Shift = {
   status: "open" | "scheduled" | "completed" | "cancelled"
 }
 
+/**
+ * One worked period, as claimed and then decided on.
+ *
+ * work_date is the date the shift STARTS: an end_time at or before start_time
+ * means it ran past midnight, which is why minutes is the server's number and
+ * not something to recompute from the two clock times here.
+ */
+export type TimesheetStatus = "pending" | "approved" | "rejected"
+
 export type Timesheet = {
   id: number
   worker_id: number
@@ -336,7 +345,10 @@ export type Timesheet = {
   start_time: string
   end_time: string
   minutes: number
-  status: "pending" | "approved"
+  status: TimesheetStatus
+  decided_at: string | null
+  decision_note: string | null
+  decided_by: string | null
 }
 
 export type Announcement = {
@@ -415,6 +427,7 @@ export type Job = {
   priority: "emergency" | "high" | "standard"
   status: "booked" | "assigned" | "in_progress" | "done" | "cancelled"
   scheduled_for: string | null
+  notes: string | null
   created_at: string
 }
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ReactElement } from "react"
-import { createBrowserRouter } from "react-router-dom"
+import { createBrowserRouter, Navigate } from "react-router-dom"
 
 import PublicLayout from "@/layouts/PublicLayout"
 import BareLayout from "@/layouts/BareLayout"
@@ -69,7 +69,6 @@ const Scheduling = lazy(() => import("@/pages/app/Scheduling"))
 const Jobs = lazy(() => import("@/pages/app/Jobs"))
 const Quotes = lazy(() => import("@/pages/app/Quotes"))
 const Contracts = lazy(() => import("@/pages/app/Contracts"))
-const Timetable = lazy(() => import("@/pages/app/Timetable"))
 const Timesheets = lazy(() => import("@/pages/app/Timesheets"))
 const Payroll = lazy(() => import("@/pages/app/Payroll"))
 const Bookings = lazy(() => import("@/pages/app/Bookings"))
@@ -180,7 +179,13 @@ export const router = createBrowserRouter([
           { path: "inbox", element: page(<Mailbox />) },
           { path: "workers", element: page(<Workers />) },
           { path: "scheduling", element: page(<Scheduling />) },
-          { path: "timetable", element: page(<Timetable />) },
+          // /app/timetable was a second, worse copy of Timesheets: the same
+          // endpoint, the same totals, the same table and the same dialog, minus
+          // the CSV export and minus the role check on the "log time" button.
+          // It was named for a calendar it never was -- the week view it implied
+          // is Scheduling's timeGridWeek. Kept as a redirect so existing links
+          // and bookmarks still land on the page that does the work.
+          { path: "timetable", element: <Navigate to="/app/timesheets" replace /> },
           { path: "timesheets", element: page(<Timesheets />) },
           { path: "payroll", element: page(<Payroll />) },
           { path: "jobs", element: page(<Jobs />) },

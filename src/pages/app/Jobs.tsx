@@ -73,6 +73,9 @@ export default function Jobs() {
   async function setStatus(id: number, status: Job["status"]) {
     try {
       await api(`jobs.php?action=status&id=${id}`, { method: "POST", body: { status } })
+      // Changing a job's state through a dropdown gave no acknowledgement at
+      // all, so the only way to know it had saved was to watch the row redraw.
+      toast.success(`Job marked ${status.replace("_", " ")}.`)
       reload()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not update the job.")
@@ -140,7 +143,14 @@ export default function Jobs() {
             <TableBody>
               {filtered.map((j) => (
                 <TableRow key={j.id}>
-                  <TableCell className="font-medium">{j.title}</TableCell>
+                  <TableCell className="font-medium">
+                    {j.title}
+                    {j.notes && (
+                      <p className="mt-0.5 max-w-sm text-xs font-normal leading-snug text-muted-foreground">
+                        {j.notes}
+                      </p>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{DIVISION_LABELS[j.division] ?? j.division}</TableCell>
                   <TableCell className="text-muted-foreground">{j.client || "—"}</TableCell>
                   <TableCell>

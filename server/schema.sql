@@ -931,3 +931,12 @@ ALTER TABLE consent_log ADD INDEX IF NOT EXISTS idx_consent_email_kind (email, k
 ALTER TABLE contact_enquiries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
 ALTER TABLE integration_submissions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+
+-- A timesheet decision (migration 021). The CREATE above predates rejection:
+-- a manager could only ever agree with the hours in front of them. Approval
+-- recorded who but not when, and never why.
+ALTER TABLE timesheets
+  MODIFY COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending';
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP NULL DEFAULT NULL AFTER approved_by;
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS decision_note VARCHAR(255) NULL DEFAULT NULL AFTER decided_at;
+ALTER TABLE timesheets ADD INDEX IF NOT EXISTS idx_ts_status_date (status, work_date);

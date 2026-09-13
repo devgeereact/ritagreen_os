@@ -13,11 +13,15 @@ $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {
     $res = $conn->query(
+        // notes are collected when a job is raised and were never returned, so
+        // whatever the office wrote about the visit was invisible from the moment
+        // the dialog closed.
         'SELECT j.id, j.client_id, c.name AS client, j.division, j.type, j.title,
-                j.priority, j.status, j.scheduled_for, j.created_at
+                j.priority, j.status, j.scheduled_for, j.notes, j.created_at
          FROM jobs j LEFT JOIN clients c ON c.id = j.client_id
          WHERE j.deleted_at IS NULL
-         ORDER BY FIELD(j.priority,"emergency","high","standard"), j.created_at DESC'
+         ORDER BY FIELD(j.priority,"emergency","high","standard"), j.created_at DESC
+         LIMIT 500'
     );
     $jobs = [];
     while ($row = $res->fetch_assoc()) {
@@ -87,6 +91,7 @@ if (method() === 'POST') {
             'id' => (int) $id, 'client_id' => $clientId, 'client' => null,
             'division' => $division, 'type' => $type, 'title' => $title,
             'priority' => $priority, 'status' => 'booked', 'scheduled_for' => $scheduledVal,
+            'notes' => $notesVal,
         ],
     ], 201);
 }

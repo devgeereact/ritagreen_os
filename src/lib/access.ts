@@ -26,6 +26,17 @@ const OFFICE_PLUS_TRAINER: Role[] = [...OFFICE, "trainer"]
 const COMPLIANCE: Role[] = [...OFFICE, "trainer", "employee"]
 
 /**
+ * Roles holding the 'payroll' zone in server/migrations/015.
+ *
+ * Only the office. Hours are what pay is calculated from, so the screens that
+ * show them are payroll screens: server/timesheets.php and server/payroll.php
+ * both call can_view_zone($conn, $user, 'payroll'), and this mirrors that. It
+ * read as STAFF here while the server let any internal account read every
+ * worker's hours, so the two agreed with each other and both were wrong.
+ */
+const PAYROLL: Role[] = [...OFFICE]
+
+/**
  * Is this an internal staff account, as opposed to a worker or client login?
  *
  * Mirrors is_staff() in server/lib.php, and for the same reason: role alone
@@ -45,11 +56,13 @@ export function isStaff(user: Pick<User, "role" | "client_id" | "worker_id">): b
 const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   // Operations
   { path: "/app/scheduling", roles: OFFICE },
-  { path: "/app/timetable", roles: STAFF },
+  // /app/timetable is a redirect to /app/timesheets; the rule stays so the
+  // redirect itself is behind the same gate as its destination.
+  { path: "/app/timetable", roles: PAYROLL },
   { path: "/app/jobs", roles: STAFF },
   { path: "/app/field", roles: STAFF },
-  { path: "/app/timesheets", roles: STAFF },
-  { path: "/app/payroll", roles: OFFICE },
+  { path: "/app/timesheets", roles: PAYROLL },
+  { path: "/app/payroll", roles: PAYROLL },
 
   // People
   { path: "/app/workers", roles: COMPLIANCE },

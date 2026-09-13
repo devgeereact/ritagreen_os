@@ -143,7 +143,7 @@ Legal · NotFoundPublic.
 ForgotPassword · ResetPassword · GoogleCallback.
 
 **Internal CMS (`src/pages/app/`, lazy):** Dashboard · Workers · Compliance · ATS · Academy ·
-AcademyDetail · Scheduling · Timetable · Jobs · FieldOps · Timesheets · Payroll · Clients ·
+AcademyDetail · Scheduling · Jobs · FieldOps · Timesheets · Payroll · Clients ·
 ClientDetail · Bookings · Enquiries · Quotes · Contracts · Invoicing · Incidents · Files ·
 Reports · Analytics · Insights · Comms · Mailbox · Notifications · Blog · ContentStudio ·
 Testimonials · Settings · Profile · Help · SmokeTest.
@@ -152,7 +152,7 @@ Testimonials · Settings · Profile · Help · SmokeTest.
 **Worker:** WorkerApp (`/m`) — own compliance, shifts, open shifts to claim, clock in/out.
 
 Audit every one of them in Phase 2 and Phase 3. Several are thin, several duplicate each other
-(Analytics/Insights/Reports; Jobs/Scheduling/Timetable; Comms/Mailbox/Notifications), and the
+(Analytics/Insights/Reports; Comms/Mailbox/Notifications), and the
 CMS is thirty-four links deep for a business whose owner mostly wants to know what needs
 attention today.
 
@@ -645,9 +645,10 @@ states · empty states · error handling · success feedback · micro-interactio
 Identify: confusing flows · duplicate pages · dead ends · feature overload · hidden actions ·
 poor accessibility · visual inconsistencies.
 
-Start with the four that are known to be crowded: Analytics/Insights/Reports;
-Jobs/Scheduling/Timetable; Comms/Mailbox/Notifications; Workers/Compliance/ATS/Profile now that
-one person record exists and the separate applicant and worker views should have merged.
+Start with the three that are known to be crowded: Analytics/Insights/Reports;
+Comms/Mailbox/Notifications; Workers/Compliance/ATS/Profile now that one person record exists
+and the separate applicant and worker views should have merged. Timetable was the fourth and is
+resolved: it duplicated Timesheets outright and is now a redirect to it.
 
 ## PHASE 3 — UI AUDIT
 

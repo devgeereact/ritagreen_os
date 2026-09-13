@@ -15,7 +15,6 @@ import {
   Star,
   Users,
   CalendarRange,
-  Clock,
   Clock4,
   Banknote,
   CalendarPlus,
@@ -98,7 +97,6 @@ const NAV_GROUPS: { label?: string; items: { title: string; url: string; icon: t
     label: "Operations",
     items: [
       { title: "Scheduling", url: "/app/scheduling", icon: CalendarRange },
-      { title: "Timetable", url: "/app/timetable", icon: Clock },
       { title: "Jobs", url: "/app/jobs", icon: ClipboardList },
       { title: "Field ops", url: "/app/field", icon: Radio },
       { title: "Timesheets", url: "/app/timesheets", icon: Clock4 },

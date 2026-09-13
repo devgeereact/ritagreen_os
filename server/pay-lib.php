@@ -62,7 +62,8 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
         'SELECT t.id, t.worker_id, w.name AS worker, w.division, w.pay_type, w.pay_rate_pence,
                 t.work_date, t.start_time, t.end_time, t.minutes
          FROM timesheets t JOIN workers w ON w.id = t.worker_id
-         WHERE t.status = "approved" AND t.work_date BETWEEN ? AND ?'
+         WHERE t.status = "approved" AND t.work_date BETWEEN ? AND ?
+           AND t.deleted_at IS NULL AND w.deleted_at IS NULL'
         . ($onlyWorker ? ' AND t.worker_id = ?' : '')
         . ' ORDER BY t.worker_id, t.work_date, t.start_time';
     $stmt = $conn->prepare($sql);

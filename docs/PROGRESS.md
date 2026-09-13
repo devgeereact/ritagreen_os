@@ -128,10 +128,10 @@ Milestone 4 · 10 done, 0 partial, 0 to do
 - [x] Field events: clock in/out, check-in, panic, signature — _shift_events with lat/lng_
 - [x] Four-eyes approval on high-risk actions — _Enforced on deletion. The requester is blocked from deciding their own request, so a single determined person cannot walk it through_
 - [x] Shift broadcast with token acceptance — _shift_offers, SMS link, no login required_
-- [x] Shifts, templates and recurrence
+- [x] Shifts, templates and recurrence — _Creating was the whole of it: a shift could not be reassigned, taken off somebody or cancelled, so a worker falling ill left a wrong row on the rota with no route out but the database. scheduling.php now carries assign, unassign and cancel, each behind the same deployment gate and clash check as creating, and Scheduling opens a shift on click. has_clash() ignores archived shifts and the shift being moved, so a shift no longer clashes with itself._
 - [x] Single reusable deployment eligibility gate — _rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned_
 - [x] Smart matching on skills and availability
-- [x] Timesheets and pay rules
+- [x] Timesheets and pay rules — _Three defects found by exercising it. A shift crossing midnight was rejected outright, so a business running waking nights could not record one; the calculation is now rg_shift_minutes() in pure.php, UTC and tested. Reads were open to any internal account, so an editor could pull every worker's hours; every branch now takes the payroll zone, and src/lib/access.ts matches. A manager could only ever approve, never reject: migration 021 adds 'rejected', decided_at and decision_note, and a reason is required. The page defaults to the current month and filters by period and status._
 
 ### IAM — Identity, access and permissions
 

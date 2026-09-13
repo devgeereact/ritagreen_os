@@ -7,12 +7,25 @@ type State<T> = {
   error: string | null
 }
 
+type Options = {
+  /**
+   * Keep the last successful response when a refetch fails, instead of clearing
+   * it. For a page loaded once, clearing is right: showing data beside an error
+   * invites acting on something that may no longer be true. For a page that
+   * polls -- the field operations board re-reads every 30 seconds -- it is
+   * wrong, because one dropped request would blank a board somebody is watching.
+   * Off by default, so only a caller that polls takes the trade.
+   */
+  keepPreviousOnError?: boolean
+}
+
 // Read-only GET hook with loading/error/empty handling. `deps` re-fetches.
-export function useApi<T>(endpoint: string | null, deps: unknown[] = []) {
+export function useApi<T>(endpoint: string | null, deps: unknown[] = [], options: Options = {}) {
   const [state, setState] = useState<State<T>>({ data: null, loading: !!endpoint, error: null })
   // Monotonic request id: a slow earlier fetch must not overwrite a newer one
   // when endpoint/deps change quickly (last-issued request wins).
   const reqIdRef = useRef(0)
+  const keepPrevious = options.keepPreviousOnError ?? false
 
   const reload = useCallback(() => {
     if (!endpoint) return
@@ -24,14 +37,14 @@ export function useApi<T>(endpoint: string | null, deps: unknown[] = []) {
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return // superseded by a newer request
-        setState({
-          data: null,
+        setState((s) => ({
+          data: keepPrevious ? s.data : null,
           loading: false,
           error: err instanceof ApiError ? err.message : "Failed to load.",
-        })
+        }))
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, ...deps])
+  }, [endpoint, keepPrevious, ...deps])
 
   useEffect(() => {
     reload()
