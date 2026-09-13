@@ -133,6 +133,16 @@ somebody's health takes the zone check as well as `require_staff()`. `rg_file_re
 same job per file in `server/files.php` — being allowed to open the vault is not permission to
 open everything in it.
 
+**One clock, UTC, pinned in `server/lib.php`.** `date_default_timezone_set('UTC')` and
+`SET time_zone = '+00:00'` on the connection, immediately after `mysqli_report()`. Neither was
+pinned: PHP took the host's `date.timezone` and the connection took the MySQL server's default,
+so on a developer machine `NOW()` returned `21:47:21` while `date()` in the same request
+returned `20:47:21`. Every `created_at` was written on one clock and every date comparison in
+PHP made on the other, for the seven months of British Summer Time. Do not reintroduce a local
+timezone anywhere. DATETIME columns (`shifts.starts_at`, work dates) hold literal wall-clock and
+are unaffected; TIMESTAMP columns are converted on read, so on a server that was not already UTC
+an existing `created_at` now reads as the UTC instant it always was.
+
 **Hours are the payroll zone, not just "internal".** `server/timesheets.php` and
 `server/payroll.php` both take `can_view_zone($conn, $user, 'payroll')` on top of the role
 check, above every branch. `require_staff()` alone was not a narrowing: an editor, a trainer and

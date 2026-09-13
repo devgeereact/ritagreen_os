@@ -33,7 +33,10 @@ require __DIR__ . '/lib.php';
 
 `lib.php` loads `config.php` (server-only, gitignored), opens the mysqli
 connection `$conn`, installs the error handlers, emits the CORS headers, and
-defines the shared helpers. Two endpoints (`payroll.php`, `margin.php`) also
+defines the shared helpers. It pins both clocks to UTC
+(`date_default_timezone_set('UTC')` and `SET time_zone = '+00:00'` on the
+connection) so PHP's date arithmetic and MySQL's `NOW()` cannot disagree, which
+they did by an hour throughout British Summer Time. Two endpoints (`payroll.php`, `margin.php`) also
 `require __DIR__ . '/pay-lib.php'`; `me.php` requires it lazily inside its
 payslip branch (`me.php:24`).
 

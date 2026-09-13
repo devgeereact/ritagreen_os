@@ -70,6 +70,29 @@ require __DIR__ . '/config.php';
 // exception handler above, which logs the detail and returns a reference.
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+// One clock, in UTC, on both sides of the connection.
+//
+// Neither was pinned. PHP used the host's date.timezone and the connection used
+// the MySQL server's default, so the two disagreed with each other by an hour
+// for the seven months of British Summer Time -- measured on a developer
+// machine: NOW() returned 21:47:21 while date() in the same request returned
+// 20:47:21. Every created_at, updated_at and decided_at was written on one
+// clock and every date comparison in PHP made on the other, so "today's shifts"
+// in field.php and the retention sweep's cut-off both moved for the hour after
+// midnight, and the same code gave different answers on a laptop and on cPanel.
+//
+// schema.sql has declared `SET time_zone = '+00:00'` since the first import;
+// that only applied to the import itself, never to a request. This makes the
+// connection honour what the schema already says.
+//
+// DATETIME columns -- shifts.starts_at, shifts.ends_at, work dates -- store a
+// literal wall-clock value and are not converted, so the rota is unaffected.
+// TIMESTAMP columns are converted on read, so on a server that was running
+// something other than UTC an existing created_at now reads as the UTC instant
+// it always was, which during BST is an hour earlier than it used to display.
+date_default_timezone_set('UTC');
+$conn->query("SET time_zone = '+00:00'");
+
 foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
     if (!defined($_required)) {
         http_response_code(500);
