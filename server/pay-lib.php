@@ -51,12 +51,36 @@ function pay_day_premium(array $rules, string $workDate, string $startTime, arra
     return ['key' => $key, 'mult' => max($applicable)];
 }
 
+/**
+ * Overtime is a weekly threshold, so the whole week has to be counted even when
+ * the pay period cuts through it.
+ *
+ * A monthly run used to read only the entries inside from..to while keying the
+ * 40-hour accumulator by ISO week. A week straddling the month end was therefore
+ * counted twice from zero: a worker doing 8 hours on Monday 31 August and 40
+ * more across the rest of that week reached 48, and the September run saw 40 and
+ * paid no overtime at all. These two widen the *scan* to whole ISO weeks; the
+ * entries outside the period still only fill the threshold, they are never paid.
+ */
+function pay_week_scan_start(string $from): string
+{
+    return date('Y-m-d', strtotime('monday this week', strtotime($from)));
+}
+
+function pay_week_scan_end(string $to): string
+{
+    return date('Y-m-d', strtotime('sunday this week', strtotime($to)));
+}
+
 // Compute per-entry pay across approved timesheets in range.
 // Returns ['workers' => [aggregate...], 'lines' => [entry breakdowns], 'rules' => [...]].
 function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = null): array
 {
     $rules = pay_load_rules($conn);
     $bankHols = pay_load_bank_holidays($conn, $from, $to);
+
+    $scanFrom = pay_week_scan_start($from);
+    $scanTo = pay_week_scan_end($to);
 
     $sql =
         'SELECT t.id, t.worker_id, w.name AS worker, w.division, w.pay_type, w.pay_rate_pence,
@@ -67,8 +91,8 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
         . ($onlyWorker ? ' AND t.worker_id = ?' : '')
         . ' ORDER BY t.worker_id, t.work_date, t.start_time';
     $stmt = $conn->prepare($sql);
-    if ($onlyWorker) $stmt->bind_param('ssi', $from, $to, $onlyWorker);
-    else $stmt->bind_param('ss', $from, $to);
+    if ($onlyWorker) $stmt->bind_param('ssi', $scanFrom, $scanTo, $onlyWorker);
+    else $stmt->bind_param('ss', $scanFrom, $scanTo);
     $stmt->execute();
     $res = $stmt->get_result();
 
@@ -93,6 +117,10 @@ function pay_compute(mysqli $conn, string $from, string $to, ?int $onlyWorker = 
             $otHours = $hours - $normalHours;
         }
         $otMult = max($rules['overtime'], $prem['mult']);
+
+        // Outside the period: it has filled the week's threshold above, which is
+        // the whole reason it was read, and it belongs to a different pay run.
+        if ($e['work_date'] < $from || $e['work_date'] > $to) continue;
 
         $gross = (int) round($rate * ($normalHours * $prem['mult'] + $otHours * $otMult));
         $base = (int) round($rate * $hours);

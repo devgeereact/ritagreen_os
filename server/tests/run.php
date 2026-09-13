@@ -181,6 +181,24 @@ check('rejects a partial date', pay_valid_date('2026-03'), false);
 check('rejects trailing text', pay_valid_date("2026-03-01' OR 1=1"), false);
 
 // ---------------------------------------------------------------------------
+group('pay week scan');
+
+// Overtime is a weekly threshold, so a pay period cutting through a week has to
+// count the days either side of the cut or the threshold resets mid-week.
+//
+// The defect: a monthly run read only the entries inside from..to while keying
+// the 40-hour accumulator by ISO week. A worker doing 8 hours on Monday 31
+// August and 40 more across the rest of that week reached 48; the September run
+// saw 40 and paid no overtime at all. Widening the scan to whole ISO weeks fixes
+// it -- the days outside the period fill the threshold and are never paid.
+check('a period starting mid-week scans back to Monday', pay_week_scan_start('2026-09-01'), '2026-08-31');
+check('a period starting on a Monday stays put', pay_week_scan_start('2026-08-31'), '2026-08-31');
+check('a Sunday start scans back six days', pay_week_scan_start('2026-09-06'), '2026-08-31');
+check('a period ending mid-week scans on to Sunday', pay_week_scan_end('2026-09-30'), '2026-10-04');
+check('a period ending on a Sunday stays put', pay_week_scan_end('2026-10-04'), '2026-10-04');
+check('a Monday end scans on six days', pay_week_scan_end('2026-09-28'), '2026-10-04');
+
+// ---------------------------------------------------------------------------
 group('pay_day_premium');
 
 $rules = ['night' => 1.30, 'weekend' => 1.25, 'bank_holiday' => 2.00, 'overtime' => 1.50];

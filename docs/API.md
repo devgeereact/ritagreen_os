@@ -620,7 +620,7 @@ worker's hours for every day on record.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}}`, 500 most recent in range. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected` |
+| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}, truncated}`, 500 rows per read. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
 | POST | `approve` | Office roles | `id` | `{ok: true}`; records `approved_by` and `decided_at` |
 | POST | `reject` | Office roles | `id`, body `{note}` | `{ok: true}`; the reason is required and stored in `decision_note`. Rejected hours are excluded from pay without deleting the claim |
 | POST | — | Office roles | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours |
@@ -645,6 +645,15 @@ gross has to ask the same question.
 
 Only `approved` timesheets are included, and `pay_compute()` excludes archived
 timesheets and archived workers: a soft-deleted entry used to be paid anyway.
+
+**Overtime counts the whole ISO week, not the part of it inside the period.**
+The 40-hour threshold is weekly, so `pay_compute()` scans from the Monday of the
+week containing `from` to the Sunday of the week containing `to`
+(`pay_week_scan_start()` / `pay_week_scan_end()`), fills the weekly accumulator
+from every entry it finds, and pays only the entries inside `from..to`. Before
+this, a week straddling a month end was counted from zero twice: eight hours on
+Monday 31 August plus forty across the rest of that week is forty-eight, and the
+September run saw forty and paid no overtime at all.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|

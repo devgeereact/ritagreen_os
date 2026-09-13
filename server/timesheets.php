@@ -12,6 +12,9 @@ require __DIR__ . '/lib.php';
 /** Mirrors the timesheets.status enum (migration 021). */
 const TIMESHEET_STATUSES = ['pending', 'approved', 'rejected'];
 
+/** Rows returned per read. Totals are computed over the whole filter, not this. */
+const TIMESHEET_PAGE = 500;
+
 $user = require_auth($conn);
 // Timesheets are other people's hours and pay-bearing records. Internal staff
 // only; the worker app records its own time through field.php.
@@ -58,6 +61,8 @@ if (method() === 'GET') {
         $args[] = $status;
     }
 
+    $clause = implode(' AND ', $where);
+
     $sql =
         'SELECT t.id, t.worker_id, w.name AS worker, w.division, t.work_date, t.start_time,
                 t.end_time, t.minutes, t.status, t.decided_at, t.decision_note,
@@ -65,24 +70,50 @@ if (method() === 'GET') {
          FROM timesheets t
          JOIN workers w ON w.id = t.worker_id
          LEFT JOIN users u ON u.id = t.approved_by
-         WHERE ' . implode(' AND ', $where) . '
+         WHERE ' . $clause . '
          ORDER BY t.work_date DESC, t.start_time DESC
-         LIMIT 500';
+         LIMIT ' . TIMESHEET_PAGE;
     $stmt = $conn->prepare($sql);
     if ($types !== '') $stmt->bind_param($types, ...$args);
     $stmt->execute();
     $res = $stmt->get_result();
 
     $timesheets = [];
-    $totals = ['pending_minutes' => 0, 'approved_minutes' => 0, 'rejected_minutes' => 0];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['worker_id'] = (int) $row['worker_id'];
         $row['minutes'] = (int) $row['minutes'];
-        $totals[$row['status'] . '_minutes'] += $row['minutes'];
         $timesheets[] = $row;
     }
-    json_out(['timesheets' => $timesheets, 'totals' => $totals]);
+
+    // Totalled by the database over the whole filter, not by PHP over the page.
+    //
+    // The tiles used to be summed from the rows that had just been fetched, so
+    // once a filter matched more than the page size the "awaiting approval"
+    // figure quietly became "awaiting approval, in the most recent N rows" --
+    // an under-count on the one number the office acts on, and one that
+    // disagreed with the count action-centre.php shows for the same thing.
+    $totals = ['pending_minutes' => 0, 'approved_minutes' => 0, 'rejected_minutes' => 0];
+    $sumStmt = $conn->prepare(
+        'SELECT t.status, SUM(t.minutes) AS mins
+         FROM timesheets t
+         JOIN workers w ON w.id = t.worker_id
+         WHERE ' . $clause . '
+         GROUP BY t.status'
+    );
+    if ($types !== '') $sumStmt->bind_param($types, ...$args);
+    $sumStmt->execute();
+    $sums = $sumStmt->get_result();
+    while ($row = $sums->fetch_assoc()) {
+        $totals[$row['status'] . '_minutes'] = (int) $row['mins'];
+    }
+
+    json_out([
+        'timesheets' => $timesheets,
+        'totals' => $totals,
+        // So the page can say so rather than silently showing a partial list.
+        'truncated' => count($timesheets) === TIMESHEET_PAGE,
+    ]);
 }
 
 if (($action === 'approve' || $action === 'reject') && method() === 'POST') {

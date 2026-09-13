@@ -40,7 +40,7 @@ import { shortDate, monthBounds, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 type Totals = { pending_minutes: number; approved_minutes: number; rejected_minutes: number }
-type Data = { timesheets: Timesheet[]; totals: Totals }
+type Data = { timesheets: Timesheet[]; totals: Totals; truncated: boolean }
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
@@ -228,6 +228,16 @@ export default function Timesheets() {
               </CardContent>
             </Card>
           </div>
+
+          {/* The totals above are computed by the server over the whole filter, so
+              they stay right even when the list below is cut off. Say so rather
+              than letting the two look like they disagree. */}
+          {data.truncated && (
+            <p className="text-sm text-muted-foreground">
+              Showing the first 500 entries in this period. The totals above cover all of it —
+              narrow the dates or the status to see the rest.
+            </p>
+          )}
 
           {data.timesheets.length === 0 ? (
             <EmptyBlock
