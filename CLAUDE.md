@@ -199,6 +199,21 @@ compute them from. Do not retitle it until there is.
 soft-deleted timesheet was still paid. Archiving is the disposal route this system has; a query
 that ignores it converts an archive into a silent liability.
 
+**A broadcast notification is read by receipt, not by a column.** `notification_reads`
+(migration 025). One broadcast row is read by many people and `notifications` has one `read_at`,
+so every broadcast was forced to read and the unread count ignored them — which meant a panic
+alert, which is a broadcast, arrived pre-read and the bell never lit. Anything new that notifies
+more than one person uses the receipts.
+
+**A panic alert is a sequence, not a flag.** `rg_panic_open()` reads the ordered kinds, because a
+shift can be raised, acknowledged and raised again. The board used `in_array('panic', ...)`, a
+latch nothing could clear.
+
+**Screening a list is not deciding about a person.** `rg_deployment_check(..., $persist = false)`
+for bulk screening. It wrote a `person_services` row per worker, so "Find eligible" on a
+200-worker division performed 200 writes on a GET, and broadcast did it again. `rg_load_rules()`
+is memoised per request for the same reason.
+
 **Retention periods are configuration, and they are all NULL.** `server/retention-sweep.php`
 reports by default, acts only with `--go`, acts only where a period is set, and never
 hard-deletes. Do not put a period in code. See `docs/RETENTION.md`.
@@ -275,9 +290,9 @@ generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` 
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
 verification, and the deployment gate — are **built and verified against a local database**.
-Migrations `001`–`021` exist in `server/migrations/` and all twenty-one are applied locally. The
+Migrations `001`–`027` exist in `server/migrations/` and all twenty-seven are applied locally. The
 deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
-pending and that 019 was applied that day, so **`020` and `021` are outstanding there** — but
+pending and that 019 was applied that day, so **`020` through `027` are outstanding there** — but
 that is the record talking, not a check against the live database. Confirm with
 `php server/migrate.php --status` on the server before acting on it.
 

@@ -14,7 +14,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{40}$/', $token)) fail('Invalid offe
 
 // Load offer + shift + worker.
 $stmt = $conn->prepare(
-    'SELECT o.id AS offer_id, o.status AS offer_status, o.worker_id, w.name AS worker,
+    'SELECT o.id AS offer_id, o.status AS offer_status, o.expires_at, o.worker_id, w.name AS worker,
             s.id AS shift_id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status AS shift_status,
             c.name AS client
      FROM shift_offers o
@@ -41,6 +41,13 @@ if (method() === 'GET') {
 
 if (method() === 'POST') {
     rate_limit($conn, 'offer', 20, 600);
+    // The link stops working when the shift it is for starts. Without this a
+    // text from three months ago still resolved, which is a bearer token with no
+    // lifetime. Accepting already runs the deployment gate, so this is about the
+    // link not outliving its purpose rather than about who gets booked.
+    if ($row['expires_at'] !== null && strtotime($row['expires_at']) <= time()) {
+        json_out(['result' => 'closed', 'message' => 'This offer has expired.'], 410);
+    }
     $data = body();
     $act = trim((string) ($data['action'] ?? ''));
     $offerId = (int) $row['offer_id'];

@@ -253,6 +253,29 @@ function rg_shift_minutes(string $workDate, string $startTime, string $endTime):
     return (int) round(($end->getTimestamp() - $start->getTimestamp()) / 60);
 }
 
+/**
+ * Is there an unacknowledged panic alert on this shift?
+ *
+ * The board derived its panic flag from "is there a panic event", so once one
+ * was raised the banner stayed up all day with nothing that could clear it --
+ * and the next alert, on another shift, arrived into a board already shouting.
+ *
+ * Order matters, not counts: a shift can be raised, acknowledged, and raised
+ * again, and the second one is live. Takes the kinds in the order they were
+ * recorded and reports whether the last panic-related event was a panic.
+ *
+ * @param string[] $kinds shift_events.kind values, oldest first
+ */
+function rg_panic_open(array $kinds): bool
+{
+    $open = false;
+    foreach ($kinds as $k) {
+        if ($k === 'panic') $open = true;
+        elseif ($k === 'panic_ack') $open = false;
+    }
+    return $open;
+}
+
 // ------------------------------------------------------------- bank holidays
 
 /**

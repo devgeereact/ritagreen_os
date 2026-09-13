@@ -85,6 +85,17 @@ database. None has been applied to the live one, which is a separate deliberate 
 |---|---|---|---|---|
 | Clients and sites are recorded | `clients`, `sites` | `server/clients.php` | `src/pages/app/Clients.tsx` | none |
 | Shifts are scheduled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
+| A shift can be reassigned or cancelled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
+| Work orders are raised and tracked | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
+| A work order can be corrected or archived | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
+| A pay rate is priced as at the date worked | `worker_pay_rates` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
+| Premiums follow the worked interval | `pay_rules`, `bank_holidays` | `rg_premium_segments()` in `server/pure.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
+| Bank holidays are known beyond this year | `bank_holidays` | `rg_bank_holidays()` in `server/pure.php` | — | `server/tests/run.php` |
+| A rate below the configured floor is visible | `pay_floors` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | none |
+| Hours are approved or rejected with a reason | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | `server/tests/run.php` |
+| A panic alert reaches somebody | `notifications`, `notification_reads` | `server/notifications.php` | `src/components/app/*` | none |
+| A panic alert can be acknowledged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` |
+| A lone worker can make a check call | `shift_events` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | Recurring shifts are generated | `shift_templates` | `server/shift-templates.php` | `src/pages/app/Scheduling.tsx` | none |
 | Workers are matched on skills | `skills`, `worker_skills` | `server/skills.php` | `src/pages/app/Scheduling.tsx` | none |
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |

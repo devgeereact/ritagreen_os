@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Plus, Search } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Plus, Search, Pencil, Archive } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -56,6 +55,13 @@ const TYPES: { value: string; label: string; division: string | null }[] = [
 
 const DIVISIONS = ["care", "academy", "cleaning", "security"] as const
 
+/**
+ * Radix Select uses the empty string internally for "no value", so the
+ * no-client option needs a real one, translated back to null for the server.
+ * Without it a client chosen by mistake could not be cleared.
+ */
+const NO_CLIENT = "none"
+
 const PRIORITY_VARIANT: Record<Job["priority"], "destructive" | "secondary" | "outline"> = {
   emergency: "destructive",
   high: "secondary",
@@ -67,10 +73,12 @@ export default function Jobs() {
   // dialog needs, are office-only on the server.
   const { hasRole } = useAuth()
   const canCreate = hasRole("super_admin", "admin", "manager")
-  const { data, loading, error, reload } = useApi<{ jobs: Job[] }>("jobs.php")
+  const { data, loading, error, reload } = useApi<{ jobs: Job[]; truncated: boolean }>("jobs.php")
   const [q, setQ] = useState("")
   const [filter, setFilter] = useState<"all" | Job["status"]>("all")
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Job | null>(null)
+  const [archiving, setArchiving] = useState<Job | null>(null)
 
   const jobs = data?.jobs ?? []
   const filtered = jobs.filter(
@@ -78,6 +86,17 @@ export default function Jobs() {
       (filter === "all" || j.status === filter) &&
       [j.title, j.client].some((f) => f?.toLowerCase().includes(q.toLowerCase())),
   )
+
+  async function archive(job: Job) {
+    try {
+      await api(`jobs.php?action=archive&id=${job.id}`, { method: "POST", body: {} })
+      toast.success("Job archived.")
+      setArchiving(null)
+      reload()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not archive the job.")
+    }
+  }
 
   async function setStatus(id: number, status: Job["status"]) {
     try {
@@ -100,7 +119,11 @@ export default function Jobs() {
             Care visits, cleans, guard shifts and courses, on one work-order spine.
           </p>
         </div>
-        {canCreate && <NewJobDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
+        {canCreate && (
+          <Button onClick={() => { setEditing(null); setOpen(true) }}>
+            <Plus className="mr-1 size-4" /> New job
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -148,6 +171,7 @@ export default function Jobs() {
                 <TableHead>Priority</TableHead>
                 <TableHead>Scheduled</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-px"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -179,11 +203,29 @@ export default function Jobs() {
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  <TableCell className="text-right">
+                    {canCreate && (
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="ghost" aria-label={`Edit ${j.title}`} onClick={() => { setEditing(j); setOpen(true) }}>
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Archive ${j.title}`}
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setArchiving(j)}
+                        >
+                          <Archive className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No jobs match the filters.
                   </TableCell>
                 </TableRow>
@@ -192,25 +234,70 @@ export default function Jobs() {
           </Table>
         </Card>
       )}
+
+      {data?.truncated && (
+        <p className="text-sm text-muted-foreground">
+          Showing the first 500 work orders. Narrow the search or the status filter to see the rest.
+        </p>
+      )}
+
+      <JobDialog open={open} job={editing} onOpenChange={setOpen} onSaved={reload} />
+
+      <Dialog open={archiving !== null} onOpenChange={(o) => !o && setArchiving(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive this work order?</DialogTitle>
+            <DialogDescription>
+              {archiving
+                ? `"${archiving.title}" comes off the board. The record is kept — nothing here is hard-deleted — so it can be brought back if this was a mistake.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setArchiving(null)}>Keep it</Button>
+            <Button variant="destructive" onClick={() => archiving && archive(archiving)}>Archive</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function NewJobDialog({
+/**
+ * One dialog for raising a work order and for correcting one.
+ *
+ * There was no edit at all: a typo in a title, a job raised against the wrong
+ * client or scheduled for the wrong day could only be cancelled and re-raised,
+ * which loses the history of what was actually asked for.
+ */
+function JobDialog({
   open,
+  job,
   onOpenChange,
-  onCreated,
+  onSaved,
 }: {
   open: boolean
+  /** null to raise a new one, a job to correct it. */
+  job: Job | null
   onOpenChange: (o: boolean) => void
-  onCreated: () => void
+  onSaved: () => void
 }) {
-  const { data } = useApi<{ clients: Client[] }>(open ? "clients.php" : null, [open])
-  const [type, setType] = useState("care_visit")
-  const [division, setDivision] = useState("care")
-  const [priority, setPriority] = useState("standard")
-  const [clientId, setClientId] = useState("")
+  const { data, loading, error } = useApi<{ clients: Client[] }>(open ? "clients.php" : null, [open])
+  const [type, setType] = useState<string>(job?.type ?? "care_visit")
+  const [division, setDivision] = useState<string>(job?.division ?? "care")
+  const [priority, setPriority] = useState<string>(job?.priority ?? "standard")
+  const [clientId, setClientId] = useState<string>(job?.client_id ? String(job.client_id) : NO_CLIENT)
   const [submitting, setSubmitting] = useState(false)
+
+  // Re-seed when a different job is opened: the component stays mounted between
+  // rows, so without this the second row edited shows the first one's values.
+  useEffect(() => {
+    if (!open) return
+    setType(job?.type ?? "care_visit")
+    setDivision(job?.division ?? "care")
+    setPriority(job?.priority ?? "standard")
+    setClientId(job?.client_id ? String(job.client_id) : NO_CLIENT)
+  }, [open, job])
 
   function chooseType(next: string) {
     setType(next)
@@ -226,7 +313,7 @@ function NewJobDialog({
       type,
       division,
       priority,
-      client_id: clientId || null,
+      client_id: clientId === NO_CLIENT ? null : clientId,
       scheduled_for: String(form.get("scheduled_for") || ""),
       notes: String(form.get("notes") || "").trim(),
     }
@@ -236,32 +323,38 @@ function NewJobDialog({
     }
     setSubmitting(true)
     try {
-      await api("jobs.php", { method: "POST", body: payload })
-      toast.success("Job created.")
+      await api(job ? `jobs.php?action=update&id=${job.id}` : "jobs.php", { method: "POST", body: payload })
+      toast.success(job ? "Job updated." : "Job created.")
       onOpenChange(false)
-      setClientId("")
-      onCreated()
+      onSaved()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not create the job.")
+      toast.error(err instanceof ApiError ? err.message : "Could not save the job.")
     } finally {
       setSubmitting(false)
     }
   }
 
+  /** datetime-local wants "YYYY-MM-DDTHH:MM"; the API returns a SQL datetime. */
+  const scheduledDefault = job?.scheduled_for ? job.scheduled_for.replace(" ", "T").slice(0, 16) : ""
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button><Plus className="mr-1 size-4" /> New job</Button>
-      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New work order</DialogTitle>
+          <DialogTitle>{job ? "Edit work order" : "New work order"}</DialogTitle>
           <DialogDescription>Choosing a type fills in the division; change it if it is wrong.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="title">Title</Label>
-            <Input id="title" name="title" placeholder="e.g. Morning care visit — Mrs Patel" required />
+            <Input
+              id="title"
+              name="title"
+              defaultValue={job?.title ?? ""}
+              placeholder="e.g. Morning care visit — Mrs Patel"
+              maxLength={190}
+              required
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -284,6 +377,8 @@ function NewJobDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="priority">Priority</Label>
               <Select value={priority} onValueChange={setPriority}>
@@ -295,31 +390,34 @@ function NewJobDialog({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="client">Client (optional)</Label>
               <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger id="client"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectTrigger id="client"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  {/* Without this a client chosen by mistake could not be cleared. */}
+                  <SelectItem value={NO_CLIENT}>No client</SelectItem>
                   {(data?.clients ?? []).map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="scheduled_for">Scheduled for (optional)</Label>
-              <Input id="scheduled_for" name="scheduled_for" type="datetime-local" />
+              {/* An empty client list and a failed request used to look identical. */}
+              {loading && <p className="text-xs text-muted-foreground">Loading clients…</p>}
+              {error && <p className="text-xs text-destructive">Clients could not be loaded: {error}</p>}
             </div>
           </div>
           <div className="grid gap-2">
+            <Label htmlFor="scheduled_for">Scheduled for (optional)</Label>
+            <Input id="scheduled_for" name="scheduled_for" type="datetime-local" defaultValue={scheduledDefault} />
+          </div>
+          <div className="grid gap-2">
             <Label htmlFor="notes">Notes (optional)</Label>
-            <Textarea id="notes" name="notes" rows={3} />
+            <Textarea id="notes" name="notes" rows={3} defaultValue={job?.notes ?? ""} maxLength={5000} />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : "Create job"}
+              {submitting ? "Saving…" : job ? "Save changes" : "Create job"}
             </Button>
           </DialogFooter>
         </form>

@@ -218,7 +218,7 @@ export type FieldShift = {
 
 export type ShiftEvent = {
   id: number
-  kind: "clock_in" | "clock_out" | "check_in" | "panic" | "note" | "task" | "signoff"
+  kind: "clock_in" | "clock_out" | "check_in" | "panic" | "panic_ack" | "note" | "task" | "signoff"
   note: string | null
   lat: string | null
   lng: string | null

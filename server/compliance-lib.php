@@ -14,6 +14,14 @@
  */
 function rg_load_rules(mysqli $conn, string $service, ?string $workerRole = null): array
 {
+    // Memoised per request. Screening a division for a shift asks for the same
+    // rule set once per worker -- identical every time for a given service and
+    // role -- so a 200-worker division ran this query 200 times to get 200
+    // identical answers.
+    static $cache = [];
+    $key = $service . '|' . ($workerRole ?? '');
+    if (isset($cache[$key])) return $cache[$key];
+
     $sql = 'SELECT r.req_key, r.label, r.expires, r.requires_verification, r.evidence_source, c.weight
             FROM compliance_rules c
             JOIN compliance_requirements r ON r.id = c.requirement_id
@@ -200,12 +208,22 @@ function rg_load_evidence(mysqli $conn, int $personId): array
  * The verdict is CALCULATED here and written to person_services. Nothing else
  * may write those columns -- see docs/RULES.md rule 1.
  */
-function rg_assess_person(mysqli $conn, int $personId, string $service, ?string $workerRole = null): array
+function rg_assess_person(mysqli $conn, int $personId, string $service, ?string $workerRole = null, bool $persist = true): array
 {
     $rules = rg_load_rules($conn, $service, $workerRole);
     $evidence = rg_load_evidence($conn, $personId);
     $verdict = rg_evaluate_eligibility($rules, $evidence);
     $reason = rg_eligibility_reason($verdict);
+
+    // $persist false when screening a list rather than deciding about a person.
+    //
+    // Recording the verdict is worth doing when the office assigns somebody:
+    // person_services then says what was decided and when. It is not worth doing
+    // once per worker every time a calendar moves -- "Find eligible" on a
+    // 200-worker division wrote 200 rows on a GET, and broadcast did it again.
+    if (!$persist) {
+        return $verdict + ['reason' => $reason, 'service' => $service, 'person_id' => $personId];
+    }
 
     $stmt = $conn->prepare(
         'INSERT INTO person_services (person_id, service, eligibility_status, eligibility_reason, eligibility_score, assessed_at)
@@ -231,7 +249,7 @@ function rg_assess_person(mysqli $conn, int $personId, string $service, ?string 
  * refusal reason, never a bare boolean -- a refusal nobody can act on is a
  * refusal that gets worked around.
  */
-function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = null): array
+function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = null, bool $persist = true): array
 {
     $stmt = $conn->prepare('SELECT person_id, name, role, division FROM workers WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $workerId);
@@ -244,7 +262,7 @@ function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = nul
         return ['eligible' => false, 'reason' => 'That worker is not linked to a person record.', 'status' => 'not_eligible'];
     }
 
-    $verdict = rg_assess_person($conn, (int) $w['person_id'], $service ?? $w['division'], $w['role']);
+    $verdict = rg_assess_person($conn, (int) $w['person_id'], $service ?? $w['division'], $w['role'], $persist);
     $verdict['worker'] = $w['name'];
     return $verdict;
 }

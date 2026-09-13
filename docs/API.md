@@ -588,7 +588,7 @@ the office.
 |---|---|---|---|---|
 | GET | `match` | Office roles | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. Eligibility is `rg_deployment_check()`, the same gate assignment uses. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
 | POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
-| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open`. Rate-limited (12 per 10 minutes) — every broadcast sends a chargeable message per worker and nothing stopped the same shift being sent round repeatedly |
+| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open`. Rate-limited (12 per 10 minutes) — every broadcast sends a chargeable message per worker and nothing stopped the same shift being sent round repeatedly. Offers now carry `expires_at` (the shift's start) and are unique per worker per shift, so a re-broadcast refreshes the link rather than sending a second live one. Eligibility screening passes `persist: false`, so a GET no longer writes a `person_services` row per worker |
 | GET | — | Office roles | `from`, `to` (default: current month) | `{shifts}` for the calendar |
 | POST | `assign` | Office roles | `id`, body `{worker_id}` | `{ok, status, worker, division}`; fills an open shift or moves a scheduled one. Runs the same deployment gate and clash check as creating, so a refusal carries the blocking requirements. 409 on a completed shift |
 | POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; takes the worker off and returns the shift to `open` so it can be broadcast. 409 if nobody is on it |
@@ -616,12 +616,23 @@ Field operations: the office live board and the worker's clock-in/panic trail.
 |---|---|---|---|---|
 | GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag. Includes completed shifts — the filter listed only `scheduled` and `open`, so a shift vanished from the day the moment it was clocked out. One grouped query for every shift's events, not one per shift |
 | GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events, location_withheld}` — the shift timeline. **`lat`/`lng` are nulled unless the caller holds the `employment` zone, or it is their own trail.** `docs/PRIVACY.md` records the location as personal data about the worker; nothing asked anything about it, so a content editor could open the board, click any shift and read a named colleague's coordinates to six decimal places |
-| POST | — | Staff for any shift; a worker **only for a shift assigned to them** | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403 |
+| POST | — | Staff for any shift; a worker **only for a shift assigned to them**; `panic_ack` office-only | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403. A shift cannot be clocked in twice, clocked out without being clocked in, or acknowledged with no open alert — each is a 409. Nothing validated the sequence, so two `clock_in` rows or a `clock_out` with no `clock_in` both corrupted the derived field status |
 
-`kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `note`, `task`,
-`signoff`. A `clock_out` flips a `scheduled` shift to `completed`
-(`field.php:103`). A `panic` raises a broadcast notification and, when mail is
-enabled, emails `MAIL_TO` with a `[PANIC]` subject.
+`kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `panic_ack`, `note`,
+`task`, `signoff`. A `clock_out` flips a `scheduled` shift to `completed`. A
+`panic` raises a broadcast notification and, when mail is enabled, emails
+`MAIL_TO` with a `[PANIC]` subject.
+
+**`panic_ack`** (migration 026) closes an alert. The board's panic flag was
+`in_array('panic', $kinds)` — a latch with nothing that could clear it, so one
+alert kept the banner up for the rest of the day. `rg_panic_open()` now reads the
+sequence, because a shift can be raised, acknowledged and raised again.
+Acknowledging is the office responding, so it is the one kind a worker cannot
+post.
+
+**`check_in`** — a lone worker saying they are still fine mid-shift — has been
+accepted here and advertised in the ⌘K palette all along, and nothing anywhere
+could send one. The worker app offers it while on site.
 
 Scoping is by shift ownership rather than role, because a worker's login is an
 ordinary account with `users.worker_id` set and may hold any role. A worker
@@ -791,9 +802,11 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Staff | — | `{jobs}`, emergency first then high then standard, 500 most recent. Includes `notes`, which were collected on creation and previously never returned |
+| GET | — | Staff | `client_id?`, `status?` | `{jobs, truncated}`, emergency first then high then standard, 500 per read. Includes `notes`, which were collected on creation and previously never returned. `client_id` filters server-side — ClientDetail and Insights both fetched the whole list and filtered in the browser, which quietly computed against a truncated set |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
-| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201, read back from the row so `client` and `created_at` are real. Type ∈ care_visit/clean/guard_shift/course/other. `title` capped at 190 to match the column; an unreadable `scheduled_for` is now a 400 rather than being stored as `1970-01-01 00:00:00` |
+| POST | `update` | Office roles | `id`; same body as create | `{job}`; corrects a work order in place. There was no edit at all, so a typo could only be fixed by cancelling and re-raising, which loses what was actually asked for |
+| POST | `archive` | Office roles | `id` | `{ok: true}`; sets `deleted_at`. The column has existed since migration 013 and every query respected it — nothing ever set it |
+| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201, read back from the row so `client` and `created_at` are real. Type ∈ care_visit/clean/guard_shift/course/other. `title` capped at 190 to match the column; an unreadable `scheduled_for` is a 400 rather than being stored as `1970-01-01 00:00:00`. Create and update share one validator so they cannot drift |
 
 ---
 
@@ -1041,9 +1054,18 @@ Password ≥ 8 characters. Only a `super_admin` may create a `super_admin`
 
 ## 42. `notifications.php`
 
-The bell. A user sees their own notifications plus broadcasts (`user_id IS
-NULL`), but the unread count tracks only their own targeted rows — broadcasts
-are always reported as read (`notifications.php:42`).
+The bell. A user sees their own notifications plus, for staff accounts only,
+broadcasts (`user_id IS NULL`).
+
+**A broadcast is read by receipt** (`notification_reads`, migration 025). One
+broadcast row is read by many people and the table has a single `read_at`, so
+there was nowhere to record that one person had seen it: every broadcast was
+forced to `read: true` and the unread count ignored them entirely. A panic alert
+raised from the worker app is a broadcast — it therefore arrived already marked
+read and the bell never lit, and with `MAIL_ENABLED` false by default the email
+path is latent too, so the alert existed only as a row in a table. The migration
+seeds a receipt for every existing broadcast and every existing user, so only
+new ones count.
 
 | Method | Action | Auth | Body | Returns |
 |---|---|---|---|---|

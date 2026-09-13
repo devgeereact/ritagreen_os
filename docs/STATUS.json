@@ -418,6 +418,11 @@
           "note": "Creating was the whole of it: a shift could not be reassigned, taken off somebody or cancelled, so a worker falling ill left a wrong row on the rota with no route out but the database. scheduling.php now carries assign, unassign and cancel, each behind the same deployment gate and clash check as creating, and Scheduling opens a shift on click. has_clash() ignores archived shifts and the shift being moved, so a shift no longer clashes with itself. Template generation created shifts in the past: the weekday offset is 0 when today is the template's own weekday, so generating on a Monday afternoon produced that morning's 09:00 shift. Past occurrences are skipped, and the duplicate guard now respects deleted_at, which was silently blocking a slot's regeneration."
         },
         {
+          "name": "Work orders (jobs)",
+          "status": "done",
+          "note": "Care visits, cleans, guard shifts and courses on one spine. Untracked here until now, and it showed: a typo in a date was stored as 1970-01-01, an \"Other\" job was filed under Care whatever it was for, notes were collected and never shown, there was no edit and nothing ever set deleted_at. The status enum still has \"assigned\" with no assignee column, which is the one thing left."
+        },
+        {
           "name": "Smart matching on skills and availability",
           "status": "done"
         },
@@ -429,7 +434,7 @@
         {
           "name": "Field events: clock in/out, check-in, panic, signature",
           "status": "done",
-          "note": "shift_events with lat/lng. Location is personal data about the worker (docs/PRIVACY.md) and was gated by nothing: is_staff() is true for editor, trainer and employee, so a content role could read a named colleague's coordinates to six decimal places. Coordinates now need the 'employment' zone, or the trail being the caller's own. The board also dropped a shift the moment it was clocked out, and ran one query per shift for its events; both fixed. A panic alert still cannot be acknowledged and, separately, notifies nobody -- notifications.php forces every broadcast to read."
+          "note": "shift_events with lat/lng. Location is personal data about the worker (docs/PRIVACY.md) and was gated by nothing: is_staff() is true for editor, trainer and employee, so a content role could read a named colleague's coordinates to six decimal places. Coordinates now need the 'employment' zone, or the trail being the caller's own. The board also dropped a shift the moment it was clocked out, and ran one query per shift for its events; both fixed. A panic alert still cannot be acknowledged and, separately, notifies nobody -- notifications.php forces every broadcast to read. A panic alert also reached nobody: it is a broadcast, and notifications had no per-user read state, so it arrived marked read and the bell never lit (migration 025). It can be acknowledged now (migration 026) instead of latching for the day, the clock sequence is validated, and check_in -- accepted by the API and advertised in the palette since the beginning -- can finally be sent from the worker app."
         },
         {
           "name": "Timesheets and pay rules",

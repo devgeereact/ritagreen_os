@@ -636,7 +636,9 @@ No `deleted_at`.
 
 ### `jobs`
 
-Work orders. Soft-deleted. `CREATE` at `schema.sql:292`.
+Work orders. Soft-deleted, and `jobs.php?action=archive` is what sets it —
+nothing did until then, so the column existed and every query respected it while
+no job could ever be taken off the board. `CREATE` at `schema.sql:302`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -1575,11 +1577,13 @@ second payment row for the same real-world payment.
 ~~**`bank_holidays` runs out at the end of 2026.**~~ Fixed by migration 023,
 which seeds to the end of 2035 from the tested `rg_bank_holidays()` generator.
 
-**No expiry on `shift_offers`** (`schema.sql:790`). The `expired` status exists
-but no timestamp drives it; there is also no unique key on
-`(shift_id, worker_id)`.
+~~**No expiry on `shift_offers`.**~~ Fixed by migration 027: `expires_at` is set
+to the shift's start when the offer is created, `offer.php` refuses an expired
+link with 410, and a unique key on `(shift_id, worker_id)` means a re-broadcast
+refreshes the existing link rather than sending a second live one.
 
-**`notifications` cannot track per-user read state for a broadcast.** A
+~~**`notifications` cannot track per-user read state for a broadcast.**~~ Fixed
+by migration 025 (`notification_reads`). The original note, for the record: A
 `user_id IS NULL` row (`schema.sql:808`) has one `read_at` shared by everyone.
 
 **`shift_templates.weekday TINYINT` is not range-constrained**

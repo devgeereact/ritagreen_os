@@ -43,12 +43,18 @@ export default function WorkerApp() {
   const { data, loading, error, reload } = useApi<MeData>("me.php")
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function clock(shiftId: number, kind: "clock_in" | "clock_out") {
+  const CLOCK_LABEL = {
+    clock_in: "Clocked in.",
+    clock_out: "Clocked out.",
+    check_in: "Check call recorded.",
+  } as const
+
+  async function clock(shiftId: number, kind: keyof typeof CLOCK_LABEL) {
     setBusy(`${kind}-${shiftId}`)
     try {
       const pos = await getPos()
       await api("field.php", { method: "POST", body: { shift_id: shiftId, kind, lat: pos.lat, lng: pos.lng } })
-      toast.success(kind === "clock_in" ? "Clocked in." : "Clocked out.")
+      toast.success(CLOCK_LABEL[kind])
       reload()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not record.")
@@ -147,6 +153,15 @@ export default function WorkerApp() {
                             <>
                               <Button size="sm" variant="outline" onClick={() => clock(s.id, "clock_out")} disabled={busy === `clock_out-${s.id}`}>
                                 <ClockOut className="mr-1 size-4" /> Clock out
+                              </Button>
+                              {/* A check call is a lone worker saying they are
+                                  still fine mid-shift. field.php has accepted
+                                  check_in all along and the ⌘K palette advertises
+                                  "check calls", but nothing anywhere could send
+                                  one. Only offered while on site, which is the
+                                  only time it means anything. */}
+                              <Button size="sm" variant="outline" onClick={() => clock(s.id, "check_in")} disabled={busy === `check_in-${s.id}`}>
+                                <MapPin className="mr-1 size-4" /> Check in
                               </Button>
                               <Badge variant="default" className="gap-1"><MapPin className="size-3" /> On site</Badge>
                             </>

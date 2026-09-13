@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { MapPin, AlertOctagon, CheckCircle2, CircleDashed, RefreshCw } from "lucide-react"
+import { MapPin, AlertOctagon, CheckCircle2, CircleDashed, RefreshCw, ShieldCheck } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +11,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { useApi } from "@/hooks/use-api"
+import { api, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import type { FieldShift, ShiftEvent } from "@/lib/types"
 import { DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
@@ -49,6 +52,28 @@ export default function FieldOps() {
   )
   const [openShift, setOpenShift] = useState<FieldShift | null>(null)
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
+  // Acknowledging is the office responding to an alert, and the server agrees:
+  // panic_ack is the one event kind a worker cannot post.
+  const { hasRole } = useAuth()
+  const canAcknowledge = hasRole("super_admin", "admin", "manager")
+  const [acking, setAcking] = useState<number | null>(null)
+
+  async function acknowledge(shift: FieldShift) {
+    setAcking(shift.id)
+    try {
+      await api("field.php", {
+        method: "POST",
+        body: { shift_id: shift.id, kind: "panic_ack" },
+      })
+      toast.success("Alert acknowledged.")
+      reload()
+      setRefreshedAt(new Date())
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not acknowledge the alert.")
+    } finally {
+      setAcking(null)
+    }
+  }
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -89,10 +114,34 @@ export default function FieldOps() {
 
       {panics.length > 0 && (
         <Card className="border-destructive">
-          <CardContent className="flex items-center gap-3 pt-6 text-destructive">
-            <AlertOctagon className="size-6" />
-            <p className="text-sm font-semibold">
-              {panics.length} active panic alert{panics.length === 1 ? "" : "s"} — {panics.map((p) => p.worker || p.title).join(", ")}
+          <CardContent className="space-y-3 pt-6">
+            <p className="flex items-center gap-3 text-sm font-semibold text-destructive">
+              <AlertOctagon className="size-6 shrink-0" />
+              {panics.length} unacknowledged panic alert{panics.length === 1 ? "" : "s"}
+            </p>
+            <div className="space-y-2">
+              {panics.map((p) => (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 p-3">
+                  <button type="button" className="text-left" onClick={() => setOpenShift(p)}>
+                    <span className="text-sm font-medium underline-offset-4 hover:underline">
+                      {p.worker || "Unfilled"} — {p.title}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {p.client || p.site_name || "No site recorded"} · {hm(p.starts_at)}–{hm(p.ends_at)}
+                    </span>
+                  </button>
+                  {canAcknowledge && (
+                    <Button size="sm" variant="destructive" disabled={acking === p.id} onClick={() => acknowledge(p)}>
+                      <ShieldCheck className="mr-1 size-4" />
+                      {acking === p.id ? "Acknowledging…" : "Acknowledge"}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Acknowledging records who responded and when, on the shift's own timeline. It clears the
+              alert from this board; it does not close the incident.
             </p>
           </CardContent>
         </Card>
@@ -150,7 +199,8 @@ export default function FieldOps() {
 
 const EVENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   clock_in: CheckCircle2, clock_out: CheckCircle2, check_in: MapPin,
-  panic: AlertOctagon, note: CircleDashed, task: CircleDashed, signoff: CheckCircle2,
+  panic: AlertOctagon, panic_ack: ShieldCheck, note: CircleDashed,
+  task: CircleDashed, signoff: CheckCircle2,
 }
 
 function TimelineDialog({ shift, onOpenChange }: { shift: FieldShift | null; onOpenChange: (o: boolean) => void }) {

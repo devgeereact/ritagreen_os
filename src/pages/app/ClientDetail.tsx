@@ -49,7 +49,10 @@ const EVENT_ICON = {
 
 // Activity timeline assembled from the module endpoints filtered to this client.
 function ClientTimeline({ clientId, email }: { clientId: number; email: string | null }) {
-  const jobs = useApi<{ jobs: Job[] }>("jobs.php")
+  // Filtered by the server. This fetched every work order in the business and
+  // filtered in the browser, which quietly computed against a truncated set once
+  // the list passed the page size.
+  const jobs = useApi<{ jobs: Job[] }>(`jobs.php?client_id=${clientId}`, [clientId])
   const quotes = useApi<{ quotes: Quote[] }>("quotes.php")
   const invoices = useApi<{ invoices: Invoice[] }>("invoices.php")
   const enquiries = useApi<{ enquiries: Enquiry[] }>("enquiries.php")

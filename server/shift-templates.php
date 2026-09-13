@@ -53,8 +53,8 @@ if ($action === 'generate' && method() === 'POST') {
 
     $created = 0;
     $insert = $conn->prepare(
-        'INSERT INTO shifts (worker_id, client_id, division, title, site_name, starts_at, ends_at, status)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, "open")'
+        'INSERT INTO shifts (worker_id, client_id, template_id, division, title, site_name, starts_at, ends_at, status)
+         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, "open")'
     );
     // Guard against re-generating the same open shift (same template signature + datetime).
     //
@@ -62,14 +62,13 @@ if ($action === 'generate' && method() === 'POST') {
     // from ever being regenerated -- the row is invisible everywhere else and
     // silently suppressed the replacement here.
     //
-    // The signature is still division + title + start time rather than the
-    // template it came from, because shifts carries no template_id. Two active
-    // templates with the same title, division and time therefore still collapse
-    // into one shift; that needs a column, so it is written down rather than
-    // half-fixed here.
+    // Keyed on the template that made it (migration 027), not on
+    // division + title + start time. Two active templates sharing a title, a
+    // division and a time used to collapse into one shift, and nothing could say
+    // which template a shift on the rota came from.
     $dupe = $conn->prepare(
         'SELECT id FROM shifts
-         WHERE division = ? AND title = ? AND starts_at = ? AND status = "open"
+         WHERE template_id = ? AND starts_at = ? AND status = "open"
            AND deleted_at IS NULL
          LIMIT 1'
     );
@@ -99,11 +98,12 @@ if ($action === 'generate' && method() === 'POST') {
             $clientId = $t['client_id'] !== null ? (int) $t['client_id'] : null;
             $division = $t['division']; $title = $t['title']; $siteName = $t['site_name'];
 
-            $dupe->bind_param('sss', $division, $title, $startsAt);
+            $templateId = (int) $t['id'];
+            $dupe->bind_param('is', $templateId, $startsAt);
             $dupe->execute();
             if ($dupe->get_result()->fetch_assoc()) continue;
 
-            $insert->bind_param('isssss', $clientId, $division, $title, $siteName, $startsAt, $endsAt);
+            $insert->bind_param('iisssss', $clientId, $templateId, $division, $title, $siteName, $startsAt, $endsAt);
             $insert->execute();
             $created++;
         }

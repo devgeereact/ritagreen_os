@@ -181,6 +181,23 @@ check('rejects a partial date', pay_valid_date('2026-03'), false);
 check('rejects trailing text', pay_valid_date("2026-03-01' OR 1=1"), false);
 
 // ---------------------------------------------------------------------------
+group('rg_panic_open');
+
+// The board used in_array('panic', $kinds), so once an alert was raised the
+// banner stayed up for the rest of the day with nothing that could clear it.
+check('no events, nothing open', rg_panic_open([]), false);
+check('ordinary shift, nothing open', rg_panic_open(['clock_in', 'note', 'clock_out']), false);
+check('a raised alert is open', rg_panic_open(['clock_in', 'panic']), true);
+check('acknowledged closes it', rg_panic_open(['clock_in', 'panic', 'panic_ack']), false);
+
+// Order, not counts: a shift can be raised, acknowledged, and raised again, and
+// the second one is live.
+check('raised again after an acknowledgement', rg_panic_open(['panic', 'panic_ack', 'panic']), true);
+check('and acknowledged again', rg_panic_open(['panic', 'panic_ack', 'panic', 'panic_ack']), false);
+check('other events do not close it', rg_panic_open(['panic', 'note', 'check_in']), true);
+check('an acknowledgement alone opens nothing', rg_panic_open(['panic_ack']), false);
+
+// ---------------------------------------------------------------------------
 group('rg_bank_holidays');
 
 // The table held eight rows for 2026 and nothing after, so from 2027 every bank

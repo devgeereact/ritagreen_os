@@ -28,7 +28,7 @@ export default function Insights() {
   const workers = useApi<{ workers: Worker[] }>("workers.php")
   const compliance = useApi<{ items: ComplianceItem[] }>("compliance.php")
   const clients = useApi<{ clients: Client[] }>("clients.php")
-  const jobs = useApi<{ jobs: Job[] }>("jobs.php")
+  const jobs = useApi<{ jobs: Job[]; truncated: boolean }>("jobs.php")
   const invoices = useApi<{ invoices: Invoice[] }>("invoices.php")
 
   const loading = workers.loading || compliance.loading || clients.loading || jobs.loading || invoices.loading
@@ -143,6 +143,15 @@ export default function Insights() {
 
       {loading && <LoadingBlock rows={4} />}
       {error && <ErrorBlock message={error} onRetry={reload} />}
+
+      {/* Client risk is scored from the work orders this page holds. Say so when
+          the list came back capped, rather than presenting a score computed from
+          part of the data as though it were the whole. */}
+      {jobs.data?.truncated && (
+        <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+          Client risk below is scored from the most recent 500 work orders, not all of them.
+        </p>
+      )}
 
       {!loading && !error && (
         <>

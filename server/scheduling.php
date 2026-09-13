@@ -103,7 +103,9 @@ if ($action === 'match' && method() === 'GET') {
     $eligible = [];
     while ($w = $res->fetch_assoc()) {
         if (!(int) $w['available']) continue;
-        if (!rg_deployment_check($conn, (int) $w['id'], $division)['eligible']) continue;
+        // persist: false -- this is screening a list, not deciding about a
+        // person, and it ran on every calendar move.
+        if (!rg_deployment_check($conn, (int) $w['id'], $division, false)['eligible']) continue;
         if (rg_shift_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
         $eligible[] = [
             'id' => (int) $w['id'], 'name' => $w['name'], 'role' => $w['role'],
@@ -185,12 +187,21 @@ if ($action === 'broadcast' && method() === 'POST') {
     while ($w = $res->fetch_assoc()) {
         if (!(int) $w['available']) continue;
         // The same gate as match and assign -- see the note on the match branch.
-        if (!rg_deployment_check($conn, (int) $w['id'], $shift['division'])['eligible']) continue;
+        if (!rg_deployment_check($conn, (int) $w['id'], $shift['division'], false)['eligible']) continue;
         if (rg_shift_clash($conn, (int) $w['id'], $startSql, $endSql)) continue;
 
+        // An offer is a bearer token in a text message, so it stops working when
+        // the shift it is for starts. One live offer per worker per shift
+        // (migration 027): re-broadcasting refreshes the link rather than
+        // sending a second one for the same shift.
         $token = bin2hex(random_bytes(20));
-        $stmt = $conn->prepare('INSERT INTO shift_offers (shift_id, worker_id, token) VALUES (?, ?, ?)');
-        $stmt->bind_param('iis', $id, $w['id'], $token);
+        $stmt = $conn->prepare(
+            'INSERT INTO shift_offers (shift_id, worker_id, token, status, expires_at)
+             VALUES (?, ?, ?, "sent", ?)
+             ON DUPLICATE KEY UPDATE token = VALUES(token), status = "sent",
+                                     expires_at = VALUES(expires_at), responded_at = NULL'
+        );
+        $stmt->bind_param('iiss', $id, $w['id'], $token, $startSql);
         $stmt->execute();
 
         $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : '';

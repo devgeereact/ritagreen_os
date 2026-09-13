@@ -5,7 +5,10 @@
 //   lat/lng are returned to the worker whose trail it is, and to roles holding the
 //   'employment' zone. Everyone else gets the timeline with the coordinates nulled.
 // POST /field.php {shift_id, kind, note?, lat?, lng?, signer?} -> log a field event
-//   kind: clock_in | clock_out | check_in | panic | note | task | signoff
+//   kind: clock_in | clock_out | check_in | panic | panic_ack | note | task | signoff
+//   panic_ack is office-only: acknowledging an alert is the office responding to
+//   it, not the worker standing it down. A shift cannot be clocked in twice, or
+//   clocked out without being clocked in.
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
@@ -64,7 +67,9 @@ if ($action === 'live' && method() === 'GET') {
     if ($rows) {
         $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
         $marks = implode(',', array_fill(0, count($ids), '?'));
-        $ev = $conn->prepare("SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks)");
+        // Ordered, because rg_panic_open() reads the sequence: a shift can be
+        // raised, acknowledged and raised again.
+        $ev = $conn->prepare("SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks) ORDER BY id");
         $ev->bind_param(str_repeat('i', count($ids)), ...$ids);
         $ev->execute();
         $evRes = $ev->get_result();
@@ -83,7 +88,7 @@ if ($action === 'live' && method() === 'GET') {
             'field_status' => $s['status'] === 'open'
                 ? 'unfilled'
                 : ($s['status'] === 'completed' ? 'completed' : field_status($kinds, $s['starts_at'], $s['ends_at'])),
-            'panic' => in_array('panic', $kinds, true),
+            'panic' => rg_panic_open($kinds),
         ];
     }
     json_out(['shifts' => $shifts]);
@@ -144,8 +149,12 @@ if (method() === 'POST') {
     // Stored at a precision proportionate to the purpose -- see rg_coord_places.
     $lat = isset($data['lat']) && $data['lat'] !== '' ? (float) $data['lat'] : null;
     $lng = isset($data['lng']) && $data['lng'] !== '' ? (float) $data['lng'] : null;
-    $valid = ['clock_in', 'clock_out', 'check_in', 'panic', 'note', 'task', 'signoff'];
+    $valid = ['clock_in', 'clock_out', 'check_in', 'panic', 'panic_ack', 'note', 'task', 'signoff'];
     if ($shiftId <= 0 || !in_array($kind, $valid, true)) fail('A shift and valid event kind are required.');
+
+    // Acknowledging an alert is the office responding to it, not the worker
+    // standing it down, so it is the one kind a worker cannot post.
+    if ($kind === 'panic_ack') require_role($user, 'super_admin', 'admin', 'manager');
 
     // A routine attendance record is stored to ~110 m: enough to show somebody
     // was at the site, not enough to be a movement history. A panic alert keeps
@@ -173,6 +182,32 @@ if (method() === 'POST') {
 
     // Prefer the logged-in user's linked worker, else the shift's worker.
     $workerId = $user['worker_id'] ? (int) $user['worker_id'] : ($shift['worker_id'] !== null ? (int) $shift['worker_id'] : null);
+
+    // A clock sequence that cannot have happened is a data-entry problem, not a
+    // record. Nothing stopped two clock_in rows on one shift, or a clock_out
+    // with no clock_in, and both corrupt the derived field status -- and, once
+    // clock events feed timesheets, the hours.
+    if ($kind === 'clock_in' || $kind === 'clock_out' || $kind === 'panic_ack') {
+        $stmt = $conn->prepare(
+            'SELECT kind FROM shift_events WHERE shift_id = ? AND kind IN ("clock_in","clock_out","panic","panic_ack") ORDER BY id'
+        );
+        $stmt->bind_param('i', $shiftId);
+        $stmt->execute();
+        $prior = [];
+        $priorRes = $stmt->get_result();
+        while ($r = $priorRes->fetch_assoc()) $prior[] = $r['kind'];
+
+        if ($kind === 'clock_in' && in_array('clock_in', $prior, true)) {
+            fail('That shift has already been clocked in.', 409);
+        }
+        if ($kind === 'clock_out') {
+            if (!in_array('clock_in', $prior, true)) fail('That shift has not been clocked in.', 409);
+            if (in_array('clock_out', $prior, true)) fail('That shift has already been clocked out.', 409);
+        }
+        if ($kind === 'panic_ack' && !rg_panic_open($prior)) {
+            fail('There is no open panic alert on that shift.', 409);
+        }
+    }
 
     $noteVal = $note !== '' ? $note : null;
     $signerVal = $signer !== '' ? $signer : null;
