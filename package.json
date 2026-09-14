@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:php": "php server/tests/run.php",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:db": "php server/tests/db/run.php"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.20",

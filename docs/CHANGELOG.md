@@ -7,6 +7,63 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Fixed — a fresh install did not work (2026-09-14)
+
+Found by building a database from `server/schema.sql` and every migration, which nothing had
+done since the schema and the migrations started being maintained side by side. All three
+faults are in `schema.sql`; none of them affects a database that already exists.
+
+- **`schema.sql` altered a table it never creates.** `ALTER TABLE integration_submissions ADD
+  COLUMN ... deleted_at` sat in the privacy build pass, and `integration_submissions` is created
+  by migration 011. A new database therefore failed on the third statement of the file, before
+  a single table existed. Migration 020 already adds that column and keeps it
+- **`schema.sql` repeated an index the migrations own.** `idx_consent_email_kind` was added here
+  with `IF NOT EXISTS` and by migration 020 without it, so migration 020 stopped on "Duplicate
+  key name" — leaving **eleven migrations, 020 to 030, unapplied** on any new database. That is
+  the privacy rights tables, the pay rate history, the bank holidays, the notification receipts,
+  the panic acknowledgements, the attendance retention and the break deduction
+- **`schema.sql` repeated three foreign keys the migrations own** — `fk_shifts_template` (027),
+  `fk_ts_shift` (029) and `fk_jobs_worker` (030). MySQL has no `ADD CONSTRAINT IF NOT EXISTS`,
+  so each one stopped its migration the same way
+- The rule now stated in the file: a statement belongs in `schema.sql` only if the table it
+  names is created in `schema.sql`
+
+### Added — database-backed HTTP tests (2026-09-14)
+
+`server/tests/run.php` says in its own header that anything needing a database is out of its
+scope. That left authorisation, service scope, state transitions and persistence covered by
+nothing, while `docs/` described behaviour no test exercised.
+
+- **`npm run test:db`** builds `ritagreen_os_test` from `schema.sql` and every migration, seeds
+  it, serves `server/` over HTTP and makes real requests as each seeded account. 85 assertions
+  across authentication and the permission matrix. Documented in `docs/TESTING.md`
+- It applies the migrations twice and asserts the second run changes nothing, and runs
+  `backfill-people.php --go` twice and asserts no person is created — both documented as safe
+  and neither previously tested
+- **`RG_CONFIG`** in `server/lib.php` lets the harness load its own configuration instead of
+  `server/config.php`, so a test run cannot reach a developer's working database and cannot
+  reach production. It is refused unless the file it names declares `RG_ENV` as `'local'`, and
+  the harness refuses any database name that is not `ritagreen_os_test`
+- Every outbound integration in the test configuration is off. Nothing in a run can send an
+  email, a text message, a payment or an AI request
+- CI gains a `database` job, on MySQL 8, with no `config.php` present
+
+### Fixed — deployment could promote a commit nothing had tested (2026-09-14)
+
+- **`deploy.yml` triggered on `push: branches: [main]`, exactly as `ci.yml` does.** Two
+  workflows on one event start together; they do not form a chain. The FTP upload finished
+  whether or not the typecheck, the tests, the build assertions or the source-map check had
+  passed. A red CI run and a deployed commit were compatible states
+- Deployment now triggers on `workflow_run` when CI **completes**, runs only when the conclusion
+  is success, and checks out `head_sha` — the commit CI tested, not whatever `main` points at by
+  then. It repeats the build-output assertions before uploading, and records the commit and the
+  CI run it is promoting
+- The gate also requires `workflow_run.event == 'push'` and that the head repository is this
+  repository. CI runs on `pull_request` too, including from forks: without those two conditions
+  a fork branch named `main` would have passed a conclusion-and-branch check, and this job would
+  have run `npm ci` and `npm run build` on that branch's code with the FTP credentials in the
+  environment
+
 ### Security — authorisation on reads (2026-09-09)
 
 Found by probing all 54 endpoints with a token for each of the seven roles, before and after,

@@ -63,6 +63,15 @@ system read as local: `migrate.php --go` skipped the typed-name confirmation and
 `config.php` without the constant counts as production, because the cost of being wrong that way
 is a refusal rather than a restore from backup.
 
+**A statement belongs in `schema.sql` only if the table it names is created in `schema.sql`.**
+It had drifted the other way: migration content was copied back into the baseline, and three of
+those copies were not re-runnable. A fresh install failed on statement three with an `ALTER` on
+`integration_submissions`, a table migration 011 creates; then on migration 020 with a duplicate
+`idx_consent_email_kind`, leaving 020 to 030 unapplied; then on 027, 029 and 030 with duplicate
+foreign keys, because MySQL has no `ADD CONSTRAINT IF NOT EXISTS`. `npm run test:db` builds a
+database from `schema.sql` plus every migration on every run, so this fails in CI now rather than
+on the day somebody needs a new environment.
+
 **Two schema mechanisms, and you need both.** `server/schema.sql` is the from-scratch baseline
 — one re-runnable file organised in "build passes", where later
 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` blocks patch earlier `CREATE TABLE` statements *in
@@ -262,6 +271,7 @@ npm run lint         # eslint . — has a known non-zero baseline, see below
 npm test             # vitest, node environment, src/**/*.test.ts(x)
 npm test -- access   # one test file, by substring of its path
 npm run test:php     # php server/tests/run.php — whole suite, no database, no filtering
+npm run test:db      # php server/tests/db/run.php — real HTTP against a disposable database
 npm run build
 ```
 
@@ -275,8 +285,18 @@ npm run seed -- --confirm         # fixtures, CLI-only and local-host-only
 
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, `npm test`, build, a build-output
 assertion (`dist/index.html`, `manifest.webmanifest`, `sw.js` present, **zero `*.map` files**),
-`php -l` across every PHP file, `php server/tests/run.php`, a check that `server/config.php` is
-not tracked, and `python3 scripts/docs_sync.py --check`.
+`php -l` across every PHP file, `php server/tests/run.php`, `php server/tests/db/run.php` against
+a MySQL service, a check that `server/config.php` is not tracked, and
+`python3 scripts/docs_sync.py --check`.
+
+**Deployment is gated on CI, for the exact commit CI tested.** `deploy.yml` triggers on
+`workflow_run` when CI completes, and runs only when the conclusion is success, the branch is
+`main`, the triggering event was a `push`, and the head repository is this one. It used to
+trigger on `push: branches: [main]` alongside `ci.yml` — two workflows on one event, which start
+together rather than in sequence, so the upload finished whether or not anything passed. The
+`event == 'push'` and head-repository conditions matter because CI also runs on `pull_request`:
+without them a fork branch named `main` would have reached a job that runs `npm ci` with the FTP
+credentials in its environment. See `docs/TESTING.md`.
 
 **Lint gates, at zero.** CI runs `eslint --max-warnings 0` and blocks. It was 33 errors, then
 27, then 19; the last of them were cleared by changing the code rather than the rules. Keep it

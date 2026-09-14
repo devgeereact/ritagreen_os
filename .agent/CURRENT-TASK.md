@@ -2,26 +2,47 @@
 
 ## Outcome
 
-Verification and correctness pass over the whole application: establish what it actually does,
-fix what is broken, and bring every document back into step with the code.
+Implement the approved lean CMS launch plan (`docs/LEAN-CMS-LAUNCH-PLAN.md`, approved
+14 September 2026) against this repository, phase by phase, verifying each before the next.
 
-Superseded: the GEE OS 0.5.0 adoption contract this file previously carried. That work is done —
-`AGENTS.md`, `.agent/PROJECT.yml` and this file exist, and no application behaviour was changed
-by it.
+The launch unit is one complete journey: application → recruitment review → evidence
+verification → onboarding → authorised approval → active worker → eligible assignment →
+ongoing compliance and expiry follow-up.
+
+Superseded: the "verification and correctness pass" contract this file previously carried. Its
+work is done and its evidence is in `docs/CHANGELOG.md` and `docs/PRIVACY_READINESS_REPORT.md`.
+Nothing it established is discarded — the defects it fixed stay fixed, and its rule that a claim
+needs a command behind it is carried forward here.
+
+## Product boundary
+
+One company. Four services: Care, Cleaning, Security, Academy. One person record.
+
+This is a company management system. It is not a learning management system. Lessons, quizzes,
+assessments, course authoring, gradebooks, video hosting, classrooms, SCORM and learner
+progression are out of scope, and the existing AI quiz generator in `AcademyDetail.tsx` is to be
+removed. Training **records** and external certificate evidence are retained.
+
+Keep React, Vite, TypeScript, the existing UI components, the flat PHP endpoints and MySQL. No
+framework migration, no multi-tenancy, no microservices, no generic workflow engine, no
+permissions DSL, no new state library.
 
 ## Scope
 
-- Verify implemented behaviour against a local database, by exercising it rather than reading it.
-- Fix defects found, smallest cohesive change first, root cause before symptom.
-- Keep `docs/`, `CLAUDE.md`, `README.md` and `server/README.md` accurate as the code changes.
-- Commit on `privacy/readiness`, push the branch, keep the pull request green.
+- Phases 0 to 5 of the approved plan, locally, in order.
+- Reuse before building: existing tables, helpers, access controls, queues and components.
+- Removal only through the plan's removal protocol, recorded per path with its verification.
+- Keep `docs/`, `CLAUDE.md` and the STATUS/PROGRESS/TRACEABILITY set accurate as code changes.
+- Commit on `lean-cms/build`.
 
 ## Outside scope
 
-- Applying migrations to the production database.
-- Uploading PHP to the live host, and merging to `main` — which deploys.
-- Any change to production data, external services or third-party accounts.
-- New features. A defect found is fixed; a feature imagined is written down instead.
+- Pushing, merging to `main` (which deploys), or uploading PHP to the live host.
+- Applying migrations to, or reading, the production database.
+- Real email, SMS, WhatsApp, payment or AI calls — local runs keep every integration disabled.
+- Phase 6, the external Academy integration: it needs a confirmed provider, and there is none.
+- Deleting historical employment, financial, certificate or audit data as cleanup.
+- Dropping database tables because a feature is retired.
 
 ## Mode and workflow
 
@@ -31,14 +52,31 @@ by it.
 
 ## Evidence
 
-- HTTP permission matrix across every endpoint and every role, before and after.
-- Journeys exercised end to end against a seeded local database, not mocked.
+Every phase reports: what changed, which files, which acceptance scenarios were exercised, the
+commands and their results, what remains broken, and what was not tested.
+
 - `npm run typecheck`, `npm run lint -- --max-warnings 0`, `npm test`, `npm run test:php`,
-  `npm run build`, `python3 scripts/docs_sync.py --check` — all green, all blocking in CI.
-- Every claim in the final report traceable to a command that was run.
+  `npm run test:db`, `npm run build`, `python3 scripts/docs_sync.py --check` — all green, all
+  blocking in CI.
+- Database-backed HTTP tests for anything that touches authorisation, scope, a state transition
+  or persistence. A pure-function test is not evidence that a workflow works.
+- Browser journeys for what a person actually does.
+- `NOT TESTED` stated plainly wherever it applies.
 
 ## Completion
 
-The critical journeys are verified, the defects found are fixed and retested, the documentation
-matches the code, and what remains unverified is stated plainly — including everything that
-needs production access, which this contract does not grant.
+The core journey works for the owner, for staff and for a worker; the negative cases are refused;
+the documentation matches the code; a release candidate and its evidence are prepared. Production
+deployment is a separate authorisation and is not part of this contract.
+
+## Phase record
+
+| Phase | State | Evidence |
+|---|---|---|
+| 0 — reproducible local baseline | done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
+| 1 — foundation and one person record | in progress | |
+| 2 — recruitment and communications | not started | |
+| 3 — verification, onboarding, activation | not started | |
+| 4 — workforce and worker portal | not started | |
+| 5 — owner visibility and launch readiness | not started | |
+| 6 — external Academy integration | deferred, no provider | |

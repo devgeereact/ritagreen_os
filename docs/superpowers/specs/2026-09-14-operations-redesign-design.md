@@ -1,5 +1,20 @@
 # Operations, redefined: Today, Rota, Pay
 
+> **Superseded in part, 14 September 2026.** The approved product direction is
+> [`../../LEAN-CMS-LAUNCH-PLAN.md`](../../LEAN-CMS-LAUNCH-PLAN.md), whose navigation is Today,
+> Recruitment, People, Compliance, Assignments, Reports and Settings. The Today / Rota / Pay
+> grouping proposed here is **not being implemented as a whole**, and the files it lists are not
+> to be deleted on the strength of it.
+>
+> Two of its findings are carried into the approved plan and remain correct, both checked against
+> the code rather than assumed: `action-centre.php` already returns every item needing attention
+> with a link to where it is fixed and nothing in `src/` calls it, and `bookings.php` is the
+> front door to cover while being filed under money. The approved plan's Today list and
+> Assignments section build on both.
+>
+> Design only. Nothing here was implemented.
+
+
 **Date:** 2026-09-14
 **Status:** design agreed, not implemented
 **Scope:** the OPERATIONS group of the internal CMS only

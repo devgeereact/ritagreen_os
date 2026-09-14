@@ -32,3 +32,6 @@ server/uploads/
 *.sln
 *.sw?
 *.tsbuildinfo
+
+# Playwright MCP scratch output (snapshots, console logs)
+.playwright-mcp/

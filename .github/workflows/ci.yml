@@ -111,6 +111,65 @@ jobs:
             exit 1
           fi
 
+  database:
+    name: Database-backed HTTP tests
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+      RG_TEST_DB_HOST: 127.0.0.1
+      RG_TEST_DB_USER: root
+      RG_TEST_DB_PASS: rg_ci_local_only
+      RG_TEST_DB_NAME: ritagreen_os_test
+
+    # server/tests/run.php covers the pure logic and says so: anything needing a
+    # database is out of its scope. That left authorisation, service scope, state
+    # transitions and persistence untested by anything -- and those are the parts
+    # that decide who can read a worker's compliance record.
+    #
+    # This job builds a database from server/schema.sql and every migration on
+    # each run, so "a fresh install works" is asserted rather than remembered. It
+    # was not working: schema.sql altered a table it never created, and repeated
+    # three statements the migrations own, so a new database stopped at migration
+    # 020 with eleven migrations unapplied.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rg_ci_local_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -prg_ci_local_only"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mysqli, curl
+          coverage: none
+
+      # No config.php is present and none is created. The suite loads
+      # server/tests/db/config.php through RG_CONFIG, which holds no secret and
+      # switches every outbound integration off. Nothing here can email anyone.
+      - name: Refuse to run with a config.php present
+        run: |
+          if [ -f server/config.php ]; then
+            echo "server/config.php exists in the CI checkout. It must never be committed."
+            exit 1
+          fi
+
+      # Called directly rather than through npm: the job installs no node
+      # modules, and the script is one php invocation.
+      - name: Database-backed HTTP tests
+        run: php server/tests/db/run.php
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest

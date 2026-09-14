@@ -1,5 +1,16 @@
 # RITAGREEN_SETUP.md — the transformation brief
 
+> **Superseded, 14 September 2026.** The approved product direction is
+> [`LEAN-CMS-LAUNCH-PLAN.md`](LEAN-CMS-LAUNCH-PLAN.md): one company, four services, one person
+> record, on the existing React/Vite, PHP and MySQL architecture. The multi-tenant SaaS
+> transformation this file briefs — tenants, custom domains, sign-up, per-tenant branding — is
+> **not being built**, and neither is the LMS scope it assumes.
+>
+> This file is kept because Part D is still the fullest written account of what the application
+> actually does, surface by surface, and that account is accurate and useful. Read it as a
+> description of the system, not as a plan for it. Where Parts A to C describe the
+> transformation, treat them as a proposal that was considered and set aside.
+
 **Status:** working brief, written against the codebase as it stood on 2026-09-02.
 **Owner:** Gideon Akinlotan.
 **Purpose:** a single, self-contained prompt that briefs an executive product team on RitaGreen

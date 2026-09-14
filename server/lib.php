@@ -46,7 +46,30 @@ set_error_handler(function ($severity, $message, $file, $line) {
 // endpoint has it, and so server/tests/run.php can include it on its own.
 require_once __DIR__ . '/pure.php';
 
-if (!file_exists(__DIR__ . '/config.php')) {
+// Which config file to load. server/config.php is the only answer on the server
+// and the normal answer locally. RG_CONFIG names a different one, and exists so
+// the database-backed test harness can run against a disposable database without
+// the developer's own config.php -- which holds real credentials and points at a
+// database whose contents the tests would destroy.
+//
+// It is read from the environment, so it can only be set by whoever starts the
+// process. It is refused outright unless the file it names declares
+// RG_ENV === 'local': an env var must not be able to redirect a deployed server
+// at another database, and a test run must not be able to reach production.
+$_config = __DIR__ . '/config.php';
+$_override = getenv('RG_CONFIG');
+if (is_string($_override) && $_override !== '') {
+    $_resolved = realpath($_override);
+    if ($_resolved === false || !is_file($_resolved)) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => "RG_CONFIG names a file that does not exist: $_override"]);
+        exit;
+    }
+    $_config = $_resolved;
+}
+
+if (!file_exists($_config)) {
     http_response_code(500);
     header('Content-Type: application/json');
     // Two audiences: a developer who has not set up locally yet, and an operator
@@ -56,7 +79,16 @@ if (!file_exists(__DIR__ . '/config.php')) {
         : 'config.php is missing on the server. Upload it to the document root.']);
     exit;
 }
-require __DIR__ . '/config.php';
+require $_config;
+
+// An overriding config must say it is local, and must say it before it is
+// trusted. Checked after the require because RG_ENV is defined inside the file.
+if ($_config !== __DIR__ . '/config.php' && !(defined('RG_ENV') && RG_ENV === 'local')) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => "RG_CONFIG is only honoured for a config that declares RG_ENV as 'local'."]);
+    exit;
+}
 
 // From here on a failed query THROWS instead of returning false.
 //
