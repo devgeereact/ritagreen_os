@@ -88,6 +88,10 @@ CREATE TABLE IF NOT EXISTS counters (
   val INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- The payroll counter is seeded by migration 032, which sets it to the highest
+-- payroll number already in use. On a database built from this file there are no
+-- workers yet, so next_seq() starting it at 1 is correct.
+
 -- ---- Rate limiting (brute-force / spam throttle for public endpoints) ----
 -- rate_limit() in lib.php writes one row per hit and counts within a window.
 CREATE TABLE IF NOT EXISTS rate_limits (
@@ -626,7 +630,7 @@ CREATE TABLE IF NOT EXISTS applicants (
   phone VARCHAR(40) NULL,
   role_applied VARCHAR(80) NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
-  stage ENUM('applied','screened','interview','vetting','offer','onboarded','rejected') NOT NULL DEFAULT 'applied',
+  stage ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected') NOT NULL DEFAULT 'applied',
   source VARCHAR(80) NULL,
   notes TEXT NULL,
   worker_id INT NULL,

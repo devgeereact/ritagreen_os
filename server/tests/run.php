@@ -992,6 +992,25 @@ check('anything else asks a person', rg_retention_action('destroy'), 'review');
 check('and so does an empty value', rg_retention_action(''), 'review');
 
 // ---------------------------------------------------------------------------
+group('rg_in_service_scope');
+
+// An unscoped account -- admin, or any account with scope_to_division off.
+check('no scope sees a record in any service', rg_in_service_scope(null, 'care'), true);
+check('no scope sees a record with no service', rg_in_service_scope(null, null), true);
+
+// A scoped account.
+check('own service is in scope', rg_in_service_scope('security', 'security'), true);
+check('another service is not', rg_in_service_scope('security', 'care'), false);
+
+// A record with no service is out of scope for a scoped account. Treating
+// "unknown" as "yours" is how a scope stops meaning anything.
+check('a record with no service is out of scope', rg_in_service_scope('security', null), false);
+check('an empty service is out of scope', rg_in_service_scope('security', ''), false);
+
+// Services are compared exactly. A prefix is a different service.
+check('a prefix is not a match', rg_in_service_scope('care', 'careers'), false);
+
+// ---------------------------------------------------------------------------
 group('endpoint guards');
 
 [$guardChecked, $guardProblems] = guard_check_endpoints();

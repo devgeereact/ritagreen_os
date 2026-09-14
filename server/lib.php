@@ -296,6 +296,56 @@ function service_scope(array $user): ?string
 }
 
 /**
+ * Refuse a record that is outside this account's service scope.
+ *
+ * Call it immediately after loading the record and before doing anything with
+ * it, on reads as well as writes. service_scope() returns null for an account
+ * that sees everything, so this is a no-op for an admin.
+ *
+ * The predicate is rg_in_service_scope() in pure.php, where it is tested.
+ */
+function require_service_scope(array $user, ?string $service): void
+{
+    if (!rg_in_service_scope(service_scope($user), $service)) {
+        fail('You do not have access to this.', 403);
+    }
+}
+
+/**
+ * A worker's service, or null when there is no such worker.
+ *
+ * Branches that take a worker id need the division to check the scope against,
+ * and each of them was otherwise about to write a second query for it.
+ */
+function worker_division(mysqli $conn, int $workerId): ?string
+{
+    $stmt = $conn->prepare('SELECT division FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    // No worker is not this function's refusal to make -- the caller's own
+    // "not found" message is better than a scope error. Returning null means a
+    // scoped account is refused first, which tells them nothing they should not
+    // already know: that id is not theirs either way.
+    return $row['division'] ?? null;
+}
+
+/**
+ * As above, from inside an open transaction.
+ *
+ * fail() exits, and an exit with a transaction still open relies on the
+ * connection closing to roll it back. That does happen, but leaving it implicit
+ * means the next person to add a statement before the refusal has to know it.
+ */
+function require_service_scope_tx(mysqli $conn, array $user, ?string $service): void
+{
+    if (!rg_in_service_scope(service_scope($user), $service)) {
+        $conn->rollback();
+        fail('You do not have access to this.', 403);
+    }
+}
+
+/**
  * Find the person these details describe, or create them.
  *
  * Every path that creates a candidate, worker or login goes through here, which
@@ -331,8 +381,35 @@ function find_or_create_person(mysqli $conn, string $name, ?string $email = null
     $normalised = rg_normalise_email($email);
     $stmt = $conn->prepare('INSERT INTO people (full_name, email, phone, match_key) VALUES (?, ?, ?, ?)');
     $stmt->bind_param('ssss', $name, $normalised, $phone, $match['key']);
-    $stmt->execute();
-    return (int) $conn->insert_id;
+
+    try {
+        $stmt->execute();
+        return (int) $conn->insert_id;
+    } catch (mysqli_sql_exception $e) {
+        // 1062 is a duplicate on people.match_key (UNIQUE, migration 001).
+        //
+        // The lookup above and this insert are two statements with nothing
+        // between them, so two requests for the same person can both find
+        // nothing and both try to create them. The unique key is what stops the
+        // second one -- correctly -- and with no handling that refusal surfaced
+        // as a 500. Reproduced with four simultaneous applications from one
+        // address in server/tests/db/cases/050_identity.php: two runs in three
+        // returned "Server error: Duplicate entry 'e:...' for key
+        // 'uniq_people_match'" to an applicant who had done nothing wrong.
+        //
+        // The other request has created exactly the person this one was about to
+        // create, so read it and carry on. Anything else is rethrown.
+        if ($e->getCode() !== 1062 || $match['key'] === null) throw $e;
+
+        $stmt = $conn->prepare('SELECT id FROM people WHERE match_key = ? LIMIT 1');
+        $stmt->bind_param('s', $match['key']);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        // A 1062 on this key with no row behind it should not be reachable. If it
+        // ever is, the original error is the honest thing to report.
+        if (!$row) throw $e;
+        return (int) $row['id'];
+    }
 }
 
 /**

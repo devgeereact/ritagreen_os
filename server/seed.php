@@ -96,22 +96,31 @@ echo "Seeding…\n";
 // throwaway credential for a throwaway database; it is not a secret and must
 // never appear in a real config.
 $password = password_hash('LocalDev123!', PASSWORD_BCRYPT, ['cost' => 10]);
+// The last column is scope_to_division. It is opt-in per account (migration 015)
+// and every seeded account had it off, so service scope -- the rule that a
+// manager for one service does not see another's candidates and workers -- was
+// not exercised by any fixture, and therefore not by any test. Sonia is scoped to
+// security and exists to be told no.
 $staff = [
-    ['Olu Admin',      'admin@local.invalid',    'admin',    null],
-    ['Mara Manager',   'manager@local.invalid',  'manager',  'care'],
-    ['Tam Trainer',    'trainer@local.invalid',  'trainer',  'academy'],
-    ['Eddie Editor',   'editor@local.invalid',   'editor',   null],
-    ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning'],
+    ['Olu Admin',      'admin@local.invalid',    'admin',    null,       0],
+    ['Mara Manager',   'manager@local.invalid',  'manager',  'care',     0],
+    ['Sonia Scoped',   'scoped@local.invalid',   'manager',  'security', 1],
+    ['Tam Trainer',    'trainer@local.invalid',  'trainer',  'academy',  0],
+    ['Eddie Editor',   'editor@local.invalid',   'editor',   null,       0],
+    ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning', 0],
 ];
 // Every identity is created through find_or_create_person(), the same call the
 // application uses. Migration 004 made users.person_id, workers.person_id and
 // applicants.person_id NOT NULL, and these inserts still named none of them --
 // so seeding a migrated database failed outright with "Field 'person_id'
 // doesn't have a default value", which is every developer's database.
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, person_id) VALUES (?, ?, ?, ?, ?, ?)');
-foreach ($staff as [$name, $email, $role, $division]) {
+$ins = $conn->prepare(
+    'INSERT INTO users (name, email, password_hash, role, division, scope_to_division, person_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)'
+);
+foreach ($staff as [$name, $email, $role, $division, $scoped]) {
     $personId = find_or_create_person($conn, $name, $email);
-    $ins->bind_param('sssssi', $name, $email, $password, $role, $division, $personId);
+    $ins->bind_param('sssssii', $name, $email, $password, $role, $division, $scoped, $personId);
     $ins->execute();
 }
 echo "  users        " . count($staff) . "\n";
@@ -158,16 +167,22 @@ $workers = [
     ['Ivan Petrov',   'ivan@local.invalid',   '07700900109', 'cleaner', 'cleaning', 'onboarding', 0, null,      null,     null,           null,    1200],
     ['Jade Thompson', 'jade@local.invalid',   '07700900110', 'trainer', 'academy',  'active',     1, 'valid',   $d(600),  null,           null,    2500],
 ];
+// Through next_payroll_no(), because both paths that create a worker in the
+// application do -- and these inserts did not, so every seeded worker had a NULL
+// payroll number and no test could tell the difference between "the fixtures are
+// unnumbered" and "the allocator is broken".
 $ins = $conn->prepare(
     'INSERT INTO workers (name, email, phone, role, division, status, right_to_work,
-                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type, person_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye", ?)'
+                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type,
+                          person_id, payroll_no)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye", ?, ?)'
 );
 $workerIds = [];
 $workerPersonIds = [];
 foreach ($workers as $w) {
     $personId = find_or_create_person($conn, $w[0], $w[1], $w[2]);
-    $ins->bind_param('ssssssissssii', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11], $personId);
+    $payrollNo = next_payroll_no($conn);
+    $ins->bind_param('ssssssissssiis', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11], $personId, $payrollNo);
     $ins->execute();
     $workerIds[$w[0]] = $conn->insert_id;
     $workerPersonIds[$w[0]] = $personId;

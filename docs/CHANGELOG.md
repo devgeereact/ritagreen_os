@@ -7,6 +7,79 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Security — service scope was applied to lists and nothing else (2026-09-14)
+
+`service_scope()` confines an account to one service, opt-in per account through
+`users.scope_to_division` (migration 015). Every seeded account had it off, so no fixture
+exercised it and no test could. `server/seed.php` now seeds `scoped@local.invalid`, a manager
+for security, and `server/tests/db/cases/030_service_scope.php` is the reproduction.
+
+Reproduced as that account, against `care` records it should never reach. Before the fix it
+could:
+
+- **read a candidate in full** by id — name, email, phone, notes — because the ATS list query
+  was scoped and the detail read was not
+- **reject them**, by posting a stage change
+- **add onboarding tasks** to their checklist
+- **complete a task** on it, through `task_done`, which takes a task id and so was not covered
+  even by the branches that did look at an applicant id
+- **convert them into a worker**, allocating them a payroll number
+- and on `workers.php`: change another service's worker's availability, set their **pay rate**
+  and write a rate-history row, and create a worker in a service it cannot see
+
+`require_service_scope()` in `lib.php` now sits on every branch of `ats.php` and `workers.php`
+that reads or writes one record, including the two that take the service from the request body
+rather than from a row. The predicate is `rg_in_service_scope()` in `pure.php`, tested there: a
+record with no service is **out** of scope for a scoped account, because treating "unknown" as
+"yours" is how a scope stops meaning anything.
+
+### Fixed — one applicant, four workers (2026-09-14)
+
+`ats.php?action=onboard` is five writes — allocate a payroll number, insert the worker, link the
+person to the service, mark the application, seed the checklist — and it had no transaction and
+no lock on the row it checked.
+
+- **Four simultaneous requests produced four workers**, each with its own payroll number, and
+  seeded the checklist four times over. The "already a worker" test was a plain `SELECT`, so
+  every request read `worker_id` as NULL and every request went on to insert. The whole branch
+  is now one transaction with the applicant held `FOR UPDATE`: one request creates the worker,
+  the other three get 409
+- This was invisible until the test harness could serve requests concurrently. `php -S` handles
+  one at a time unless `PHP_CLI_SERVER_WORKERS` is set, so the first version of the concurrency
+  test passed against the unfixed code
+- A failure part way through used to leave the halves that had succeeded — a worker holding a
+  payroll number that no application pointed at. It now rolls back
+
+### Fixed — a repeat application could return a 500 (2026-09-14)
+
+- `find_or_create_person()` does a lookup and then an insert, and `people.match_key` is UNIQUE
+  (migration 001). Two requests for the same person could both find nothing and both insert, and
+  the second got `Duplicate entry 'e:...' for key 'uniq_people_match'` as a **500**. Reproduced
+  with four simultaneous applications from one address: two runs in three failed. The duplicate
+  is now caught and the person the other request created is read back
+- The unique key was doing its job throughout. What was missing was the handling of its refusal
+
+### Fixed — starting onboarding is not finishing it (2026-09-14)
+
+- The conversion set the application's stage to `onboarded` while creating a **pending** worker
+  and a checklist of **unfinished** tasks. Migration 031 adds `onboarding` between `offer` and
+  `onboarded`; the conversion writes that, and `onboarded` becomes the completed state that the
+  activation step will reach. Existing rows are reclassified by whether their checklist is
+  finished, not in bulk
+
+### Fixed — payroll numbers (2026-09-14)
+
+- **`counters.payroll` is seeded by migration 032** to the highest number already in use. On a
+  database whose payroll numbers predate the counter — or one restored from a dump without the
+  counters table — `next_seq()` would have started at 1 and the next conversion would have died
+  on the unique key with a 500 that explained nothing
+- **`server/backfill-payroll.php`** allocates a number to workers that have none: report by
+  default, `--go` to write, safe to run twice, refuses to start if the counter is behind a
+  number already in use. It never renumbers anybody — the old number is already on payslips
+- **`server/seed.php` allocates through `next_payroll_no()`**, as both application paths do. It
+  did not, so all ten seeded workers had NULL and no test could tell an unnumbered fixture from
+  a broken allocator
+
 ### Fixed — a fresh install did not work (2026-09-14)
 
 Found by building a database from `server/schema.sql` and every migration, which nothing had

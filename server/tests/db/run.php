@@ -90,7 +90,12 @@ $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
 // assertion failures under a line per request.
 $cmd = sprintf('exec %s -S 127.0.0.1:%d -t %s >>%s 2>&1',
     escapeshellarg(PHP_BINARY), $port, escapeshellarg($root), escapeshellarg($log));
-$proc = proc_open($cmd, $descriptors, $pipes, null, ['RG_CONFIG' => $configPath] + $_ENV);
+// PHP_CLI_SERVER_WORKERS makes `php -S` fork worker processes. Without it the
+// dev server handles one request at a time, so every "concurrent" test passes by
+// accident: the requests are simply queued, and a race the production host would
+// hit under two simultaneous clicks is invisible here.
+$env = ['RG_CONFIG' => $configPath, 'PHP_CLI_SERVER_WORKERS' => '8'] + $_ENV;
+$proc = proc_open($cmd, $descriptors, $pipes, null, $env);
 if (!is_resource($proc)) {
     fwrite(STDERR, "Could not start the PHP dev server on port $port\n");
     exit(2);

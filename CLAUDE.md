@@ -135,6 +135,30 @@ branch. `server/tests/guards.php` (in `npm run test:php`) fails if an endpoint r
 between `require_auth()` and its first authorisation call; endpoints that really do serve any
 authenticated account are listed there with the reason.
 
+**Service scope goes on the record, not on the list.** `require_service_scope()` after loading
+a row, on reads as well as writes, on every branch — including the ones that take a task id or a
+worker id rather than the obvious one, and the ones that take the service from the request body.
+Only the ATS and workforce *list* queries applied `service_scope()`, so a manager confined to
+security could read a care candidate in full by id, reject them, add and complete onboarding
+tasks, convert them into a worker with a payroll number, and set another service's worker's pay.
+`rg_in_service_scope()` in `server/pure.php` is the rule: a record with no service is **out** of
+scope for a scoped account. It is opt-in per account through `users.scope_to_division`, which was
+off for every fixture, so nothing exercised it — `scoped@local.invalid` exists now.
+
+**A check and a write in two statements is not a check.** `ats.php?action=onboard` read
+`worker_id`, found NULL, and inserted; four simultaneous requests made four workers from one
+applicant, each with its own payroll number. It is one transaction with the applicant held `FOR
+UPDATE` now. `find_or_create_person()` had the same shape against the UNIQUE `people.match_key`
+and turned the database's correct refusal into a 500 for a returning applicant. Note that
+`php -S` serves one request at a time unless `PHP_CLI_SERVER_WORKERS` is set, so a concurrency
+test written without it passes against broken code — `server/tests/db/run.php` sets it to 8.
+
+**A payroll number is permanent, and the counter has to know that.** `next_seq()` starts an
+unseen counter at 1 and `workers.payroll_no` is UNIQUE, so on a database whose numbers predate
+the counter the next conversion dies on the unique key. Migration 032 raises the counter to the
+highest number in use; `server/backfill-payroll.php` fills in workers that have none. Neither
+ever renumbers anybody: the old number is already on payslips and in records.
+
 **Sensitive data is separated by zone, not by role alone.** `can_view_zone()` reads
 `zone_permissions` (migration 015), and it is enforced for `payroll`, `compliance` and `health`.
 A new endpoint that returns right-to-work state, DBS status, an SIA number or anything about

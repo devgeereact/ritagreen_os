@@ -58,6 +58,9 @@ if ($action === 'availability' && method() === 'POST') {
     $id = (int) ($_GET['id'] ?? 0);
     $data = body();
     if ($id <= 0) fail('A worker is required.');
+    // The list above is scoped and this was not, so a manager confined to one
+    // service could change another service's worker by asking for them by id.
+    require_service_scope($user, worker_division($conn, $id));
     $days = !empty($data['avail_days']) ? 1 : 0;
     $nights = !empty($data['avail_nights']) ? 1 : 0;
     $weekends = !empty($data['avail_weekends']) ? 1 : 0;
@@ -94,13 +97,15 @@ if ($action === 'pay' && method() === 'POST') {
     if (mb_strlen($note) > 255) fail('That note is too long.');
     // Read the current values first: an audit entry that cannot say what the pay
     // rate was before is not much of an audit entry.
-    $prev = $conn->prepare('SELECT pay_rate_pence, pay_type FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $prev = $conn->prepare('SELECT pay_rate_pence, pay_type, division FROM workers WHERE id = ? AND deleted_at IS NULL');
     $prev->bind_param('i', $id);
     $prev->execute();
     $was = $prev->get_result()->fetch_assoc();
     // No row means no worker. Without this a pay change against a mistyped id
     // reported success and wrote an audit entry with an empty before-state.
     if (!$was) fail('Worker not found.', 404);
+    require_service_scope($user, $was['division']);
+    unset($was['division']);   // not part of the pay before-state
 
     // The history row is what payroll reads for work done on or after that date
     // (migration 022); workers.pay_rate_pence stays as the current rate for the
@@ -148,6 +153,10 @@ if (method() === 'POST') {
     $allowedDiv = ['care', 'academy', 'cleaning', 'security'];
     if (!in_array($role, $allowedRoles, true)) fail('Invalid role.');
     if (!in_array($division, $allowedDiv, true)) fail('Invalid division.');
+    // The division arrives in the body, so without this a scoped account could
+    // create a worker in a service it cannot then see, manage or be responsible
+    // for -- and would have allocated them a payroll number doing it.
+    require_service_scope($user, $division);
     if ($payRate < 0) fail('Pay rate cannot be negative.');
     if (!in_array($payType, ['paye', 'umbrella'], true)) fail('Invalid pay type.');
     if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');

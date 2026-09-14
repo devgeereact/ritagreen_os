@@ -1067,3 +1067,25 @@ function rg_derive_worker_status(array $worker, array $facts, ?string $today = n
     return ['status' => 'active',
             'reason' => 'Cleared for ' . $eligible . ' ' . ($eligible === 1 ? 'service' : 'services')];
 }
+
+/**
+ * Is a record in this account's service scope?
+ *
+ * $scope is what service_scope() returned: null for an account that sees every
+ * service, otherwise the one service it is confined to. $service is the record's
+ * own service, which is a division column on applicants, workers and shifts.
+ *
+ * A record with NO service is out of scope for a scoped account. That is the
+ * safe direction: a NULL division cannot be shown to belong to security, and
+ * treating "unknown" as "yours" is how a scope becomes decorative.
+ *
+ * Pure, so the rule is testable without a database -- and it needs to be, because
+ * the scope was applied to the ATS list query and to nothing else. A manager
+ * confined to security could read another service's candidate by id, reject them,
+ * add onboarding tasks and convert them into a worker with a payroll number.
+ */
+function rg_in_service_scope(?string $scope, ?string $service): bool
+{
+    if ($scope === null) return true;
+    return $service !== null && $service !== '' && $service === $scope;
+}

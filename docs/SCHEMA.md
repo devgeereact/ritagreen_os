@@ -1790,3 +1790,38 @@ business's to state with advice; a number written here would be trusted and woul
 `kind = 'marketing'`, checked before every send, so it has to be a lookup and not a scan. No new
 table: an opt-out is a row with `granted = 0`, never a deletion — erasing the record that
 somebody unsubscribed is how they get signed up again by the next import.
+
+
+## `applicants.stage` — widened by migration 031
+
+`ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected')`.
+
+`onboarding` is new, and sits between `offer` and `onboarded`. `ats.php?action=onboard` creates
+a pending worker and a checklist of unfinished tasks, and it used to set the stage to
+`onboarded` in the same transaction — so the pipeline said a candidate was through onboarding at
+the moment none of it had been done, and no stage was left to mean cleared and working.
+
+The migration reclassifies existing rows by what is true of them rather than in bulk: an
+`onboarded` row with outstanding tasks, or with no checklist at all, becomes `onboarding`; one
+whose checklist is finished keeps the word, because the word is then accurate. The checklist is
+the evidence and is untouched either way.
+
+Reaching `onboarded` is the activation step's job, and activation is Phase 3 of
+`docs/LEAN-CMS-LAUNCH-PLAN.md`. Until it exists, nothing writes `onboarded` automatically.
+
+## `counters.payroll` — seeded by migration 032
+
+Not a new table. `next_payroll_no()` formats `next_seq($conn, 'payroll')`, and `next_seq()`
+starts a counter it has never seen at 1. `workers.payroll_no` is UNIQUE (migration 001).
+
+On any database that already holds numbered workers and has no `payroll` row in `counters` —
+one where the numbers predate the counter, or one restored from a dump without it — the next
+worker created would be offered `RG-000001`, the unique key would refuse it, and the conversion
+would fail with a 500 that explained nothing. The migration raises the counter to the highest
+number already in use. It never lowers it and never renumbers anybody, so re-running changes
+nothing.
+
+`server/backfill-payroll.php` fills in workers that have no number at all: report by default,
+`--go` to allocate, safe to run twice, and it refuses to start if the counter is behind a number
+already in use. Archived workers are included — a leaver's payroll number is still cited by the
+records of the work they did.

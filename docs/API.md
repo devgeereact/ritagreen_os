@@ -1048,10 +1048,10 @@ Recruitment and onboarding.
 | POST | — | **Public**, rate-limited | body `{name, email, phone?, role_applied?, division, consent}` | `{ok: true}` 201; creates an applicant with source `careers`, a `consent_log` row, a broadcast notification and an office email |
 | GET | — (with `?id=`) | Office roles plus `trainer` | `id` | `{applicant, tasks}` |
 | GET | — | Office roles plus `trainer` | — | `{applicants}`, 500 most recent |
-| POST | `stage` | Office roles | `id`; body `{stage}` | `{ok: true}`; stage ∈ applied/screened/interview/vetting/offer/onboarded/rejected |
+| POST | `stage` | Office roles, **scoped to the applicant's service** | `id`; body `{stage}` | `{ok: true}`; stage ∈ applied/screened/interview/vetting/offer/onboarding/onboarded/rejected |
 | POST | `add_task` | Office roles | `id`; body `{label}` | `{ok: true}` 201 |
 | POST | `task_done` | Office roles | `task_id`; body `{done}` | `{ok: true}` |
-| POST | `onboard` | Office roles | `id` | `{ok: true, worker_id}` 201; creates a worker, marks the applicant `onboarded`, and seeds the five-item checklist at `ats.php:15`. 409 if already onboarded |
+| POST | `onboard` | Office roles, **scoped to the applicant's service** | `id` | `{ok: true, worker_id, person_id, payroll_no}` 201; **one transaction**, with the applicant row held `FOR UPDATE`: allocates a payroll number, creates a pending worker, links the person to the service, sets the stage to `onboarding` (migration 031 — *started*, not finished) and seeds the five-item checklist at `ats.php:15`. 409 if already converted, including for a simultaneous second request |
 | POST | `from_learner` | Office roles + `trainer` | body `{name, email?, division?}` | `{ok: true, id}` 201; Academy-to-ATS handoff, entering at stage `screened`. An invalid email is replaced with `<name>@learner.invalid` (`ats.php:180`) |
 
 The staff GET exposes every applicant's name, email and phone to any

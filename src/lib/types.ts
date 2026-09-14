@@ -236,7 +236,10 @@ export type Applicant = {
   phone: string | null
   role_applied: string | null
   division: DivisionId
-  stage: "applied" | "screened" | "interview" | "vetting" | "offer" | "onboarded" | "rejected"
+  // "onboarding" is onboarding STARTED: a pending worker exists and the checklist
+  // is outstanding. "onboarded" is the completed state. They were one value, so
+  // the pipeline said onboarded the moment the first unfinished task was written.
+  stage: "applied" | "screened" | "interview" | "vetting" | "offer" | "onboarding" | "onboarded" | "rejected"
   source: string | null
   worker_id: number | null
   created_at: string

@@ -136,12 +136,31 @@ Seeded fixture accounts all share the password `LocalDev123!`:
 | Email | Role | Notes |
 |---|---|---|
 | `admin@local.invalid` | admin | no division, sees everything |
-| `manager@local.invalid` | manager | division `care` |
+| `manager@local.invalid` | manager | division `care`, **not** scoped |
+| `scoped@local.invalid` | manager | division `security`, `scope_to_division = 1` |
 | `trainer@local.invalid` | trainer | division `academy` |
 | `editor@local.invalid` | editor | no division |
 | `employee@local.invalid` | employee | division `cleaning`, no worker record |
 | `amara.login@local.invalid` | employee | linked to a worker, so **not** staff |
 | `priya@local.invalid` | client | client portal login |
+
+### Fixture email addresses
+
+`local.invalid`, `example.invalid` and `learner.invalid` are listed in
+`RG_SYNTHETIC_EMAIL_DOMAINS` and discarded by `rg_normalise_email()`. They are the placeholders
+the system generates for somebody who gave no address, and treating them as identities would
+collapse every such person into one. A test about identity therefore cannot use one — use
+`@example.test`, which is reserved by RFC 2606 and can never reach a real recipient.
+
+### Concurrency
+
+`server/tests/db/run.php` sets `PHP_CLI_SERVER_WORKERS=8`. Without it `php -S` handles one
+request at a time, every "concurrent" test passes because the requests are simply queued, and a
+race the production host hits under two simultaneous clicks is invisible. Two real races were
+found this way and both had passed before the variable was set.
+
+Write a concurrency case with `curl_multi`, and run it several times before believing it: the
+duplicate-person race reproduced in two runs out of three, not in every one.
 
 ### Rate limiting
 

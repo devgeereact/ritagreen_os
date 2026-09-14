@@ -21,11 +21,15 @@ import type { Applicant, OnboardingTask } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
-const STAGES = ["applied", "screened", "interview", "vetting", "offer", "onboarded", "rejected"]
+const STAGES = ["applied", "screened", "interview", "vetting", "offer", "onboarding", "onboarded", "rejected"]
 const STAGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   applied: "outline", screened: "secondary", interview: "secondary",
-  vetting: "secondary", offer: "default", onboarded: "default", rejected: "destructive",
+  vetting: "secondary", offer: "default", onboarding: "secondary",
+  onboarded: "default", rejected: "destructive",
 }
+// "onboarding" and "onboarded" are two stages because starting onboarding and
+// completing it are two different facts about a person. The conversion sets
+// "onboarding": a pending worker and a checklist nobody has worked through yet.
 
 export default function ATS() {
   const { data, loading, error, reload } = useApi<{ applicants: Applicant[] }>("ats.php")

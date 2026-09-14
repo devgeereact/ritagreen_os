@@ -74,7 +74,7 @@ deployment is a separate authorisation and is not part of this contract.
 | Phase | State | Evidence |
 |---|---|---|
 | 0 — reproducible local baseline | done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
-| 1 — foundation and one person record | in progress | |
+| 1 — foundation and one person record | done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
 | 2 — recruitment and communications | not started | |
 | 3 — verification, onboarding, activation | not started | |
 | 4 — workforce and worker portal | not started | |
