@@ -1048,8 +1048,12 @@ Recruitment and onboarding.
 | POST | — | **Public**, rate-limited | body `{name, email, phone?, role_applied?, division, consent}` | `{ok: true}` 201; creates an applicant with source `careers`, a `consent_log` row, a broadcast notification and an office email |
 | GET | — (with `?id=`) | Office roles plus `trainer` | `id` | `{applicant, tasks}` |
 | GET | — | Office roles plus `trainer` | — | `{applicants}`, 500 most recent |
-| POST | `stage` | Office roles, **scoped to the applicant's service** | `id`; body `{stage}` | `{ok: true}`; stage ∈ applied/screened/interview/vetting/offer/onboarding/onboarded/rejected |
-| POST | `add_task` | Office roles | `id`; body `{label}` | `{ok: true}` 201 |
+| POST | `stage` | Office roles, **scoped to the applicant's service** | `id`; body `{stage, reason?}` | `{ok: true, stage}`. Transitions are enforced by `rg_stage_transition()` in `server/pure.php`: forward one stage at a time; backward to any earlier stage **with a reason**; out to `rejected`/`withdrawn` from anywhere **with a reason**; back in from either **with a reason**. `onboarding` and `onboarded` cannot be set here at all — they are set by `onboard` and by activation. 409 with the rule that refused it |
+| POST | `recruiter` | Office roles, scoped | `id`; body `{recruiter_id\|null}` | `{ok: true, recruiter_id}`. 422 unless the account is internal staff by `is_staff()` |
+| POST | `task_assign` | Office roles, scoped **through the task's applicant** | `task_id`; body `{owner_id\|null, due_on\|null}` | `{ok: true}`. 422 for a non-staff owner, 400 for a date that is not `YYYY-MM-DD` |
+| POST | `interview` | Office roles, scoped | `id`; body `{scheduled_at, interviewer_id?, location?, notes?}` | `{ok: true, id}` 201. `scheduled_at` is wall-clock `YYYY-MM-DD HH:MM`, like `shifts.starts_at` |
+| POST | `interview_outcome` | Office roles, scoped | `interview_id`; body `{outcome, notes?}` | `{ok: true, outcome}`; outcome ∈ scheduled/passed/failed/no_show/cancelled. Records who decided and when. **Does not move the candidate's stage** — an interview outcome is evidence, not a decision about the pipeline |
+| POST | `add_task` | Office roles, scoped | `id`; body `{label, owner_id?, due_on?}` | `{ok: true, id}` 201 |
 | POST | `task_done` | Office roles | `task_id`; body `{done}` | `{ok: true}` |
 | POST | `onboard` | Office roles, **scoped to the applicant's service** | `id` | `{ok: true, worker_id, person_id, payroll_no}` 201; **one transaction**, with the applicant row held `FOR UPDATE`: allocates a payroll number, creates a pending worker, links the person to the service, sets the stage to `onboarding` (migration 031 — *started*, not finished) and seeds the five-item checklist at `ats.php:15`. 409 if already converted, including for a simultaneous second request |
 | POST | `from_learner` | Office roles + `trainer` | body `{name, email?, division?}` | `{ok: true, id}` 201; Academy-to-ATS handoff, entering at stage `screened`. An invalid email is replaced with `<name>@learner.invalid` (`ats.php:180`) |
@@ -1635,3 +1639,56 @@ have been removed from the table below.
 | `invoices.php:2` | Says "manual reconciliation — no card processor wired yet"; Stripe (`payments.php`) and GoCardless (`gocardless.php`) both mark invoices paid |
 | `config.sample.php:51` | Calls `OPENWEATHER_API_KEY` "read only by a future `weather.php`"; `weather.php` exists and uses it |
 | `server/README.md` | Its endpoint table lists 8 of the 54 endpoint files. Treat this document as the reference instead |
+
+
+## `ats.php?id=N` — the candidate detail
+
+Returns `{applicant, tasks, interviews, history, next_stages}`.
+
+`next_stages` is a list of `{stage, needs_reason}`, derived from `rg_stage_transition()` rather
+than listed again. The screen renders the moves it is given, so it cannot offer one the write
+path would refuse, and the two cannot drift apart.
+
+`applicant.recruiter_name` and each task's `owner_name`, each interview's `interviewer_name` and
+each history row's `changed_by_name` are joined in, so the screen does not have to read the
+account list to render a label. `changed_by_name` is null when the public form or an integration
+made the change — an integration has no user behind it and inventing an attribution would be
+worse than admitting there is none.
+
+## `users.php?action=assignable`
+
+`GET`, office roles including `manager`. Returns `{staff: [{id, name, role}]}` — active internal
+accounts only, filtered by the same `is_staff()` test the assignment endpoints apply, so the
+dropdown cannot offer somebody the write would then refuse. Deliberately narrow: the full account
+list is `GET /users.php` and stays admin-only.
+
+## `comms.php?action=queue` — outgoing email
+
+`GET`, office roles. Returns `{messages, counts, mail_enabled, max_attempts}`; `?status=` filters.
+`queue_mail()` has written to `email_queue` since migration 008 and nothing read it back, so a
+message that failed five times, or that was never sent because mail is switched off, left no
+trace anybody would see.
+
+`mail_enabled` is stated rather than inferred from an empty sent list. With mail off every
+message is recorded `cancelled` — *not sent*, which is a different fact from a delivery failure
+and must not be shown as one.
+
+`POST ?action=requeue&id=N` puts a `failed` or `cancelled` message back on the queue and resets
+`attempts` to 0, because the drainer refuses anything at the limit and a retry that cannot be
+attempted is not a retry. A message that is still `queued` or `sending` is refused with 409:
+re-queueing a live message is how one person receives the same email twice. Audited as
+`mail.requeue`.
+
+## `forms-intake.php` — replay safety
+
+`process_submission()` returns `{ok: true, already_mapped: true, applicant_id}` for a submission
+that has already produced a candidate, and maps nothing again. The retry branch re-ran the mapping
+on whatever it was given, so pressing retry on a submission that had already worked produced a
+**second** candidate for the same person, a second notification, and a submission row repointed at
+the newer of the two. The guard is inside the mapping rather than in the branch, so a future
+caller cannot reintroduce it.
+
+The webhook's duplicate check and its insert are two statements, and `uniq_external` is what makes
+the pair safe. Two deliveries of one response — what a retrying Apps Script produces — could both
+find nothing and both insert; the second got a duplicate-key **500**, which Google would then
+retry again. The refusal is now caught and answered as the duplicate it is.

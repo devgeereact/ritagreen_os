@@ -1089,3 +1089,112 @@ function rg_in_service_scope(?string $scope, ?string $service): bool
     if ($scope === null) return true;
     return $service !== null && $service !== '' && $service === $scope;
 }
+
+// ---------------------------------------------------------------------------
+// Recruitment stages.
+
+/**
+ * The pipeline, in order. A fixed list, deliberately: the plan is a company
+ * management system, not a workflow designer, and a configurable stage model is
+ * the first step towards one.
+ *
+ * 'onboarding' and 'onboarded' are in the order but are NOT settable through the
+ * stage endpoint -- see rg_stage_transition(). The exits are separate because
+ * they are reachable from anywhere rather than from one predecessor.
+ */
+const RG_STAGES = ['applied', 'screened', 'interview', 'vetting', 'offer', 'onboarding', 'onboarded'];
+const RG_STAGE_EXITS = ['rejected', 'withdrawn'];
+
+/**
+ * Stages that only an action can set, with the action that sets them.
+ *
+ * The defect: every stage was freely selectable from a dropdown, so a candidate
+ * could be moved straight from 'applied' to 'onboarded' without a worker record,
+ * a checklist, a verification or an approval existing. Setting a status field is
+ * not the same as doing the work it describes, and a stage model where it is
+ * describes nothing.
+ */
+const RG_STAGE_BY_ACTION = [
+    'onboarding' => 'starting onboarding, which creates the worker record',
+    'onboarded'  => 'approving activation, once onboarding is complete',
+];
+
+/**
+ * May this stage change be made by hand?
+ *
+ * Returns ['ok' => bool, 'reason' => string]. The reason is written to be shown
+ * to the person who tried, so it says what to do instead.
+ *
+ * The rules:
+ *  - Forward, one step at a time. Skipping forward is how required work gets
+ *    bypassed, and it is the only direction where that matters.
+ *  - Backward, to any earlier stage. A correction is not a bypass, and
+ *    recruitment genuinely does go backwards -- a candidate is re-interviewed,
+ *    or an offer is withdrawn and they return to vetting.
+ *  - Out to rejected or withdrawn from anywhere, with a reason. They are
+ *    different facts: one is the company's decision, the other is the
+ *    candidate's, and recording both as 'rejected' loses that.
+ *  - Back in from rejected or withdrawn, to any active stage, with a reason.
+ *  - Never into a stage an action owns.
+ *
+ * $hasReason is passed rather than the reason itself so this stays a decision
+ * about stages and does not start validating strings.
+ */
+function rg_stage_transition(string $from, string $to, bool $hasReason = false): array
+{
+    if ($from === $to) {
+        return ['ok' => false, 'reason' => 'That is already the stage.'];
+    }
+
+    $known = array_merge(RG_STAGES, RG_STAGE_EXITS);
+    if (!in_array($to, $known, true)) {
+        return ['ok' => false, 'reason' => 'That is not a stage.'];
+    }
+    if (!in_array($from, $known, true)) {
+        // An unrecognised current stage is a data problem, not a decision this
+        // function should make on the caller's behalf.
+        return ['ok' => false, 'reason' => 'This candidate is at a stage that is no longer recognised.'];
+    }
+
+    if (isset(RG_STAGE_BY_ACTION[$to])) {
+        return ['ok' => false, 'reason' => ucfirst(RG_STAGE_BY_ACTION[$to]) . ' sets this stage. It cannot be set directly.'];
+    }
+
+    $leaving = in_array($from, RG_STAGE_EXITS, true);
+
+    // Out of the pipeline.
+    if (in_array($to, RG_STAGE_EXITS, true)) {
+        if ($leaving) {
+            return ['ok' => false, 'reason' => 'This candidate has already left the pipeline.'];
+        }
+        if (!$hasReason) {
+            return ['ok' => false, 'reason' => 'A reason is required when a candidate leaves the pipeline.'];
+        }
+        return ['ok' => true, 'reason' => ''];
+    }
+
+    // Back in from an exit.
+    if ($leaving) {
+        if (!$hasReason) {
+            return ['ok' => false, 'reason' => 'A reason is required when a candidate is brought back into the pipeline.'];
+        }
+        return ['ok' => true, 'reason' => ''];
+    }
+
+    $fromIndex = array_search($from, RG_STAGES, true);
+    $toIndex = array_search($to, RG_STAGES, true);
+
+    if ($toIndex < $fromIndex) {
+        if (!$hasReason) {
+            return ['ok' => false, 'reason' => 'A reason is required when a candidate is moved back a stage.'];
+        }
+        return ['ok' => true, 'reason' => ''];
+    }
+
+    if ($toIndex > $fromIndex + 1) {
+        $next = RG_STAGES[$fromIndex + 1];
+        return ['ok' => false, 'reason' => "A candidate moves forward one stage at a time. The next stage is $next."];
+    }
+
+    return ['ok' => true, 'reason' => ''];
+}

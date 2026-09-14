@@ -7,6 +7,82 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added — recruitment records a recruiter actually keeps (2026-09-14)
+
+The pipeline had a stage and a list of label/done tasks, and nothing else. Migration 033 adds a
+named recruiter, interview records, task owners and due dates, stage history and a reason on the
+way out. Fixed list, not a workflow designer.
+
+- **Stage transitions are enforced.** Every stage was freely selectable from a dropdown, so a
+  candidate could go from `applied` to `onboarded` in one click with no worker record, no
+  checklist, no verification and no approval behind it. `rg_stage_transition()` in `pure.php`:
+  forward one stage at a time; backward with a reason; out to `rejected`/`withdrawn` with a
+  reason; back in with a reason; and `onboarding`/`onboarded` not settable by hand at all — they
+  are what starting onboarding and approving activation *do*. 28 unit tests
+- **`withdrawn` is its own exit.** A candidate who took another job is not one the company turned
+  down, and recording both as `rejected` loses the difference
+- **Stage history**, with the reason and who made the change. `audit_log` had it, and is the wrong
+  place to read it from: a recruiter looking at one candidate should not be handed a tool that
+  pages through everybody's
+- **Interviews**: date, interviewer, location, outcome, notes, and who decided. Recording an
+  outcome deliberately does **not** move the candidate — a passed interview is evidence, not the
+  only thing that has to be true before vetting
+- **Tasks have an owner and a due date**, and record who ticked one and when. Un-ticking clears
+  both: "Right to work verified" with nobody's name against it is not evidence
+- An owner, recruiter or interviewer must be internal staff by `is_staff()`. A client portal login
+  and a worker's login are ordinary user rows, and either would have been shown — or emailed
+  about — a record they cannot open. `users.php?action=assignable` feeds the dropdown from the
+  same test, so it cannot offer somebody the write would refuse
+- The candidate screen was rebuilt around all of this. The stage dropdown in the list is now a
+  badge; moving a candidate happens in the detail, where the server says which moves are open and
+  a reason can be given
+
+### Fixed — retrying a form submission created a second candidate (2026-09-14)
+
+- **`process_submission()` re-ran the mapping on whatever it was given**, so pressing retry on a
+  submission that had already produced a candidate produced a second candidate for the same
+  person, a second notification email, and a submission row repointed at the newer of the two.
+  Retry is for a submission that *failed*. The guard is now inside the mapping rather than in the
+  branch, so a future caller cannot reintroduce it
+- **The webhook's duplicate check and its insert are two statements.** Two deliveries of one
+  response — what a retrying Apps Script produces — could both find nothing and both insert, and
+  the second got a duplicate-key **500**, which Google would then retry again. `uniq_external` was
+  doing its job; the refusal is now caught and answered as the duplicate it is
+- A candidate arriving through a form now gets the same first stage-history row as one who used
+  the careers page
+
+### Added — the outgoing email queue is visible and recoverable (2026-09-14)
+
+- **`queue_mail()` has written to `email_queue` since migration 008 and nothing read it back.** A
+  message that failed five times, or that was never sent because mail is switched off, left no
+  trace anybody would see, so "we emailed them" and "nobody emailed them" looked identical from
+  inside the application. `comms.php?action=queue` and a table on the Communication page
+- **Mail being switched off is stated, not inferred.** With `MAIL_ENABLED` false the drainer
+  records every message `cancelled`. That is *not sent* — a different fact from a delivery
+  failure, and it must not be shown as one
+- **`?action=requeue`** puts a `failed` or `cancelled` message back and resets `attempts` to 0,
+  because the drainer refuses anything at the limit and a retry that cannot be attempted is not a
+  retry. A message still `queued` or `sending` is refused: re-queueing a live message is how one
+  person gets the same email twice. Audited
+- Office roles only. Recipients and subjects are correspondence with named people
+
+### Added — form intake has a screen (2026-09-14)
+
+- `forms-intake.php` has served integration health, submissions and retry since migration 011 and
+  **nothing in `src/` called any of it**. A form that silently stopped feeding the system looked
+  exactly like a quiet week; a submission that failed to map was a person who applied and then
+  vanished. Both are now on a tab in Settings, with the failure reason, the kept payload and a
+  retry button
+- A form with no shared secret refuses every submission, which is also indistinguishable from
+  nobody applying. It is now labelled
+
+### Fixed — a dialog with no title (2026-09-14)
+
+- The candidate dialog rendered its header inside the `data &&` branch, so for as long as the
+  fetch was in flight it had no `DialogTitle` and no description — which Radix reports as an
+  error and which reaches a screen reader as an unnamed dialog. Found in the browser, not by a
+  test
+
 ### Security — service scope was applied to lists and nothing else (2026-09-14)
 
 `service_scope()` confines an account to one service, opt-in per account through

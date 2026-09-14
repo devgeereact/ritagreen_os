@@ -992,6 +992,55 @@ check('anything else asks a person', rg_retention_action('destroy'), 'review');
 check('and so does an empty value', rg_retention_action(''), 'review');
 
 // ---------------------------------------------------------------------------
+group('rg_stage_transition');
+
+$ok = fn (string $f, string $t, bool $r = false) => rg_stage_transition($f, $t, $r)['ok'];
+$why = fn (string $f, string $t, bool $r = false) => rg_stage_transition($f, $t, $r)['reason'];
+
+// Forward, one step at a time.
+check('applied to screened', $ok('applied', 'screened'), true);
+check('screened to interview', $ok('screened', 'interview'), true);
+check('interview to vetting', $ok('interview', 'vetting'), true);
+check('vetting to offer', $ok('vetting', 'offer'), true);
+
+// Skipping forward is the bypass this exists to stop.
+check('applied straight to offer is refused', $ok('applied', 'offer'), false);
+check('and says which stage comes next', $why('applied', 'offer'), 'A candidate moves forward one stage at a time. The next stage is screened.');
+check('applied straight to vetting is refused', $ok('applied', 'vetting'), false);
+check('screened straight to offer is refused', $ok('screened', 'offer'), false);
+
+// Stages an action owns cannot be typed in.
+check('nobody sets onboarding by hand', $ok('offer', 'onboarding'), false);
+check('and is told what does', $why('offer', 'onboarding'),
+    'Starting onboarding, which creates the worker record sets this stage. It cannot be set directly.');
+check('nobody sets onboarded by hand', $ok('onboarding', 'onboarded'), false);
+check('not even from applied', $ok('applied', 'onboarded'), false);
+
+// Backwards is a correction, not a bypass, and needs a reason.
+check('interview back to screened needs a reason', $ok('interview', 'screened'), false);
+check('and is allowed with one', $ok('interview', 'screened', true), true);
+check('offer back to applied is allowed with a reason', $ok('offer', 'applied', true), true);
+
+// Leaving the pipeline, from anywhere, with a reason.
+check('rejected from applied needs a reason', $ok('applied', 'rejected'), false);
+check('rejected from applied with a reason', $ok('applied', 'rejected', true), true);
+check('rejected from offer with a reason', $ok('offer', 'rejected', true), true);
+check('withdrawn is its own exit', $ok('interview', 'withdrawn', true), true);
+check('a candidate cannot be rejected twice', $ok('rejected', 'withdrawn', true), false);
+check('nor withdrawn after rejection', $ok('rejected', 'rejected', true), false);
+
+// Coming back in.
+check('rejected back to applied needs a reason', $ok('rejected', 'applied'), false);
+check('rejected back to applied with a reason', $ok('rejected', 'applied', true), true);
+check('withdrawn back to interview with a reason', $ok('withdrawn', 'interview', true), true);
+check('but not back into a stage an action owns', $ok('withdrawn', 'onboarded', true), false);
+
+// Nonsense.
+check('no move to the same stage', $ok('applied', 'applied'), false);
+check('an unknown target is refused', $ok('applied', 'hired'), false);
+check('an unknown source is refused', $ok('shortlisted', 'interview', true), false);
+
+// ---------------------------------------------------------------------------
 group('rg_in_service_scope');
 
 // An unscoped account -- admin, or any account with scope_to_division off.

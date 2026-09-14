@@ -75,7 +75,7 @@ deployment is a separate authorisation and is not part of this contract.
 |---|---|---|
 | 0 — reproducible local baseline | done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
 | 1 — foundation and one person record | done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
-| 2 — recruitment and communications | not started | |
+| 2 — recruitment and communications | done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
 | 3 — verification, onboarding, activation | not started | |
 | 4 — workforce and worker portal | not started | |
 | 5 — owner visibility and launch readiness | not started | |

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { IntakeTab } from "@/components/app/intake-tab"
 import {
   Table,
   TableBody,
@@ -45,6 +46,7 @@ const DIVISIONS = ["care", "academy", "cleaning", "security"]
 export default function Settings() {
   const { hasRole } = useAuth()
   const isAdmin = hasRole("super_admin", "admin")
+  const isOffice = hasRole("super_admin", "admin", "manager")
 
   return (
     <div className="space-y-6">
@@ -59,6 +61,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="security">Security</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">Users & roles</TabsTrigger>}
+          {isOffice && <TabsTrigger value="intake">Form intake</TabsTrigger>}
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
@@ -66,6 +69,9 @@ export default function Settings() {
           <TwoFactorCard />
           <SessionsCard />
         </TabsContent>
+        {/* Intake is a manager's screen as well as an admin's: a form that stops
+            feeding the system is a recruitment problem before it is an IT one. */}
+        {isOffice && <TabsContent value="intake" className="mt-4"><IntakeTab /></TabsContent>}
         {isAdmin && (
           <>
             <TabsContent value="users" className="mt-4"><UsersTab /></TabsContent>

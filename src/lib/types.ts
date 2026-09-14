@@ -242,10 +242,54 @@ export type Applicant = {
   stage: "applied" | "screened" | "interview" | "vetting" | "offer" | "onboarding" | "onboarded" | "rejected"
   source: string | null
   worker_id: number | null
+  recruiter_id: number | null
+  /** Only sent on the detail read, not in the list. */
+  recruiter_name?: string | null
+  /** Why they left the pipeline. Cleared if they come back into it. */
+  outcome_reason?: string | null
   created_at: string
 }
 
-export type OnboardingTask = { id: number; label: string; done: number }
+export type OnboardingTask = {
+  id: number
+  label: string
+  done: number
+  owner_id: number | null
+  owner_name: string | null
+  due_on: string | null
+  done_at: string | null
+}
+
+/** An interview record. `scheduled_at` is wall-clock, like a shift's start. */
+export type ApplicantInterview = {
+  id: number
+  scheduled_at: string
+  location: string | null
+  outcome: "scheduled" | "passed" | "failed" | "no_show" | "cancelled"
+  notes: string | null
+  decided_at: string | null
+  interviewer_id: number | null
+  interviewer_name: string | null
+}
+
+export type ApplicantStageChange = {
+  id: number
+  from_stage: string | null
+  to_stage: string
+  reason: string | null
+  changed_at: string
+  /** Null when the public form or an integration made the change. */
+  changed_by_name: string | null
+}
+
+/**
+ * A stage the candidate may be moved to, and whether it needs a reason.
+ * Sent by the server so the screen does not keep its own copy of the rules.
+ */
+export type NextStage = { stage: string; needs_reason: boolean }
+
+/** Internal staff who can be given a candidate, a task or an interview. */
+export type AssignableStaff = { id: number; name: string; role: string }
 
 export type ComplianceItem = {
   worker_id: number

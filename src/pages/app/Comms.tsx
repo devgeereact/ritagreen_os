@@ -20,6 +20,7 @@ import { api, aiDraft, ApiError } from "@/lib/api"
 import type { Announcement } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { MailQueue } from "@/components/app/mail-queue"
 
 const AUDIENCES = [
   { value: "all", label: "Whole group" },
@@ -38,8 +39,14 @@ export default function Comms() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Communication</h1>
-        <p className="text-sm text-muted-foreground">Broadcasts to the whole group or one division.</p>
+        <p className="text-sm text-muted-foreground">
+          Broadcasts to the whole group or one division, and what the system has tried to email.
+        </p>
       </div>
+
+      {/* Office roles only: the queue is correspondence with named people, and
+          comms.php refuses it to anybody else. */}
+      {canPost && <MailQueue />}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {canPost && (

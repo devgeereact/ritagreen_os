@@ -630,7 +630,7 @@ CREATE TABLE IF NOT EXISTS applicants (
   phone VARCHAR(40) NULL,
   role_applied VARCHAR(80) NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
-  stage ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected') NOT NULL DEFAULT 'applied',
+  stage ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected','withdrawn') NOT NULL DEFAULT 'applied',
   source VARCHAR(80) NULL,
   notes TEXT NULL,
   worker_id INT NULL,

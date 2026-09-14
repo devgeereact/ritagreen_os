@@ -1825,3 +1825,38 @@ nothing.
 `--go` to allocate, safe to run twice, and it refuses to start if the counter is behind a number
 already in use. Archived workers are included — a leaver's payroll number is still cited by the
 records of the work they did.
+
+
+## Recruitment detail — migration 033
+
+Four additions. Not a workflow engine: the stage model stays a fixed list in
+`RG_STAGES` / `RG_STAGE_EXITS` in `server/pure.php`.
+
+**`applicants.recruiter_id`** `INT NULL`, FK → `users(id)` **ON DELETE SET NULL**. Who is dealing
+with this candidate, which was previously answered in somebody's head. `SET NULL` rather than
+cascade: a recruiter leaving must not take their candidates with them.
+
+**`applicants.outcome_reason`** `VARCHAR(500) NULL`. Why they left the pipeline. Cleared when they
+come back into it, because then they did not leave.
+
+**`applicants.stage`** gains `withdrawn`. A candidate who takes another job is not a candidate the
+company turned down, and recording both as `rejected` loses the difference between a pipeline
+problem and a market one.
+
+**`applicant_stage_history`** — `from_stage`, `to_stage`, `reason`, `changed_by`, `changed_at`.
+`audit_log` already records the change and is the wrong place to read it from: it is a security
+record spanning every table, and a recruiter looking at one candidate should not be handed a tool
+that pages through everybody's. Existing applications are backfilled with their current stage,
+`changed_by` NULL — nobody can now say who moved them, and inventing an attribution is worse than
+admitting there is none.
+
+**`applicant_interviews`** — `scheduled_at` (wall-clock DATETIME, like `shifts.starts_at`),
+`interviewer_id`, `location`, `outcome` ∈ scheduled/passed/failed/no_show/cancelled, `notes`,
+`decided_at`, `decided_by`, `deleted_at`. A cancelled interview is recorded as cancelled, not
+erased.
+
+**`onboarding_tasks`** gains `owner_id`, `due_on`, `done_at`, `done_by`. A checklist nobody owns
+and nothing is due on cannot be chased, which is the only thing a checklist is for. Un-ticking a
+task clears `done_at` and `done_by`: "Right to work verified" with nobody's name against it is not
+evidence that anybody verified anything. Tasks already marked done keep NULL — `NOW()` would be a
+lie about when the work happened.

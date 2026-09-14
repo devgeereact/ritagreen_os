@@ -159,6 +159,19 @@ the counter the next conversion dies on the unique key. Migration 032 raises the
 highest number in use; `server/backfill-payroll.php` fills in workers that have none. Neither
 ever renumbers anybody: the old number is already on payslips and in records.
 
+**A stage is a fact about work done, not a field to type into.** `rg_stage_transition()` in
+`server/pure.php` holds the pipeline rules and `ats.php` enforces them: forward one stage at a
+time, backward or out only with a reason, and `onboarding`/`onboarded` not settable by hand at all
+— they are what starting onboarding and approving activation *do*. Every stage used to be
+selectable from a dropdown, so `applied` → `onboarded` was one click with no worker, no checklist
+and no approval behind it. `ats.php?id=N` returns `next_stages` from the same function, so the
+screen offers exactly what the server will accept.
+
+**Assigning work means assigning it to staff.** A recruiter, a task owner and an interviewer all
+go through `is_assignable_staff()`, which is `is_staff()` on a live account. A client portal login
+and a worker's login are ordinary `users` rows; either would have been shown, or emailed about, a
+record they cannot open. `users.php?action=assignable` feeds the dropdowns from the same test.
+
 **Sensitive data is separated by zone, not by role alone.** `can_view_zone()` reads
 `zone_permissions` (migration 015), and it is enforced for `payroll`, `compliance` and `health`.
 A new endpoint that returns right-to-work state, DBS status, an SIA number or anything about
