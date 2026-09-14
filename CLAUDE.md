@@ -189,6 +189,37 @@ timezone anywhere. DATETIME columns (`shifts.starts_at`, work dates) hold litera
 are unaffected; TIMESTAMP columns are converted on read, so on a server that was not already UTC
 an existing `created_at` now reads as the UTC instant it always was.
 
+**A rejection is not "no evidence", and the difference is load-bearing.**
+`rg_load_evidence()` tracks a `$decided` map of requirements a reviewer has ruled on, separately
+from the `$evidence` entry a rejection removes. Without it the newest-wins test read
+`from_verification` on a key the rejection had just unset, so the next row — an *older*
+verification — won, and somebody rejected today read as verified. The certifications pass matches
+on a lower-cased free-text label and must never outrank a decision: it could revive a rejection
+outright, or quietly re-date a reviewed expiry. Same rule for references and the contract file.
+
+**Employment state first, credentials second.** `rg_employment_gate()` in `server/pure.php` runs
+inside `rg_deployment_check()` before any evidence is assessed: archived, left, suspended,
+inactive, onboarding outstanding, not approved. The gate weighed credentials alone, so a suspended
+worker or one nobody had ever approved could be booked on a shift with an in-date DBS. The verdict
+carries `blocked_by` (`employment` or `evidence`) because the two need different people to fix
+them. `workers.status` gained `'suspended'` in migration 035 — `rg_derive_worker_status()` had
+branched on it since 016 against a column that could not hold it.
+
+**Approval is a fact somebody is answerable for.** `workers.approved_at`/`approved_by`
+(migration 034), granted by `workers.php?action=approve`, which requires onboarding finished and a
+signed employment contract that has been **reviewed**. Migration 034 backfills every already-active
+worker, because introducing the requirement would otherwise have stood the whole workforce down on
+the day it shipped; `server/report-activation.php` says who is blocked and why, and writes nothing.
+
+**Derived status is recalculated when something changes, not only at 3am.**
+`rg_refresh_worker_status()` — called on verify, reject, approve and unapprove.
+`rg_derive_worker_status()` used to run only in the nightly `expiry-alerts.php` sweep, so an
+approval at 10am was invisible until the next morning. The sweep still runs.
+
+**`server/employment-contracts.php` is employment evidence. `server/contracts.php` is commercial.**
+Different tables, different people, different meanings of the word, and they were confused often
+enough to be worth saying twice. Neither is a document designer or a signature service.
+
 **`rg_deployment_check()` is the only gate, and three paths used to dodge it.**
 `server/compliance-lib.php` also holds `rg_shift_clash()` and `rg_claim_check()` — the clash test
 lives there rather than in `scheduling.php` precisely because an endpoint cannot be required by

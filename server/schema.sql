@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS workers (
   phone VARCHAR(40) NULL,
   role ENUM('carer','nurse','cleaner','guard','trainer') NOT NULL DEFAULT 'carer',
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
-  status ENUM('active','onboarding','inactive') NOT NULL DEFAULT 'onboarding',
+  status ENUM('active','onboarding','inactive','suspended') NOT NULL DEFAULT 'onboarding',
   right_to_work TINYINT(1) NOT NULL DEFAULT 0,
   dbs_status ENUM('valid','pending','expired') NULL,
   dbs_expiry DATE NULL,
@@ -1057,3 +1057,15 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_to INT NULL AFTER client_id;
 ALTER TABLE jobs ADD INDEX IF NOT EXISTS idx_jobs_assignee (assigned_to, status);
 -- The foreign key is added by migration 030, which owns it. See the note on
 -- fk_shifts_template above for why it is not repeated here.
+
+-- ---- Activation is somebody's decision (migration 034) ----
+--
+-- rg_derive_worker_status() weighs outstanding tasks, a signed contract and
+-- eligibility. Whether anybody with the authority actually said yes is a
+-- separate fact, and nothing recorded it. The columns are added by migration
+-- 034, which also backfills every already-active worker so that introducing the
+-- requirement did not stand the workforce down.
+--
+-- employment_contracts gains reviewed_at/reviewed_by/review_note in the same
+-- migration: a contract being signed and somebody having read the signed copy
+-- are two different things.

@@ -7,6 +7,83 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Security — a rejected requirement read as verified (2026-09-14)
+
+`rg_load_evidence()` builds one picture of a person from four sources that disagree, and what
+it concludes decides who may work. Three faults, each reproduced in
+`server/tests/db/cases/100_evidence_precedence.php` before being fixed.
+
+- **A newer rejection was overwritten by an older success.** The newest-wins test read
+  `$evidence[$key]['from_verification']` — but a rejection *unsets* the key, so the test was
+  false for the next row, and the next row is an older verification for the same requirement.
+  Somebody rejected today, having been verified last year, read as **verified**. A `$decided` map
+  now records that a reviewer has ruled, separately from the entry a rejection removes: "there is
+  nothing here" and "somebody looked and said no" are not the same fact
+- **A certificate could revive a rejection.** The certifications pass runs after the verifications
+  pass, matches on a lower-cased free-text label, and overwrote whatever it found. A rejected
+  requirement had been removed from the picture by then, so a certificate carrying the same words
+  put it straight back
+- **A certificate could silently re-date a reviewed expiry.** The reviewed decision carries the
+  date somebody checked; a certificate row with a later one quietly extended it
+- References and the contract file are treated the same way: a reviewer's ruling stands over the
+  rows themselves
+
+### Security — the deployment gate weighed credentials and nothing else (2026-09-14)
+
+`rg_deployment_check()` is the single chokepoint every assignment path goes through. It assessed
+compliance evidence only, so a worker who was **suspended, had left, was half way through
+onboarding, or had never been approved for work** passed it as long as their DBS and licence were
+in date.
+
+- `rg_employment_gate()` in `pure.php` runs first, in order: archived, left, suspended, inactive,
+  onboarding outstanding, not approved. A leaver is not a compliance problem and is no longer
+  reported as one
+- The verdict now carries `blocked_by` — `employment` or `evidence` — because the two need
+  different people to fix them
+- **`workers.status` could not hold `'suspended'`.** It is `ENUM('active','onboarding','inactive')`,
+  and `rg_derive_worker_status()` has branched on `'suspended'` since migration 016 — a branch the
+  column made unreachable. Suspending somebody was not a thing the system could be told, and the
+  nearest available answer, `inactive`, means something else. Migration 035 adds the value, with
+  no backfill: reclassifying existing inactive workers would invent a decision nobody made
+
+### Added — activation is somebody's decision (migration 034)
+
+- **`workers.approved_at` / `approved_by` / `approval_note`.** Every box being ticked is not the
+  same fact as an approval, and only the second one is an approval. `workers.php?action=approve`
+  requires onboarding finished, a signed contract that has been **reviewed**, and refuses a
+  second approval under concurrency by pinning `approved_at IS NULL` in the UPDATE
+- **`?action=unapprove` requires a reason.** Withdrawing approval stops somebody working
+- The migration **backfills every already-active worker**, dated from their record's creation with
+  no approver named and a note saying so. Enforcing a new requirement against an existing
+  workforce would have marked every current worker unapproved the moment it shipped — a policy
+  change that stands the company down overnight. `server/report-activation.php` lists who is
+  blocked and why, changes nothing, and is meant to be run before and after
+- **`server/employment-contracts.php` is new.** The table has existed since migration 010 with no
+  endpoint at all. Draft → sent → accepted → signed → reviewed, with transitions enforced;
+  superseding keeps the old row with its signature and review intact. It is **not** the Contracts
+  screen (`server/contracts.php` is commercial agreements with clients) and it is **not** a
+  document designer or a signature service: the agreed version is uploaded, the signed copy is
+  uploaded, and what this owns is the record. A signed copy must be a file that exists and is
+  filed against that person — another person's document is refused
+- `employment_contracts.reviewed_at` / `reviewed_by` / `review_note`. A signature is evidence the
+  worker agreed; a review is evidence the company did
+
+### Fixed — status was recalculated once a day and no sooner (2026-09-14)
+
+- `rg_derive_worker_status()` was called from exactly one place: the nightly `expiry-alerts.php`
+  run. A worker approved at 10am read as "pre-employment" on every screen until the following
+  morning, and a credential rejected at noon left a dashboard saying "active" all afternoon.
+  `rg_refresh_worker_status()` recalculates on the spot, and verifying, rejecting, approving and
+  unapproving all call it. The nightly sweep still runs
+
+### Fixed — the test harness hid its own SQL errors (2026-09-14)
+
+- The database-backed cases arrange rows through `$db`, and that connection had
+  `MYSQLI_REPORT_OFF`. A mistyped column name inserted nothing, silently, and the assertion that
+  followed measured a database that had never been set up — a test reporting on nothing while
+  looking like it passed. Found exactly that way: an INSERT naming a `note` column the table does
+  not have vanished without a word. It throws now
+
 ### Added — recruitment records a recruiter actually keeps (2026-09-14)
 
 The pipeline had a stage and a list of label/done tasks, and nothing else. Migration 033 adds a

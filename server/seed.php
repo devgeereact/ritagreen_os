@@ -187,6 +187,27 @@ foreach ($workers as $w) {
     $workerIds[$w[0]] = $conn->insert_id;
     $workerPersonIds[$w[0]] = $personId;
 }
+// Approval, for the workers seeded as active.
+//
+// Migration 034 made approval a requirement and backfilled every already-active
+// worker on a real database. These rows are inserted AFTER the migrations run, so
+// the backfill never sees them -- and without this the fixtures are a workforce
+// nobody ever approved, which is not what a working system looks like and makes
+// every gate test start from a false state.
+//
+// approved_by is the seeded admin: a fixture approval needs a fixture approver,
+// and NULL here would mean "approved by nobody", which is what the migration says
+// about records whose approver genuinely cannot be known.
+$adminId = (int) $conn->query(
+    "SELECT id FROM users WHERE email = 'admin@local.invalid' LIMIT 1"
+)->fetch_row()[0];
+$conn->query(
+    "UPDATE workers SET approved_at = created_at, approved_by = $adminId,
+            approval_note = 'Approved by the seed fixtures'
+      WHERE status = 'active' AND approved_at IS NULL"
+);
+echo "  approvals    " . $conn->affected_rows . " active workers\n";
+
 // A statutory-style entitlement in hours, so the leave balance means something.
 // 28 days at 7.5 hours is 210; part-time workers get less, which is the point of
 // counting in hours rather than days.

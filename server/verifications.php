@@ -17,6 +17,10 @@
 // recheck rules that belong to it alone, and flattening those into this generic
 // shape would lose them.
 require __DIR__ . '/lib.php';
+// Verifying or rejecting something changes what the deployment gate concludes, so
+// the worker's derived status is recalculated here rather than left to the
+// nightly run.
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 require_staff($user);
@@ -208,6 +212,9 @@ if ($action === 'verify') {
         $set['expires_on'] = $expires;
     }
     move_to($conn, $user, $verification, 'verified', $set, $method);
+    // Now, not at 3am. A credential signed off at 10am left the worker reading as
+    // blocked on every screen until the following morning.
+    rg_refresh_person_workers($conn, (int) $verification['person_id']);
     json_out(['ok' => true, 'status' => 'verified']);
 }
 
@@ -216,6 +223,9 @@ if ($action === 'reject') {
     if ($reason === '') fail('Give a reason, so the person can be told what was wrong.');
     move_to($conn, $user, $verification, 'rejected',
         ['rejection_reason' => substr($reason, 0, 500), 'reviewed_at' => date('Y-m-d H:i:s')], $reason);
+    // A rejection is the direction that matters most: somebody who should stop
+    // being offered work must stop being offered it now, not tomorrow.
+    rg_refresh_person_workers($conn, (int) $verification['person_id']);
     json_out(['ok' => true, 'status' => 'rejected']);
 }
 

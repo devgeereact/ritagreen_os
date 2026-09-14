@@ -992,6 +992,64 @@ check('anything else asks a person', rg_retention_action('destroy'), 'review');
 check('and so does an empty value', rg_retention_action(''), 'review');
 
 // ---------------------------------------------------------------------------
+group('rg_employment_gate');
+
+$approved = ['status' => 'active', 'approved_at' => '2026-01-01 09:00:00', 'left_on' => null];
+$none = ['onboarding_outstanding' => 0];
+$today = '2026-09-14';
+
+check('an approved active worker passes', rg_employment_gate($approved, $none, $today)['ok'], true);
+
+// Order matters: a leaver is not a compliance problem and must not read as one.
+// Written out rather than built with `+`: the union operator keeps the LEFT
+// operand's keys, so $approved's own left_on => null would have won and the
+// test would have passed while asserting nothing.
+check('a leaver is blocked',
+    rg_employment_gate(['status' => 'active', 'approved_at' => 'x', 'left_on' => '2026-06-30'], $none, $today)['ok'], false);
+check('and is told why',
+    rg_employment_gate(['status' => 'active', 'approved_at' => 'x', 'left_on' => '2026-06-30'], $none, $today)['reason'],
+    'This worker left on 2026-06-30.');
+// A leaving date in the future has not happened yet.
+check('a future leaving date does not block yet',
+    rg_employment_gate(['status' => 'active', 'approved_at' => 'x', 'left_on' => '2026-12-31'], $none, $today)['ok'], true);
+
+check('an archived record is blocked',
+    rg_employment_gate($approved + ['deleted_at' => '2026-01-02'], $none, $today)['ok'], false);
+
+check('a suspended worker is blocked',
+    rg_employment_gate(['status' => 'suspended', 'approved_at' => 'x'], $none, $today)['ok'], false);
+check('with suspension given as the reason',
+    rg_employment_gate(['status' => 'suspended', 'approved_at' => 'x'], $none, $today)['reason'],
+    'This worker is suspended.');
+check('an inactive worker is blocked',
+    rg_employment_gate(['status' => 'inactive', 'approved_at' => 'x'], $none, $today)['ok'], false);
+
+// Starting onboarding is not finishing it.
+check('outstanding onboarding blocks',
+    rg_employment_gate($approved, ['onboarding_outstanding' => 3], $today)['ok'], false);
+check('and says how many',
+    rg_employment_gate($approved, ['onboarding_outstanding' => 3], $today)['reason'],
+    '3 onboarding tasks are still outstanding.');
+check('one task reads as one task',
+    rg_employment_gate($approved, ['onboarding_outstanding' => 1], $today)['reason'],
+    '1 onboarding task is still outstanding.');
+
+// Every box ticked is not the same fact as an approval.
+check('an unapproved worker is blocked',
+    rg_employment_gate(['status' => 'active', 'approved_at' => null], $none, $today)['ok'], false);
+check('and is told so plainly',
+    rg_employment_gate(['status' => 'active', 'approved_at' => null], $none, $today)['reason'],
+    'This worker has not been approved for work.');
+check('an empty approval date is not an approval',
+    rg_employment_gate(['status' => 'active', 'approved_at' => ''], $none, $today)['ok'], false);
+
+// A suspension outranks an unfinished checklist: both block, and the reason
+// given should be the one a person acts on first.
+check('suspension is reported before onboarding',
+    rg_employment_gate(['status' => 'suspended', 'approved_at' => null], ['onboarding_outstanding' => 2], $today)['reason'],
+    'This worker is suspended.');
+
+// ---------------------------------------------------------------------------
 group('rg_stage_transition');
 
 $ok = fn (string $f, string $t, bool $r = false) => rg_stage_transition($f, $t, $r)['ok'];

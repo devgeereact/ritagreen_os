@@ -1198,3 +1198,57 @@ function rg_stage_transition(string $from, string $to, bool $hasReason = false):
 
     return ['ok' => true, 'reason' => ''];
 }
+
+/**
+ * May this worker be put on a shift at all, before their credentials are looked at?
+ *
+ * rg_deployment_check() assessed compliance evidence and nothing else, so a
+ * worker who was suspended, had left, was still half way through onboarding, or
+ * had never been approved for work passed the gate as long as their DBS and
+ * licence were in date. Credentials describe a person; employment state
+ * describes whether the company has agreed they work here.
+ *
+ * Returns ['ok' => bool, 'reason' => string]. The reason is shown to whoever
+ * tried to make the booking, so it says which of the several possible things is
+ * wrong rather than "not eligible".
+ *
+ * Order matters. A leaver is not a compliance problem and must not be reported as
+ * one; a suspension is a decision and outranks everything below it.
+ */
+function rg_employment_gate(array $worker, array $facts, ?string $today = null): array
+{
+    $today ??= date('Y-m-d');
+
+    if (!empty($worker['deleted_at'])) {
+        return ['ok' => false, 'reason' => 'This worker record has been archived.'];
+    }
+
+    $leftOn = $worker['left_on'] ?? null;
+    if ($leftOn !== null && $leftOn !== '' && strtotime((string) $leftOn) <= strtotime($today)) {
+        return ['ok' => false, 'reason' => 'This worker left on ' . $leftOn . '.'];
+    }
+
+    $status = (string) ($worker['status'] ?? 'onboarding');
+    if ($status === 'suspended') {
+        return ['ok' => false, 'reason' => 'This worker is suspended.'];
+    }
+    if ($status === 'inactive') {
+        return ['ok' => false, 'reason' => 'This worker is marked inactive.'];
+    }
+
+    // Onboarding outstanding. Starting onboarding is not finishing it, and a
+    // checklist with work left on it is the plainest statement of that.
+    $outstanding = (int) ($facts['onboarding_outstanding'] ?? 0);
+    if ($outstanding > 0) {
+        return ['ok' => false, 'reason' => $outstanding . ' onboarding '
+            . ($outstanding === 1 ? 'task is' : 'tasks are') . ' still outstanding.'];
+    }
+
+    // Somebody with the authority has to have said yes. Every box being ticked is
+    // not the same fact as an approval, and only the second one is an approval.
+    if (empty($worker['approved_at'])) {
+        return ['ok' => false, 'reason' => 'This worker has not been approved for work.'];
+    }
+
+    return ['ok' => true, 'reason' => ''];
+}

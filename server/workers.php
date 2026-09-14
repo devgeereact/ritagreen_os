@@ -3,6 +3,10 @@
 // GET  /workers.php  -> { workers: [...] }
 // POST /workers.php {name, email, phone, role, division, right_to_work} -> { worker }
 require __DIR__ . '/lib.php';
+// The employment gate, the onboarding count and the status refresh. Approving a
+// worker is a compliance decision as much as an HR one, and the rules for it
+// belong in one file rather than being restated here.
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
@@ -134,6 +138,117 @@ if ($action === 'pay' && method() === 'POST') {
     [$before, $after] = audit_diff($was, ['pay_rate_pence' => $rate, 'pay_type' => $type], ['pay_rate_pence', 'pay_type']);
     audit($conn, $uid, 'worker.pay', "worker #$id from $effective", 'worker', $id, $before, $after);
     json_out(['ok' => true, 'effective_from' => $effective]);
+}
+
+// ----- Approve a worker for work, or withdraw that approval -----
+// POST /workers.php?action=approve&id=N   {note?}
+// POST /workers.php?action=unapprove&id=N {reason}
+//
+// The last gate before somebody can be assigned. Every box being ticked is not
+// the same fact as an approval: rg_deployment_check() weighed compliance evidence
+// and nothing else, so a worker still half way through onboarding, or one nobody
+// had ever agreed to employ, could be put on a shift as long as their DBS was in
+// date.
+if ($action === 'approve' && method() === 'POST') {
+    // Deliberately narrower than the rest of this file. Approving somebody for
+    // work is the decision the company is answerable for, and a manager holds it.
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A worker is required.');
+    $note = trim((string) (body()['note'] ?? ''));
+    if (mb_strlen($note) > 255) fail('Please keep the note under 255 characters.');
+
+    $stmt = $conn->prepare(
+        'SELECT id, person_id, name, division, status, left_on, approved_at, deleted_at
+           FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+    require_service_scope($user, $w['division']);
+
+    if ($w['approved_at'] !== null) fail('This worker is already approved.', 409);
+
+    // Approval does not override the things it sits on top of. Approving somebody
+    // whose onboarding is unfinished would make the approval mean nothing, and
+    // approving a leaver or a suspended worker is not a decision anybody means to
+    // make. Checked with the same function the gate uses, minus the approval test
+    // itself -- which is what is being granted here.
+    $outstanding = rg_onboarding_outstanding($conn, (int) $w['person_id']);
+    // array_merge, not `+`. The union operator keeps the LEFT operand's keys, and
+    // $w already carries approved_at => null -- so the placeholder never landed
+    // and the gate refused every approval for want of the approval being granted.
+    $gate = rg_employment_gate(
+        array_merge($w, ['approved_at' => 'granting']),
+        ['onboarding_outstanding' => $outstanding]
+    );
+    if (!$gate['ok']) fail('This worker cannot be approved yet. ' . $gate['reason'], 409);
+
+    // A signed contract that somebody with the authority has read. A signature is
+    // evidence that the worker agreed; a review is evidence that the company did.
+    $stmt = $conn->prepare(
+        'SELECT COUNT(*) FROM employment_contracts
+          WHERE person_id = ? AND status = "signed" AND reviewed_at IS NOT NULL'
+    );
+    $stmt->bind_param('i', $w['person_id']);
+    $stmt->execute();
+    if ((int) $stmt->get_result()->fetch_row()[0] === 0) {
+        fail('This worker has no signed employment contract that has been reviewed.', 409);
+    }
+
+    $uid = (int) $user['id'];
+    $noteVal = $note !== '' ? $note : null;
+    $stmt = $conn->prepare(
+        'UPDATE workers SET approved_at = NOW(), approved_by = ?, approval_note = ?, status = "active"
+          WHERE id = ? AND approved_at IS NULL'
+    );
+    $stmt->bind_param('isi', $uid, $noteVal, $id);
+    $stmt->execute();
+    // Another request got there first. Reporting success would attribute the
+    // approval to whoever asked second.
+    if ($stmt->affected_rows === 0) fail('This worker is already approved.', 409);
+
+    // Recalculated now, not at the next cron run. A worker who has just been
+    // approved and whose dashboard still says "pre-employment" until tomorrow
+    // morning is a worker the office will ring up about.
+    rg_refresh_worker_status($conn, $id);
+
+    audit($conn, $uid, 'worker.approve', $w['name'], 'worker', $id,
+        ['approved_at' => null], ['approved_at' => 'now', 'approved_by' => $uid]);
+    json_out(['ok' => true, 'approved' => true]);
+}
+
+if ($action === 'unapprove' && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A worker is required.');
+    $reason = trim((string) (body()['reason'] ?? ''));
+    // Withdrawing approval stops somebody working. It is not a thing to do
+    // without saying why.
+    if ($reason === '') fail('A reason is required to withdraw approval.');
+    if (mb_strlen($reason) > 255) fail('Please keep the reason under 255 characters.');
+
+    $stmt = $conn->prepare('SELECT id, name, division, approved_at FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+    require_service_scope($user, $w['division']);
+    if ($w['approved_at'] === null) fail('This worker is not approved.', 409);
+
+    $uid = (int) $user['id'];
+    $stmt = $conn->prepare(
+        'UPDATE workers SET approved_at = NULL, approved_by = NULL, approval_note = ? WHERE id = ?'
+    );
+    $stmt->bind_param('si', $reason, $id);
+    $stmt->execute();
+
+    rg_refresh_worker_status($conn, $id);
+
+    audit($conn, $uid, 'worker.unapprove', $w['name'], 'worker', $id,
+        ['approved_at' => $w['approved_at']], ['approved_at' => null, 'reason' => $reason]);
+    json_out(['ok' => true, 'approved' => false]);
 }
 
 if (method() === 'POST') {

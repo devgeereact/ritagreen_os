@@ -120,6 +120,9 @@ register_shutdown_function(function () use ($proc, $admin, $dbName, $keep, $log,
         proc_close($proc);
     }
     rgt_assert_disposable($dbName);
+    // Reporting is set to throw for the cases; a throw from inside a shutdown
+    // function would replace the test report with a stack trace.
+    mysqli_report(MYSQLI_REPORT_OFF);
     @$admin->query("DROP DATABASE IF EXISTS `$dbName`");
 });
 

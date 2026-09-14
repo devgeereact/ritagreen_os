@@ -43,6 +43,9 @@ function rgt_admin_connect(): array
 
     rgt_assert_disposable($name);
 
+    // OFF only for the connection attempt, so a failure to reach MySQL prints the
+    // guidance below rather than a stack trace. Switched to throwing as soon as
+    // the connection exists -- see rgt_recreate().
     mysqli_report(MYSQLI_REPORT_OFF);
     $conn = @new mysqli($host, $user, $pass);
     if ($conn->connect_errno) {
@@ -52,6 +55,19 @@ function rgt_admin_connect(): array
         exit(2);
     }
     $conn->set_charset('utf8mb4');
+
+    // A failed query now THROWS on this connection.
+    //
+    // It was MYSQLI_REPORT_OFF, and the cases use $db to arrange the rows a test
+    // is about. A mistyped column name therefore inserted nothing, silently, and
+    // the assertion that followed measured a database that had never been set up
+    // -- which is a test that reports on nothing while looking like it passed.
+    // Found exactly that way: an INSERT naming a `note` column the table does not
+    // have (it is `rejection_reason`) vanished without a word.
+    //
+    // rgt_apply_sql_file() and the teardown DROP handle their own errors, so they
+    // set this back where they need to.
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     return [$conn, $name];
 }
 
@@ -76,6 +92,8 @@ function rgt_recreate(mysqli $conn, string $name): void
  */
 function rgt_apply_sql_file(mysqli $conn, string $path): int
 {
+    // This reports its own failures, with the statement that caused them.
+    mysqli_report(MYSQLI_REPORT_OFF);
     $sql = (string) file_get_contents($path);
     $count = 0;
     foreach (rgt_split_statements($sql) as $stmt) {
@@ -86,6 +104,7 @@ function rgt_apply_sql_file(mysqli $conn, string $path): int
         }
         $count++;
     }
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     return $count;
 }
 
