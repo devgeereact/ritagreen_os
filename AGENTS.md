@@ -1,6 +1,6 @@
 # ritagreen_os Agent Contract
 
-This existing project adopts the active shared GEE OS, minimum version 0.5.0. Read `.agent/PROJECT.yml` and `.agent/CURRENT-TASK.md`, then apply the constitution, loop and routing rules at `~/.agents/gee-os`.
+This existing project adopts the active shared GEE OS, minimum version 0.9.0. Read `.agent/PROJECT.yml` and `.agent/CURRENT-TASK.md`, then apply the constitution, loop and routing rules at `~/.agents/gee-os`.
 
 ## Read order
 
@@ -9,6 +9,15 @@ This existing project adopts the active shared GEE OS, minimum version 0.5.0. Re
 3. `.agent/CURRENT-TASK.md`, current scope and evidence.
 4. `CLAUDE.md`, preserved project knowledge pending modularisation.
 5. `README.md` and the relevant files under `docs/`.
+
+## Commands
+
+- Install: `npm ci`
+- Develop: `npm run dev` (port 5122). Local API: `npm run dev:api` (PHP on 127.0.0.1:8122)
+- Type check: `npm run typecheck`
+- Lint: `npm run lint` (19-error known baseline, non-blocking in CI)
+- Test: `npm test` (Vitest) and `npm run test:php` (needs PHP)
+- Build: `npm run build`
 
 ## Shared rules
 

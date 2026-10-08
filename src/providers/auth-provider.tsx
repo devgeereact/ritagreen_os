@@ -87,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setToken(null)
     setUser(null)
+    // The service worker keeps the last worker reads (me.php, notifications.php) for offline
+    // use. Drop them on sign-out so the next person on a shared device cannot read them.
+    if ("caches" in window) caches.delete("worker-reads").catch(() => {})
   }
 
   function hasRole(...roles: Role[]) {

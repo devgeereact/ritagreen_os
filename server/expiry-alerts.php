@@ -11,10 +11,12 @@
 //
 // Designed to be run by cron, once a day. Two ways to trigger:
 //   CLI (preferred):  php /home/<user>/ritagreenservices.com/expiry-alerts.php
-//   HTTP (needs key):  wget -qO- "https://ritagreenservices.com/expiry-alerts.php?key=YOUR_ALERTS_KEY"
+//   HTTP (needs key):  wget -qO- --header="X-Cron-Key: YOUR_ALERTS_KEY" "https://ritagreenservices.com/expiry-alerts.php"
+//                      (the older "?key=YOUR_ALERTS_KEY" form still works, but lands in the access log)
 //
-// HTTP access is refused unless ?key matches ALERTS_KEY in config.php, so the
-// digest can't be triggered (or scraped) by the public.
+// HTTP access is refused unless the key (X-Cron-Key header, else ?key) matches
+// ALERTS_KEY in config.php, so the digest can't be triggered (or scraped) by the
+// public.
 require __DIR__ . '/lib.php';
 require __DIR__ . '/compliance-lib.php';
 
@@ -35,9 +37,10 @@ if (!$isCli) {
     // attacker who simply tries a lot of keys; without a limit the guard was a
     // single shared secret with unlimited attempts against it.
     rate_limit($conn, 'cron-key', 10, 600);
-    $key = $_GET['key'] ?? '';
+    // X-Cron-Key header preferred, ?key= still accepted. See rg_cron_key().
+    $key = rg_cron_key($_SERVER, $_GET);
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
-    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, (string) $key)) {
+    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, $key)) {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         exit;

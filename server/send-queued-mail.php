@@ -2,7 +2,8 @@
 // Drain the email queue.
 //
 //   CLI:  php /home/<user>/ritagreenservices.com/send-queued-mail.php
-//   HTTP: wget -qO- "https://.../send-queued-mail.php?key=YOUR_ALERTS_KEY"
+//   HTTP: wget -qO- --header="X-Cron-Key: YOUR_ALERTS_KEY" "https://.../send-queued-mail.php"
+//         (the older "?key=YOUR_ALERTS_KEY" form still works, but lands in the access log)
 //
 // Run by cron, every few minutes. This is the only place SMTP is spoken, which
 // is the point: a web request that opens a socket to a mail server is a web
@@ -19,9 +20,10 @@ if (!$isCli) {
     // attacker who simply tries a lot of keys; without a limit the guard was a
     // single shared secret with unlimited attempts against it.
     rate_limit($conn, 'cron-key', 10, 600);
-    $key = $_GET['key'] ?? '';
+    // X-Cron-Key header preferred, ?key= still accepted. See rg_cron_key().
+    $key = rg_cron_key($_SERVER, $_GET);
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
-    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, (string) $key)) {
+    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, $key)) {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         exit;

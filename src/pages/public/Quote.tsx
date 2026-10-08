@@ -81,6 +81,13 @@ export default function Quote() {
       `Scale (hours / headcount): ${scale || "—"}\n\n` +
       `Details:\n${notes}`
 
+    // contact.php refuses a message over 5000 characters. Say so here, before
+    // the request, rather than after it.
+    if (message.length > 5000) {
+      toast.error("That request is too long. Please shorten the details and try again.")
+      return
+    }
+
     setSubmitting(true)
     try {
       await api("contact.php", {
@@ -108,12 +115,13 @@ export default function Quote() {
       />
 
       <Section className="grid gap-12 md:grid-cols-3">
-        {/* Form */}
+        {/* Form. maxLength values mirror the caps in server/contact.php; the notes
+            field leaves room for the brief composed around it in onSubmit. */}
         <form onSubmit={onSubmit} className="space-y-5 md:col-span-2" noValidate>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="name">Your name</Label>
-              <Input id="name" name="name" required autoComplete="name" />
+              <Input id="name" name="name" required maxLength={160} autoComplete="name" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="org">Organisation (optional)</Label>
@@ -121,11 +129,11 @@ export default function Quote() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required autoComplete="email" />
+              <Input id="email" name="email" type="email" required maxLength={190} autoComplete="email" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
-              <Input id="phone" name="phone" type="tel" autoComplete="tel" />
+              <Input id="phone" name="phone" type="tel" maxLength={40} autoComplete="tel" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="service">Service</Label>
@@ -177,6 +185,7 @@ export default function Quote() {
               name="notes"
               rows={5}
               required
+              maxLength={4000}
               placeholder="Tell us the role, the setting and anything that affects the quote — nights, weekends, access, special requirements."
             />
           </div>

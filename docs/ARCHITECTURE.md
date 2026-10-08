@@ -114,7 +114,8 @@ be, because its output decides whether a person may work.
 vendor directory. `totp_verify()` is a hand-rolled RFC 6238 implementation. Both exist because
 the host cannot install packages.
 
-**Three cron-only scripts**, refused over HTTP unless `?key=` matches `ALERTS_KEY`:
+**Three cron-only scripts**, refused over HTTP unless the key in an `X-Cron-Key` header (or,
+for existing crontabs, `?key=`) matches `ALERTS_KEY`:
 
 - `server/expiry-alerts.php` — the credential renewal engine
 - `server/send-queued-mail.php` — drains `email_queue`; the only place SMTP is spoken
@@ -322,7 +323,10 @@ locally or in CI and ship as static artifacts.
 
 `public/.htaccess` handles SPA routing, passes the `Authorization` header through, and hard
 blocks `^uploads/` so uploaded documents are only ever reachable through `files.php` with an
-authentication check.
+authentication check. It also refuses `*.sql`, `*.md`, `migrations/`, `tests/` and the three
+CLI tools, which land in the document root when `server/` is uploaded beside `index.html`.
+It is a mirror of the hand-maintained server copy, so a change to it is live only once
+copied across by hand; see `server/README.md`.
 
 ## 10. Development environment
 

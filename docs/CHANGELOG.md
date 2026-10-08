@@ -7,6 +7,22 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Security: audit fix pass (2026-10-08, local, not deployed)
+
+- **Server files in the document root are refused.** `public/.htaccess` now returns 403
+  for `*.sql`, `*.md`, `migrations/`, `tests/`, `migrate.php`, `seed.php` and
+  `backfill-people.php`. The live `.htaccess` is hand-maintained, so these lines are
+  not on the server until copied there; `server/README.md` says how
+- **Cron keys can travel in a header.** `expiry-alerts.php`, `send-queued-mail.php`
+  and `backup.php` read `ALERTS_KEY` from an `X-Cron-Key` header first, which keeps it
+  out of the access log, and still accept `?key=` so existing crontabs keep working.
+  The rule is `rg_cron_key()` in `pure.php`, with six assertions in `server/tests/run.php`
+- **`contact.php` caps email at 190 and phone at 40**, matching its columns and
+  `bookings.php`, and the Contact and Quote forms carry the same `maxLength` caps
+- **`server/README.md` no longer prints the seeded super-admin password.** It says
+  how to rotate it, and its `api.php` row and smoke test now reflect that `api.php`
+  needs a token
+
 ### Deployed — production (2026-09-03)
 
 - Migration 019 applied to `devgeereact_ritagreen_os` after a fresh dump to

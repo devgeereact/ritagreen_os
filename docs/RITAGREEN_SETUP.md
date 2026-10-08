@@ -229,12 +229,12 @@ MySQL / MariaDB on cPanel shared hosting (host = localhost)
 | Pure logic | `server/pure.php` — no database, no config, no output, no globals; every date function takes an injectable clock. Holds expiry classification, reminder banding, staff/worker/client distinction, field status, person match keys, and `rg_evaluate_eligibility()` |
 | Auth | Opaque bearer tokens (32 random bytes, SHA-256 stored, 30-day expiry), bcrypt cost 12, hand-rolled RFC 6238 TOTP, device/session list with per-session revoke, rate limiting, Google SSO matched on verified email only, idle lock screen, `MANDATORY_2FA` flag |
 | Mail | Nothing in a web request opens an SMTP socket. `queue_mail()` writes to `email_queue`; `send-queued-mail.php` drains it on cron, claims each row, logs every attempt including skips. Three sends stay synchronous by design: panic alert, password reset, interactive mailbox reply |
-| Cron-only | `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` — refused over HTTP without `?key=` matching `ALERTS_KEY` |
+| Cron-only | `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` — refused over HTTP unless an `X-Cron-Key` header (or `?key=`) matches `ALERTS_KEY` |
 | CLI-only | `migrate.php`, `seed.php`, `backfill-people.php` — refuse HTTP entirely |
 | Config | 43 `define()` constants in `server/config.php`, gitignored, hand-placed on the server. `config.sample.php` is the tracked template. **No `.env`, no `VITE_*`, nothing secret in the bundle** |
 | Deploy | Push to `main` → GitHub Actions → `npm ci` → `npm run build` → FTPS upload of `dist/` **only**. PHP, `config.php` and `.htaccess` excluded by design; `dangerous-clean-slate` must never be added (rule 16) |
 | Dev | `npm run dev` (Vite, port 5122, `strictPort`) + `npm run dev:api` (`php -S 127.0.0.1:8122 -t server`). Proxy target from `RG_API_TARGET`, defaults local, warns when overridden (rule 13) |
-| Tests | `server/tests/run.php` (254 assertions, no database, no Composer) and `src/lib/__tests__/access.test.ts` (24 assertions over the permission map) |
+| Tests | `server/tests/run.php` (260 assertions, no database, no Composer) and `src/lib/__tests__/access.test.ts` (24 assertions over the permission map) |
 | CI | typecheck, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Lint reports but does not block |
 
 **Hard host constraints — treat as inputs to every recommendation:**
@@ -338,7 +338,7 @@ server/
   *.php                 55 endpoints, one per resource
   migrations/           001–018
   schema.sql            the from-scratch baseline
-  tests/run.php         254 assertions, no database
+  tests/run.php         260 assertions, no database
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
 ```
@@ -577,7 +577,7 @@ From `docs/PROGRESS.md`, generated from `docs/STATUS.json`: **151 done · 14 par
 
 **Everything still open, in full — do not plan around a rosier picture:**
 
-- Automated tests are partial: 254 server assertions and 24 access-map assertions; **endpoints
+- Automated tests are partial: 260 server assertions and 24 access-map assertions; **endpoints
   and React components are untested.**
 - CI quality gates are partial: typecheck, build, `php -l` and docs checks block; **lint reports
   only**, with 27 ESLint errors remaining (8 `react-hooks/set-state-in-effect`, 7
@@ -713,7 +713,7 @@ and the blast radius of one bad migration. If it does not, sequence the move so 
 keeps working throughout, and cost it honestly — including the fact that the deploy pipeline
 uploads `dist/` over FTPS today and PHP is placed by hand.
 
-Do not propose a rewrite as the opening move. 55 endpoints, 18 migrations and 278 assertions of
+Do not propose a rewrite as the opening move. 55 endpoints, 18 migrations and 284 assertions of
 tested behaviour are an asset.
 
 ## PHASE 9 — BRAND REPOSITIONING
@@ -1040,10 +1040,12 @@ hand, so a frontend deploy can never disturb it.
 4. **Upload the `*.php` files** to the document root, alongside `index.html`.
 5. **Place `.htaccess`.** It handles SPA routing, re-injects the `Authorization` header that
    LiteSpeed otherwise strips before PHP sees it, and hard-blocks `^uploads/` so uploaded
-   documents are only ever reachable through `files.php` behind an auth check.
+   documents are only ever reachable through `files.php` behind an auth check. It also refuses
+   `*.sql`, `*.md`, `migrations/`, `tests/` and the CLI tools; confirm `/schema.sql` is 403.
 6. **Create the uploads directory** and confirm a direct request to `/uploads/<stored_name>` is
    refused.
-7. **Add the cron jobs** (see D11). Each refuses HTTP without `?key=` matching `ALERTS_KEY`.
+7. **Add the cron jobs** (see D11). Each refuses HTTP unless an `X-Cron-Key` header (or `?key=`)
+   matches `ALERTS_KEY`.
 8. **Apply migrations**, after a restore-tested backup (rule 15). Note the live footgun recorded
    in Part B §5: `migrate.php` treats `DB_HOST=localhost` as local, and on shared hosting the
    production database *is* localhost, so the `--production` guard never fires.
@@ -1784,7 +1786,7 @@ routes, parameters and return shapes in `docs/API.md`.
 | `system-health.php` | `super_admin` / `admin` / `manager` |
 | `forms-intake.php` | **Webhook: shared secret in `X-RitaGreen-Secret`, no bearer token.** Views staff only |
 | `notifications.php` · `dashboard.php` · `ai.php` · `weather.php` · `api.php` | Auth, any role |
-| `expiry-alerts.php` · `send-queued-mail.php` · `backup.php` | **Cron.** CLI, or HTTP with `?key=` matching `ALERTS_KEY` |
+| `expiry-alerts.php` · `send-queued-mail.php` · `backup.php` | **Cron.** CLI, or HTTP with an `X-Cron-Key` header (or `?key=`) matching `ALERTS_KEY` |
 | `migrate.php` · `seed.php` · `backfill-people.php` | **CLI only.** They refuse to run over HTTP at all |
 
 **Four auth mechanisms are in use, and they are not interchangeable:** a bearer token; a shared
@@ -1800,9 +1802,10 @@ understates what its code does.
 
 ## D11. Scheduled work
 
-Three cron scripts. Each runs from the CLI with no key, or over HTTP with `?key=` matching
-`ALERTS_KEY`; a key that is unset or `CHANGE_ME` refuses every HTTP request. A key in a query
-string lands in the access log, so prefer the CLI trigger.
+Three cron scripts. Each runs from the CLI with no key, or over HTTP with `ALERTS_KEY` in an
+`X-Cron-Key` header (or `?key=`, kept for existing crontabs; the header wins when both are
+sent); a key that is unset or `CHANGE_ME` refuses every HTTP request. A key in a query string
+lands in the access log and a header does not, so prefer the CLI trigger, then the header.
 
 | Script | Cadence | What it does |
 |---|---|---|
@@ -1847,7 +1850,7 @@ component — use the token**, and never invent a fourth colour for a compliance
 |---|---|---|
 | `npm run typecheck` | `tsc -b --force` over the referenced strict config | Yes |
 | `npm run build` | Vite production build, plus a source-map assertion | Yes |
-| `npm run test:php` | `server/tests/run.php` — **254 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
+| `npm run test:php` | `server/tests/run.php` — **260 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
 | `npm test` | `src/lib/__tests__/access.test.ts` — 24 assertions over the permission map, including that a client or worker account cannot reach `/app` | Yes |
 | `php -l` | Every PHP file | Yes |
 | Config guard | Fails if `server/config.php` is committed | Yes |
