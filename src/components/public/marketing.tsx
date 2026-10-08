@@ -275,7 +275,7 @@ export function TrustStrip({ items }: { items: string[] }) {
 // Five-star row; fills to the (rounded) rating in brand amber.
 function Stars({ rating, className }: { rating: number; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-0.5", className)} aria-label={`${rating} out of 5`}>
+    <div role="img" className={cn("flex items-center gap-0.5", className)} aria-label={`${rating} out of 5`}>
       {[1, 2, 3, 4, 5].map((i) => (
         <Star
           key={i}

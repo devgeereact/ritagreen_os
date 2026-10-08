@@ -7,6 +7,10 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Accessibility: give the public star rating an image role (2026-10-08)
+
+The five-star row now has `role="img"`, so its existing rating label names a meaningful graphic rather than a generic div. No rating values, review text or styling changed. Local Chromium axe scans reproduced `aria-prohibited-attr` before this correction. Typecheck, lint, unit tests, build and the repeated browser check are recorded in the Mac development review; a screen-reader check remains outstanding.
+
 ### Deployed — production (2026-09-03)
 
 - Migration 019 applied to `devgeereact_ritagreen_os` after a fresh dump to
