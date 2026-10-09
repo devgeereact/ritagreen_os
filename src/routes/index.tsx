@@ -6,6 +6,13 @@ import BareLayout from "@/layouts/BareLayout"
 import RequireAuth from "@/auth/RequireAuth"
 import ErrorPage from "@/pages/ErrorPage"
 import { PageLoader } from "@/routes/page-loader"
+import {
+  LegacyArticleRedirect,
+  LegacyQuoteRedirect,
+  LegacyRedirect,
+  LegacyServiceRedirect,
+  LegacyServicesRedirect,
+} from "@/routes/legacy-redirects"
 
 // The home page stays eager: it is the first paint for most visitors, and
 // making it wait on a second round trip would cost exactly the metric this
@@ -20,24 +27,24 @@ import Home from "@/pages/public/Home"
 // verifier, the article template and five forms before anything rendered. That
 // is LCP and INP spent on pages most visitors never open. Each is now its own
 // chunk, fetched when it is actually routed to.
+//
+// The 2026 website (section S6): six service pages share one lazy chunk
+// (ServicePage, told which page by a prop); /request, /news and the rest are
+// one chunk each. The previous site's addresses redirect, through the small
+// eager components in legacy-redirects.tsx and real 301s in public/.htaccess.
+const ServicePage = lazy(() => import("@/pages/public/ServicePage"))
 const About = lazy(() => import("@/pages/public/About"))
-const Services = lazy(() => import("@/pages/public/Services"))
-const ServiceDetail = lazy(() => import("@/pages/public/ServiceDetail"))
-const Sectors = lazy(() => import("@/pages/public/Sectors"))
 const Careers = lazy(() => import("@/pages/public/Careers"))
-const Accreditations = lazy(() => import("@/pages/public/Accreditations"))
-const Resources = lazy(() => import("@/pages/public/Resources"))
+const News = lazy(() => import("@/pages/public/News"))
 const Article = lazy(() => import("@/pages/public/Article"))
 const Contact = lazy(() => import("@/pages/public/Contact"))
-const Quote = lazy(() => import("@/pages/public/Quote"))
+const Request = lazy(() => import("@/pages/public/Request"))
 const Verify = lazy(() => import("@/pages/public/Verify"))
 const Legal = lazy(() => import("@/pages/public/Legal"))
 const DataRequest = lazy(() => import("@/pages/public/DataRequest"))
 const NotFoundPublic = lazy(() => import("@/pages/public/NotFoundPublic"))
 
 const Offer = lazy(() => import("@/pages/public/Offer"))
-const RequestCover = lazy(() => import("@/pages/public/RequestCover"))
-const Apply = lazy(() => import("@/pages/public/Apply"))
 
 // Auth
 const Login = lazy(() => import("@/pages/auth/Login"))
@@ -104,18 +111,30 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       { index: true, element: <Home /> },
+      { path: "healthcare", element: page(<ServicePage key="healthcare" pageKey="healthcare" />) },
+      { path: "healthcare/staffing", element: page(<ServicePage key="staffing" pageKey="healthcare/staffing" />) },
+      {
+        path: "healthcare/supported-living",
+        element: page(<ServicePage key="supported-living" pageKey="healthcare/supported-living" />),
+      },
+      { path: "cleaning", element: page(<ServicePage key="cleaning" pageKey="cleaning" />) },
+      { path: "security", element: page(<ServicePage key="security" pageKey="security" />) },
+      { path: "training", element: page(<ServicePage key="training" pageKey="training" />) },
       { path: "about", element: page(<About />) },
-      { path: "services", element: page(<Services />) },
-      { path: "services/:slug", element: page(<ServiceDetail />) },
-      { path: "sectors", element: page(<Sectors />) },
       { path: "careers", element: page(<Careers />) },
-      { path: "accreditations", element: page(<Accreditations />) },
-      { path: "resources", element: page(<Resources />) },
-      { path: "resources/:slug", element: page(<Article />) },
+      { path: "news", element: page(<News />) },
+      { path: "news/:slug", element: page(<Article />) },
       { path: "contact", element: page(<Contact />) },
-      { path: "quote", element: page(<Quote />) },
-      { path: "request", element: page(<RequestCover />) },
-      { path: "apply", element: page(<Apply />) },
+      { path: "request", element: page(<Request />) },
+      // The previous site's addresses (S6). Old links and bookmarks still land.
+      { path: "services", element: <LegacyServicesRedirect /> },
+      { path: "services/:slug", element: <LegacyServiceRedirect /> },
+      { path: "sectors", element: <LegacyRedirect from="/sectors" /> },
+      { path: "accreditations", element: <LegacyRedirect from="/accreditations" /> },
+      { path: "resources", element: <LegacyRedirect from="/resources" /> },
+      { path: "resources/:slug", element: <LegacyArticleRedirect /> },
+      { path: "apply", element: <LegacyRedirect from="/apply" /> },
+      { path: "quote", element: <LegacyQuoteRedirect /> },
       { path: "verify", element: page(<Verify />) },
       { path: "verify/:id", element: page(<Verify />) },
       { path: "privacy", element: page(<Legal kind="privacy" />) },

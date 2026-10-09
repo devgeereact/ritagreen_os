@@ -90,6 +90,17 @@ export const LEGACY_REDIRECTS: Record<string, string> = {
   "/quote": "/request?type=cleaning",
 }
 
+/**
+ * Where /quote?service=... now goes. /quote was the cleaning-heavy quote form,
+ * so a bare /quote opens the cleaning quote; the old links that named another
+ * service open the form for that service instead.
+ */
+export function legacyQuoteTarget(service: string | null): string {
+  if (service === "care" || service === "security") return `/request?type=staff&service=${service}`
+  if (service === "academy") return "/request?type=training"
+  return LEGACY_REDIRECTS["/quote"]
+}
+
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
