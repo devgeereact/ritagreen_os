@@ -361,3 +361,22 @@ Rgt::same('two of them', count($ids), 2);
 Rgt::same('both drafts at the site', (int) $one($db,
     'SELECT COUNT(*) FROM shifts WHERE is_draft = 1 AND site_id = ' . $oakleaf . ' AND id IN (' . implode(',', $ids ?: [0]) . ')'), 2);
 Rgt::status('a second time is refused', $admin->post("/bookings.php?action=confirm&id=$reqId", []), 409);
+
+// ---------------------------------------------------------------------------
+Rgt::group('rota: requests in one list, with an owner');
+
+$adminId = (int) $one($db, "SELECT id FROM users WHERE email = 'admin@local.invalid'");
+$list = $admin->get('/requests.php');
+Rgt::status('the office reads requests', $list, 200);
+$types = array_values(array_unique(array_column($list->get('requests', []), 'type')));
+sort($types);
+Rgt::same('cover requests and enquiries together', $types, ['cover', 'enquiry']);
+Rgt::status('an owner can be set', $admin->post("/requests.php?action=owner&type=cover&id=$reqId", ['user_id' => $adminId]), 200);
+$mine = array_values(array_filter($admin->get('/requests.php?type=cover')->get('requests', []), static fn($r) => $r['id'] === $reqId))[0] ?? [];
+Rgt::same('and is shown', $mine['owner_id'] ?? null, $adminId);
+Rgt::status('a worker login cannot own a request',
+    $admin->post("/requests.php?action=owner&type=cover&id=$reqId", ['user_id' => $amaraUser]), 422);
+Rgt::denied('nor read them', $amaraApp->get('/requests.php'));
+$sec = $scoped->get('/requests.php');
+Rgt::ok('a scoped manager sees only their service',
+    !array_diff(array_unique(array_column($sec->get('requests', []), 'division')), ['security']), $sec->body);

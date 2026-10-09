@@ -1074,7 +1074,8 @@ ALTER TABLE jobs ADD INDEX IF NOT EXISTS idx_jobs_assignee (assigned_to, status)
 --
 -- shifts gains is_draft/published_at/published_by, cancel_reason/cancelled_at/
 -- cancelled_by and site_id; sites gains postcode, access notes, a site contact
--- and active; timesheets gains 'draft' and 'queried', source and submitted_at.
+-- and active; timesheets gains 'draft' and 'queried', source and submitted_at;
+-- service_requests and contact_enquiries gain owner_id.
 -- New tables: site_requirements, availability_blocks, app_settings. All of it is
 -- added by migration 038, which owns it: the new tables are not created in this
 -- file, and the columns sit beside two foreign keys that cannot be repeated here.

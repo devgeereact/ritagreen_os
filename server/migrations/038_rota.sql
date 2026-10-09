@@ -130,3 +130,14 @@ ALTER TABLE timesheets
 ALTER TABLE timesheets
   ADD COLUMN IF NOT EXISTS source ENUM('office','clock') NOT NULL DEFAULT 'office' AFTER break_minutes;
 ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS submitted_at DATETIME NULL AFTER source;
+
+-- ---- Requests have an owner --------------------------------------------------
+--
+-- Cover requests and website enquiries arrive in two lists with nobody's name on
+-- either, so "who is dealing with this?" had no answer but asking round. The
+-- Rota's Requests page shows both with an owner. No foreign key: users are
+-- archived, never deleted, and an owner who has left is still who owned it.
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS owner_id INT NULL AFTER shift_id;
+ALTER TABLE service_requests ADD INDEX IF NOT EXISTS idx_sr_owner (owner_id);
+ALTER TABLE contact_enquiries ADD COLUMN IF NOT EXISTS owner_id INT NULL AFTER status;
+ALTER TABLE contact_enquiries ADD INDEX IF NOT EXISTS idx_ce_owner (owner_id);
