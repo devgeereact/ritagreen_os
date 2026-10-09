@@ -1407,6 +1407,7 @@ export type PortalLeave = {
     reason: string | null
     decided_at: string | null
   }[]
+}
 
 // ---- Website: vacancies and the forms directory (server/vacancies.php,
 // server/website-forms.php, migration 039) -----------------------------------
