@@ -94,7 +94,7 @@ $cmd = sprintf('exec %s -S 127.0.0.1:%d -t %s >>%s 2>&1',
 // dev server handles one request at a time, so every "concurrent" test passes by
 // accident: the requests are simply queued, and a race the production host would
 // hit under two simultaneous clicks is invisible here.
-$env = ['RG_CONFIG' => $configPath, 'PHP_CLI_SERVER_WORKERS' => '8'] + $_ENV;
+$env = ['RG_CONFIG' => $configPath, 'PHP_CLI_SERVER_WORKERS' => '8'] + rgt_environment();
 $proc = proc_open($cmd, $descriptors, $pipes, null, $env);
 if (!is_resource($proc)) {
     fwrite(STDERR, "Could not start the PHP dev server on port $port\n");
@@ -195,7 +195,7 @@ function rgt_run_cli(string $script, array $args, string $configPath): string
     $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script);
     foreach ($args as $a) $cmd .= ' ' . escapeshellarg($a);
     $descriptors = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
-    $proc = proc_open($cmd, $descriptors, $pipes, null, ['RG_CONFIG' => $configPath] + $_ENV);
+    $proc = proc_open($cmd, $descriptors, $pipes, null, ['RG_CONFIG' => $configPath] + rgt_environment());
     if (!is_resource($proc)) return '';
     $out = (string) stream_get_contents($pipes[1]);
     $err = (string) stream_get_contents($pipes[2]);
@@ -203,6 +203,18 @@ function rgt_run_cli(string $script, array $args, string $configPath): string
     fclose($pipes[2]);
     proc_close($proc);
     return $out . $err;
+}
+
+/**
+ * The parent's environment, for a child process. Not $_ENV: that is filled only
+ * when variables_order contains "E", and the production php.ini that CI's
+ * setup-php installs uses "GPCS". There $_ENV was empty, so migrate.php and the
+ * server started without RG_TEST_DB_* and connected as the default user, which
+ * CI does not have.
+ */
+function rgt_environment(): array
+{
+    return getenv();
 }
 
 /** Empty the rate-limit window. See the call site for why this is not cheating. */
@@ -213,6 +225,12 @@ function rgt_clear_rate_limits(mysqli $conn): void
 
 function rgt_count_migrations(mysqli $conn): int
 {
-    $res = $conn->query('SELECT COUNT(*) FROM schema_migrations');
+    // No table means migrate.php never got as far as creating it. Report 0 so
+    // the caller prints migrate.php's own output, which says why.
+    try {
+        $res = $conn->query('SELECT COUNT(*) FROM schema_migrations');
+    } catch (mysqli_sql_exception $e) {
+        return 0;
+    }
     return $res ? (int) $res->fetch_row()[0] : 0;
 }
