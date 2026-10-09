@@ -33,6 +33,13 @@ Rgt::status('an XLSX file is refused with how to get a CSV',
 Rgt::status('a file with no rows under the header is refused',
     $admin->post('/sheet-import.php?action=upload', ['file_name' => 'empty.csv', 'csv' => "Name,Email\n"]), 422);
 
+// Row 8 of the sample is somebody who already applied through the careers page.
+$db->query('DELETE FROM rate_limits');
+Rgt::status('a candidate applies through the careers page first', $client->post('/ats.php', [
+    'name' => 'Kemi Bakare', 'email' => 'kemi.bakare@example.test', 'phone' => '07700900428',
+    'role_applied' => 'Care assistant', 'division' => 'care', 'consent' => true,
+]), 201);
+
 $applicantsBefore = $count('SELECT COUNT(*) FROM applicants');
 $peopleBefore = $count('SELECT COUNT(*) FROM people');
 $up = $admin->post('/sheet-import.php?action=upload', ['file_name' => 'Support worker (Responses).csv', 'csv' => "\xEF\xBB\xBF" . $fixture]);
