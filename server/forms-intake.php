@@ -8,6 +8,9 @@
 //   GET  /forms-intake.php?action=health            integration status (staff)
 //   GET  /forms-intake.php?action=submissions       recent submissions (staff)
 //   POST /forms-intake.php?action=retry&id=N        re-map a failed submission
+//   POST /forms-intake.php?action=set_secret&id=N   new shared secret, shown once (owner)
+//
+// Setting up a form end to end: docs/runbooks/google-forms-intake.md.
 //
 // Called by an Apps Script on the form's submit trigger. The CMS owns the
 // record; Google Forms is an integration, which is what makes it replaceable.
@@ -95,6 +98,33 @@ if ($action === 'retry') {
     $result = process_submission($conn, (int) $sub['integration_id'], $id, is_array($payload) ? $payload : []);
     audit($conn, (int) $user['id'], 'intake.retry', "#$id", 'integration_submission', $id);
     json_out($result);
+}
+
+// ---- Set a new shared secret (owner only) ------------------------------------
+// The secret is generated here, shown once in the response and stored only as a
+// hash. Nobody types one in, so nobody picks a weak one, and a leaked database
+// still does not hand over the ability to post applications. Setting a new one
+// replaces the old: the Apps Script must be given the new value, which is the
+// point when a secret may have leaked. The secret is never written to the audit
+// log.
+if ($action === 'set_secret') {
+    $user = require_auth($conn);
+    require_role($user, 'super_admin', 'admin');
+    $id = (int) ($_GET['id'] ?? 0);
+    $stmt = $conn->prepare('SELECT id, integration_key, secret_hash IS NOT NULL AS had_secret FROM integrations WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $integration = $stmt->get_result()->fetch_assoc();
+    if (!$integration) fail('Integration not found.', 404);
+
+    $secret = bin2hex(random_bytes(24));
+    $hash = hash('sha256', $secret);
+    $stmt = $conn->prepare('UPDATE integrations SET secret_hash = ? WHERE id = ?');
+    $stmt->bind_param('si', $hash, $id);
+    $stmt->execute();
+    audit($conn, (int) $user['id'], 'intake.secret_set', $integration['integration_key'], 'integration', $id,
+        ['had_secret' => (bool) $integration['had_secret']], ['had_secret' => true]);
+    json_out(['ok' => true, 'integration_key' => $integration['integration_key'], 'secret' => $secret]);
 }
 
 // ---- The webhook -----------------------------------------------------------

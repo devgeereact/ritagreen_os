@@ -670,24 +670,6 @@ function record_stage(mysqli $conn, int $applicantId, ?string $from, string $to,
 }
 
 /**
- * May this user be given a candidate, a task or an interview to own?
- *
- * Internal staff only. A client portal login and a worker's login are ordinary
- * user rows, so without this an owner could be set to somebody who is then shown
- * -- or emailed about -- a record they are not allowed to open.
- */
-function is_assignable_staff(mysqli $conn, int $userId): bool
-{
-    $stmt = $conn->prepare(
-        'SELECT role, client_id, worker_id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1'
-    );
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    return $row !== null && is_staff($row);
-}
-
-/**
  * The owner and due date from a request body, validated.
  *
  * Shared by add_task and task_assign so the two cannot drift into accepting
