@@ -33,7 +33,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ✅ | `mvp/s02-people-compliance`, PR #11 | Migration 037. Also fixed missing service scope on verifications, right-to-work, leave, employment-contracts, compliance. Follow-up: label checks that are Valid only from a legacy certification record (no verifier) |
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ✅ | `mvp/s03-rota`, PR #13 | Migration 038. FullCalendar removed. Service scope added to scheduling/timesheets. Rest-gap setting has API only, no screen |
 | S4 | Staff portal (Home, Rota, Records, Me) | 🚧 | `mvp/s04-staff-portal` | Phase 4 |
-| S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
+| S5 | Today and Reports | 🚧 | `mvp/s05-today-reports` | Phase 5; agent on ubuntu-dev |
 | S6 | Website rebuild | ✅ | `mvp/s06-website`, PR #12 | Deploy: upload quotes.php, contact.php, pure.php before frontend; copy .htaccess 301 block by hand. Hero uses stock care photo until real photography |
 | S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
 | S8 | Spreadsheet import | ⏳ | `mvp/s08-sheet-import` | |
