@@ -20,7 +20,7 @@ declare(strict_types=1);
 
 /** Files that are not HTTP endpoints. */
 const GUARD_NOT_AN_ENDPOINT = [
-    'lib.php', 'pure.php', 'compliance-lib.php', 'pay-lib.php',
+    'lib.php', 'pure.php', 'compliance-lib.php', 'pay-lib.php', 'people-lib.php',
     'config.php', 'config.sample.php',
     'migrate.php', 'seed.php', 'backfill-people.php', 'retention-sweep.php',
     'send-queued-mail.php', 'create-admin.php', 'expiry-alerts.php', 'backup.php',
