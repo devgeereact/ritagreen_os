@@ -15,6 +15,9 @@ $user = require_auth($conn);
 // replying sends as the company. Before this check any authenticated account
 // could do both, including a client portal login.
 require_role($user, 'super_admin', 'admin', 'manager');
+// The owner can switch the shared inbox off in Settings (migration 036). Checked
+// before IMAP is touched, so a switched-off inbox never opens a connection.
+require_feature($conn, 'inbox', 'The shared inbox');
 
 if (!function_exists('imap_open')) {
     fail('The PHP imap extension is not installed on the server.', 503);

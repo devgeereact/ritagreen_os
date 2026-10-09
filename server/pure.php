@@ -1277,3 +1277,60 @@ function rg_cron_key(array $server, array $query): string
     $key = $query['key'] ?? '';
     return is_string($key) ? $key : '';
 }
+
+/**
+ * The feature switches the owner can set in Settings, with the value each one
+ * takes when nothing has been stored for it (migration 036 seeds the same).
+ *
+ * The list is fixed in code on purpose. A switch is a promise that some code
+ * reads it, so a name the code does not know is refused rather than stored.
+ *
+ * The defaults preserve what production did before the switches existed, except
+ * the AI assistant, which the 2026 plan retires. They also answer for a server
+ * whose PHP has been uploaded ahead of migration 036, so that upload does not
+ * quietly switch payments, SMS or the inbox off.
+ *
+ * @return array<string, bool>
+ */
+function rg_feature_defaults(): array
+{
+    return [
+        'finance' => true,
+        'online_payments' => true,
+        'sms_whatsapp' => true,
+        'inbox' => true,
+        'ai_assistant' => false,
+    ];
+}
+
+/**
+ * Is a switch on, given the rows stored for it?
+ *
+ * @param string $name   a switch name
+ * @param array  $stored name => enabled, as read from feature_switches; a name
+ *                       with no row falls back to its default
+ *
+ * An unknown name is off. It can only come from a typo in code, and the safe
+ * answer to "is this feature allowed?" for a feature nobody defined is no.
+ */
+function rg_feature_on(string $name, array $stored): bool
+{
+    $defaults = rg_feature_defaults();
+    if (!array_key_exists($name, $defaults)) return false;
+    if (array_key_exists($name, $stored)) return (bool) (int) $stored[$name];
+    return $defaults[$name];
+}
+
+/**
+ * Every switch with its current value, in the defaults' order.
+ *
+ * @return array<string, bool>
+ */
+function rg_feature_map(array $stored): array
+{
+    $out = [];
+    foreach (array_keys(rg_feature_defaults()) as $name) {
+        $out[$name] = rg_feature_on($name, $stored);
+    }
+    return $out;
+}

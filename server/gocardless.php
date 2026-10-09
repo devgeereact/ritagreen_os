@@ -122,6 +122,11 @@ $user = require_auth($conn);
 // mandate, so any logged-in account -- a client portal login included -- could
 // walk client_id and read every Direct Debit on the system.
 require_role($user, 'super_admin', 'admin', 'manager');
+// Online payments switched off in Settings (migration 036): nothing new is set
+// up or collected. Reading an existing mandate's status stays open, because the
+// record exists either way, and the webhook above keeps settling payments that
+// were already in flight, so switching off never strands one half-recorded.
+if ($action !== 'status') require_feature($conn, 'online_payments', 'Online payments');
 if (!gc_configured()) fail('Direct Debit is not set up yet. Add GC_ACCESS_TOKEN to config.php.', 503);
 
 if ($action === 'status' && method() === 'GET') {

@@ -12,6 +12,10 @@ require __DIR__ . '/lib.php';
 // but the office should be able to draw on.
 $user = require_auth($conn);
 require_staff($user);
+// Off unless the owner turns it on in Settings (migration 036); the 2026 plan
+// retires the assistant. Checked before the rate limit, so a refused call does
+// not spend the account's allowance.
+require_feature($conn, 'ai_assistant', 'The AI assistant');
 
 if (method() !== 'POST') fail('Method not allowed.', 405);
 
