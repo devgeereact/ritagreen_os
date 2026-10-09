@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  163 done · 12 partial · 1 to do · 176 tracked
+`#######################.`  166 done · 12 partial · 1 to do · 179 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 15 | 2 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 18 | 2 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 17 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,18 +35,21 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 15 done, 2 partial, 0 to do
+Milestone 0 · 18 done, 2 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] CI quality gates — _typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block_
+- [x] Design system: company green, Source Serif 4 headlines — _src/index.css tokens and tailwind.config.ts rebuilt on #33512D with warm neutrals, status colours that are not the brand green, one 8px radius and a green-black dark mode. Source Serif 4 (500, 600) self-hosted for website headlines; Plus Jakarta Sans removed. Navy and mint retired. docs/DESIGN_SYSTEM.md rewritten. Website page designs are S6_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
 - [x] ESLint baseline clean — _0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks_
+- [x] Eight-destination office navigation — _Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Content Studio, Analytics, Insights and Notifications left the rail and stay in the command palette until S9_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
 - [x] Migration production guard is meaningful on cPanel — _Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name_
 - [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
+- [x] Owner feature switches — _Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox, ai_assistant. Owner-only and audited; inbox.php, ai.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. server/tests/db/cases/120_feature_switches.php_
 - [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
@@ -151,7 +154,7 @@ Milestone 5 · 21 done, 1 partial, 0 to do
 - [x] Per-service scoping is enforced — _As a query filter, not just a stored preference_
 - [x] Portal and worker app gated to their linked accounts — _/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side_
 - [x] Rate limiting — _rate_limits table + rate_limit()_
-- [x] Role-filtered navigation — _app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse_
+- [x] Role-filtered navigation — _src/lib/nav.ts holds the sidebar's destinations and visibleDestinations() filters them through canAccess and the owner's feature switches, so no link is offered that the guard would refuse; src/lib/__tests__/nav.test.ts checks every role_
 - [x] Role-restrict field event logging — _Fixed. Board is staff-only; a worker may post only against a shift assigned to them_
 - [x] Role-restrict the shared mailbox — _Fixed. server/inbox.php now requires super_admin/admin/manager_
 - [x] Role-restrict worker reads — _Fixed. server/workers.php GET now calls require_staff(); pay fields returned only to super_admin/admin/manager_
@@ -251,7 +254,7 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 
 Milestone 9 · 9 done, 0 partial, 0 to do
 
-- [x] Brand-correct app icon — _favicon.svg was still the retired green #15803D. Redrawn navy and mint, with PNGs generated for 192, 512, maskable and the iOS touch icon, which ignores SVG_
+- [x] Brand-correct app icon — _favicon.svg and the 192, 512, maskable and iOS touch PNGs redrawn in the company green (2026 design system); the PNGs are rendered from SVG with ImageMagick, as docs/DESIGN_SYSTEM.md describes_
 - [x] Cached read-only worker data — _NetworkFirst on me.php and notifications.php with a 5-second timeout. The rest of the PHP API is never cached: stale compliance data would mean showing an eligibility answer that is no longer true_
 - [x] Install payload trimmed — _37 MB of orphaned Pulse-UI template assets removed (cards, products, illustrations, carousels, countries) -- shipped on every deploy and precached into the app. Precache 14.5 MB across 115 entries down to 1.15 MB across 67. The office-only chunks are excluded too: a field worker should not download a charts library, a calendar and a PDF engine_
 - [x] Offline banner — _Says what still works, not just that something is wrong_
@@ -259,7 +262,7 @@ Milestone 9 · 9 done, 0 partial, 0 to do
 - [x] Registration — _Owned by PwaStatus, which also owns the update prompt. Registering in main.tsx as well would race it_
 - [x] Service worker — _vite-plugin-pwa with a build-hash precache manifest, so a deploy invalidates exactly what changed and offline survives it_
 - [x] Update-available prompt — _src/components/pwa-status.tsx, registerType 'prompt'. Never automatic: swapping the app out from under someone part-way through clocking in is its own failure_
-- [x] Web app manifest — _Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, and the navy theme colour_
+- [x] Web app manifest — _Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, theme colour green #33512D and paper background_
 
 ### REPORTING — Reporting and insight
 

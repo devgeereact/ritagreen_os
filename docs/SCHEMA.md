@@ -1860,3 +1860,22 @@ and nothing is due on cannot be chased, which is the only thing a checklist is f
 task clears `done_at` and `done_by`: "Right to work verified" with nobody's name against it is not
 evidence that anybody verified anything. Tasks already marked done keep NULL — `NOW()` would be a
 lie about when the work happened.
+
+## `feature_switches`: migration 036
+
+Which optional areas of the system the owner has switched on. One row per switch; the names
+are fixed in code (`rg_feature_defaults()` in `server/pure.php`) and `server/features.php` can
+set a switch but not create one. Created by the migration only, not in `schema.sql`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | VARCHAR(40) PK | `finance`, `online_payments`, `sms_whatsapp`, `inbox`, `ai_assistant` |
+| `enabled` | TINYINT(1) NOT NULL | |
+| `updated_by` | INT NULL | FK → `users(id)` **ON DELETE SET NULL**. NULL for a seeded row nobody has changed |
+| `updated_at` | DATETIME NULL | UTC, set on change |
+
+Seeded with `INSERT IGNORE`, so re-running never undoes the owner's choice: everything on
+except `ai_assistant`, which the 2026 plan retires. That preserves what production did before
+the table existed. A missing row, or a missing table on a server whose PHP is ahead of its
+migrations, reads as the same default. What each switch does when off is in `docs/API.md`
+§54c; `finance` only changes the navigation.

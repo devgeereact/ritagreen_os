@@ -325,6 +325,18 @@ surface.
 | `send_whatsapp($conn, $to, $body): bool` | 413 | Send one WhatsApp message; body truncated to 1500 chars. |
 | `message_worker($conn, $to, $body): bool` | 448 | WhatsApp if available, otherwise SMS. |
 
+`send_sms()` and `send_whatsapp()` check the `sms_whatsapp` feature switch before Twilio: while
+it is off, the attempt is logged to `sms_log` as `skipped` with meta `sms switched off in
+settings` (or `whatsapp switched off in settings`) and nothing is sent.
+
+### Feature switches
+
+| Function | Purpose |
+|---|---|
+| `feature_rows($conn): array` | Every stored switch as name => enabled, read once per request. Empty when migration 036 has not run, so the defaults apply. |
+| `feature_enabled($conn, $name): bool` | Is a switch on? The rule is `rg_feature_on()` in `pure.php`: a stored row wins, otherwise the default; an unknown name is off. |
+| `require_feature($conn, $name, $what)` | 403 "`$what` is switched off. An owner can turn it on in Settings, Features." when off. |
+
 ### TOTP
 
 | Function | Line | Purpose |
@@ -363,7 +375,7 @@ computed identically everywhere.
 | File | Purpose | Auth posture |
 |---|---|---|
 | `academy.php` | LMS: programmes, enrolments, certificate issue | Office roles plus `trainer` and `editor` throughout, reads included; writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
-| `ai.php` | OpenRouter chat proxy | Staff |
+| `ai.php` | OpenRouter chat proxy | Staff, and the `ai_assistant` switch on (403 otherwise) |
 | `analytics.php` | Group BI aggregates | `super_admin`/`admin`/`manager` |
 | `api.php` | Items smoke test | Staff |
 | `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else office roles plus `trainer`, reads included; writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
@@ -386,8 +398,9 @@ computed identically everywhere.
 | `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
 | `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
-| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest office roles throughout, the mandate status read included |
-| `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager` |
+| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest office roles throughout, the mandate status read included. `setup`, `complete` and `charge` also need the `online_payments` switch on |
+| `features.php` | Owner feature switches | Staff to read; `super_admin`/`admin` to change, audited |
+| `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager`, and the `inbox` switch on |
 | `incidents.php` | Incidents and safeguarding | `super_admin`/`admin`/`manager` throughout, reads included |
 | `insurance.php` | Company insurance register | Office roles throughout, reads included |
 | `invoices.php` | Invoicing | Office roles throughout, reads included |
@@ -396,7 +409,7 @@ computed identically everywhere.
 | `me.php` | Worker self-service (mobile PWA) | Auth **and** a linked `worker_id` |
 | `notifications.php` | Notification bell | Auth, any role |
 | `offer.php` | Shift offer accept/decline from an SMS link | **Public, token in the URL is the secret** |
-| `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager` |
+| `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager`. Everything except the webhook needs the `online_payments` switch on |
 | `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager`, and the `payroll` zone |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
 | `quotes.php` | Quoting | Office roles throughout, reads included |
@@ -488,6 +501,10 @@ or upstream error. The model is `OR_MODEL` from `config.php`; `system` defaults
 to a RitaGreen-specific UK-English assistant prompt (`ai.php:18`). Internal
 staff only (`require_staff`), so a client portal or worker login cannot spend
 tokens through it; any staff account can.
+
+Refused with 403 while the `ai_assistant` feature switch is off, which is how it is
+seeded (migration 036): the assistant is being retired. The check runs before the rate
+limit, so a refused call does not use the account's allowance.
 
 ---
 
@@ -1117,8 +1134,9 @@ announcement also raises a broadcast notification.
 
 ## 44. `inbox.php`
 
-Live IMAP mailbox with SMTP replies. Returns 503 if the PHP `imap` extension
-is absent or `IMAP_HOST` is unset. TLS certificate validation is on unless
+Live IMAP mailbox with SMTP replies. Refused with 403 on every route while the
+`inbox` feature switch is off, before any IMAP connection is attempted. Returns 503 if
+the PHP `imap` extension is absent or `IMAP_HOST` is unset. TLS certificate validation is on unless
 `IMAP_VALIDATE_CERT` is explicitly false (`inbox.php:25`).
 
 **Auth: `super_admin`, `admin`, `manager` for every route.** Reading this mailbox
@@ -1323,6 +1341,10 @@ the other four packs are undocumented at the top of the file.
 
 Stripe Checkout, hosted. No card data touches this server.
 
+While the `online_payments` feature switch is off, `public_checkout`, `paylink` and
+`checkout` are refused with 403. The `webhook` stays open: a client who opened a checkout
+before the switch went off can still pay, and the invoice must record it.
+
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | `webhook` | **None — Stripe signature verified** | Raw body; `Stripe-Signature` header | `{ok: true}` |
@@ -1356,6 +1378,10 @@ the file.
 
 Direct Debit via the Billing Requests flow. Raw HTTPS, no SDK. Sandbox unless
 `GC_ENVIRONMENT` is `live` (`gocardless.php:19`).
+
+While the `online_payments` feature switch is off, `setup`, `complete` and `charge` are
+refused with 403. `status` (reading a mandate that already exists) and the `webhook`
+(settling payments already in flight) are not.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
@@ -1535,6 +1561,7 @@ stays stable and comparable.
 | `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
 | `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
 | `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) |
+| `features.php` | Owner feature switches. See §54c | Staff to read; owner to change |
 | `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` | Schema, fixtures and the first administrator | **CLI only.** Refuse to run over HTTP at all. `migrate.php`, `seed.php` and `backfill-people.php` additionally read `RG_ENV` from `config.php` to decide what they may do; a config that does not declare it counts as production |
 
 Two auth mechanisms here are neither a bearer token nor a role, and are worth stating plainly:
@@ -1544,6 +1571,31 @@ Two auth mechanisms here are neither a bearer token nor a role, and are worth st
   limited, and an integration with no secret configured refuses every submission.
 - **`send-queued-mail.php`** follows `expiry-alerts.php` and `backup.php`: CLI, or HTTP with
   `ALERTS_KEY` in an `X-Cron-Key` header, or `?key=` for existing crontabs.
+
+## 54c. `features.php`
+
+The owner's feature switches (migration 036). The names are fixed in code,
+`rg_feature_defaults()` in `pure.php`; this endpoint sets a switch, it cannot create one.
+
+| Method | Auth | Body | Returns |
+|---|---|---|---|
+| GET | Staff (`require_staff`, above every branch) | none | `{features: {finance, online_payments, sms_whatsapp, inbox, ai_assistant}, switches: [{name, enabled, updated_at, updated_by}]}` |
+| POST | `super_admin`/`admin` | `{name, enabled: true\|false}` | The same shape, after the change |
+
+An unknown name or a non-boolean `enabled` is a 422. A change is written with
+`updated_by` and `updated_at`, and audited as `feature.switch` with the state before and
+after; setting a switch to the value it already has writes nothing.
+
+| Switch | Seed | When off |
+|---|---|---|
+| `finance` | on | Invoicing, quotes, client contracts and payroll leave the office navigation and the command palette. **Interface only**: the endpoints keep their role and zone checks and are not refused |
+| `online_payments` | on | `payments.php` and `gocardless.php` refuse anything that starts a payment; webhooks stay open |
+| `sms_whatsapp` | on | `send_sms()` and `send_whatsapp()` log the attempt as skipped and send nothing |
+| `inbox` | on | `inbox.php` refuses every route; the Inbox link leaves Settings |
+| `ai_assistant` | **off** | `ai.php` refuses; the header assistant and the weather panel are hidden |
+
+The seeds keep production as it was, except the AI assistant, which the 2026 plan retires.
+A server whose PHP is uploaded before migration 036 runs reads the same defaults.
 
 ## 55. Public / unauthenticated surface
 

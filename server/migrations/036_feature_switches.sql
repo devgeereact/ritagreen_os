@@ -1,4 +1,4 @@
--- 036 — feature switches the owner can turn on and off in Settings.
+-- 036: feature switches the owner can turn on and off in Settings.
 --
 -- The 2026 plan (file 02, "Keep, switch off, retire") keeps finance, online
 -- payments, the built-in inbox and SMS/WhatsApp sending, but behind a switch, so
@@ -6,7 +6,7 @@
 -- Nothing stored a decision like that: there was no settings table, and every
 -- integration was either configured in config.php or not.
 --
--- One row per switch. The names are fixed in code (rg_feature_names() in
+-- One row per switch. The names are fixed in code (rg_feature_defaults() in
 -- server/pure.php); a name the code does not know is never read.
 --
 --   finance          Invoicing, quotes, client contracts and payroll in the

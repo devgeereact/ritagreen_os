@@ -55,7 +55,7 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          {isAdmin ? "Manage people, roles, data and your own security." : "Manage your account security."}
+          {isAdmin ? "Manage people, roles, features, data and your own security." : "Manage your account security."}
         </p>
       </div>
 

@@ -392,7 +392,7 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
 ## 6. Current state
 
-160 done, 12 partial, 2 to do of 174 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+166 done, 12 partial, 1 to do of 179 tracked items — see [`docs/PROGRESS.md`](docs/PROGRESS.md),
 generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential

@@ -19,7 +19,7 @@ $stored = static fn (string $name) => $db->query(
     "SELECT enabled, updated_by FROM feature_switches WHERE name = '" . $db->real_escape_string($name) . "'"
 )->fetch_assoc();
 
-Rgt::group('feature switches — seeded as the plan says');
+Rgt::group('feature switches: seeded as the plan says');
 
 Rgt::same('the five switches are seeded',
     (int) $db->query('SELECT COUNT(*) FROM feature_switches')->fetch_row()[0], 5);
@@ -29,7 +29,7 @@ Rgt::same('SMS and WhatsApp start on', (int) $stored('sms_whatsapp')['enabled'],
 Rgt::same('the inbox starts on', (int) $stored('inbox')['enabled'], 1);
 Rgt::same('the AI assistant starts off', (int) $stored('ai_assistant')['enabled'], 0);
 
-Rgt::group('feature switches — any staff account can read them');
+Rgt::group('feature switches: any staff account can read them');
 
 $res = $manager->get('/features.php');
 Rgt::status('a manager reads the switches', $res, 200);
@@ -38,13 +38,13 @@ Rgt::same('and the AI assistant off', $res->get('features.ai_assistant'), false)
 Rgt::same('with a row per switch', count((array) $res->get('switches', [])), 5);
 Rgt::status('an editor reads them too', $editor->get('/features.php'), 200);
 
-Rgt::group('feature switches — not for worker, client or anonymous logins');
+Rgt::group('feature switches: not for worker, client or anonymous logins');
 
 Rgt::denied("a worker's login cannot read them", $worker->get('/features.php'));
 Rgt::denied('a client portal login cannot read them', $customer->get('/features.php'));
 Rgt::status('nobody signed in is refused', $client->get('/features.php'), 401);
 
-Rgt::group('feature switches — only an owner may change one');
+Rgt::group('feature switches: only an owner may change one');
 
 $res = $manager->post('/features.php', ['name' => 'inbox', 'enabled' => false]);
 Rgt::denied('a manager cannot switch the inbox off', $res);
@@ -53,7 +53,7 @@ Rgt::denied('nor can an editor', $editor->post('/features.php', ['name' => 'ai_a
 Rgt::same('and the AI assistant stays off', (int) $stored('ai_assistant')['enabled'], 0);
 Rgt::denied("nor a worker's login", $worker->post('/features.php', ['name' => 'finance', 'enabled' => false]));
 
-Rgt::group('feature switches — only real switches, only true or false');
+Rgt::group('feature switches: only real switches, only true or false');
 
 Rgt::status('an unknown switch is refused', $admin->post('/features.php', ['name' => 'teleport', 'enabled' => true]), 422);
 Rgt::same('and nothing is stored for it',
@@ -62,7 +62,7 @@ Rgt::status('a value that is not a boolean is refused',
     $admin->post('/features.php', ['name' => 'inbox', 'enabled' => 'off']), 422);
 Rgt::same('and the inbox is untouched', (int) $stored('inbox')['enabled'], 1);
 
-Rgt::group('feature switches — an owner change is stored and audited');
+Rgt::group('feature switches: an owner change is stored and audited');
 
 $auditBefore = (int) $db->query("SELECT COUNT(*) FROM audit_log WHERE action = 'feature.switch'")->fetch_row()[0];
 $res = $admin->post('/features.php', ['name' => 'inbox', 'enabled' => false]);
@@ -86,7 +86,7 @@ Rgt::status('setting it to what it already is succeeds', $res, 200);
 Rgt::same('without a second audit entry',
     (int) $db->query("SELECT COUNT(*) FROM audit_log WHERE action = 'feature.switch'")->fetch_row()[0], $auditBefore + 1);
 
-Rgt::group('feature switches — a switched-off area is refused by the server');
+Rgt::group('feature switches: a switched-off area is refused by the server');
 
 $res = $admin->get('/inbox.php?action=unread');
 Rgt::status('the inbox refuses even an admin', $res, 403);
@@ -114,7 +114,7 @@ Rgt::ok('the Stripe webhook is not refused by the switch', $res->status !== 403,
 $res = $client->post('/gocardless.php?action=webhook', []);
 Rgt::ok('nor is the GoCardless webhook', $res->status !== 403, "HTTP {$res->status} {$res->body}");
 
-Rgt::group('feature switches — SMS and WhatsApp are skipped, and logged, while off');
+Rgt::group('feature switches: SMS and WhatsApp are skipped, and logged, while off');
 
 // send_sms() is reached through a CLI probe that loads lib.php against the same
 // test database, rather than through a broadcast, which needs an eligible,
@@ -145,7 +145,7 @@ Rgt::same('switched back on, the switch no longer stops it',
     $lastMeta('feature switch probe sms')['meta'] ?? null, 'sms disabled');
 @unlink($probe);
 
-Rgt::group('feature switches — switching back on restores the area');
+Rgt::group('feature switches: switching back on restores the area');
 
 $admin->post('/features.php', ['name' => 'inbox', 'enabled' => true]);
 $res = $admin->get('/inbox.php?action=unread');
