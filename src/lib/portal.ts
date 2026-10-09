@@ -8,6 +8,16 @@
 
 import { addDays, dayLabel } from "@/lib/rota"
 
+/** Now, as a London wall-clock string ("2026-10-09 21:47:00"), to compare with shift times. */
+export function londonNow(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(now)
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00"
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`
+}
+
 /** "Today", "Tomorrow" or "Friday 10 October" for a wall-clock datetime. */
 export function relativeDay(datetime: string, today: string): string {
   const date = datetime.slice(0, 10)

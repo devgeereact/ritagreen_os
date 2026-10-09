@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { buildIcs, byDay, greeting, icsEscape, mapLink, relativeDay } from "@/lib/portal"
+import { buildIcs, byDay, greeting, icsEscape, londonNow, mapLink, relativeDay } from "@/lib/portal"
 
 describe("portal days and greetings", () => {
   it("says today and tomorrow", () => {
     expect(relativeDay("2026-10-09 08:00:00", "2026-10-09")).toBe("Today")
     expect(relativeDay("2026-10-10 07:30:00", "2026-10-09")).toBe("Tomorrow")
     expect(relativeDay("2026-10-12 07:30:00", "2026-10-09")).toBe("Monday 12 October")
+  })
+
+  it("reads now on the London clock, in summer and winter", () => {
+    expect(londonNow(new Date("2026-07-01T06:45:00Z"))).toBe("2026-07-01 07:45:00")
+    expect(londonNow(new Date("2026-12-01T06:45:00Z"))).toBe("2026-12-01 06:45:00")
   })
 
   it("greets by the hour", () => {
