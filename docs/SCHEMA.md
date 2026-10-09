@@ -513,7 +513,7 @@ Worked time, as claimed and then decided on; the input to payroll.
 | `shift_id` | INT | yes | NULL | FK → `shifts(id)` **ON DELETE SET NULL**. The rota entry these hours were worked on, when there was one. Nullable on purpose: hours are recorded for call-outs and cover arranged by phone that never had a shift. Migration 029 |
 | `minutes` | INT | no | 0 | Clock duration start to end, breaks included, computed by `rg_shift_minutes()` |
 | `break_minutes` | INT | no | 0 | Unpaid break. Pay is on `minutes - break_minutes`. Migration 029 |
-| `status` | ENUM('pending','approved','rejected') | no | 'pending' | `rejected` added by migration 021 |
+| `status` | ENUM('draft','pending','approved','rejected','queried') | no | 'pending' | `rejected` added by migration 021; `draft` and `queried` by migration 038. Only `approved` is paid |
 | `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL**. Who decided, whichever way |
 | `decided_at` | TIMESTAMP | yes | NULL | When. Migration 021 |
 | `decision_note` | VARCHAR(255) | yes | NULL | Why. Required by the endpoint on a rejection. Migration 021 |
@@ -834,7 +834,7 @@ credit notes. Since `invoices` has no `deleted_at`, that path is a hard delete.
 ### `shifts`
 
 Scheduled and open shifts. `worker_id` is nullable because an open shift has no
-worker until one accepts a broadcast offer (`schema.sql:480-481`).
+worker until one accepts a broadcast offer (`schema.sql:480-481`). Draft and published, the site link and the cancellation reason were added by migration 038; see "The rota: migration 038" at the end of this file.
 `CREATE` at `schema.sql:482`, with two no-op `MODIFY` statements at
 `schema.sql:733-734` for older installs.
 
@@ -1908,3 +1908,55 @@ the one person, because a task that does not apply cannot be finished and would 
 **`enrolments.learner_name`** becomes `NULL`-able. A training record added from the person
 profile links through `enrolments.person_id` (migration 001) and reads the name from `people`;
 copying the name into this row as well would be a second copy of the person.
+
+## The rota: migration 038
+
+Applied locally by the database suite; **not** applied to production. Re-runnable apart from
+`fk_shifts_site`, which MySQL cannot add `IF NOT EXISTS` (as with migrations 027 and 029).
+`schema.sql` carries a pointer to it, not a copy.
+
+**`shifts.is_draft`** `TINYINT(1) NOT NULL DEFAULT 0`. Whether workers can see the shift.
+`status` keeps its four values and its meaning (who is on it; whether it happened); being a
+draft is a separate fact. The default is 0 so every shift that already existed counts as
+published, which they all were; every office path that creates a shift sets 1 explicitly.
+`rg_shift_state()` derives the word the rota shows (`draft`, `open`, `offered`, `assigned`,
+`completed`, `cancelled`). Indexed `(is_draft, starts_at)`.
+**`published_at`** `DATETIME NULL`, **`published_by`** `INT NULL`: set when a draft is
+published; NULL on shifts that predate drafts.
+**`cancel_reason`** `VARCHAR(255) NULL`, **`cancelled_at`** `DATETIME NULL`,
+**`cancelled_by`** `INT NULL`: a cancellation needs a reason, and it is what the worker is told.
+**`site_id`** `INT NULL`, FK `fk_shifts_site` → `sites(id)` **ON DELETE SET NULL**, indexed
+`(site_id, starts_at)`. Backfilled where the shift's client and `site_name` match a site exactly.
+`site_name` stays: it is what older shifts carry and it is history.
+
+**`sites`** gains `postcode` `VARCHAR(12)`, `access_notes` `VARCHAR(1000)`, `contact_name`
+`VARCHAR(160)`, `contact_phone` `VARCHAR(40)` and `active` `TINYINT(1) NOT NULL DEFAULT 1`. A
+closed site takes no new shifts and is kept, because shifts point at it.
+
+**`site_requirements`**: `site_id` FK → `sites(id)` **ON DELETE CASCADE**, `requirement_id` FK →
+`compliance_requirements(id)` **ON DELETE CASCADE**, `created_by`, `created_at`; primary key
+`(site_id, requirement_id)`. What a site insists on beyond the service's own rules.
+`rg_load_rules($conn, $service, $role, $siteId)` adds these as mandatory rules, so the same
+evaluator decides; the site verdict is never written to `person_services`.
+
+**`availability_blocks`**: `id`, `person_id` FK → `people(id)` **ON DELETE CASCADE**,
+`starts_at`, `ends_at` (wall-clock DATETIME, like shifts), `note` `VARCHAR(255)`, `created_by` FK
+→ `users(id)` **ON DELETE SET NULL**, `created_at`, `deleted_at`. A period the worker has marked
+unavailable: a warning the office acknowledges, never a block. Keyed by person, because somebody
+unavailable is unavailable for every service.
+
+**`app_settings`**: `name` `VARCHAR(60)` PK, `value` `VARCHAR(255)`, `updated_by` FK →
+`users(id)` **ON DELETE SET NULL**, `updated_at`. Numbers the owner may change; the names and
+defaults are fixed in `rg_setting_defaults()`, and a value that is not a whole number or is out of
+bounds reads as the default. Seeded `rest_gap_min_hours = 11` with `INSERT IGNORE`.
+
+**`timesheets.status`** becomes `ENUM('draft','pending','approved','rejected','queried')`.
+`draft` is made from a clock-in and clock-out (`rg_timesheet_from_clock()`), `queried` is the
+office asking the worker (the reason in `decision_note`). `pending` keeps its meaning, submitted
+and waiting, so every existing row keeps its place. Only `approved` is paid.
+**`source`** `ENUM('office','clock') NOT NULL DEFAULT 'office'` and **`submitted_at`**
+`DATETIME NULL`. Corrections are not a table: each one is an audit row with the values before
+and after and the reason (`timesheets.php?action=correct`), which is the entry's history.
+
+**`service_requests.owner_id`** and **`contact_enquiries.owner_id`** `INT NULL`, indexed. Who in
+the office owns the request (`requests.php`). No foreign key: users are archived, not deleted.

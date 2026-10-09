@@ -77,6 +77,7 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
 
   // Clients and sales
   { path: "/app/clients", roles: OFFICE },
+  { path: "/app/requests", roles: OFFICE },
   { path: "/app/enquiries", roles: OFFICE },
   { path: "/app/bookings", roles: OFFICE },
   { path: "/app/quotes", roles: OFFICE },

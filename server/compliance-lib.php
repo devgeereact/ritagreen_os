@@ -12,14 +12,14 @@
  * A rule with worker_role NULL applies to everyone in the service; a rule naming
  * a role applies in addition. Returns the shape rg_evaluate_eligibility wants.
  */
-function rg_load_rules(mysqli $conn, string $service, ?string $workerRole = null): array
+function rg_load_rules(mysqli $conn, string $service, ?string $workerRole = null, ?int $siteId = null): array
 {
     // Memoised per request. Screening a division for a shift asks for the same
     // rule set once per worker -- identical every time for a given service and
     // role -- so a 200-worker division ran this query 200 times to get 200
     // identical answers.
     static $cache = [];
-    $key = $service . '|' . ($workerRole ?? '');
+    $key = $service . '|' . ($workerRole ?? '') . '|' . ($siteId ?? '');
     if (isset($cache[$key])) return $cache[$key];
 
     $sql = 'SELECT r.req_key, r.label, r.expires, r.requires_verification, r.evidence_source, c.weight
@@ -52,7 +52,35 @@ function rg_load_rules(mysqli $conn, string $service, ?string $workerRole = null
             'source' => $row['evidence_source'],
         ];
     }
-    return array_values($rules);
+
+    // What the site insists on (migration 038), as mandatory rules in the same
+    // set. Not a second opinion about who may work: the same evaluator, the same
+    // evidence, one more line in the list. A requirement the service already
+    // asks for is raised to mandatory here, because at this site it is.
+    if ($siteId !== null && $siteId > 0) {
+        $stmt = $conn->prepare(
+            'SELECT r.req_key, r.label, r.expires, r.requires_verification, r.evidence_source
+               FROM site_requirements sr
+               JOIN compliance_requirements r ON r.id = sr.requirement_id
+              WHERE sr.site_id = ? AND r.active = 1'
+        );
+        $stmt->bind_param('i', $siteId);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $rules[$row['req_key']] = [
+                'key' => $row['req_key'],
+                'label' => $row['label'],
+                'weight' => 'mandatory',
+                'expires' => (bool) $row['expires'],
+                'verify' => (bool) $row['requires_verification'],
+                'source' => $row['evidence_source'],
+                'site' => true,
+            ];
+        }
+    }
+
+    return $cache[$key] = array_values($rules);
 }
 
 /**
@@ -241,12 +269,32 @@ function rg_load_evidence(mysqli $conn, int $personId): array
  * The verdict is CALCULATED here and written to person_services. Nothing else
  * may write those columns -- see docs/RULES.md rule 1.
  */
-function rg_assess_person(mysqli $conn, int $personId, string $service, ?string $workerRole = null, bool $persist = true): array
-{
+function rg_assess_person(
+    mysqli $conn,
+    int $personId,
+    string $service,
+    ?string $workerRole = null,
+    bool $persist = true,
+    ?int $siteId = null
+): array {
     $rules = rg_load_rules($conn, $service, $workerRole);
     $evidence = rg_load_evidence($conn, $personId);
     $verdict = rg_evaluate_eligibility($rules, $evidence);
     $reason = rg_eligibility_reason($verdict);
+
+    // A shift at a site with its own requirements is assessed against the
+    // service's rules plus the site's. person_services records the SERVICE
+    // verdict only -- "eligible for care" must not flip because somebody once
+    // looked at a care home that wants extra training -- so the site verdict is
+    // returned, never stored.
+    $siteVerdict = null;
+    if ($siteId !== null && $siteId > 0) {
+        $siteRules = rg_load_rules($conn, $service, $workerRole, $siteId);
+        if (count(array_filter($siteRules, static fn(array $r): bool => !empty($r['site']))) > 0) {
+            $sv = rg_evaluate_eligibility($siteRules, $evidence);
+            $siteVerdict = $sv + ['reason' => rg_eligibility_reason($sv), 'service' => $service, 'person_id' => $personId, 'site_id' => $siteId];
+        }
+    }
 
     // $persist false when screening a list rather than deciding about a person.
     //
@@ -255,7 +303,7 @@ function rg_assess_person(mysqli $conn, int $personId, string $service, ?string 
     // once per worker every time a calendar moves -- "Find eligible" on a
     // 200-worker division wrote 200 rows on a GET, and broadcast did it again.
     if (!$persist) {
-        return $verdict + ['reason' => $reason, 'service' => $service, 'person_id' => $personId];
+        return $siteVerdict ?? ($verdict + ['reason' => $reason, 'service' => $service, 'person_id' => $personId]);
     }
 
     $stmt = $conn->prepare(
@@ -272,7 +320,7 @@ function rg_assess_person(mysqli $conn, int $personId, string $service, ?string 
     $stmt->bind_param('isssi', $personId, $service, $status, $reason, $score);
     $stmt->execute();
 
-    return $verdict + ['reason' => $reason, 'service' => $service, 'person_id' => $personId];
+    return $siteVerdict ?? ($verdict + ['reason' => $reason, 'service' => $service, 'person_id' => $personId]);
 }
 
 /**
@@ -282,8 +330,13 @@ function rg_assess_person(mysqli $conn, int $personId, string $service, ?string 
  * refusal reason, never a bare boolean -- a refusal nobody can act on is a
  * refusal that gets worked around.
  */
-function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = null, bool $persist = true): array
-{
+function rg_deployment_check(
+    mysqli $conn,
+    int $workerId,
+    ?string $service = null,
+    bool $persist = true,
+    ?int $siteId = null
+): array {
     $stmt = $conn->prepare(
         'SELECT person_id, name, role, division, status, left_on, approved_at, deleted_at
            FROM workers WHERE id = ? AND deleted_at IS NULL'
@@ -324,7 +377,7 @@ function rg_deployment_check(mysqli $conn, int $workerId, ?string $service = nul
         ];
     }
 
-    $verdict = rg_assess_person($conn, (int) $w['person_id'], $service ?? $w['division'], $w['role'], $persist);
+    $verdict = rg_assess_person($conn, (int) $w['person_id'], $service ?? $w['division'], $w['role'], $persist, $siteId);
     $verdict['worker'] = $w['name'];
     $verdict['blocked_by'] = ($verdict['status'] ?? '') === RG_NOT_ELIGIBLE ? 'evidence' : null;
     return $verdict;
@@ -412,49 +465,167 @@ function rg_shift_clash(mysqli $conn, int $workerId, string $startSql, string $e
 }
 
 /**
- * May this worker take this specific shift?
+ * May this worker be put on this shift? The one check every assignment path
+ * makes: office create, assign and edit, matching, broadcast, offers, offer
+ * acceptance by link and claiming in the worker app.
  *
- * rg_deployment_check() answers "may they work at all"; this adds "and are they
- * free". Every path that puts a worker on a shift must call it -- the office
- * screen did, and the two self-service paths did not, so a worker whose DBS had
- * lapsed since the broadcast was booked by replying to the text, and one who had
- * since taken an overlapping shift was booked over the top of it. Verified
- * against a local database: a worker already scheduled 08:00-16:00 accepted an
- * overlapping 09:00-17:00 shift through /m and ended up on both.
+ * rg_deployment_check() answers "may they work at all" (employment state, then
+ * the service's rules plus the site's own requirements). This adds the facts
+ * about this particular shift:
+ *
+ *   blocking  clash with another booking; approved or taken leave on any day
+ *             the shift touches
+ *   warnings  a period the worker has marked unavailable; a rest gap shorter
+ *             than the configured minimum (app_settings.rest_gap_min_hours),
+ *             measured in Europe/London so the clock changes count
+ *
+ * A warning does not refuse anything here. The office path refuses until the
+ * office acknowledges the warnings; a worker choosing a shift for themselves has
+ * made that choice already.
+ *
+ * $shift needs division, starts_at and ends_at; id (0 for a shift not yet
+ * created) and site_id are optional. $persist false when screening a list.
+ *
+ * @return array{ok:bool,reason:string,blocking:list<array{code:string,reason:string}>,
+ *               warnings:list<array{code:string,reason:string}>,gate:array}
+ */
+function rg_assignment_check(mysqli $conn, int $workerId, array $shift, bool $persist = true): array
+{
+    $shiftId = (int) ($shift['id'] ?? 0);
+    $siteId = isset($shift['site_id']) && $shift['site_id'] !== null ? (int) $shift['site_id'] : null;
+    $starts = (string) $shift['starts_at'];
+    $ends = (string) $shift['ends_at'];
+
+    $blocking = [];
+    $warnings = [];
+
+    $gate = rg_deployment_check($conn, $workerId, $shift['division'] ?? null, $persist, $siteId);
+    if (!$gate['eligible']) {
+        $blocking[] = [
+            'code' => ($gate['blocked_by'] ?? null) === 'employment' ? 'employment' : 'evidence',
+            'reason' => $gate['reason'],
+        ];
+    }
+
+    if (rg_shift_clash($conn, $workerId, $starts, $ends, $shiftId)) {
+        $blocking[] = ['code' => 'clash', 'reason' => 'Already booked for an overlapping shift.'];
+    }
+
+    $stmt = $conn->prepare('SELECT person_id FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $personId = (int) ($stmt->get_result()->fetch_row()[0] ?? 0);
+
+    if ($personId > 0) {
+        // Leave, in whole dates, for any day the shift touches.
+        $dates = rg_shift_dates($starts, $ends);
+        $first = $dates[0];
+        $last = $dates[count($dates) - 1];
+        $stmt = $conn->prepare(
+            'SELECT kind, status, starts_on, ends_on FROM leave_records
+              WHERE person_id = ? AND status IN ("approved","taken") AND starts_on <= ? AND ends_on >= ?'
+        );
+        $stmt->bind_param('iss', $personId, $last, $first);
+        $stmt->execute();
+        $leave = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        if ($hit = rg_leave_conflict($leave, $starts, $ends)) {
+            // The kind of leave is not said: whether somebody is off sick is
+            // health information, and the office arranging cover only needs to
+            // know that they are off.
+            $blocking[] = [
+                'code' => 'leave',
+                'reason' => 'On approved leave from ' . date('j M', strtotime($hit['starts_on']))
+                    . ' to ' . date('j M Y', strtotime($hit['ends_on'])) . '.',
+            ];
+        }
+
+        $stmt = $conn->prepare(
+            'SELECT starts_at, ends_at, note FROM availability_blocks
+              WHERE person_id = ? AND deleted_at IS NULL AND starts_at < ? AND ends_at > ?'
+        );
+        $stmt->bind_param('iss', $personId, $ends, $starts);
+        $stmt->execute();
+        $blocks = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        if ($hit = rg_unavailability_conflict($blocks, $starts, $ends)) {
+            $warnings[] = [
+                'code' => 'unavailable',
+                'reason' => 'Marked as unavailable from ' . rg_shift_when($hit['starts_at'])
+                    . ' to ' . rg_shift_when($hit['ends_at'])
+                    . ($hit['note'] ? ' (' . $hit['note'] . ')' : '') . '.',
+            ];
+        }
+    }
+
+    // Rest: the worker's other live bookings within the minimum either side.
+    // Drafts with this worker count, because they are about to be real.
+    $minHours = setting_int($conn, 'rest_gap_min_hours');
+    if ($minHours > 0) {
+        $windowStart = rg_add_days($starts, -1);
+        $windowEnd = rg_add_days($ends, 1);
+        $stmt = $conn->prepare(
+            'SELECT id, starts_at, ends_at FROM shifts
+              WHERE worker_id = ? AND id <> ? AND deleted_at IS NULL
+                AND status IN ("scheduled","completed")
+                AND starts_at < ? AND ends_at > ?'
+        );
+        $stmt->bind_param('iiss', $workerId, $shiftId, $windowEnd, $windowStart);
+        $stmt->execute();
+        $others = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        foreach (rg_rest_gap_warnings(['starts_at' => $starts, 'ends_at' => $ends], $others, $minHours) as $r) {
+            $warnings[] = ['code' => 'rest', 'reason' => $r['reason']];
+        }
+    }
+
+    return [
+        'ok' => $blocking === [],
+        'reason' => $blocking[0]['reason'] ?? '',
+        'blocking' => $blocking,
+        'warnings' => $warnings,
+        'gate' => $gate,
+    ];
+}
+
+/**
+ * May this worker claim this specific shift for themselves?
+ *
+ * The self-service form of rg_assignment_check(), for the two paths a worker
+ * uses: accepting an offer by link (offer.php) and claiming in the app (me.php).
+ * Those paths used to test the division and nothing else, so a worker whose DBS
+ * had lapsed since the broadcast was booked by replying to the text, and one who
+ * had since taken an overlapping shift was booked over the top of it.
+ *
+ * A draft is not there to be claimed: workers never see drafts, so a claim on
+ * one can only be a guessed id.
  *
  * Returns the shift row alongside the verdict so the caller need not load it
  * twice.
  *
- * @return array{ok:bool,reason:string,shift:?array,gate:?array}
+ * @return array{ok:bool,reason:string,shift:?array,gate:?array,warnings:list<array{code:string,reason:string}>}
  */
 function rg_claim_check(mysqli $conn, int $workerId, int $shiftId): array
 {
     $stmt = $conn->prepare(
-        'SELECT id, worker_id, division, title, starts_at, ends_at, status
+        'SELECT id, worker_id, division, title, site_id, site_name, starts_at, ends_at, status, is_draft
          FROM shifts WHERE id = ? AND deleted_at IS NULL'
     );
     $stmt->bind_param('i', $shiftId);
     $stmt->execute();
     $shift = $stmt->get_result()->fetch_assoc();
-    if (!$shift) {
-        return ['ok' => false, 'reason' => 'That shift no longer exists.', 'shift' => null, 'gate' => null];
+    if (!$shift || (int) $shift['is_draft'] === 1) {
+        return ['ok' => false, 'reason' => 'That shift no longer exists.', 'shift' => null, 'gate' => null, 'warnings' => []];
     }
 
-    $gate = rg_deployment_check($conn, $workerId, $shift['division']);
-    if (!$gate['eligible']) {
-        return ['ok' => false, 'reason' => $gate['reason'], 'shift' => $shift, 'gate' => $gate];
-    }
-
-    if (rg_shift_clash($conn, $workerId, $shift['starts_at'], $shift['ends_at'], $shiftId)) {
-        return [
-            'ok' => false,
-            'reason' => 'You are already booked for an overlapping shift.',
-            'shift' => $shift,
-            'gate' => $gate,
-        ];
-    }
-
-    return ['ok' => true, 'reason' => '', 'shift' => $shift, 'gate' => $gate];
+    $check = rg_assignment_check($conn, $workerId, $shift);
+    $reason = $check['reason'];
+    // Addressed to the worker, who is the one reading it.
+    if ($reason === 'Already booked for an overlapping shift.') $reason = 'You are already booked for an overlapping shift.';
+    return [
+        'ok' => $check['ok'],
+        'reason' => $reason,
+        'shift' => $shift,
+        'gate' => $check['gate'],
+        'warnings' => $check['warnings'],
+    ];
 }
 
 /**

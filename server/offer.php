@@ -16,7 +16,7 @@ if ($token === '' || !preg_match('/^[a-f0-9]{40}$/', $token)) fail('Invalid offe
 $stmt = $conn->prepare(
     'SELECT o.id AS offer_id, o.status AS offer_status, o.expires_at, o.worker_id, w.name AS worker,
             s.id AS shift_id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status AS shift_status,
-            c.name AS client
+            s.is_draft, s.deleted_at AS shift_deleted_at, c.name AS client
      FROM shift_offers o
      JOIN shifts s ON s.id = o.shift_id
      JOIN workers w ON w.id = o.worker_id
@@ -26,7 +26,10 @@ $stmt = $conn->prepare(
 $stmt->bind_param('s', $token);
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
-if (!$row) fail('This offer was not found.', 404);
+// A draft or an archived shift is not something a worker can be shown, so an
+// offer for one reads as no offer at all. Offers are only made on published
+// shifts; this holds even if one somehow outlived that.
+if (!$row || (int) $row['is_draft'] === 1 || $row['shift_deleted_at'] !== null) fail('This offer was not found.', 404);
 
 if (method() === 'GET') {
     json_out([
@@ -95,7 +98,10 @@ if (method() === 'POST') {
         }
 
         // Atomic claim: only succeeds if the shift is still open.
-        $stmt = $conn->prepare('UPDATE shifts SET worker_id = ?, status = "scheduled" WHERE id = ? AND status = "open"');
+        $stmt = $conn->prepare(
+            'UPDATE shifts SET worker_id = ?, status = "scheduled"
+              WHERE id = ? AND status = "open" AND is_draft = 0 AND deleted_at IS NULL'
+        );
         $stmt->bind_param('ii', $workerId, $shiftId);
         $stmt->execute();
         if ($conn->affected_rows === 1) {
@@ -107,8 +113,11 @@ if (method() === 'POST') {
             $stmt->bind_param('i', $shiftId);
             $stmt->execute();
             // Tell the office.
-            notify($conn, null, 'Open shift filled', $row['worker'] . ' accepted "' . $row['title'] . '"', 'shift', '/app/scheduling');
-            audit($conn, null, 'shift.accepted', "shift #$shiftId by worker #$workerId");
+            // Warnings (a short rest gap, a period they marked unavailable) do not
+            // stop a worker choosing a shift; the office is told.
+            $warn = $claim['warnings'] ? ' Note: ' . implode(' ', array_column($claim['warnings'], 'reason')) : '';
+            notify($conn, null, 'Open shift filled', $row['worker'] . ' accepted "' . $row['title'] . '".' . $warn, 'shift', '/app/scheduling');
+            audit($conn, null, 'shift.accepted', $row['worker'] . ' accepted the offer.' . $warn, 'shift', $shiftId);
             json_out(['result' => 'accepted', 'message' => 'You\'re booked in. Thank you!']);
         }
         // Someone else got there first.

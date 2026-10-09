@@ -1720,3 +1720,289 @@ function rg_cleaning_frequencies(): array
         'not_sure' => 'Not sure yet',
     ];
 }
+
+
+
+// ---------------------------------------------------------------- the rota
+
+/**
+ * The rota's clock. Shift times are wall-clock DATETIMEs (CLAUDE.md, "One
+ * clock"): what the office typed and what the worker reads on the rota. Elapsed
+ * time between two of them is only meaningful in the zone they were typed in,
+ * because twice a year a night in Britain is 9 or 11 hours long, not 10.
+ */
+const RG_ROTA_TZ = 'Europe/London';
+
+/**
+ * Settings the owner may change, with the value each takes when nothing is
+ * stored (migration 038 seeds the same). Fixed in code for the same reason as
+ * rg_feature_defaults(): a setting is a promise that some code reads it.
+ *
+ * @return array<string,int>
+ */
+function rg_setting_defaults(): array
+{
+    return [
+        // Minimum rest between two shifts for the same worker, in hours.
+        'rest_gap_min_hours' => 11,
+    ];
+}
+
+/** Sensible bounds per setting; a stored value outside them falls back to the default. */
+const RG_SETTING_BOUNDS = [
+    'rest_gap_min_hours' => [0, 24],
+];
+
+/**
+ * One integer setting, from the stored rows (name => value).
+ *
+ * A missing row, a value that is not a whole number or one outside its bounds
+ * all give the default: a typo in a settings row must not switch a safety check
+ * off. An unknown name throws, because it can only be a typo in code.
+ */
+function rg_setting_int(string $name, array $stored): int
+{
+    $defaults = rg_setting_defaults();
+    if (!array_key_exists($name, $defaults)) {
+        throw new InvalidArgumentException("Unknown setting '$name'.");
+    }
+    $raw = $stored[$name] ?? null;
+    if ($raw === null || !preg_match('/^\d+$/', trim((string) $raw))) return $defaults[$name];
+    $value = (int) $raw;
+    [$min, $max] = RG_SETTING_BOUNDS[$name] ?? [PHP_INT_MIN, PHP_INT_MAX];
+    if ($value < $min || $value > $max) return $defaults[$name];
+    return $value;
+}
+
+/**
+ * Real minutes from one wall-clock datetime to another, in Europe/London.
+ *
+ * 22:00 on Saturday 28 March 2026 to 08:00 on Sunday 29 March reads as ten
+ * hours and is nine, because the clocks go forward at 01:00. The same times
+ * across Sunday 25 October are eleven. Naive arithmetic gets both wrong by an
+ * hour, which is exactly the size of the margin a rest-gap check is about.
+ *
+ * Negative when $to is before $from.
+ */
+function rg_wall_minutes_between(string $from, string $to, string $tz = RG_ROTA_TZ): int
+{
+    $zone = new DateTimeZone($tz);
+    $a = new DateTimeImmutable($from, $zone);
+    $b = new DateTimeImmutable($to, $zone);
+    return intdiv($b->getTimestamp() - $a->getTimestamp(), 60);
+}
+
+/** "9h", "10h 30m", "45m". */
+function rg_minutes_label(int $minutes): string
+{
+    $sign = $minutes < 0 ? '-' : '';
+    $minutes = abs($minutes);
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    if ($h === 0) return $sign . $m . 'm';
+    return $sign . $h . 'h' . ($m > 0 ? ' ' . $m . 'm' : '');
+}
+
+/** "Sat 28 Mar 22:00" for a wall-clock datetime. */
+function rg_shift_when(string $datetime): string
+{
+    $d = new DateTimeImmutable($datetime, new DateTimeZone('UTC'));
+    return $d->format('D j M H:i');
+}
+
+/**
+ * The calendar dates a shift touches, start date first.
+ *
+ * A shift ending exactly at midnight does not touch the next day: 16:00 to
+ * 00:00 is an evening shift, not two days' work.
+ *
+ * @return list<string>
+ */
+function rg_shift_dates(string $startsAt, string $endsAt): array
+{
+    $utc = new DateTimeZone('UTC');
+    $start = new DateTimeImmutable(substr($startsAt, 0, 10), $utc);
+    $endInstant = new DateTimeImmutable($endsAt, $utc);
+    $last = new DateTimeImmutable($endInstant->modify('-1 minute')->format('Y-m-d'), $utc);
+    if ($last < $start) $last = $start;
+    $out = [];
+    for ($d = $start; $d <= $last; $d = $d->modify('+1 day')) $out[] = $d->format('Y-m-d');
+    return $out;
+}
+
+/**
+ * Leave that rules a worker out of this shift, or null.
+ *
+ * Only leave that has been agreed counts: 'approved', or 'taken' once it has
+ * happened. A request still waiting is the office's to decide, and a declined
+ * one is not leave. Leave is recorded in whole dates, so any day the shift
+ * touches that falls inside it is a clash -- a night shift starting the evening
+ * before somebody's holiday runs into their first morning off.
+ *
+ * @param list<array{starts_on:string,ends_on:string,status:string,kind?:string}> $leave
+ */
+function rg_leave_conflict(array $leave, string $startsAt, string $endsAt): ?array
+{
+    $dates = rg_shift_dates($startsAt, $endsAt);
+    $first = $dates[0];
+    $last = $dates[count($dates) - 1];
+    foreach ($leave as $row) {
+        if (!in_array($row['status'] ?? '', ['approved', 'taken'], true)) continue;
+        if (rg_leave_overlaps($row['starts_on'], $row['ends_on'], $first, $last)) return $row;
+    }
+    return null;
+}
+
+/**
+ * A period the worker has marked as unavailable that overlaps this shift, or null.
+ *
+ * Both are wall-clock periods. Touching ends do not overlap: unavailable until
+ * 08:00 and a shift from 08:00 is fine.
+ *
+ * @param list<array{starts_at:string,ends_at:string}> $blocks
+ */
+function rg_unavailability_conflict(array $blocks, string $startsAt, string $endsAt): ?array
+{
+    foreach ($blocks as $b) {
+        if ($b['starts_at'] < $endsAt && $b['ends_at'] > $startsAt) return $b;
+    }
+    return null;
+}
+
+/**
+ * Rest gaps shorter than the minimum between this shift and the worker's others.
+ *
+ * Measured in real time in Europe/London (rg_wall_minutes_between), so a gap
+ * across the spring clock change is an hour shorter than it reads and one across
+ * the autumn change an hour longer. Overlapping shifts are not a rest question:
+ * rg_shift_clash() refuses those outright.
+ *
+ * @param array{starts_at:string,ends_at:string} $shift
+ * @param list<array{id?:int,starts_at:string,ends_at:string}> $others
+ * @return list<array{shift_id:?int,gap_minutes:int,reason:string}>
+ */
+function rg_rest_gap_warnings(array $shift, array $others, int $minHours): array
+{
+    if ($minHours <= 0) return [];
+    $min = $minHours * 60;
+    $out = [];
+    foreach ($others as $o) {
+        if ($o['ends_at'] <= $shift['starts_at']) {
+            $gap = rg_wall_minutes_between($o['ends_at'], $shift['starts_at']);
+            $where = 'after the shift ending ' . rg_shift_when($o['ends_at']);
+        } elseif ($shift['ends_at'] <= $o['starts_at']) {
+            $gap = rg_wall_minutes_between($shift['ends_at'], $o['starts_at']);
+            $where = 'before the shift starting ' . rg_shift_when($o['starts_at']);
+        } else {
+            continue; // an overlap is a clash, refused elsewhere
+        }
+        if ($gap >= $min) continue;
+        $out[] = [
+            'shift_id' => isset($o['id']) ? (int) $o['id'] : null,
+            'gap_minutes' => $gap,
+            'reason' => 'Only ' . rg_minutes_label($gap) . ' rest ' . $where
+                . ' (the minimum is ' . $minHours . 'h).',
+        ];
+    }
+    return $out;
+}
+
+/**
+ * Where a shift is in its life, as one word for the rota (plan file 03).
+ *
+ * Derived from the columns rather than stored, so it cannot disagree with them:
+ * draft, open, offered, assigned, completed, cancelled.
+ */
+function rg_shift_state(array $shift, int $liveOffers = 0): string
+{
+    $status = $shift['status'] ?? '';
+    if ($status === 'cancelled') return 'cancelled';
+    if ($status === 'completed') return 'completed';
+    if ((int) ($shift['is_draft'] ?? 0) === 1) return 'draft';
+    if ($status === 'open') return $liveOffers > 0 ? 'offered' : 'open';
+    return 'assigned';
+}
+
+/**
+ * What changed about a shift, in words a worker can act on.
+ *
+ * "Every change after publishing tells the affected worker what changed"
+ * (plan file 03). Only the fields a worker cares about are compared.
+ *
+ * @return list<string>
+ */
+function rg_shift_change_lines(array $before, array $after): array
+{
+    $lines = [];
+    if (($before['starts_at'] ?? null) !== ($after['starts_at'] ?? null)
+        || ($before['ends_at'] ?? null) !== ($after['ends_at'] ?? null)) {
+        $lines[] = 'Time: ' . rg_shift_when($before['starts_at']) . ' to ' . substr($before['ends_at'], 11, 5)
+            . ' is now ' . rg_shift_when($after['starts_at']) . ' to ' . substr($after['ends_at'], 11, 5) . '.';
+    }
+    $site = static fn(array $s): string => trim((string) ($s['site_name'] ?? '')) ?: 'no site';
+    if ($site($before) !== $site($after)) {
+        $lines[] = 'Site: ' . $site($before) . ' is now ' . $site($after) . '.';
+    }
+    if (trim((string) ($before['title'] ?? '')) !== trim((string) ($after['title'] ?? ''))) {
+        $lines[] = 'Role: ' . $before['title'] . ' is now ' . $after['title'] . '.';
+    }
+    return $lines;
+}
+
+/** A wall-clock datetime moved by whole days, without any zone getting involved. */
+function rg_add_days(string $datetime, int $days): string
+{
+    $d = new DateTimeImmutable($datetime, new DateTimeZone('UTC'));
+    return $d->modify(($days >= 0 ? '+' : '') . $days . ' days')->format('Y-m-d H:i:s');
+}
+
+/** The Monday of the ISO week a date falls in. */
+function rg_week_start(string $date): string
+{
+    $d = new DateTimeImmutable(substr($date, 0, 10), new DateTimeZone('UTC'));
+    return $d->modify('-' . ((int) $d->format('N') - 1) . ' days')->format('Y-m-d');
+}
+
+/**
+ * Turn a clock-in and clock-out into a timesheet's date and times.
+ *
+ * The clock events are TIMESTAMPs, read back in UTC. A timesheet is wall-clock,
+ * like the rota, so they are converted to Europe/London first: a 07:00 clock-in
+ * in July is 06:00 UTC, and a timesheet saying 06:00 would be an hour wrong.
+ * Seconds are dropped. work_date is the date the shift started, as everywhere.
+ *
+ * @return array{work_date:string,start_time:string,end_time:string}
+ */
+function rg_clock_to_timesheet(string $clockInUtc, string $clockOutUtc, string $tz = RG_ROTA_TZ): array
+{
+    $utc = new DateTimeZone('UTC');
+    $zone = new DateTimeZone($tz);
+    $in = (new DateTimeImmutable($clockInUtc, $utc))->setTimezone($zone);
+    $out = (new DateTimeImmutable($clockOutUtc, $utc))->setTimezone($zone);
+    return [
+        'work_date' => $in->format('Y-m-d'),
+        'start_time' => $in->format('H:i'),
+        'end_time' => $out->format('H:i'),
+    ];
+}
+
+/**
+ * Which timesheet statuses each action may start from.
+ *
+ * approve and reject keep the permissive rule they always had (any status), so
+ * an office decision can still be changed before a pay run. The new actions are
+ * narrower: a worker submits a draft or answers a query; the office queries
+ * something not yet decided; a correction never touches an approved entry,
+ * because approved hours may already have been paid. Reject it first.
+ */
+const RG_TIMESHEET_FROM = [
+    'submit'  => ['draft', 'queried'],
+    'query'   => ['draft', 'pending'],
+    'correct' => ['draft', 'pending', 'queried', 'rejected'],
+];
+
+function rg_timesheet_can(string $action, string $status): bool
+{
+    if ($action === 'approve' || $action === 'reject') return true;
+    return in_array($status, RG_TIMESHEET_FROM[$action] ?? [], true);
+}

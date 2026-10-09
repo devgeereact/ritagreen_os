@@ -89,6 +89,66 @@ export type MatchWorker = {
   home_postcode: string | null
   travel_radius_mi: number
   upcoming_shifts: number
+  /** Things the office must acknowledge before booking them (rest gap, marked unavailable). */
+  warnings?: CheckReason[]
+}
+
+/** One reason from the rota's assignment check (server: rg_assignment_check). */
+export type CheckReason = {
+  code: "employment" | "evidence" | "clash" | "leave" | "unavailable" | "rest"
+  reason: string
+}
+
+/** May this worker take this shift? Blocking reasons refuse; warnings need acknowledging. */
+export type AssignmentCheck = {
+  ok: boolean
+  blocking: CheckReason[]
+  warnings: CheckReason[]
+  eligibility: {
+    status: string | null
+    score: number | null
+    blocking: { requirement: string; reason: string }[]
+  }
+}
+
+/** A site under a client (migration 038). */
+export type Site = {
+  id: number
+  client_id: number
+  client?: string
+  name: string
+  address: string | null
+  postcode: string | null
+  access_notes: string | null
+  contact_name: string | null
+  contact_phone: string | null
+  active: boolean
+  requirements: { id: number; req_key: string; label: string }[]
+}
+
+/** A compliance requirement a site can insist on. */
+export type RequirementOption = { id: number; req_key: string; label: string }
+
+/** A cover request or a website enquiry, as the Requests page lists them. */
+export type RequestItem = {
+  type: "cover" | "enquiry"
+  id: number
+  name: string
+  email: string
+  phone: string | null
+  division: string
+  summary: string
+  status: string
+  open: boolean
+  owner_id: number | null
+  owner: string | null
+  client_id: number | null
+  client: string | null
+  site_name: string | null
+  preferred_start: string | null
+  preferred_end: string | null
+  shift_id: number | null
+  created_at: string
 }
 
 export type ShiftTemplate = {
@@ -388,6 +448,38 @@ export type Shift = {
   starts_at: string
   ends_at: string
   status: "open" | "scheduled" | "completed" | "cancelled"
+  /** Migration 038. Workers never see a draft. */
+  is_draft?: boolean
+  site_id?: number | null
+  cancel_reason?: string | null
+}
+
+/** Where a shift is in its life, derived by the server (rg_shift_state). */
+export type ShiftState = "draft" | "open" | "offered" | "assigned" | "completed" | "cancelled"
+
+/** A shift as the rota shows it: its state and anything wrong with who is on it. */
+export type RotaShift = Shift & {
+  is_draft: boolean
+  site_id: number | null
+  state: ShiftState
+  live_offers: number
+  conflicts: (CheckReason & { severity: "block" | "warning" })[]
+}
+
+export type ShiftHistoryEntry = {
+  action: string
+  detail: string | null
+  reason: string | null
+  by: string | null
+  at: string
+}
+
+export type ShiftOffer = {
+  worker_id: number
+  worker: string
+  status: "sent" | "accepted" | "declined" | "expired"
+  expires_at: string | null
+  responded_at: string | null
 }
 
 /**
@@ -397,7 +489,7 @@ export type Shift = {
  * means it ran past midnight, which is why minutes is the server's number and
  * not something to recompute from the two clock times here.
  */
-export type TimesheetStatus = "pending" | "approved" | "rejected"
+export type TimesheetStatus = "draft" | "pending" | "approved" | "rejected" | "queried"
 
 export type Timesheet = {
   id: number
@@ -415,6 +507,9 @@ export type Timesheet = {
   shift_id: number | null
   shift_title: string | null
   status: TimesheetStatus
+  /** Made from clock-in and clock-out, or logged by the office. */
+  source?: "office" | "clock"
+  submitted_at?: string | null
   decided_at: string | null
   decision_note: string | null
   decided_by: string | null
