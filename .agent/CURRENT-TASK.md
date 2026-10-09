@@ -29,7 +29,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | ID | Section | State | Branch / PR | Notes |
 |---|---|---|---|---|
 | S0 | Plan pack, tracker, test toolbox, CI database job fixed | ✅ | `plans/2026-mvp`, PR #9 | CI database job green for the first time (MariaDB, env fix) |
-| S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | 🚧 | `mvp/s01-brand-shell` | agent on ubuntu-dev |
+| S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | ✅ | `mvp/s01-brand-shell`, PR #10 | Seeds keep production behaviour (finance, payments, SMS, inbox on; AI off). Leftover "Care/Academy" copy, og.png and website gradients go to S6/S7 |
 | S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ⏳ | `mvp/s02-people-compliance` | Launch plan Phase 3 UI |
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ⏳ | `mvp/s03-rota` | Phase 4 |
 | S4 | Staff portal (Home, Rota, Records, Me) | ⏳ | `mvp/s04-staff-portal` | Phase 4 |
