@@ -68,6 +68,7 @@ const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
 const Clients = lazy(() => import("@/pages/app/Clients"))
 const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
 const Enquiries = lazy(() => import("@/pages/app/Enquiries"))
+const Requests = lazy(() => import("@/pages/app/Requests"))
 const Mailbox = lazy(() => import("@/pages/app/Mailbox"))
 const Comms = lazy(() => import("@/pages/app/Comms"))
 const Blog = lazy(() => import("@/pages/app/Blog"))
@@ -199,6 +200,7 @@ export const router = createBrowserRouter([
           { index: true, element: page(<Dashboard />) },
           { path: "clients", element: page(<Clients />) },
           { path: "clients/:id", element: page(<ClientDetail />) },
+          { path: "requests", element: page(<Requests />) },
           { path: "enquiries", element: page(<Enquiries />) },
           { path: "bookings", element: page(<Bookings />) },
           { path: "incidents", element: page(<Incidents />) },

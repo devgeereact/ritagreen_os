@@ -54,9 +54,10 @@ export const NAV: NavEntry[] = [
     icon: CalendarRange,
     items: [
       { title: "Timesheets", url: "/app/timesheets" },
+      // Cover requests and enquiries, together. /app/enquiries and /app/bookings
+      // still open on their own and are in the palette.
+      { title: "Requests", url: "/app/requests" },
       { title: "Clients", url: "/app/clients" },
-      { title: "Enquiries", url: "/app/enquiries" },
-      { title: "Cover requests", url: "/app/bookings" },
       { title: "Jobs", url: "/app/jobs" },
       { title: "Field ops", url: "/app/field" },
       { title: "Incidents", url: "/app/incidents" },

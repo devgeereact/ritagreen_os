@@ -64,6 +64,7 @@ export const DESTINATIONS: Destination[] = [
   { label: "Rota", path: "/app/scheduling", icon: CalendarRange, group: "Rota", keywords: "scheduling shifts cover assign calendar" },
   { label: "Timesheets", path: "/app/timesheets", icon: Clock, group: "Rota", keywords: "hours worked approve timetable time tracking" },
   { label: "Clients", path: "/app/clients", icon: Building2, group: "Rota", keywords: "accounts customers sites" },
+  { label: "Requests", path: "/app/requests", icon: Inbox, group: "Rota", keywords: "cover requests enquiries bookings website owner create shifts" },
   { label: "Enquiries", path: "/app/enquiries", icon: Inbox, group: "Rota", keywords: "requests leads contact form website" },
   { label: "Cover requests", path: "/app/bookings", icon: CalendarRange, group: "Rota", keywords: "bookings requests website" },
   { label: "Jobs", path: "/app/jobs", icon: Briefcase, group: "Rota", keywords: "work orders visits cleans guard shifts courses" },

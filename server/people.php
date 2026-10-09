@@ -397,7 +397,7 @@ while ($p = $res->fetch_assoc()) $providers[] = ['id' => (int) $p['id'], 'name' 
 // are the payroll zone and are not read by this page.
 // shifts.starts_at and ends_at are wall-clock DATETIME (CLAUDE.md, "One clock"),
 // compared here with the server's date() on the same clock.
-$shiftSelect = 'SELECT s.id, s.worker_id, s.division, s.title, s.site_name, s.starts_at, s.ends_at, s.status,
+$shiftSelect = 'SELECT s.id, s.worker_id, s.division, s.title, s.site_name, s.starts_at, s.ends_at, s.status, s.is_draft,
                        c.name AS client_name
                   FROM shifts s LEFT JOIN clients c ON c.id = s.client_id
                  WHERE s.deleted_at IS NULL';

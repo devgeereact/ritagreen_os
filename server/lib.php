@@ -1081,6 +1081,31 @@ function require_feature(mysqli $conn, string $name, string $what): void
     }
 }
 
+// ----- Settings (migration 038) -----
+// Numbers the owner may change, such as the minimum rest between shifts. The
+// names and defaults are in rg_setting_defaults() (pure.php).
+
+/** Every stored setting as name => value. Empty if migration 038 is not applied. */
+function setting_rows(mysqli $conn, bool $fresh = false): array
+{
+    static $rows = null;
+    if ($rows !== null && !$fresh) return $rows;
+    $rows = [];
+    try {
+        $res = $conn->query('SELECT name, value FROM app_settings');
+        while ($r = $res->fetch_assoc()) $rows[$r['name']] = $r['value'];
+    } catch (mysqli_sql_exception $e) {
+        error_log('app_settings unreadable, using defaults: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
+/** One integer setting, falling back to its default. */
+function setting_int(mysqli $conn, string $name): int
+{
+    return rg_setting_int($name, setting_rows($conn));
+}
+
 // ----- SMS (Twilio) -----
 // Optional: only sends when TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM are set in
 // config.php. Used for shift offers and reminders. Every attempt is logged to

@@ -321,6 +321,13 @@ foreach ($shifts as $s) {
     $ins->bind_param('iissssss', $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7]);
     $ins->execute();
 }
+// Point each shift at its site record (migration 038), the way the migration
+// links existing rows: same client, same name. Seeded shifts are published, as
+// every shift was before drafts existed.
+$conn->query(
+    'UPDATE shifts s JOIN sites t ON t.client_id = s.client_id AND t.name = s.site_name AND t.deleted_at IS NULL
+        SET s.site_id = t.id WHERE s.site_id IS NULL'
+);
 echo "  shifts       " . count($shifts) . " (2 open, for the matching path)\n";
 
 // ---- Academy ---------------------------------------------------------------

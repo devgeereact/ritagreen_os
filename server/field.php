@@ -10,6 +10,7 @@
 //   it, not the worker standing it down. A shift cannot be clocked in twice, or
 //   clocked out without being clocked in.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/rota-lib.php';
 
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
@@ -20,7 +21,11 @@ function shift_belongs_to(mysqli $conn, array $user, int $shiftId): bool
 {
     $workerId = linked_worker_id($user);
     if ($workerId === null) return false;
-    $stmt = $conn->prepare('SELECT 1 FROM shifts WHERE id = ? AND worker_id = ? LIMIT 1');
+    // A draft is not the worker's yet: they cannot see it, so they cannot read
+    // or write its trail either.
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM shifts WHERE id = ? AND worker_id = ? AND is_draft = 0 AND deleted_at IS NULL LIMIT 1'
+    );
     $stmt->bind_param('ii', $shiftId, $workerId);
     $stmt->execute();
     return (bool) $stmt->get_result()->fetch_row();
@@ -50,7 +55,7 @@ if ($action === 'live' && method() === 'GET') {
          FROM shifts s
          LEFT JOIN workers w ON w.id = s.worker_id
          LEFT JOIN clients c ON c.id = s.client_id
-         WHERE DATE(s.starts_at) = ? AND s.deleted_at IS NULL
+         WHERE DATE(s.starts_at) = ? AND s.deleted_at IS NULL AND s.is_draft = 0
            AND s.status IN ("scheduled","open","completed")
          ORDER BY s.starts_at'
     );
@@ -179,7 +184,7 @@ if (method() === 'POST') {
     $lng = rg_round_coord($lng, $places);
 
     // Resolve the worker on this shift (used to stamp the event).
-    $stmt = $conn->prepare('SELECT worker_id, title FROM shifts WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT worker_id, title, is_draft FROM shifts WHERE id = ? AND deleted_at IS NULL LIMIT 1');
     $stmt->bind_param('i', $shiftId);
     $stmt->execute();
     $shift = $stmt->get_result()->fetch_assoc();
@@ -190,7 +195,8 @@ if (method() === 'POST') {
     // panic alert against an arbitrary shift id.
     if (!is_staff($user)) {
         $workerId = linked_worker_id($user);
-        if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId) {
+        if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId
+            || (int) $shift['is_draft'] === 1) {
             fail('You are not assigned to this shift.', 403);
         }
     }
@@ -238,6 +244,9 @@ if (method() === 'POST') {
     // Mark the shift completed when clocked out.
     if ($kind === 'clock_out') {
         $conn->query('UPDATE shifts SET status = "completed" WHERE id = ' . $shiftId . ' AND status = "scheduled"');
+        // The clock-in and clock-out become the draft timesheet the worker then
+        // submits (plan file 03). Nothing is paid until the office approves it.
+        if ($shift['worker_id'] !== null) rg_timesheet_from_clock($conn, $shiftId, (int) $shift['worker_id']);
     }
     // Panic / lone-worker alert → escalate hard.
     if ($kind === 'panic') {

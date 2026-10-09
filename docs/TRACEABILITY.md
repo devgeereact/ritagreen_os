@@ -86,14 +86,24 @@ database. None has been applied to the live one, which is a separate deliberate 
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| Clients and sites are recorded | `clients`, `sites` | `server/clients.php` | `src/pages/app/Clients.tsx` | none |
-| Shifts are scheduled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
-| A shift can be reassigned or cancelled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
+| Clients and sites are recorded | `clients`, `sites` | `server/clients.php`, `server/sites.php` | `src/pages/app/Clients.tsx`, `src/components/rota/sites-tab.tsx` | `server/tests/db/cases/160_rota.php` |
+| A site's required training is part of eligibility | `site_requirements` | `rg_load_rules()` in `server/compliance-lib.php` | `src/components/rota/sites-tab.tsx`, shift panel | `server/tests/db/cases/160_rota.php` |
+| Shifts are scheduled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| Workers never see a draft; a week is published | `shifts.is_draft` | `server/scheduling.php`, `server/me.php`, `server/offer.php`, `server/field.php`, `server/portal.php` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| A change after publishing tells the worker | `notifications`, `email_queue` | `rg_notify_worker()` in `server/rota-lib.php` | shift panel | `server/tests/db/cases/160_rota.php` |
+| Last week can be copied as drafts | `shifts` | `server/scheduling.php?action=copy_week` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| A shift can be reassigned or cancelled | `shifts` | `server/scheduling.php` | `src/components/rota/shift-panel.tsx` | `server/tests/db/cases/160_rota.php` |
+| Approved leave blocks every assignment path | `leave_records` | `rg_assignment_check()` in `server/compliance-lib.php` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Unavailability and a short rest gap need acknowledging | `availability_blocks`, `app_settings` | `rg_assignment_check()`, `rg_rest_gap_warnings()` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Cover requests and enquiries have an owner | `service_requests`, `contact_enquiries` | `server/requests.php` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
+| Shifts are created from a cover request | `service_requests`, `shifts` | `server/bookings.php?action=confirm` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
 | Work orders are raised and tracked | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
 | A work order can be corrected or archived | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
 | A work order names who is doing it | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
 | An unpaid break is not paid | `timesheets` | `rg_deduct_break()` in `server/pure.php` | `src/pages/app/Timesheets.tsx` | `server/tests/run.php` |
 | Hours can be traced to the shift worked | `timesheets`, `shifts` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
+| Clocking out makes a draft timesheet the worker submits | `timesheets` | `rg_timesheet_from_clock()` in `server/rota-lib.php`, `server/me.php` | staff portal (S4) | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Hours can be queried and corrected with history | `timesheets`, `audit_log` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | `server/tests/db/cases/160_rota.php` |
 | A worker can see their own hours and pay | `timesheets` | `server/me.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | A pay rate is priced as at the date worked | `worker_pay_rates` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
 | Premiums follow the worked interval | `pay_rules`, `bank_holidays` | `rg_premium_segments()` in `server/pure.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
@@ -103,11 +113,11 @@ database. None has been applied to the live one, which is a separate deliberate 
 | A panic alert reaches somebody | `notifications`, `notification_reads` | `server/notifications.php` | `src/components/app/*` | none |
 | A panic alert can be acknowledged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` |
 | A lone worker can make a check call | `shift_events` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
-| Recurring shifts are generated | `shift_templates` | `server/shift-templates.php` | `src/pages/app/Scheduling.tsx` | none |
+| Recurring shifts are generated as drafts | `shift_templates` | `server/shift-templates.php` | `src/components/rota/dialogs.tsx` | none |
 | Workers are matched on skills | `skills`, `worker_skills` | `server/skills.php` | `src/pages/app/Scheduling.tsx` | none |
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
-| No path can assign an ineligible worker | — | `rg_deployment_check()` in `server/compliance-lib.php` | `server/scheduling.php` | none |
+| No path can assign an ineligible worker | — | `rg_deployment_check()`, `rg_assignment_check()` in `server/compliance-lib.php` | `server/scheduling.php`, `server/me.php`, `server/offer.php` | `server/tests/db/cases/160_rota.php` |
 | The office is shown what needs attention | — | `server/action-centre.php` | planned | none |
 | Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |

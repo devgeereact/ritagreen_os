@@ -63,9 +63,12 @@ export async function purgeCachedApiReads(): Promise<void> {
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** The parsed error body, for refusals that carry detail (the rota's assignment check). */
+  data: unknown
+  constructor(message: string, status: number, data: unknown = null) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -118,7 +121,7 @@ export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}):
       (data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string"
         ? (data as { error: string }).error
         : null) || `Request failed (${res.status}).`
-    throw new ApiError(msg, res.status)
+    throw new ApiError(msg, res.status, data)
   }
 
   return data as T

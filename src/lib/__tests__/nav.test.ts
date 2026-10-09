@@ -50,7 +50,7 @@ describe("the office sidebar", () => {
     const rota = navFor("admin").find((d) => d.title === "Rota")!
     expect(rota.url).toBe("/app/scheduling")
     expect((rota.items ?? []).map((i) => i.url)).toEqual([
-      "/app/timesheets", "/app/clients", "/app/enquiries", "/app/bookings",
+      "/app/timesheets", "/app/requests", "/app/clients",
       "/app/jobs", "/app/field", "/app/incidents",
     ])
   })
