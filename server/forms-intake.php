@@ -19,6 +19,7 @@
 // A submission that fails to map is a person who applied and would otherwise
 // vanish; the payload is what makes them recoverable once the mapping is fixed.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/people-lib.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -297,23 +298,12 @@ function process_submission(mysqli $conn, int $integrationId, int $submissionId,
     // Same person resolution as every other intake route.
     $personId = find_or_create_person($conn, $name, $email, $phone);
 
-    $stmt = $conn->prepare(
-        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source, notes)
-         VALUES (?, ?, ?, ?, ?, ?, "google_form", ?)'
-    );
-    $stmt->bind_param('issssss', $personId, $name, $email, $phone, $role, $service, $notesVal);
-    $stmt->execute();
-    $applicantId = (int) $conn->insert_id;
-
-    // The first history row, so a candidate who arrived through a form has the
-    // same timeline as one who used the careers page. changed_by is NULL: an
-    // integration has no user behind it.
-    $stmt = $conn->prepare(
-        'INSERT INTO applicant_stage_history (applicant_id, from_stage, to_stage, reason, changed_by)
-         VALUES (?, NULL, "applied", "Submitted through a linked form", NULL)'
-    );
-    $stmt->bind_param('i', $applicantId);
-    $stmt->execute();
+    // The same applicant row and first history entry as the spreadsheet import
+    // (people-lib.php). changed_by is NULL: an integration has no user behind it.
+    $applicantId = rg_create_applicant($conn, $personId, [
+        'name' => $name, 'email' => $email, 'phone' => $phone, 'role' => $role,
+        'service' => $service, 'source' => 'google_form', 'notes' => $notesVal,
+    ], 'Submitted through a linked form', null);
 
     $stmt = $conn->prepare(
         'UPDATE integration_submissions SET status = "mapped", applicant_id = ?, person_id = ?, failure_reason = NULL, processed_at = NOW() WHERE id = ?'
