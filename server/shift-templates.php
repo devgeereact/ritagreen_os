@@ -3,7 +3,8 @@
 // GET  /shift-templates.php                       -> { templates: [...] }
 // POST /shift-templates.php {title, division, client_id?, site_name?, weekday, start_time, end_time} -> create
 // POST /shift-templates.php?action=toggle&id=N    -> activate/deactivate
-// POST /shift-templates.php?action=generate&weeks=4 -> create open shifts from active templates
+// POST /shift-templates.php?action=generate&weeks=4 -> create open DRAFT shifts from active templates
+//   (migration 038: nothing reaches workers until the office publishes the week)
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
@@ -53,8 +54,13 @@ if ($action === 'generate' && method() === 'POST') {
 
     $created = 0;
     $insert = $conn->prepare(
-        'INSERT INTO shifts (worker_id, client_id, template_id, division, title, site_name, starts_at, ends_at, status)
-         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, "open")'
+        'INSERT INTO shifts (worker_id, client_id, site_id, template_id, division, title, site_name, starts_at, ends_at, status, is_draft)
+         VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, ?, "open", 1)'
+    );
+    // A template names its site in free text. Where that is a site on the
+    // template's client, the generated shift links to the record.
+    $siteLookup = $conn->prepare(
+        'SELECT id FROM sites WHERE client_id = ? AND name = ? AND deleted_at IS NULL AND active = 1 LIMIT 1'
     );
     // Guard against re-generating the same open shift (same template signature + datetime).
     //
@@ -66,9 +72,13 @@ if ($action === 'generate' && method() === 'POST') {
     // division + title + start time. Two active templates sharing a title, a
     // division and a time used to collapse into one shift, and nothing could say
     // which template a shift on the rota came from.
+    //
+    // Any status counts. This read status = "open", so once a generated shift
+    // had been assigned the slot looked empty and the next run made a second
+    // one; and a shift the office had cancelled came straight back.
     $dupe = $conn->prepare(
         'SELECT id FROM shifts
-         WHERE template_id = ? AND starts_at = ? AND status = "open"
+         WHERE template_id = ? AND starts_at = ?
            AND deleted_at IS NULL
          LIMIT 1'
     );
@@ -103,12 +113,19 @@ if ($action === 'generate' && method() === 'POST') {
             $dupe->execute();
             if ($dupe->get_result()->fetch_assoc()) continue;
 
-            $insert->bind_param('iisssss', $clientId, $templateId, $division, $title, $siteName, $startsAt, $endsAt);
+            $siteId = null;
+            if ($clientId !== null && $siteName !== null && $siteName !== '') {
+                $siteLookup->bind_param('is', $clientId, $siteName);
+                $siteLookup->execute();
+                $found = $siteLookup->get_result()->fetch_row();
+                if ($found) $siteId = (int) $found[0];
+            }
+            $insert->bind_param('iiisssss', $clientId, $siteId, $templateId, $division, $title, $siteName, $startsAt, $endsAt);
             $insert->execute();
             $created++;
         }
     }
-    audit($conn, (int) $user['id'], 'template.generate', "$created open shifts");
+    audit($conn, (int) $user['id'], 'template.generate', "$created draft shifts");
     json_out(['created' => $created]);
 }
 
