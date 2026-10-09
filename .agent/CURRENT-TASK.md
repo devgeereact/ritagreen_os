@@ -114,6 +114,6 @@ deployment is a separate authorisation and is not part of this contract.
 | 1 — foundation and one person record | ✅ done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
 | 2 — recruitment and communications | ✅ done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
 | 3 — verification, onboarding, activation | ✅ done | `100_evidence_precedence`, `110_activation`, `140_person_profile`, `150_onboarding_and_approval`; migrations 034, 035, 037; UI PR #11 |
-| 4 — workforce and worker portal | S3, S4 | |
+| 4 — workforce and worker portal | S3, S4 | Office side in PR #13 (migration 038, `160_rota`); worker portal is S4 |
 | 5 — owner visibility and launch readiness | S5, S10 | |
 | 6 — external Academy integration | deferred, no provider | |
