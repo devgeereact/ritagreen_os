@@ -359,8 +359,27 @@ the previous website's addresses (`/services/*`, `/sectors`, `/accreditations`, 
 and its redirects read, so there is no hand-kept `public/sitemap.xml` to fall out of date.
 That file is imported by `vite.config.ts` as well as the app, which is why it has no imports
 of its own and is listed in `tsconfig.node.json`. It holds static pages only: published posts
-live in the database, which the build in CI cannot reach. Adding posts (and S7's vacancies)
-means a server-rendered sitemap, for example a `sitemap.php` the static file points to.
+live in the database, which the build in CI cannot reach. Those are listed by
+`server/sitemap.php` (S7): published role pages and posts, public, cached for an hour.
+`robots.txt` names both files, which is simpler than a sitemap index and needs no
+`.htaccess` rewrite; the static file stays because the build already knows those pages.
+
+**The one third-party frame** (S7). The CSP in `public/.htaccess` was `default-src 'self'`
+with nothing allow-listed. It now adds `frame-src 'self' https://docs.google.com` and nothing
+else, for the Google Form on a role page. No script, style, font, image or connect origin was
+added. The frame is not in the page until the visitor presses "Load the application form from
+Google" (`src/components/public/GoogleFormEmbed.tsx`), so a visit that does not choose it still
+makes no third-party request; the iframe is built from the stored form id only
+(`src/lib/google-forms.ts`), never from a stored address. There is no `sandbox` attribute: one
+permissive enough for Google Forms (scripts, forms, same-origin, popups) adds little to a
+cross-origin frame and could not be tested against a real form here. The `.htaccess` change
+reaches production only when copied by hand; until then browsers block the frame and the page
+falls back to its "Open the form in a new tab" link and phone number.
+
+**Company details are a CMS record with a code fallback** (S7). `useCompanyDetails()` in
+`src/lib/company.ts` paints the bundled facts, then swaps in `server/company.php`'s record once
+it arrives (one request per page load, shared through `useSyncExternalStore`). If the API is
+down the bundled facts stay on screen.
 
 ## 10. Development environment
 

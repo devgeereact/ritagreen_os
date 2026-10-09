@@ -851,6 +851,97 @@ check('translation is case-insensitive', rg_map_submission(['Service' => 'care a
 check('an untranslated value passes through', rg_map_submission(['Service' => 'Cleaner'], $svcMap)['fields']['service'], 'Cleaner');
 
 // ---------------------------------------------------------------------------
+group('rg_parse_google_form');
+
+$formId = '1FAIpQLSe_example-Form_Id_0123456789abc';
+check('the responder address is accepted', rg_parse_google_form("https://docs.google.com/forms/d/e/$formId/viewform")['id'], $formId);
+check('with Google\'s sharing parameter', rg_parse_google_form("https://docs.google.com/forms/d/e/$formId/viewform?usp=sf_link")['id'], $formId);
+check('surrounding spaces are ignored', rg_parse_google_form("  https://docs.google.com/forms/d/e/$formId/viewform \n")['id'], $formId);
+check('and no error is given', rg_parse_google_form("https://docs.google.com/forms/d/e/$formId/viewform")['error'], null);
+$refused = [
+    'plain http' => "http://docs.google.com/forms/d/e/$formId/viewform",
+    'a look-alike host' => "https://docs.google.com.example.net/forms/d/e/$formId/viewform",
+    'a userinfo trick' => "https://docs.google.com@example.net/forms/d/e/$formId/viewform",
+    'the google.com redirector' => "https://www.google.com/url?q=https://docs.google.com/forms/d/e/$formId/viewform",
+    'javascript:' => 'javascript:alert(document.cookie)',
+    'a data: URL' => 'data:text/html,<script>alert(1)</script>',
+    'pasted embed HTML' => "<iframe src=\"https://docs.google.com/forms/d/e/$formId/viewform?embedded=true\"></iframe>",
+    'an extra path after viewform' => "https://docs.google.com/forms/d/e/$formId/viewform/../../evil",
+    'an arbitrary query string' => "https://docs.google.com/forms/d/e/$formId/viewform?embedded=true&x=<script>",
+    'a fragment' => "https://docs.google.com/forms/d/e/$formId/viewform#x",
+    'an id with a quote in it' => 'https://docs.google.com/forms/d/e/abc"onload="x0123456789/viewform',
+    'an id too short to be real' => 'https://docs.google.com/forms/d/e/short/viewform',
+    'a different Google product' => "https://docs.google.com/document/d/e/$formId/viewform",
+    'an upper-case scheme trick' => "HTTPS://docs.google.com/forms/d/e/$formId/viewform",
+    'empty' => '',
+];
+foreach ($refused as $what => $url) {
+    check("$what is refused", rg_parse_google_form($url)['id'], null);
+}
+check('the short link gets advice', str_contains((string) rg_parse_google_form('https://forms.gle/abc123')['error'], 'short link'), true);
+check('the editing address gets advice',
+    str_contains((string) rg_parse_google_form('https://docs.google.com/forms/d/1abcDEF/edit')['error'], 'editing address'), true);
+
+group('rg_valid_google_form_id');
+check('a stored id', rg_valid_google_form_id($formId), true);
+check('a slash is not an id', rg_valid_google_form_id("$formId/x"), false);
+check('null is not an id', rg_valid_google_form_id(null), false);
+
+// ---------------------------------------------------------------------------
+group('rg_slugify / rg_valid_slug');
+
+check('a title becomes an address', rg_slugify('Senior Carer, Night Shifts'), 'senior-carer-night-shifts');
+check('runs of punctuation collapse', rg_slugify('  Cleaner -- (Schools) / Lambeth  '), 'cleaner-schools-lambeth');
+check('accents fold to plain letters', rg_slugify('Café supervisor'), 'cafe-supervisor');
+check('nothing usable falls back', rg_slugify('!!!'), 'role');
+check('long titles are cut at 80 without a trailing hyphen', strlen(rg_slugify(str_repeat('ab ', 60))) <= 80, true);
+check('and still valid', rg_valid_slug(rg_slugify(str_repeat('ab ', 60))), true);
+check('a slug is valid', rg_valid_slug('support-worker-croydon'), true);
+check('upper case is not', rg_valid_slug('Support-Worker'), false);
+check('a double hyphen is not', rg_valid_slug('support--worker'), false);
+check('a leading hyphen is not', rg_valid_slug('-support'), false);
+check('a slash is not', rg_valid_slug('careers/x'), false);
+check('empty is not', rg_valid_slug(''), false);
+
+group('rg_vacancy_slug_editable / rg_vacancy_transition_ok');
+check('a never-published slug may change', rg_vacancy_slug_editable(null), true);
+check('a published one may not', rg_vacancy_slug_editable('2026-10-01 09:00:00'), false);
+check('draft to published', rg_vacancy_transition_ok('draft', 'published'), true);
+check('published to closed', rg_vacancy_transition_ok('published', 'closed'), true);
+check('closed can be reopened', rg_vacancy_transition_ok('closed', 'published'), true);
+check('published cannot go back to draft', rg_vacancy_transition_ok('published', 'draft'), false);
+check('an unknown state is refused', rg_vacancy_transition_ok('draft', 'archived'), false);
+
+group('rg_vacancy_default_checks / rg_vacancy_apply_route');
+check('care asks for an enhanced DBS', str_contains(rg_vacancy_default_checks('care'), 'Enhanced DBS'), true);
+check('security asks for the SIA licence', str_contains(rg_vacancy_default_checks('security'), 'SIA licence'), true);
+check('cleaning asks for COSHH', str_contains(rg_vacancy_default_checks('cleaning'), 'COSHH'), true);
+check('every service starts with right to work',
+    array_unique(array_map(fn ($s) => explode("\n", rg_vacancy_default_checks($s))[0], ['care', 'cleaning', 'security', 'academy'])),
+    ['Right to work in the UK']);
+check('no form: the native short form', rg_vacancy_apply_route(false, false), 'native');
+check('an active form: that form only', rg_vacancy_apply_route(true, true), 'form');
+check('a switched-off form: closed, not the native form', rg_vacancy_apply_route(true, false), 'closed');
+
+group('rg_form_review_due');
+check('never reviewed is due', rg_form_review_due(null, '2026-10-09'), true);
+check('reviewed last week is not', rg_form_review_due('2026-10-02', '2026-10-09'), false);
+check('89 days is not yet', rg_form_review_due('2026-07-12', '2026-10-09'), false);
+check('90 days is', rg_form_review_due('2026-07-11', '2026-10-09'), true);
+
+group('rg_social_url_ok');
+check('an Instagram profile', rg_social_url_ok('instagram', 'https://instagram.com/ritagreenservices'), true);
+check('a LinkedIn company page', rg_social_url_ok('linkedin', 'https://www.linkedin.com/company/ritagreen-services/'), true);
+check('a WhatsApp click-to-chat link', rg_social_url_ok('whatsapp', 'https://wa.me/442031052218'), true);
+check('empty means not shown', rg_social_url_ok('tiktok', ''), true);
+check('another network\'s host is refused', rg_social_url_ok('instagram', 'https://facebook.com/x'), false);
+check('a look-alike host is refused', rg_social_url_ok('instagram', 'https://instagram.com.example.net/x'), false);
+check('http is refused', rg_social_url_ok('facebook', 'http://facebook.com/x'), false);
+check('javascript: is refused', rg_social_url_ok('facebook', 'javascript:alert(1)'), false);
+check('a bare host with no profile is refused', rg_social_url_ok('instagram', 'https://instagram.com/'), false);
+check('X is not a network here', rg_social_url_ok('x', 'https://x.com/ritagreen'), false);
+
+// ---------------------------------------------------------------------------
 group('rg_parse_yes_no');
 
 check('yes', rg_parse_yes_no('Yes'), true);

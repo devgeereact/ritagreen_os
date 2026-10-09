@@ -6,7 +6,7 @@ import { openStorageNotice } from "@/lib/storage-notice"
 
 // The website footer, from the 2026 mock: who we are, the four services, the
 // company links, how to reach us, then the legal line. Every fact comes from
-// useCompanyDetails(), which S7 points at the CMS; a fact that is not confirmed
+// useCompanyDetails(), which reads the CMS record (S7); a fact that is not confirmed
 // (the registered address today) is left out rather than shown as a placeholder.
 //
 // There is no newsletter box. An earlier footer had one that stored nothing and
@@ -84,7 +84,7 @@ export function PublicFooter() {
             </li>
             <li><Link to="/contact" className={linkClass}>Send a message</Link></li>
           </ul>
-          {company.socials.length > 0 && (
+          {(company.socials.length > 0 || company.whatsappHref) && (
             <ul aria-label="RitaGreen on social media" className="mt-4 flex flex-wrap gap-x-4 gap-y-1">
               {company.socials.map((s) => (
                 <li key={s.key}>
@@ -94,6 +94,14 @@ export function PublicFooter() {
                   </a>
                 </li>
               ))}
+              {company.whatsappHref && (
+                <li>
+                  <a href={company.whatsappHref} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                    WhatsApp
+                    <span className="sr-only"> (opens WhatsApp)</span>
+                  </a>
+                </li>
+              )}
             </ul>
           )}
         </div>

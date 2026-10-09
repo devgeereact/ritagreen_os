@@ -125,7 +125,18 @@
   # proxied server-side; nothing in the bundle talks to an API directly.
   #
   # frame-ancestors repeats X-Frame-Options for browsers that have dropped it.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+  #
+  # frame-src (section S7, 2026-10): the one third-party origin the site may
+  # load, and only as a frame: an embedded Google Form on a role page
+  # (/careers/:slug). The frame is not in the page until the visitor presses
+  # "Load the application form from Google", so no request reaches Google before
+  # they choose to (src/components/public/GoogleFormEmbed.tsx, docs/COOKIES.md).
+  # 'self' keeps what default-src already allowed for frames. Nothing else is
+  # allow-listed: no script, font, image or connect origin.
+  # NOT YET ON THE SERVER: copy this line into the live .htaccess by hand when
+  # the S7 frontend is deployed, or the embedded form is blocked and the page
+  # falls back to its "Open the form in a new tab" link.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self' https://docs.google.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
 </IfModule>
 
 # --- Caching ---

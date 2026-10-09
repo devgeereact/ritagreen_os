@@ -241,6 +241,27 @@ function require_staff(array $user): void
 }
 
 /**
+ * May this user be given a candidate, a task, an interview, a vacancy or a form to own?
+ *
+ * Internal staff only. A client portal login and a worker's login are ordinary
+ * user rows, so without this an owner could be set to somebody who is then shown
+ * -- or emailed about -- a record they are not allowed to open.
+ *
+ * Here rather than in ats.php so the Website area (vacancies.php,
+ * website-forms.php) applies the same test.
+ */
+function is_assignable_staff(mysqli $conn, int $userId): bool
+{
+    $stmt = $conn->prepare(
+        'SELECT role, client_id, worker_id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row !== null && is_staff($row);
+}
+
+/**
  * May this account see a category of information?
  *
  * Zones exist because a worker profile is not one undifferentiated record.

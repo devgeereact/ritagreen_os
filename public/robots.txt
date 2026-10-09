@@ -16,4 +16,7 @@ Disallow: /reset/
 Disallow: /auth/
 Disallow: /offer/
 
+# Two sitemaps: the static pages, written at build time, and the published role
+# pages and posts, which live in the database and are listed by sitemap.php.
 Sitemap: https://ritagreenservices.com/sitemap.xml
+Sitemap: https://ritagreenservices.com/sitemap.php

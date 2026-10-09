@@ -35,8 +35,8 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S4 | Staff portal (Home, Rota, Records, Me) | 🚧 | `mvp/s04-staff-portal` | Phase 4 |
 | S5 | Today and Reports | 🚧 | `mvp/s05-today-reports` | Phase 5; agent on ubuntu-dev |
 | S6 | Website rebuild | ✅ | `mvp/s06-website`, PR #12 | Deploy: upload quotes.php, contact.php, pure.php before frontend; copy .htaccess 301 block by hand. Hero uses stock care photo until real photography |
-| S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
-| S8 | Spreadsheet import | ⏳ | `mvp/s08-sheet-import` | |
+| S7 | Careers, forms directory, CMS company details and socials | ✅ | `mvp/s07-careers-cms`, PR #14 | Migration 039. Deploy: copy CSP `frame-src` line to live .htaccess; owner sets intake secret in Settings; Apps Script per docs/runbooks/google-forms-intake.md. Real Google Form not yet tested |
+| S8 | Spreadsheet import | 🚧 | `mvp/s08-sheet-import` | |
 | S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | ⏳ | `mvp/s09-retirements` | Removal protocol |
 | S10 | Launch gate and docs consolidation, then remove `docs/Plans 2026/` with owner approval | ⏳ | `mvp/s10-launch-gate` | |
 

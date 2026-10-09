@@ -1256,3 +1256,87 @@ export type FeaturesResponse = {
   features: Record<FeatureName, boolean>
   switches: FeatureSwitch[]
 }
+
+// ---- Website: vacancies and the forms directory (server/vacancies.php,
+// server/website-forms.php, migration 039) -----------------------------------
+
+export type VacancyStatus = "draft" | "published" | "closed"
+
+/** How a role takes applications: its linked Google Form, closed, or the native short form. */
+export type ApplyRoute = "form" | "closed" | "native"
+
+/** A published role as the website sees it. Public fields only. */
+export type PublicVacancy = {
+  slug: string
+  title: string
+  service: ServiceId
+  location: string
+  hours_text: string
+  pay_text: string | null
+  summary: string
+  published_at: string | null
+}
+
+/** One role page (vacancies.php?slug=...). */
+export type PublicVacancyDetail = PublicVacancy & {
+  requirements: string | null
+  checks: string | null
+  apply: ApplyRoute
+  /** The Google Form, by id only, when apply is "form". */
+  form: { id: string; display: "embedded" | "link" } | null
+}
+
+/** A vacancy in the Website area. */
+export type Vacancy = {
+  id: number
+  slug: string
+  title: string
+  service: ServiceId
+  location: string
+  hours_text: string
+  pay_text: string | null
+  summary?: string
+  requirements?: string | null
+  checks?: string | null
+  status: VacancyStatus
+  form_id: number | null
+  form_title: string | null
+  form_active: boolean | null
+  owner_id: number | null
+  owner_name: string | null
+  published_at: string | null
+  closed_at: string | null
+  updated_at: string
+  /** False once the role has been published: its address is then fixed. */
+  slug_editable: boolean
+}
+
+export type IntakeStatus = "ok" | "silent" | "paused" | "not_configured" | "not_linked"
+
+/** An entry in the forms directory. */
+export type WebsiteForm = {
+  id: number
+  title: string
+  purpose: "recruitment" | "training" | "other"
+  service: ServiceId | null
+  google_form_id: string
+  /** Rebuilt from the id by the server; never what was pasted. */
+  url: string
+  display: "embedded" | "link"
+  active: boolean
+  owner_id: number | null
+  owner_name: string | null
+  integration_id: number | null
+  integration_name: string | null
+  integration_key: string | null
+  last_success_at: string | null
+  last_failure_at: string | null
+  last_failure_reason: string | null
+  intake_status: IntakeStatus
+  last_reviewed_at: string | null
+  /** Not reviewed for 90 days, or never. */
+  review_due: boolean
+  /** Titles of the vacancies that link to it. */
+  vacancies: string[]
+  updated_at: string
+}
