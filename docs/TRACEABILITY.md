@@ -177,6 +177,23 @@ database. None has been applied to the live one, which is a separate deliberate 
 | The system reports its own health | — | `server/system-health.php` | planned | none |
 | Exports are logged | `export_log` | `server/governance.php` | planned | none |
 
+## People and compliance (section S2)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| One profile per person, every tab behind its zone | `people`, `workers`, `applicants`, `verifications`, `right_to_work_checks`, `employment_contracts`, `worker_pay_rates`, `leave_records`, `audit_log` | `server/people.php` | `src/pages/app/PersonProfile.tsx`, `src/components/people/` | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` (`rg_service_statuses`) |
+| A person is read only inside the account's service scope | (none) | `require_person_scope()` in `server/lib.php`, `rg_person_in_scope()` in `server/pure.php` | `src/lib/access.ts` (`/app/people`) | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` |
+| The profile names the one next action | (none) | `rg_person_next_action()` in `server/pure.php` | `src/pages/app/PersonProfile.tsx` | `server/tests/run.php`, `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Each requirement shows a calculated status chip | (none) | `rg_requirement_chip()` in `server/pure.php` | `src/components/people/checks-tab.tsx` | `server/tests/run.php` |
+| Emergency contacts are kept, validated and audited | `people.emergency_contact*` (migrations 001, 037) | `rg_save_emergency_contacts()` in `server/people-lib.php` | `src/components/people/emergency-tab.tsx` | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` |
+| Evidence waiting for review is one queue | `verifications` | `server/verifications.php` `?action=queue` | `src/components/compliance/verification-queue.tsx` | `server/tests/db/cases/140_person_profile.php` |
+| Right-to-work checks are recorded and signed off | `right_to_work_checks` | `server/right-to-work.php` | `src/components/compliance/right-to-work-panel.tsx`, `src/components/people/rtw-dialog.tsx` | `server/tests/db/cases/140_person_profile.php` |
+| Onboarding starts from the service's checklist | `onboarding_template_items` (migration 037) | `server/onboarding-templates.php`, `server/ats.php` | `src/components/compliance/onboarding-templates.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Approval is offered only when the server would accept it | `workers.approved_at` | `rg_approval_blockers()` in `server/pure.php`, `server/workers.php` | `src/components/people/overview-tab.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php`, `server/tests/run.php` |
+| A suspension is a recorded decision | `workers.suspended_at`, `suspension_reason` (migration 037) | `server/workers.php` `?action=suspend` | `src/components/people/overview-tab.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Contract evidence follows its lifecycle | `employment_contracts` | `server/employment-contracts.php` | `src/components/people/employment-tab.tsx` | `server/tests/db/cases/110_activation.php`, `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Training records link to the person | `enrolments.person_id` | `rg_add_training_record()` in `server/people-lib.php` | `src/components/people/training-tab.tsx` | `server/tests/db/cases/140_person_profile.php` |
+
 ## Platform
 
 | Requirement | Data | Endpoint | Interface | Test |

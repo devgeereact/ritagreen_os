@@ -2,6 +2,9 @@
 // Workers / staff endpoint.
 // GET  /workers.php  -> { workers: [...] }
 // POST /workers.php {name, email, phone, role, division, right_to_work} -> { worker }
+// POST /workers.php?action=availability|pay&id=N
+// POST /workers.php?action=approve&id=N {note?}      unapprove&id=N {reason}
+// POST /workers.php?action=suspend&id=N {reason}     reinstate&id=N {reason}
 require __DIR__ . '/lib.php';
 // The employment gate, the onboarding count and the status refresh. Approving a
 // worker is a compliance decision as much as an HR one, and the rules for it

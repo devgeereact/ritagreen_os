@@ -1879,3 +1879,32 @@ except `ai_assistant`, which the 2026 plan retires. That preserves what producti
 the table existed. A missing row, or a missing table on a server whose PHP is ahead of its
 migrations, reads as the same default. What each switch does when off is in `docs/API.md`
 §54c; `finance` only changes the navigation.
+
+## The person profile: migration 037
+
+Re-runnable throughout. Applied locally by the database suite; **not** applied to production.
+
+**`people.emergency_contact2_name`** `VARCHAR(160) NULL`, **`emergency_contact2_phone`**
+`VARCHAR(40) NULL`, **`emergency_contact2_relationship`** `VARCHAR(80) NULL`. A second emergency
+contact beside the first from migration 001. Both are written only through
+`rg_save_emergency_contacts()` in `server/people-lib.php`, which validates them with
+`rg_validate_emergency_contacts()` and audits the names of the changed fields, never the values.
+
+**`workers.suspended_at`** `DATETIME NULL`, **`suspended_by`** `INT NULL`,
+**`suspension_reason`** `VARCHAR(255) NULL`. Who suspended a worker, when and why, written by
+`workers.php?action=suspend` and cleared by `reinstate`. No foreign key on `suspended_by`, so the
+migration stays re-runnable (MySQL has no `ADD CONSTRAINT IF NOT EXISTS`).
+
+**`onboarding_template_items`**: `id`, `service` (the division ENUM), `label` `VARCHAR(160)`
+(the same width as `onboarding_tasks.label`, which it becomes), `sort_order`, `active`,
+`created_by` FK → `users(id)` **ON DELETE SET NULL**, `created_at`, `updated_at`.
+`UNIQUE (service, label)`. One table keyed by service rather than a template table and an item
+table, because there is exactly one checklist per service. Items are retired with `active = 0`,
+never deleted. Seeded with defaults for each service from the checks in
+`docs/Plans 2026/01-BUSINESS-AND-SCOPE.md`; checks that apply only to some people (an NMC PIN,
+a DBS for a cleaner on some sites, first aid where required) are left for the office to add to
+the one person, because a task that does not apply cannot be finished and would block approval.
+
+**`enrolments.learner_name`** becomes `NULL`-able. A training record added from the person
+profile links through `enrolments.person_id` (migration 001) and reads the name from `people`;
+copying the name into this row as well would be a second copy of the person.

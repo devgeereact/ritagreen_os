@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  166 done · 12 partial · 1 to do · 179 tracked
+`#######################.`  177 done · 11 partial · 1 to do · 189 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -18,15 +18,15 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
 | PLATFORM — Engineering platform | 0 | `###########.` | 18 | 2 | 0 |
-| FOUNDATION — Foundation and person spine | 1 | `############` | 17 | 1 | 0 |
-| COMPLIANCE — Compliance engine and verification | 2 | `############` | 22 | 2 | 0 |
+| FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
+| COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
 | OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 11 | 0 | 0 |
-| IAM — Identity, access and permissions | 5 | `############` | 21 | 1 | 0 |
-| EMPLOYMENT — Employment records, contracts and leave | 6 | `##########..` | 7 | 3 | 0 |
+| IAM — Identity, access and permissions | 5 | `############` | 22 | 1 | 0 |
+| EMPLOYMENT — Employment records, contracts and leave | 6 | `###########.` | 11 | 2 | 0 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 12 | 0 | 0 |
-| RECRUITMENT — Recruitment and intake | 8 | `############` | 10 | 0 | 0 |
-| TRAINING — Training records and certificates | 8 | `############` | 7 | 0 | 0 |
+| RECRUITMENT — Recruitment and intake | 8 | `############` | 11 | 0 | 0 |
+| TRAINING — Training records and certificates | 8 | `############` | 8 | 0 | 0 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 18 | 3 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
@@ -60,7 +60,7 @@ Milestone 0 · 18 done, 2 partial, 0 to do
 
 ### FOUNDATION — Foundation and person spine
 
-Milestone 1 · 17 done, 1 partial, 0 to do
+Milestone 1 · 18 done, 1 partial, 0 to do
 
 - [x] Atomic document-number sequences — _counters table + next_seq()_
 - [x] Backfill is safe to run twice — _backfill-people.php --go inserted a fresh person for every group regardless of existing links, repointed every record at the duplicate and orphaned the original with its right-to-work checks, verifications, eligibility and leave records. Both the quickstart and the production runbook run it after a seed, when everything is already linked. It now leaves linked rows alone and gives an unlinked row its group's existing person; a group pointing at two different people is reported, never merged. Verified: --go on a linked database creates nothing and relinks nothing, and an artificially unlinked login rejoins its worker's person rather than making a second_
@@ -75,6 +75,7 @@ Milestone 1 · 17 done, 1 partial, 0 to do
 - [x] Payroll number generator — _next_payroll_no() on next_seq(), format RG-000001. Assigned on worker creation, unique, never reused_
 - [x] Person de-duplication migration — _server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)_
 - [x] Person matching logic — _rg_person_match_key/rg_group_people/rg_group_is_ambiguous in server/pure.php. Matches on email then phone, never on a name, and refuses to merge a group whose names disagree. 34 assertions_
+- [x] Person profile, one page per person — _server/people.php and /app/people/:personId: the seven tabs of docs/Plans 2026/02, read in one call behind the staff role, the person's service scope and a zone per section. Linked from the Workers list, the recruitment applicant dialog, the compliance list and the verification queue. Verified in server/tests/db/cases/140_person_profile.php and in the browser at 1280px and 375px_
 - [x] Replace the divisions CSV with a junction table — _client_services (migration 014), split from the CSV. clients.divisions is kept in step by clients.php?action=services until nothing reads it; two sources of one fact drift, so they are written in one place_
 - [x] ats.php onboard links instead of copying — _Rewritten. Verified end to end: two applications, an onboarding and a login for one human produce exactly one person record_
 - [x] people table as the single identity — _migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production_
@@ -83,7 +84,7 @@ Milestone 1 · 17 done, 1 partial, 0 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 22 done, 2 partial, 0 to do
+Milestone 2 · 25 done, 2 partial, 0 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
@@ -93,6 +94,7 @@ Milestone 2 · 22 done, 2 partial, 0 to do
 - [x] Eligibility evaluation logic — _rg_evaluate_eligibility() in server/pure.php: per-requirement assessment, blocking versus warning, score, and a human-readable reason. 48 assertions in server/tests/run.php. Storage and wiring still to come_
 - [x] Eligibility recalculated daily — _Folded into the existing expiry-alerts cron rather than adding another. Only services a person is actually intended for are assessed, so the office is not shown a wall of 'not eligible for Security' for cleaners_
 - [x] Eligibility visible in the interface — _src/components/app/eligibility-dialog.tsx, opened from the Workers table. Shows all four services with every blocking reason, not just the first_
+- [x] Evidence files belong to the person they evidence — _A verification, right-to-work check, contract or training record that names a document filed against somebody else is refused with 422. files.php uploads can be filed against a person directly_
 - [x] Expiry classification primitive — _rg_classify() in server/pure.php, covered by server/tests/run.php including the boundary days_
 - [x] Generalised verification lifecycle — _verifications table plus server/verifications.php: requested / received / under_review / verified / rejected / expired, with only legal transitions permitted and the refusal naming what IS possible_
 - [x] Legacy right-to-work carried over honestly — _Migration 006 imports the old boolean as an UNVERIFIED historical assertion with a note saying so. Presenting it as a completed check would have been inventing evidence_
@@ -103,11 +105,13 @@ Milestone 2 · 22 done, 2 partial, 0 to do
 - [x] Reference checks with gap explanation — _worker_references_
 - [x] Requirement catalogue — _migrations/003 seeds 13 requirements. Applied and verified_
 - [x] Right to work check record — _right_to_work_checks (migration 006) with method, reference, date, outcome, follow-up, recheck date, evidence file and verifier. server/right-to-work.php records, lists, reports what is due, and verifies. Recording and verifying are separate actions on purpose_
+- [x] Right-to-work screen — _Compliance, Right to work, and the person profile: record a check with method, date checked, outcome, follow-up date and evidence, and sign it off as the named reviewer. Recording and verifying recalculate derived status at once_
 - [x] SIA verification workflow — _Carried over as 'received', not 'verified' -- a number was recorded, no register check was captured_
 - [x] Seeded rules match prior enforcement — _Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused_
 - [x] Verification is a workflow — _One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked_
+- [x] Verification queue screen — _Compliance, Verification queue: everything requested, received or under review, oldest first, filtered by service and type of check, scoped to the caller's service. Upload evidence, verify with what was checked, reject with a reason. Exercised in the browser as the scoped security manager_
 - [x] Verifying records what was checked — _A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later_
-- [~] Compliance status read-only in the UI — _The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields_
+- [~] Compliance status read-only in the UI — _The person profile's checks tab shows each requirement as a calculated chip (Valid, Due soon, Expired, Awaiting review, Missing) from rg_requirement_chip(); its actions add evidence or record a decision and never set a status. The Workers list still shows raw DBS/SIA fields_
 - [~] Right to work as a dated, verified check — _The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision_
 
 ### DOCUMENTS — Document management
@@ -139,7 +143,7 @@ Milestone 4 · 11 done, 0 partial, 0 to do
 
 ### IAM — Identity, access and permissions
 
-Milestone 5 · 21 done, 1 partial, 0 to do
+Milestone 5 · 22 done, 1 partial, 0 to do
 
 - [x] A super admin cannot lock themselves out — _Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it_
 - [x] Authentication (opaque bearer tokens) — _SHA-256 hashed, 30-day expiry, server/auth.php:35_
@@ -152,6 +156,7 @@ Milestone 5 · 21 done, 1 partial, 0 to do
 - [x] Password hashing — _bcrypt cost 12_
 - [x] Per-service permission scoping — _service_scope() in lib.php, applied to the workforce and candidate lists. Opt-in per account via users.scope_to_division, so switching it on narrows nobody's access by surprise. super_admin and admin are never scoped_
 - [x] Per-service scoping is enforced — _As a query filter, not just a stored preference_
+- [x] Person-level endpoints apply service scope — _require_person_scope() in lib.php, from rg_person_in_scope() in pure.php: a person is in scope when any service they hold is the account's. verifications.php, right-to-work.php, leave.php, employment-contracts.php and people.php took a person id and applied none, and the verification queue, right-to-work due list and leave lists named everybody. Verified in 140_person_profile.php_
 - [x] Portal and worker app gated to their linked accounts — _/portal requires a client_id, /m requires a worker_id; both scope every query to that link server-side_
 - [x] Rate limiting — _rate_limits table + rate_limit()_
 - [x] Role-filtered navigation — _src/lib/nav.ts holds the sidebar's destinations and visibleDestinations() filters them through canAccess and the owner's feature switches, so no link is offered that the guard would refuse; src/lib/__tests__/nav.test.ts checks every role_
@@ -166,16 +171,19 @@ Milestone 5 · 21 done, 1 partial, 0 to do
 
 ### EMPLOYMENT — Employment records, contracts and leave
 
-Milestone 6 · 7 done, 3 partial, 0 to do
+Milestone 6 · 11 done, 2 partial, 0 to do
 
+- [x] Activation approval shows its blockers — _rg_approval_blockers() in pure.php is the rule workers.php?action=approve enforces and the profile shows before the button is offered. Approval moves the application to onboarded_
 - [x] Contract versioning — _version plus supersedes_id. A signed contract is evidence of what was agreed at a point in time, so it is superseded rather than edited_
+- [x] Emergency contacts — _Two contacts on people (migration 001 plus the second in 037). Edited on the profile by office roles holding the employment zone, validated by rg_validate_emergency_contacts(), audited by field name without the values. rg_save_emergency_contacts() in server/people-lib.php is the function the worker portal (S4) will call_
+- [x] Employment contract lifecycle — _server/employment-contracts.php and the Employment tab of the person profile: draft with the agreed version attached (document_file_id, action=document while still a draft), sent, accepted, signed copy filed against the same person, review by a named person, and supersede, which keeps the old version. Verified in server/tests/db/cases/110_activation.php and 150_onboarding_and_approval.php. Not a document designer or e-signature service, by design: documents are prepared and signed outside_
 - [x] Holiday balance distinguishes unset from overdrawn — _No entitlement recorded returns null rather than a large negative number, which would read as 'overdrawn' when it means 'nobody set this up'_
 - [x] Leave and absence — _server/leave.php_
 - [x] Leave and absence records — _leave_records plus server/leave.php. Counted in hours, not days, because shift work is not made of whole days. Records holiday taken, carried over, holiday pay and payments in lieu, and return-to-work discussions_
 - [x] Overlapping leave is refused — _Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash_
 - [x] Structured written-statement particulars — _employment_contracts carries the Acas particulars as queryable FIELDS -- job title, place of work, pay, hours, holiday, sick pay, notice, probation, training, pension -- rather than only inside a PDF_
+- [x] Suspension recorded with a reason — _workers.php?action=suspend and reinstate, with suspended_at, suspended_by and suspension_reason (migration 037). The gate refuses a suspended worker; lifting it returns them to active only if they were approved_
 - [x] Worker status derived from workflow events — _rg_derive_worker_status() in pure.php, recomputed by the daily cron into workers.derived_status. The manual column stays as the INTENT; the derived one is what is actually true. Verified: all 10 fixtures read 'active' manually, only 4 genuinely are_
-- [~] Employment contract lifecycle — _employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not_
 - [~] Records have a retention policy — _retention_policies is editable through governance.php with the periods left NULL until the business sets them. The sweep that acts on them is still to build_
 - [~] Worker employment fields — _pay rate, pay type, holiday hours present; Acas particulars not structured_
 
@@ -198,7 +206,7 @@ Milestone 7 · 12 done, 0 partial, 0 to do
 
 ### RECRUITMENT — Recruitment and intake
 
-Milestone 8 · 10 done, 0 partial, 0 to do
+Milestone 8 · 11 done, 0 partial, 0 to do
 
 - [x] A stalled integration raises an alert — _expect_within_hours per integration; the Action Centre reports anything past its window_
 - [x] Academy to recruitment handoff — _from_learner resolves a person. The fabricated @learner.invalid address is kept only to satisfy a NOT NULL column and is explicitly not treated as an identity_
@@ -207,13 +215,14 @@ Milestone 8 · 10 done, 0 partial, 0 to do
 - [x] Google Forms intake webhook — _server/forms-intake.php. Shared secret compared with hash_equals, rate limited, and redelivery-safe via the form's own response id_
 - [x] Google Forms submissions reach the system — _Verified end to end, including secret enforcement and redelivery_
 - [x] Integration health monitoring — _?action=health plus an Action Centre item. Silence is the failure that matters: a form that stops feeding the system looks exactly like a quiet week_
+- [x] Onboarding checklists per service — _onboarding_template_items (migration 037) and server/onboarding-templates.php, edited under Compliance, Onboarding lists. Starting onboarding seeds from the active items for the service; ad-hoc tasks are still added per person. Verified in 150_onboarding_and_approval.php_
 - [x] Onboarding task checklist — _onboarding_tasks, seeded on onboard_
 - [x] Public application page — _/apply, rate-limited_
 - [x] Raw submissions retained — _The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed_
 
 ### TRAINING — Training records and certificates
 
-Milestone 8 · 7 done, 0 partial, 0 to do
+Milestone 8 · 8 done, 0 partial, 0 to do
 
 - [x] CPD hours
 - [x] Certificate issue
@@ -221,6 +230,7 @@ Milestone 8 · 7 done, 0 partial, 0 to do
 - [x] Open Badges 3.0 assertion
 - [x] Programmes and enrolments
 - [x] Public certificate verification — _/verify/:id_
+- [x] Training records added from the person profile — _people.php?action=training: provider, course, completion, expiry and certificate, written to enrolments with person_id and no copy of the name. Records, certifications and renewal dates are shown on the Training tab. No lessons or quizzes_
 - [x] Training records linked to the person — _academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith_
 
 ### GOVERNANCE — Audit, retention and data protection
@@ -247,7 +257,7 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 - [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
 - [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
 - [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
-- [~] Sensitive zones enforced — _can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet_
+- [~] Sensitive zones enforced — _can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet. The person profile (server/people.php) returns each section behind its zone -- compliance for checks, training and contracts, payroll for pay history, health for leave reasons, employment for emergency contacts -- as {restricted: true} rather than data_
 - [ ] Workflow rule engine
 
 ### PWA — Progressive web app

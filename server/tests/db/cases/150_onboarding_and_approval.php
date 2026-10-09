@@ -19,7 +19,7 @@ $scoped = $client->login('scoped@local.invalid');     // manager, security, scop
 $trainer = $client->login('trainer@local.invalid');
 $workerLogin = $client->login('amara.login@local.invalid');
 
-Rgt::group('onboarding templates — one list per service');
+Rgt::group('onboarding templates: one list per service');
 
 $res = $admin->get('/onboarding-templates.php');
 Rgt::status('an admin can read the lists', $res, 200);
@@ -59,7 +59,7 @@ $careItem = (int) $db->query("SELECT id FROM onboarding_template_items WHERE ser
 Rgt::denied('a scoped manager cannot retire another service\'s item',
     $scoped->post("/onboarding-templates.php?action=update&id=$careItem", ['active' => false]));
 
-Rgt::group('onboarding templates — starting onboarding seeds from the list');
+Rgt::group('onboarding templates: starting onboarding seeds from the list');
 
 $db->query('DELETE FROM rate_limits');
 $client->post('/ats.php', [
@@ -84,7 +84,7 @@ Rgt::ok('and not the one retired', !in_array('Two references received', $tasks, 
 Rgt::status('the office can still add an ad-hoc task',
     $admin->post("/ats.php?action=add_task&id=$applicantId", ['label' => 'First aid certificate (site requires it)']), 201);
 
-Rgt::group('approval on the profile — offered only when the server would accept it');
+Rgt::group('approval on the profile: offered only when the server would accept it');
 
 $profile = $admin->get("/people.php?id=$personId");
 Rgt::status('the new worker has a profile', $profile, 200);
@@ -158,7 +158,7 @@ $profile = $admin->get("/people.php?id=$personId");
 Rgt::same('the profile reads active', $profile->get('services.0.status'), 'active');
 Rgt::same('naming who approved', $profile->get('workers.0.approved_by_name'), 'Sonia Scoped');
 
-Rgt::group('suspension — a decision with a reason, shown on the profile');
+Rgt::group('suspension: a decision with a reason, shown on the profile');
 
 Rgt::status('suspending without a reason is refused',
     $admin->post("/workers.php?action=suspend&id=$workerId", []), 400);

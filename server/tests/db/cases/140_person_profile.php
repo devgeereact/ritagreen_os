@@ -28,7 +28,7 @@ $securityPerson = (int) $db->query(
     "SELECT person_id FROM workers WHERE name = 'Dmitri Volkov' AND deleted_at IS NULL LIMIT 1"
 )->fetch_row()[0];
 
-Rgt::group('person profile — the aggregate read');
+Rgt::group('person profile: the aggregate read');
 
 $res = $admin->get("/people.php?id=$carePerson");
 Rgt::status('an admin can open a profile', $res, 200);
@@ -53,7 +53,7 @@ Rgt::ok('an admin sees the activity trail', is_array($res->get('activity')) && $
 Rgt::status('an unknown person is a 404', $admin->get('/people.php?id=999999'), 404);
 Rgt::status('no id is refused', $admin->get('/people.php'), 400);
 
-Rgt::group('person profile — who may open it at all');
+Rgt::group('person profile: who may open it at all');
 
 Rgt::denied('a worker login cannot open a profile', $workerLogin->get("/people.php?id=$carePerson"));
 Rgt::denied('not even their own, from the office endpoint', $workerLogin->get('/people.php?id=' . (int) $db->query(
@@ -64,7 +64,7 @@ Rgt::denied('a client login cannot open a profile', $clientLogin->get("/people.p
 Rgt::denied('an editor cannot open a profile', $editor->get("/people.php?id=$carePerson"));
 Rgt::denied('nobody signed in cannot open a profile', $client->get("/people.php?id=$carePerson"));
 
-Rgt::group('person profile — service scope');
+Rgt::group('person profile: service scope');
 
 Rgt::status('a security manager can open a security worker', $scoped->get("/people.php?id=$securityPerson"), 200);
 Rgt::denied('but not a care worker', $scoped->get("/people.php?id=$carePerson"));
@@ -102,7 +102,7 @@ Rgt::ok('the queue filters by service', $adminQueue->get('items') !== null
     && count(array_filter($adminQueue->get('items', []), static fn($i) => !in_array('care', $i['services'], true))) === 0,
     $adminQueue->body);
 
-Rgt::group('person profile — zones decide what each section shows');
+Rgt::group('person profile: zones decide what each section shows');
 
 $asManager = $manager->get("/people.php?id=$carePerson");
 Rgt::status('a care manager can open a care worker', $asManager, 200);
@@ -130,7 +130,7 @@ $asAdmin = $admin->get("/people.php?id=$carePerson");
 $sick = array_values(array_filter($asAdmin->get('employment.leave.records', []), static fn($l) => $l['kind'] === 'sickness'));
 Rgt::same('an admin, who holds it, does', $sick[0]['reason'] ?? null, 'Migraine');
 
-Rgt::group('emergency contacts — edited by the office, validated, audited');
+Rgt::group('emergency contacts: edited by the office, validated, audited');
 
 $res = $admin->post("/people.php?action=emergency&id=$carePerson", [
     'emergency_contact_name' => 'Wei Chen', 'emergency_contact_phone' => '07700 900555',
@@ -175,7 +175,7 @@ Rgt::same('and no refused attempt wrote an audit entry',
 Rgt::same('nor changed the contact',
     $db->query("SELECT emergency_contact_name FROM people WHERE id = $carePerson")->fetch_row()[0], 'Wei Chen');
 
-Rgt::group('training records — a record and its evidence, linked to the person');
+Rgt::group('training records: a record and its evidence, linked to the person');
 
 $provider = (int) $db->query("SELECT id FROM training_providers WHERE name = 'St John Ambulance'")->fetch_row()[0];
 $res = $admin->post("/people.php?action=training&id=$carePerson", [
@@ -210,7 +210,7 @@ Rgt::denied('nor a scoped manager for another service', $scoped->post("/people.p
     'course' => 'Fire safety', 'completed_on' => '2026-03-01',
 ]));
 
-Rgt::group('evidence — a document filed against the wrong person is refused everywhere');
+Rgt::group('evidence: a document filed against the wrong person is refused everywhere');
 
 Rgt::status('a verification cannot point at another person\'s document',
     $admin->post('/verifications.php', [
