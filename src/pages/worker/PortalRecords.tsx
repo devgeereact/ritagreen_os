@@ -169,7 +169,7 @@ function TimesheetRow({ ts, onDone }: { ts: PortalTimesheet; onDone: () => void 
     setBusy(true)
     const ok = await act(
       () => api(`me.php?action=submit_timesheet&id=${ts.id}`, { method: "POST", body: { break_minutes: Number(brk) || 0 } }),
-      "Submitted. The office will approve it.",
+      "Submitted. The office will check it.",
     )
     setBusy(false)
     if (ok) onDone()

@@ -273,7 +273,7 @@ function Messages({ data, onRead }: { data: { notifications: Notice[]; unread: n
                   {n.title}
                   {!n.read_at && <span className="sr-only"> (unread)</span>}
                 </p>
-                {n.body && <p className="text-sm text-muted-foreground">{n.body}</p>}
+                {n.body && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{n.body}</p>}
               </div>
             </div>
           ))}

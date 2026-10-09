@@ -18,18 +18,20 @@ function dayHeading(date: string, today: string): string {
   return rel === "Today" || rel === "Tomorrow" ? `${rel}, ${dayLabel(date, true)}` : dayLabel(date, true)
 }
 
-function shiftChip(s: PortalShift) {
+function shiftChip(s: PortalShift, now: string) {
   if (s.status === "cancelled") return <Chip tone="bad">Cancelled</Chip>
   if (s.clocked_out || s.status === "completed") return <Chip tone="quiet">Completed</Chip>
   if (s.clocked_in) return <Chip tone="ok">On site</Chip>
+  if (s.ends_at < now) return <Chip tone="quiet">Ended</Chip>
   return <Chip tone="ok">Confirmed</Chip>
 }
 
 export default function PortalRota() {
   useDocumentTitle("Rota, RitaGreen staff portal")
   const { data, loading, error, reload } = useApi<PortalHome>("me.php")
-  const today = londonNow().slice(0, 10)
-  const booked = data?.shifts.filter((s) => s.status === "scheduled" && !s.clocked_out) ?? []
+  const now = londonNow()
+  const today = now.slice(0, 10)
+  const booked = data?.shifts.filter((s) => s.status === "scheduled" && !s.clocked_out && s.ends_at >= now) ?? []
 
   return (
     <>
@@ -74,7 +76,7 @@ export default function PortalRota() {
                             <p className="mt-1 text-sm">Reason: {s.cancel_reason}</p>
                           )}
                         </div>
-                        {shiftChip(s)}
+                        {shiftChip(s, now)}
                       </PortalCard>
                     ))}
                   </div>
@@ -82,7 +84,12 @@ export default function PortalRota() {
               )}
             </PortalSection>
 
-            <OpenShifts shifts={data.open_shifts} today={today} onDone={reload} />
+            {/* A shift offered to me by name is answered above, not picked up below. */}
+            <OpenShifts
+              shifts={data.open_shifts.filter((s) => !data.offers.some((o) => o.shift_id === s.id))}
+              today={today}
+              onDone={reload}
+            />
           </>
         )}
       </PortalState>
@@ -105,7 +112,7 @@ function OfferCard({ offer, today, onDone }: { offer: PortalOffer; today: string
   return (
     <PortalCard className="border-[#B7791F]">
       <p className="text-sm font-semibold text-[#7A5115]">
-        Offer{offer.expires_at ? `, reply by ${offer.expires_at.slice(11, 16)} ${relativeDay(offer.expires_at, today).toLowerCase()}` : ""}
+        {offer.expires_at ? `Offer, reply by ${relativeDay(offer.expires_at, today)} ${offer.expires_at.slice(11, 16)}` : "Offer"}
       </p>
       <p className="mt-1 text-xl font-semibold leading-tight tabular-nums">
         {relativeDay(offer.starts_at, today)}
