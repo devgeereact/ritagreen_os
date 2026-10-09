@@ -68,7 +68,7 @@ export default defineConfig({
         // app renders a blank page on every route.
         globIgnores: [
           "**/react-apexcharts.esm-*.js", // charts — Dashboard, Analytics, Insights
-          "**/Scheduling-*.js", // carries FullCalendar
+          "**/Scheduling-*.js", // the office rota; nothing a worker opens offline
           "**/pdf-*.js", // jspdf + autotable
           "**/html2canvas*.js", // jspdf dependency
           "**/index.es-*.js", // jspdf dependency
