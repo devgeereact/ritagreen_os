@@ -27,7 +27,7 @@ export default function PublicLayout() {
   }, [pathname, hash])
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
+    <div className="website flex min-h-svh flex-col bg-background">
       {/* Skip link — the first focusable element on the page.
           The internal CMS had one; the public site did not, so a keyboard or
           screen-reader user had to tab through the whole header, the services

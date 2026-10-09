@@ -35,8 +35,8 @@ export default defineConfig({
         start_url: "/m",
         scope: "/",
         display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#0C447C",
+        background_color: "#F7F6F1",
+        theme_color: "#33512D",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -80,6 +80,9 @@ export default defineConfig({
           // Offline, a name with an accent falls back to the system font rather
           // than the install being half a megabyte heavier for everyone.
           "**/*-latin-ext.woff2",
+          // Source Serif 4 is for website headlines only. The worker app never
+          // sets a serif, so it is not part of the install.
+          "**/source-serif-4-*.woff2",
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",

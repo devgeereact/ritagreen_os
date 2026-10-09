@@ -14,9 +14,11 @@ const config: Config = {
     },
     extend: {
       fontFamily: {
-        // Source Sans 3 = the workhorse (all app UI + body). Plus Jakarta Sans = display.
+        // Source Sans 3 = the workhorse (app, portal, website body).
+        // Source Serif 4 = website headlines only (docs/DESIGN_SYSTEM.md).
         sans: ["'Source Sans 3'", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["'Plus Jakarta Sans'", "'Source Sans 3'", "ui-sans-serif", "sans-serif"],
+        display: ["'Source Serif 4'", "Georgia", "'Times New Roman'", "serif"],
+        serif: ["'Source Serif 4'", "Georgia", "'Times New Roman'", "serif"],
         mono: ["'Source Code Pro'", "ui-monospace", "monospace"],
       },
       borderRadius: {
@@ -27,12 +29,13 @@ const config: Config = {
         "3xl": "1.75rem",
       },
       boxShadow: {
-        // Clean elevation — soft, low-opacity, navy-tinted. Cards float, don't stamp.
-        // soft = shadow-1 (cards), elevate = shadow-2 (popovers), lift = shadow-3 (modals).
-        soft: "0 1px 2px rgba(12, 30, 60, 0.05), 0 1px 1px rgba(12, 30, 60, 0.04)",
-        elevate: "0 4px 12px rgba(12, 30, 60, 0.08)",
-        lift: "0 12px 32px rgba(12, 30, 60, 0.12)",
-        ring: "0 0 0 1px rgba(12, 30, 60, 0.06), 0 1px 3px rgba(12, 30, 60, 0.08)",
+        // Low, ink-tinted elevation from --shadow-tint (src/index.css). The design
+        // keeps shadow for menus and dialogs; cards rely on their 1px border.
+        // soft = cards (barely there), elevate = popovers and menus, lift = dialogs.
+        soft: "0 1px 2px hsl(var(--shadow-tint) / 0.05)",
+        elevate: "0 4px 12px hsl(var(--shadow-tint) / 0.10)",
+        lift: "0 12px 32px hsl(var(--shadow-tint) / 0.14)",
+        ring: "0 0 0 1px hsl(var(--shadow-tint) / 0.06), 0 1px 3px hsl(var(--shadow-tint) / 0.08)",
       },
       colors: {
         background: "hsl(var(--background))",
@@ -61,17 +64,31 @@ const config: Config = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        highlight: {
+          DEFAULT: "hsl(var(--highlight))",
+          foreground: "hsl(var(--highlight-foreground))",
+        },
+        // Status: text colour, a foreground for a filled chip, and the soft
+        // background the design pairs it with (text-success on bg-success-soft).
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+          soft: "hsl(var(--destructive-soft))",
         },
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          soft: "hsl(var(--warning-soft))",
         },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          soft: "hsl(var(--success-soft))",
+        },
+        awaiting: {
+          DEFAULT: "hsl(var(--awaiting))",
+          foreground: "hsl(var(--awaiting-foreground))",
+          soft: "hsl(var(--awaiting-soft))",
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -116,7 +133,7 @@ const config: Config = {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-up": "fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both",
-        "fade-in": "fade-in 0.6s ease-out both",
+        "fade-in": "fade-in 0.2s ease-out both",
       },
     },
   },

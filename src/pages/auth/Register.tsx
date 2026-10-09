@@ -14,8 +14,8 @@ import { api, ApiError } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
 
 const DIVS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy / training" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]

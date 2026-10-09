@@ -17,7 +17,7 @@ import { api, ApiError } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
 
 const SERVICES = [
-  { value: "care", label: "Care staff" },
+  { value: "care", label: "Healthcare staff" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
   { value: "academy", label: "Training" },

@@ -1,7 +1,13 @@
-// The four RitaGreen divisions. This single source drives the nav mega-menu,
+// The four RitaGreen services. This single source drives the nav mega-menu,
 // the services pages, the home page and the footer, so the whole public site
-// re-skins from one place. RitaGreen is one master brand: every division shares
-// the same name, colours and standard — only the descriptor word changes.
+// re-skins from one place. RitaGreen Services is one brand: every service
+// shares the same name, colours and standard. Only the service word changes.
+//
+// Public names follow owner decision D01 (2026 plan): Healthcare, Cleaning,
+// Security, Training. The internal ids `care` and `academy` stay, because they
+// are stored in the database and used in routes.
+import { SERVICE_ACCENTS } from "@/lib/services"
+
 export type Service = {
   slug: string
   name: string
@@ -12,8 +18,8 @@ export type Service = {
 export type Division = {
   id: string
   name: string
-  descriptor: string // the single brand word: Care · Academy · Cleaning · Security
-  accent: string // hex, used for the division dot/accent (brand palette)
+  descriptor: string // the single public service word: Healthcare, Cleaning, Security, Training
+  accent: string // hex, the service tag dot only (docs/DESIGN_SYSTEM.md, "Service accents")
   headline: string // the page-hero line, in brand voice
   tagline: string
   blurb: string
@@ -26,9 +32,9 @@ export type Division = {
 export const DIVISIONS: Division[] = [
   {
     id: "care",
-    name: "RitaGreen Care",
-    descriptor: "Care",
-    accent: "#0C447C",
+    name: "RitaGreen Healthcare",
+    descriptor: "Healthcare",
+    accent: SERVICE_ACCENTS.care,
     headline: "Safe hands when you need them.",
     tagline: "Trained, checked carers and nurses, when and where they are needed.",
     blurb:
@@ -84,9 +90,9 @@ export const DIVISIONS: Division[] = [
   },
   {
     id: "academy",
-    name: "RitaGreen Academy",
-    descriptor: "Academy",
-    accent: "#B7791F",
+    name: "RitaGreen Training",
+    descriptor: "Training",
+    accent: SERVICE_ACCENTS.academy,
     headline: "Start a career in care — and get hired.",
     tagline: "We train the next wave of carers, then help them into work.",
     blurb:
@@ -144,7 +150,7 @@ export const DIVISIONS: Division[] = [
     id: "cleaning",
     name: "RitaGreen Cleaning",
     descriptor: "Cleaning",
-    accent: "#5DCAA5",
+    accent: SERVICE_ACCENTS.cleaning,
     headline: "Clean, safe, presentable — every time.",
     tagline: "Buildings kept clean, safe and inspection-ready.",
     blurb:
@@ -200,7 +206,7 @@ export const DIVISIONS: Division[] = [
     id: "security",
     name: "RitaGreen Security",
     descriptor: "Security",
-    accent: "#1B2A3C",
+    accent: SERVICE_ACCENTS.security,
     headline: "Licensed officers who keep it calm.",
     tagline: "SIA-licensed guards for the places people live, work and gather.",
     blurb:

@@ -117,6 +117,13 @@ function stripe_create_session(array $inv, string $base): string
     return $json['url'];
 }
 
+// --- Online payments switched off in Settings (migration 036). ---
+// Everything below starts a payment: a public pay link, a new link, a checkout
+// session. The webhook above stays open on purpose: a client who opened a
+// checkout before the switch went off can still pay, and Stripe must be able to
+// tell us, or the invoice would read unpaid for money that has been taken.
+require_feature($conn, 'online_payments', 'Online payments');
+
 // --- Public pay link: a client pays an invoice from an emailed link, no login.
 //     GET /payments.php?action=public_checkout&token=XXXX -> 302 to Stripe ---
 if ($action === 'public_checkout' && method() === 'GET') {

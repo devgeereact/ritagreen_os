@@ -1,3 +1,5 @@
+import { SERVICE_ACCENTS, SERVICE_LABELS } from "@/lib/services"
+
 // Money is stored in pence. Format to GBP for display.
 export function gbp(pence: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100)
@@ -32,18 +34,8 @@ export function monthBounds(on: Date = new Date()): { from: string; to: string }
   }
 }
 
-export const DIVISION_LABELS: Record<string, string> = {
-  care: "Healthcare & Care",
-  academy: "Academy & Training",
-  cleaning: "Cleaning Services",
-  security: "Security Services",
-}
-
-// Division accents for data viz — brand-derived categorical palette
-// (navy / mint / amber / dark), restrained per design system v2.
-export const DIVISION_ACCENTS: Record<string, string> = {
-  care: "#0C447C",
-  academy: "#B7791F",
-  cleaning: "#5DCAA5",
-  security: "#1B2A3C",
-}
+// Service names and tag colours live in services.ts; these keep the names the
+// office pages already import. Typed as string-keyed because they are indexed
+// with whatever the API returned.
+export const DIVISION_LABELS: Record<string, string> = SERVICE_LABELS
+export const DIVISION_ACCENTS: Record<string, string> = SERVICE_ACCENTS

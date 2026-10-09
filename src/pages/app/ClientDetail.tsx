@@ -298,8 +298,8 @@ function Fin({ label, value, tone }: { label: string; value: string; tone?: "pri
 }
 
 const DIVISIONS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]

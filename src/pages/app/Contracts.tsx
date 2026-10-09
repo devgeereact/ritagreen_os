@@ -40,8 +40,8 @@ import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-blo
 type Data = { contracts: Contract[]; totals: { annual_active_pence: number } }
 
 const DIVISIONS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]

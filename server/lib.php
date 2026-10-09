@@ -969,6 +969,42 @@ function encode_mime_word(string $text): string
     return $text;
 }
 
+// ----- Feature switches (migration 036) -----
+// The owner turns finance, online payments, SMS/WhatsApp, the inbox and the AI
+// assistant on and off in Settings. The rule for each name is in pure.php
+// (rg_feature_on); this reads the stored rows once per request.
+
+/** Every stored switch as name => enabled. Empty if migration 036 is not applied. */
+function feature_rows(mysqli $conn): array
+{
+    static $rows = null;
+    if ($rows !== null) return $rows;
+    $rows = [];
+    try {
+        $res = $conn->query('SELECT name, enabled FROM feature_switches');
+        while ($r = $res->fetch_assoc()) $rows[$r['name']] = (int) $r['enabled'];
+    } catch (mysqli_sql_exception $e) {
+        // No table yet: PHP uploaded ahead of the migration. Fall back to the
+        // defaults, which preserve what the server did before switches existed.
+        error_log('feature_switches unreadable, using defaults: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
+/** Is a feature switched on? Unknown names are off. */
+function feature_enabled(mysqli $conn, string $name): bool
+{
+    return rg_feature_on($name, feature_rows($conn));
+}
+
+/** Refuse the request with a 403 when a feature is switched off. */
+function require_feature(mysqli $conn, string $name, string $what): void
+{
+    if (!feature_enabled($conn, $name)) {
+        fail("$what is switched off. An owner can turn it on in Settings, Features.", 403);
+    }
+}
+
 // ----- SMS (Twilio) -----
 // Optional: only sends when TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM are set in
 // config.php. Used for shift offers and reminders. Every attempt is logged to
@@ -1000,6 +1036,11 @@ function send_sms(mysqli $conn, ?string $to, string $body): bool
 
     if (!$num) {
         sms_log($conn, (string) $to, $body, 'failed', 'invalid number');
+        return false;
+    }
+    // Switched off by the owner: logged, so the office can see what would have gone.
+    if (!feature_enabled($conn, 'sms_whatsapp')) {
+        sms_log($conn, $num, $body, 'skipped', 'sms switched off in settings');
         return false;
     }
     if (!sms_enabled()) {
@@ -1046,6 +1087,10 @@ function send_whatsapp(mysqli $conn, ?string $to, string $body): bool
     $body = mb_substr($body, 0, 1500);
     if (!$num) {
         sms_log($conn, (string) $to, $body, 'failed', 'whatsapp: invalid number');
+        return false;
+    }
+    if (!feature_enabled($conn, 'sms_whatsapp')) {
+        sms_log($conn, $num, $body, 'skipped', 'whatsapp switched off in settings');
         return false;
     }
     if (!whatsapp_enabled()) {

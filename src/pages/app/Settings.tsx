@@ -38,10 +38,12 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import type { AdminUser, AuditEntry } from "@/lib/types"
 import { shortDate } from "@/lib/format"
+import { SERVICE_OPTIONS } from "@/lib/services"
+import { FeaturesCard } from "@/components/app/features-card"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const ROLES = ["super_admin", "admin", "manager", "trainer", "editor", "employee", "client"]
-const DIVISIONS = ["care", "academy", "cleaning", "security"]
+
 
 export default function Settings() {
   const { hasRole } = useAuth()
@@ -53,7 +55,7 @@ export default function Settings() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          {isAdmin ? "Manage people, roles, data and your own security." : "Manage your account security."}
+          {isAdmin ? "Manage people, roles, features, data and your own security." : "Manage your account security."}
         </p>
       </div>
 
@@ -61,6 +63,7 @@ export default function Settings() {
         <TabsList>
           <TabsTrigger value="security">Security</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">Users & roles</TabsTrigger>}
+          {isOffice && <TabsTrigger value="features">Features</TabsTrigger>}
           {isOffice && <TabsTrigger value="intake">Form intake</TabsTrigger>}
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
@@ -71,6 +74,9 @@ export default function Settings() {
         </TabsContent>
         {/* Intake is a manager's screen as well as an admin's: a form that stops
             feeding the system is a recruitment problem before it is an IT one. */}
+        {/* Everyone in the office can see which areas are switched on; only an
+            owner (super_admin, admin) can change them, and the server enforces it. */}
+        {isOffice && <TabsContent value="features" className="mt-4"><FeaturesCard canEdit={isAdmin} /></TabsContent>}
         {isOffice && <TabsContent value="intake" className="mt-4"><IntakeTab /></TabsContent>}
         {isAdmin && (
           <>
@@ -487,13 +493,13 @@ function NewUserDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="division">Division</Label>
+              <Label htmlFor="division">Service</Label>
               <Select value={division} onValueChange={setDivision}>
                 <SelectTrigger id="division"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {DIVISIONS.map((d) => (
-                    <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                  {SERVICE_OPTIONS.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

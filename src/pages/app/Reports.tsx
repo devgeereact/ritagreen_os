@@ -12,7 +12,7 @@ const PACKS = [
   { action: "cqc_pack", title: "CQC evidence pack", desc: "Care workers — DBS, right-to-work, references, certificates.", file: "cqc-evidence.csv" },
   { action: "sia_acs", title: "SIA ACS audit export", desc: "Security officers — SIA licence, vetting, references.", file: "sia-acs-audit.csv" },
   { action: "coshh", title: "COSHH & H&S report", desc: "Cleaning workforce compliance + logged incidents.", file: "coshh-hs.csv" },
-  { action: "skills_for_care", title: "Skills for Care report", desc: "Academy — programmes, enrolments, completions, CPD hours.", file: "skills-for-care.csv" },
+  { action: "skills_for_care", title: "Skills for Care report", desc: "Training: programmes, enrolments, completions, CPD hours.", file: "skills-for-care.csv" },
   { action: "client_kpi", title: "Client KPI report", desc: "Per-client revenue, outstanding, jobs and stage.", file: "client-kpi.csv" },
 ]
 

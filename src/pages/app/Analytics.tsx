@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useApi } from "@/hooks/use-api"
 import type { AnalyticsData } from "@/lib/types"
 import { gbp, DIVISION_LABELS, DIVISION_ACCENTS } from "@/lib/format"
+import { SERVICE_ACCENTS } from "@/lib/services"
 import { exportCsv } from "@/lib/csv"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
 
@@ -59,7 +60,7 @@ export default function Analytics() {
                   series={[{ name: "Revenue", data: data.revenue_by_division.map((r) => Math.round(r.pence / 100)) }]}
                   options={barOptions(
                     data.revenue_by_division.map((r) => DIVISION_LABELS[r.division] ?? r.division),
-                    data.revenue_by_division.map((r) => DIVISION_ACCENTS[r.division] ?? "#0C447C"),
+                    data.revenue_by_division.map((r) => DIVISION_ACCENTS[r.division] ?? SERVICE_ACCENTS.care),
                   )}
                 />
               </CardContent>
@@ -90,7 +91,7 @@ export default function Analytics() {
                   series={data.workforce_by_division.map((w) => w.count)}
                   options={donutOptions(
                     data.workforce_by_division.map((w) => DIVISION_LABELS[w.division] ?? w.division),
-                    data.workforce_by_division.map((w) => DIVISION_ACCENTS[w.division] ?? "#0C447C"),
+                    data.workforce_by_division.map((w) => DIVISION_ACCENTS[w.division] ?? SERVICE_ACCENTS.care),
                   )}
                 />
               </CardContent>
@@ -180,7 +181,7 @@ function barOptions(categories: string[], colors: string[]): ApexOptions {
 function areaOptions(categories: string[]): ApexOptions {
   return {
     chart: { type: "area", toolbar: { show: false }, fontFamily: "inherit" },
-    colors: ["#0C447C"],
+    colors: [SERVICE_ACCENTS.care],
     dataLabels: { enabled: false },
     stroke: { curve: "smooth", width: 2 },
     fill: { type: "gradient", gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },

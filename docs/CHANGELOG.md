@@ -7,6 +7,40 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: brand and shell, section S1 of the 2026 plan (2026-10-09, local, not deployed)
+
+- **The company green replaces navy and mint.** `src/index.css` and `tailwind.config.ts` are
+  rebuilt on `#33512D` with a paper canvas, ink text, status colours that are not the brand
+  green (each with a soft background), an ochre highlight, one 8px radius, ink-tinted shadows
+  and a green-black dark mode. Every hard-coded navy and mint hex in `src/` is gone; the rota's
+  open shifts now use the warning colour, because ochre is Training's accent.
+  `docs/DESIGN_SYSTEM.md` is rewritten for v3 and marks v2 retired
+- **Source Serif 4 for website headlines**, self-hosted (500 and 600, latin and latin-ext, OFL).
+  Website `h1`/`h2` pick it up from the `website` class on `PublicLayout`; the office app and
+  the staff portal keep Source Sans 3. **Plus Jakarta Sans is removed**, files and references.
+  The worker app's install skips the serif files
+- **Healthcare and Training** (decision D01) replace the public labels Care and Academy in
+  service names, filters, selects, badges and the sidebar. Internal ids `care` and `academy`
+  are unchanged. Names and accents live in `src/lib/services.ts`. Website prose still says
+  "RitaGreen Care" and "RitaGreen Academy" in places; that copy is rewritten in S6
+- **Logo, favicon and PWA icons** redrawn in green; `theme-color` and the manifest colours follow
+- **Eight destinations in the office sidebar**: Today, Recruitment, People, Compliance, Rota,
+  Website, Reports and Settings, each a link with its secondary pages beneath, plus Finance
+  only while switched on. Content Studio, Analytics, Insights and Notifications left the rail
+  and stay in the ⌘K palette, which is regrouped the same way and still finds a page by its old
+  name. The rules are in `src/lib/nav.ts`, tested in `src/lib/__tests__/nav.test.ts`
+- **Owner feature switches** (migration 036, `server/features.php`): `finance`,
+  `online_payments`, `sms_whatsapp`, `inbox` and `ai_assistant`. Any staff account can read
+  them; only `super_admin` and `admin` can change one, and every change is audited. When off,
+  `inbox.php` and `ai.php` refuse with 403; `payments.php` and `gocardless.php` refuse
+  anything that starts a payment, while their webhooks stay open so a payment already in
+  flight still settles; `send_sms()` and `send_whatsapp()` log the attempt as skipped.
+  `finance` is interface only. The seeds keep production as it is, except the AI assistant,
+  which starts off because the plan retires it; the header assistant and the weather panel
+  are hidden while it is off. Settings has a Features tab with what each switch does and the
+  plan's advice. Pure rules and tests in `server/pure.php` and `server/tests/run.php`; HTTP
+  cases in `server/tests/db/cases/120_feature_switches.php`
+
 ### Fixed: the CI database job ran on the wrong engine (2026-10-09)
 
 The `database` job used `mysql:8.0`. `schema.sql` and the migrations use MariaDB's
