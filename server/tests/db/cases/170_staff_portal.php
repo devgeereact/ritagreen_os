@@ -64,17 +64,22 @@ $db->query("INSERT INTO users (name, email, password_hash, role, division, worke
 $cerysApp = $client->login('cerys.login@local.invalid');
 $cerysHome = $cerysApp->get('/me.php');
 Rgt::same('a worker with an expired DBS is not clear to work', $cerysHome->get('eligible'), false);
-$titles = array_column($cerysHome->get('blockers', []), 'title');
-Rgt::ok('and is told which check and what to do', (bool) array_filter($titles, static fn($t) => str_contains($t, 'expired')), $cerysHome->body);
+$dbsBlock = array_values(array_filter($cerysHome->get('blockers', []), static fn($b) => $b['key'] === 'dbs'))[0] ?? [];
+Rgt::ok('and is told which check', str_starts_with((string) ($dbsBlock['title'] ?? ''), 'DBS'), $cerysHome->body);
+Rgt::ok('and what to do: nothing is waiting with the office, so send a copy',
+    str_contains((string) ($dbsBlock['todo'] ?? ''), 'Upload a current copy'), $cerysHome->body);
 
 // ---------------------------------------------------------------------------
 Rgt::group('portal: offers');
 
 $create = static fn(array $body): int => (int) $admin->post('/scheduling.php', $body + ['title' => 'Day carer', 'division' => 'care'])->get('id');
-$offered = $create(['starts_at' => $day(40) . ' 08:00', 'ends_at' => $day(40) . ' 16:00']);
+$offered = $create(['starts_at' => $day(95) . ' 08:00', 'ends_at' => $day(95) . ' 16:00']);
 $admin->post('/scheduling.php?action=publish', ['ids' => [$offered]]);
-$res = $admin->post("/scheduling.php?action=offer&id=$offered", ['worker_ids' => [$amara, $bola]]);
-Rgt::ok('the office offers a shift to Amara and Bola', $res->status < 300, $res->body);
+$res = $admin->post("/scheduling.php?action=offer&id=$offered", ['worker_ids' => [$amara], 'acknowledge_warnings' => true]);
+Rgt::ok('the office offers a shift to Amara', $res->status < 300, $res->body);
+// And to Bola, written directly: whether the office may offer it to him is the
+// rota's test (160), not this one's. This is about whose offer is whose.
+$db->query("INSERT INTO shift_offers (shift_id, worker_id, token, status) VALUES ($offered, $bola, '" . bin2hex(random_bytes(20)) . "', 'sent')");
 $amaraOffer = (int) $one($db, "SELECT id FROM shift_offers WHERE shift_id = $offered AND worker_id = $amara");
 $bolaOffer = (int) $one($db, "SELECT id FROM shift_offers WHERE shift_id = $offered AND worker_id = $bola");
 Rgt::ok('Amara sees her offer', in_array($amaraOffer, array_column($amaraApp->get('/me.php')->get('offers', []), 'id'), true));
@@ -88,7 +93,7 @@ Rgt::same('Bola\'s offer lapses', $one($db, "SELECT status FROM shift_offers WHE
 Rgt::status('an offer cannot be answered twice', $amaraApp->post("/me.php?action=offer_accept&id=$amaraOffer"), 200);
 
 // Declined, and the refusal path: a clash is refused with the reason.
-$clashing = $create(['starts_at' => $day(40) . ' 12:00', 'ends_at' => $day(40) . ' 20:00']);
+$clashing = $create(['starts_at' => $day(95) . ' 12:00', 'ends_at' => $day(95) . ' 20:00']);
 $admin->post('/scheduling.php?action=publish', ['ids' => [$clashing]]);
 $open = array_values(array_filter($amaraApp->get('/me.php')->get('open_shifts', []), static fn($s) => $s['id'] === $clashing))[0] ?? [];
 Rgt::same('an open shift she cannot take says so before she tries', $open['eligible'] ?? null, false);
@@ -130,7 +135,7 @@ Rgt::same('nothing became verified', (int) $one($db, "SELECT COUNT(*) FROM verif
 Rgt::same('the file is filed against her person, not her worker row',
     $one($db, "SELECT CONCAT(person_id, '/', IFNULL(worker_id, 'null'), '/', category) FROM files WHERE id = $fileId"), "$amaraPerson/null/certificate");
 Rgt::ok('it appears in the office verification queue', in_array($vid,
-    array_map('intval', array_column($admin->get('/verifications.php?action=queue')->get('items', $admin->get('/verifications.php?action=queue')->get('queue', [])), 'id')), true));
+    array_map('intval', array_column($admin->get('/verifications.php?action=queue')->get('items', []), 'id')), true));
 $dbs = array_values(array_filter($amaraApp->get('/me.php?action=records')->get('checks', []), static fn($c) => $c['key'] === 'dbs'))[0] ?? [];
 Rgt::same('her DBS still reads as valid, on the evidence already checked', $dbs['chip'] ?? null, 'valid');
 Rgt::same('with a copy waiting', $dbs['waiting'] ?? null, true);

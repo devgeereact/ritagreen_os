@@ -2098,11 +2098,14 @@ function rg_portal_blockers(array $gate, array $open = []): array
         $title = match ($state) {
             'expired' => "$label has expired",
             'undated' => "$label has no expiry date recorded",
-            'unverified' => "$label is waiting to be checked",
+            'unverified' => "$label has not been confirmed",
             default => "$label is missing",
         };
         $openStatus = $open[$key] ?? null;
-        if (in_array($openStatus, ['received', 'under_review'], true) || $state === 'unverified') {
+        // Only "the office is checking it" when a copy really is with them.
+        // Unverified on its own means a record nobody has confirmed, and the
+        // worker can usually move it on by sending a current copy.
+        if (in_array($openStatus, ['received', 'under_review'], true)) {
             $todo = 'The office is checking it. Nothing more is needed from you for now.';
         } elseif (rg_portal_upload_category($key) !== null) {
             $todo = 'Upload a current copy in Records. The office checks it before it counts.';

@@ -1490,6 +1490,9 @@ check('an expired check says so', $b[0]['title'], 'Enhanced DBS has expired');
 check('and asks for a new copy', str_contains($b[0]['todo'], 'Upload a current copy'), true);
 check('one already sent says the office is checking it', str_contains($b[1]['todo'], 'office is checking'), true);
 check('one the worker cannot send says to contact the office', $b[2]['todo'], 'Please contact the office about this.');
+$b = rg_portal_blockers(['eligible' => false, 'blocked_by' => 'evidence', 'blocking' => [
+    ['key' => 'dbs', 'label' => 'DBS check', 'state' => 'unverified']]]);
+check('unconfirmed with nothing sent asks for a copy, not patience', str_contains($b[0]['todo'], 'Upload a current copy'), true);
 
 $c = rg_validate_contact_details(['phone' => '07700 900123', 'postcode' => 'se13 6aa', 'city' => 'London']);
 check('a good contact form passes', $c['ok'], true);
