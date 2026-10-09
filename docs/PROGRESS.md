@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  186 done · 13 partial · 1 to do · 200 tracked
+`#######################.`  191 done · 13 partial · 1 to do · 205 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 22 | 3 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 27 | 3 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,18 +35,21 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 22 done, 3 partial, 0 to do
+Milestone 0 · 27 done, 3 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] CI quality gates — _typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block_
+- [x] Company details and social links from the CMS (S7, F24) — _Migration 039 company_settings (one row, seeded from src/lib/company.ts) and server/company.php: public read of named fields with a five-minute cache, owner-only (super_admin, admin) edit, audited with before and after. useCompanyDetails() reads it and keeps the bundled facts as the fallback. Instagram, Facebook, LinkedIn, TikTok and a WhatsApp enquiry link, each checked against its own host; X is not offered_
 - [x] Design system: company green, Source Serif 4 headlines — _src/index.css tokens and tailwind.config.ts rebuilt on #33512D with warm neutrals, status colours that are not the brand green, one 8px radius and a green-black dark mode. Source Serif 4 (500, 600) self-hosted for website headlines; Plus Jakarta Sans removed. Navy and mint retired. docs/DESIGN_SYSTEM.md rewritten. Website page designs are S6_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
 - [x] ESLint baseline clean — _0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks_
 - [x] Eight-destination office navigation — _Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Content Studio, Analytics, Insights and Notifications left the rail and stay in the command palette until S9_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
+- [x] Forms directory and embedded Google Forms (S7, F23) — _Migration 039 website_forms and server/website-forms.php. Only https://docs.google.com/forms/d/e/<id>/viewform is accepted (rg_parse_google_form(), 422 for anything else) and only the id is stored; the website builds the iframe from it (src/lib/google-forms.ts). The frame loads only after the visitor presses Load the application form from Google; Open the form in a new tab and the phone number are always shown. CSP gains frame-src https://docs.google.com only. Previous values are in the audit log and shown as history. Settings, Form intake lists forms not reviewed for 90 days and each one intake health. No sandbox attribute: submission inside a sandbox could not be tested without a real form_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
+- [x] Link-in-bio page /links (S7) — _Request staff, Arrange care, Current roles, Training, Contact, the office phone, then the social profiles and WhatsApp link from the company record. Text only, no third-party requests_
 - [x] Migration production guard is meaningful on cPanel — _Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name_
 - [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
 - [x] Old website addresses redirect — _/services, the twelve /services/:slug pages, /sectors, /accreditations, /resources, /resources/:slug, /apply and /quote redirect in the app and with 301 rules in public/.htaccess, kept in step by src/lib/__tests__/public-routes.test.ts. The .htaccess block reaches production only when copied to the server by hand_
@@ -55,13 +58,15 @@ Milestone 0 · 22 done, 3 partial, 0 to do
 - [x] Public website rebuilt on the 2026 design (S6) — _Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids, floating cards or scroll animation. Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show. Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
-- [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings, no JobPosting until S7_
+- [x] Sitemap: static pages at build time, records live — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php_
+- [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
+- [x] Vacancies and role pages from the CMS (S7, F22) — _Migration 039 vacancies and server/vacancies.php: draft, published, closed; the address is fixed once published; checks prefilled per service from plan file 01. Website, Vacancies in the office app (editor and office roles, service scope on every branch, audited). /careers lists published roles with a service filter and an empty state; /careers/:slug shows the role, its checks and one way to apply; a closed or unknown role gets a friendly page with other roles. Public reads return named public fields only. server/tests/db/cases/170_careers_cms.php_
 - [x] Website enquiries reach the right queue — _Request staff to bookings.php; cleaning quote to the new public quotes.php?action=request (a Cleaning request in the Bookings queue, not a priced quote); care, training and general to contact.php with a type. server/tests/db/cases/130_website_enquiries.php, and each form submitted in a browser against a local API_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (466 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
 - [~] Documentation pack — _Milestone 0, in progress_
-- [~] Sitemap generated at build time — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts; the hand-kept public/sitemap.xml is gone. Static pages only: published posts and S7 vacancies live in the database, which the build cannot reach, so they need a server-side sitemap_
+- [~] Google Forms auto-feed set-up (S7, F25) — _docs/runbooks/google-forms-intake.md: copy-paste Apps Script (onFormSubmit, {response_id, answers}, key and X-RitaGreen-Secret from Script Properties, retries, logging), sandbox test steps and what the office sees on failure. forms-intake.php?action=set_secret lets an owner create the shared secret in Settings, shown once and stored as a hash. Partial: the script has not been run inside Google Apps Script from this environment; the payload and secret path are covered by the database tests_
 
 ### FOUNDATION — Foundation and person spine
 

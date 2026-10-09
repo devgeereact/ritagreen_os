@@ -165,6 +165,10 @@ describe("canAccess", () => {
     const editor = account("editor")
     expect(canAccess(editor, "/app/blog")).toBe(true)
     expect(canAccess(editor, "/app/testimonials")).toBe(true)
+    expect(canAccess(editor, "/app/vacancies")).toBe(true)
+    expect(canAccess(editor, "/app/website-forms")).toBe(true)
+    // Company details are the owner's: server/company.php is super_admin and admin.
+    expect(canAccess(editor, "/app/company")).toBe(false)
     expect(canAccess(editor, "/app/content-studio")).toBe(true)
     expect(canAccess(editor, "/app/payroll")).toBe(false)
     expect(canAccess(editor, "/app/clients")).toBe(false)

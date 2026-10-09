@@ -15,6 +15,9 @@ export const OFFICE: Role[] = ["super_admin", "admin", "manager"]
 export const STAFF: Role[] = [...OFFICE, "trainer", "editor", "employee"]
 
 const OFFICE_PLUS_EDITOR: Role[] = [...OFFICE, "editor"]
+
+/** The owner's roles: require_role($user, 'super_admin', 'admin') on the server. */
+const OWNER: Role[] = ["super_admin", "admin"]
 const OFFICE_PLUS_TRAINER: Role[] = [...OFFICE, "trainer"]
 
 /**
@@ -96,6 +99,12 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/content-studio", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/blog", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/testimonials", roles: OFFICE_PLUS_EDITOR },
+  // Website area (S7). Vacancies and the forms directory: the same roles as
+  // server/vacancies.php and server/website-forms.php. Company details: owner
+  // only, as server/company.php.
+  { path: "/app/vacancies", roles: OFFICE_PLUS_EDITOR },
+  { path: "/app/website-forms", roles: OFFICE_PLUS_EDITOR },
+  { path: "/app/company", roles: OWNER },
   { path: "/app/files", roles: OFFICE_PLUS_EDITOR },
 
   // Admin and personal

@@ -990,6 +990,182 @@ function rg_map_submission(array $payload, array $maps): array
     return ['fields' => $fields, 'missing' => $missing, 'unmapped' => $unmapped];
 }
 
+// ---- Careers, forms directory and company details (section S7) -------------
+
+/**
+ * Read an address pasted into the forms directory as a Google Form id.
+ *
+ * Only the public responder address is accepted:
+ *
+ *     https://docs.google.com/forms/d/e/<id>/viewform
+ *
+ * optionally followed by Google's own `?usp=...` sharing parameter. The website
+ * builds the iframe from the id alone, so anything else (another host, a
+ * look-alike such as docs.google.com.example.net, a google.com/url redirector,
+ * a userinfo trick, javascript:, pasted HTML) is refused outright rather than
+ * cleaned up. The two near-misses people actually paste, the editor link and the
+ * forms.gle short link, get a message that says what to paste instead.
+ *
+ * @return array{id: ?string, error: ?string}
+ */
+function rg_parse_google_form(?string $url): array
+{
+    $url = trim((string) $url);
+    if ($url === '') return ['id' => null, 'error' => 'Paste the form\'s address.'];
+    if (preg_match('#^https://docs\.google\.com/forms/d/e/([A-Za-z0-9_-]{20,200})/viewform(\?usp=[A-Za-z0-9_]{1,40})?$#', $url, $m)) {
+        return ['id' => $m[1], 'error' => null];
+    }
+    if (preg_match('#^https://forms\.gle/#i', $url)) {
+        return ['id' => null, 'error' => 'That is a short link. In Google Forms choose Send, then the link tab, untick "Shorten URL" and paste the full address.'];
+    }
+    if (preg_match('#^https://docs\.google\.com/forms/d/(?!e/)[^/]+/(edit|viewform)#', $url)) {
+        return ['id' => null, 'error' => 'That is the editing address. Paste the address respondents use, from Send, then the link tab.'];
+    }
+    return ['id' => null, 'error' => 'Only a Google Forms address of the form https://docs.google.com/forms/d/e/.../viewform is accepted.'];
+}
+
+/** The id alone, as stored in website_forms.google_form_id: a Google Forms responder id. */
+function rg_valid_google_form_id(?string $id): bool
+{
+    return is_string($id) && preg_match('/^[A-Za-z0-9_-]{20,200}$/', $id) === 1;
+}
+
+/**
+ * A role page address from a title: lower case letters, digits and single
+ * hyphens, at most 80 characters, never empty.
+ */
+function rg_slugify(?string $s, int $max = 80): string
+{
+    $s = strtolower(trim((string) $s));
+    // Fold the accented letters a job title might carry into their plain form,
+    // so "Café supervisor" becomes cafe-supervisor rather than caf-supervisor.
+    if (function_exists('iconv') && preg_match('/[^\x00-\x7F]/', $s)) {
+        $folded = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+        if (is_string($folded) && $folded !== '') $s = strtolower($folded);
+    }
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
+    $s = trim($s, '-');
+    if (strlen($s) > $max) $s = rtrim(substr($s, 0, $max), '-');
+    return $s !== '' ? $s : 'role';
+}
+
+/** Is this a slug rg_slugify() could have produced? */
+function rg_valid_slug(?string $slug): bool
+{
+    return is_string($slug) && strlen($slug) <= 80 && preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) === 1;
+}
+
+/**
+ * May a vacancy's slug still change?
+ *
+ * Only while it has never been published. Once a role page has been live its
+ * address is in search results and social posts, and changing it would break
+ * every one of them.
+ */
+function rg_vacancy_slug_editable(?string $publishedAt): bool
+{
+    return $publishedAt === null || $publishedAt === '';
+}
+
+/** Vacancy states and the moves between them. A published role can be closed and reopened, never sent back to draft. */
+const RG_VACANCY_TRANSITIONS = [
+    'draft' => ['published', 'closed'],
+    'published' => ['closed'],
+    'closed' => ['published'],
+];
+
+function rg_vacancy_transition_ok(string $from, string $to): bool
+{
+    if ($from === $to) return true;
+    return in_array($to, RG_VACANCY_TRANSITIONS[$from] ?? [], true);
+}
+
+/**
+ * The checks a role in this service will need, as shown on the role page.
+ *
+ * From the 2026 plan, file 01 ("Checks the system must hold"). A prefill, not a
+ * rule: the office edits it per role, and the compliance engine, not this text,
+ * decides who may work.
+ */
+function rg_vacancy_default_checks(string $service): string
+{
+    $checks = [
+        'care' => [
+            'Right to work in the UK',
+            'Enhanced DBS check (adult and/or child workforce, as the role requires)',
+            'Two references',
+            'Care Certificate or equivalent',
+            'Mandatory training',
+            'NMC registration (PIN) for nursing roles',
+        ],
+        'cleaning' => [
+            'Right to work in the UK',
+            'Two references',
+            'COSHH awareness',
+            'DBS check where the site requires it (schools, care settings)',
+        ],
+        'security' => [
+            'Right to work in the UK',
+            'SIA licence of the correct type, checked against the public register',
+            'Two references',
+            'First aid where the site requires it',
+        ],
+        'academy' => [
+            'Right to work in the UK',
+            'Trainer qualifications for the courses you will deliver',
+            'Two references',
+        ],
+    ];
+    return implode("\n", $checks[$service] ?? $checks['care']);
+}
+
+/**
+ * How a published role takes applications. One intake path per role (file 06):
+ *
+ *   form    a linked, active Google Form
+ *   closed  a linked form that has been switched off: applications are closed
+ *   native  no linked form: the short form that posts to ats.php
+ */
+function rg_vacancy_apply_route(bool $hasForm, bool $formActive): string
+{
+    if (!$hasForm) return 'native';
+    return $formActive ? 'form' : 'closed';
+}
+
+/** Is a form due for review? Never reviewed counts as due. */
+function rg_form_review_due(?string $lastReviewed, string $today, int $days = 90): bool
+{
+    if ($lastReviewed === null || $lastReviewed === '') return true;
+    $age = rg_days_until($today, substr($lastReviewed, 0, 10));
+    return $age === null || $age >= $days;
+}
+
+/** The social networks the company record holds, and the hosts each may point at. */
+const RG_SOCIAL_HOSTS = [
+    'instagram' => ['instagram.com', 'www.instagram.com'],
+    'facebook' => ['facebook.com', 'www.facebook.com', 'm.facebook.com'],
+    'linkedin' => ['linkedin.com', 'www.linkedin.com', 'uk.linkedin.com'],
+    'tiktok' => ['tiktok.com', 'www.tiktok.com'],
+    'whatsapp' => ['wa.me', 'api.whatsapp.com'],
+];
+
+/**
+ * Is this a link the website may show for that network?
+ *
+ * https only, the network's own host exactly, a path, and nothing that could
+ * carry a script or a login. Empty is allowed and means "do not show it".
+ */
+function rg_social_url_ok(string $network, ?string $url): bool
+{
+    $url = trim((string) $url);
+    if ($url === '') return true;
+    $hosts = RG_SOCIAL_HOSTS[$network] ?? null;
+    if ($hosts === null || strlen($url) > 300) return false;
+    if (!preg_match('#^https://([a-z0-9.-]+)(/[A-Za-z0-9._~%/+@-]*)(\?[A-Za-z0-9._~%=&+-]*)?$#', $url, $m)) return false;
+    if (!in_array(strtolower($m[1]), $hosts, true)) return false;
+    return trim($m[2], '/') !== '';
+}
+
 /**
  * Read a yes/no answer as written by a human.
  * Returns null for anything that is not clearly one or the other, rather than

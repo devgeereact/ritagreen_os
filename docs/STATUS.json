@@ -1069,14 +1069,39 @@
           "note": "/services, the twelve /services/:slug pages, /sectors, /accreditations, /resources, /resources/:slug, /apply and /quote redirect in the app and with 301 rules in public/.htaccess, kept in step by src/lib/__tests__/public-routes.test.ts. The .htaccess block reaches production only when copied to the server by hand"
         },
         {
-          "name": "Sitemap generated at build time",
-          "status": "partial",
-          "note": "dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts; the hand-kept public/sitemap.xml is gone. Static pages only: published posts and S7 vacancies live in the database, which the build cannot reach, so they need a server-side sitemap"
+          "name": "Sitemap: static pages at build time, records live",
+          "status": "done",
+          "note": "dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php"
         },
         {
           "name": "Structured data on public pages",
           "status": "done",
-          "note": "EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings, no JobPosting until S7"
+          "note": "EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings"
+        },
+        {
+          "name": "Vacancies and role pages from the CMS (S7, F22)",
+          "status": "done",
+          "note": "Migration 039 vacancies and server/vacancies.php: draft, published, closed; the address is fixed once published; checks prefilled per service from plan file 01. Website, Vacancies in the office app (editor and office roles, service scope on every branch, audited). /careers lists published roles with a service filter and an empty state; /careers/:slug shows the role, its checks and one way to apply; a closed or unknown role gets a friendly page with other roles. Public reads return named public fields only. server/tests/db/cases/170_careers_cms.php"
+        },
+        {
+          "name": "Forms directory and embedded Google Forms (S7, F23)",
+          "status": "done",
+          "note": "Migration 039 website_forms and server/website-forms.php. Only https://docs.google.com/forms/d/e/<id>/viewform is accepted (rg_parse_google_form(), 422 for anything else) and only the id is stored; the website builds the iframe from it (src/lib/google-forms.ts). The frame loads only after the visitor presses Load the application form from Google; Open the form in a new tab and the phone number are always shown. CSP gains frame-src https://docs.google.com only. Previous values are in the audit log and shown as history. Settings, Form intake lists forms not reviewed for 90 days and each one intake health. No sandbox attribute: submission inside a sandbox could not be tested without a real form"
+        },
+        {
+          "name": "Company details and social links from the CMS (S7, F24)",
+          "status": "done",
+          "note": "Migration 039 company_settings (one row, seeded from src/lib/company.ts) and server/company.php: public read of named fields with a five-minute cache, owner-only (super_admin, admin) edit, audited with before and after. useCompanyDetails() reads it and keeps the bundled facts as the fallback. Instagram, Facebook, LinkedIn, TikTok and a WhatsApp enquiry link, each checked against its own host; X is not offered"
+        },
+        {
+          "name": "Link-in-bio page /links (S7)",
+          "status": "done",
+          "note": "Request staff, Arrange care, Current roles, Training, Contact, the office phone, then the social profiles and WhatsApp link from the company record. Text only, no third-party requests"
+        },
+        {
+          "name": "Google Forms auto-feed set-up (S7, F25)",
+          "status": "partial",
+          "note": "docs/runbooks/google-forms-intake.md: copy-paste Apps Script (onFormSubmit, {response_id, answers}, key and X-RitaGreen-Secret from Script Properties, retries, logging), sandbox test steps and what the office sees on failure. forms-intake.php?action=set_secret lets an owner create the shared secret in Settings, shown once and stored as a hash. Partial: the script has not been run inside Google Apps Script from this environment; the payload and secret path are covered by the database tests"
         }
       ]
     }

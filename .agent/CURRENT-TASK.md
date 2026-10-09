@@ -35,7 +35,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S4 | Staff portal (Home, Rota, Records, Me) | 🚧 | `mvp/s04-staff-portal` | Phase 4 |
 | S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
 | S6 | Website rebuild | ✅ | `mvp/s06-website`, PR #12 | Deploy: upload quotes.php, contact.php, pure.php before frontend; copy .htaccess 301 block by hand. Hero uses stock care photo until real photography |
-| S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
+| S7 | Careers, forms directory, CMS company details and socials | 🚧 | `mvp/s07-careers-cms`, PR #14 | agent on ubuntu-dev |
 | S8 | Spreadsheet import | ⏳ | `mvp/s08-sheet-import` | |
 | S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | ⏳ | `mvp/s09-retirements` | Removal protocol |
 | S10 | Launch gate and docs consolidation, then remove `docs/Plans 2026/` with owner approval | ⏳ | `mvp/s10-launch-gate` | |

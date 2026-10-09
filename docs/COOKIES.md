@@ -10,6 +10,18 @@ acknowledging the notice, after a reload, after signing in as a worker, and afte
 contains only `localhost:5122`, and the production build contains no reference to any external
 origin. Google Fonts was the only one and is now self-hosted under `public/fonts`.
 
+**One exception, and only on request (S7, 2026-10-09).** A role page (`/careers/:slug`) whose
+vacancy links a Google Form shows a notice and a button, "Load the application form from
+Google". Until it is pressed the page makes no request to Google. Pressing it adds an iframe
+from `docs.google.com`, after which Google Forms runs in that frame and Google may set or read
+its own cookies under its own policy; this site cannot see or control them and stores nothing
+of its own when it happens. The "Open the form in a new tab" link and the office phone number
+are always shown, so nobody has to load the frame to apply. The CSP allows frames from
+`https://docs.google.com` and nothing else third-party. Because the frame is loaded only by an
+explicit action at the point of use, the site-wide notice stays a notice; the notice's stored
+version was not changed, since nothing this site stores changed. The cookie notice page
+(`/cookies`, version 2.1) and the privacy notice ("If you visit this website") say this.
+
 ---
 
 ## Cookies
@@ -50,7 +62,7 @@ its range appears. Offline, an accented name falls back to the system font.
 **None.** Verified by searching `src/`, `index.html`, `public/` and `package.json`: no Google
 Analytics, no Tag Manager, no gtag, no Plausible, PostHog, Matomo, Segment, Hotjar, FullStory or
 Clarity; no Sentry or any error-monitoring SDK; no advertising pixel; no session replay or
-heatmap; no maps, video embeds, social widgets or CAPTCHA. The CSP is `script-src 'self'` and
+heatmap; no maps, video embeds, social widgets or CAPTCHA. The Google Form frame above is the only embed, and only after a click. The CSP is `script-src 'self'` and
 `connect-src 'self'`, so the bundle cannot reach a third party even if one were added by
 mistake.
 

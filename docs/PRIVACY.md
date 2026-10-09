@@ -52,11 +52,12 @@ Public, no authentication:
 | Quote | `/quote` | `contact.php` | name, org, email, phone, location, start date, scale, notes | Optional marketing only |
 | Cover request | `/request` | `bookings.php` | contact name, email, phone, division, site, dates, detail | Required, logged |
 | Apply | `/apply` | `ats.php` | name, email, phone, role, division | Required, logged |
-| Careers | `/careers` | `ats.php` | name, email, phone, role, free text | Required, logged |
+| Careers | `/careers` (register your interest) | `ats.php` | name, email, phone, role, free text | Required, logged |
 | Register | `/register` | `auth.php` | name, email, phone, division, role | Required, logged |
 | Data request | `/data-request` | `data-request.php` | name, email, relationship, detail | Not applicable |
 | Certificate check | `/verify` | `certificates.php` | certificate id only | Not applicable |
 | Google Forms | external | `forms-intake.php` | whole answer set, stored raw | Captured by Google, not here |
+| Role page | `/careers/:slug` | the linked Google Form (embedded after a click, or in a new tab), else `ats.php` | as the Google Form or the Careers row; never both for one role | Google's form carries its own; ats.php required, logged |
 
 Authenticated: the CMS at `/app/*`, the client portal at `/portal`, the worker app at `/m`.
 
@@ -118,7 +119,7 @@ uploaded files under `files.category = 'id'`.
 | Cloudflare | All request traffic | Always | Global edge | Live |
 | Google Fonts | **Nothing, since this audit.** Previously every visitor's IP and user agent | — | — | Removed |
 | Google (OAuth) | Staff email address | Sign in with Google | US | Off by default |
-| Google Forms | The whole application, as the primary copy | An application form | US | Per integration |
+| Google Forms | The whole application, as the primary copy; and, once a visitor presses "Load the application form from Google" on a role page, that visitor's IP address, user agent and whatever Google's own cookies carry (S7) | An application form, embedded only after the click, or opened in a new tab | US | Per integration; per vacancy in Website, Forms |
 | Twilio | Worker phone number, full message body | SMS or WhatsApp about a shift | US | Off by default |
 | Stripe | Client organisation name, amount, invoice reference | Card payment | US/IE | Off by default |
 | GoCardless | Amount, invoice metadata; collects bank details itself | Direct Debit | UK | Off by default |
