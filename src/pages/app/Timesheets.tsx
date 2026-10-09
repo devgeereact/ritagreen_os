@@ -259,18 +259,18 @@ export default function Timesheets() {
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-6">
-          <div className="flex items-end gap-1">
+          <div className="flex flex-wrap items-end gap-1">
             <Button variant="outline" size="icon" className="size-9" aria-label="Previous week" onClick={() => shiftWeek(-7)}>
               <ChevronLeft className="size-4" />
             </Button>
             <div className="grid gap-1.5">
               <Label htmlFor="from">From</Label>
-              <Input id="from" type="date" className="h-9" value={from} max={to || undefined}
+              <Input id="from" type="date" className="h-9 w-[9.5rem]" value={from} max={to || undefined}
                 onChange={(e) => setPeriod((p) => ({ ...p, from: e.target.value }))} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="to">To</Label>
-              <Input id="to" type="date" className="h-9" value={to} min={from || undefined}
+              <Input id="to" type="date" className="h-9 w-[9.5rem]" value={to} min={from || undefined}
                 onChange={(e) => setPeriod((p) => ({ ...p, to: e.target.value }))} />
             </div>
             <Button variant="outline" size="icon" className="size-9" aria-label="Next week" onClick={() => shiftWeek(7)}>

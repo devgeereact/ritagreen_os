@@ -512,7 +512,7 @@ function HistorySection({ loading, history, offers }: { loading: boolean; histor
             <li key={i} className="text-sm">
               <p>
                 <span className="font-medium">{HISTORY_LABEL[h.action] ?? h.action}</span>
-                {h.detail ? <span className="text-muted-foreground"> · {h.detail}</span> : null}
+                {h.detail && h.detail !== HISTORY_LABEL[h.action] ? <span className="text-muted-foreground"> · {h.detail}</span> : null}
               </p>
               <p className="text-xs tabular-nums text-muted-foreground">
                 {/* audit_log.created_at is a UTC TIMESTAMP; shown in the reader's own time. */}

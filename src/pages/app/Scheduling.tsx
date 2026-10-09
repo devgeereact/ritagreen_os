@@ -230,7 +230,7 @@ export default function Scheduling() {
 }
 
 /** One shift, as a button: time, role, who, service, state, and what is wrong. */
-function ShiftCard({ s, onOpen, showSite }: { s: RotaShift; onOpen: (id: number) => void; showSite?: boolean }) {
+function ShiftCard({ s, onOpen, showSite, hideWorker }: { s: RotaShift; onOpen: (id: number) => void; showSite?: boolean; hideWorker?: boolean }) {
   const blocked = s.conflicts.some((c) => c.severity === "block")
   return (
     <button
@@ -245,7 +245,7 @@ function ShiftCard({ s, onOpen, showSite }: { s: RotaShift; onOpen: (id: number)
     >
       <p className="font-semibold tabular-nums">{shiftTimes(s.starts_at, s.ends_at)}</p>
       <p className={cn("truncate", s.state === "cancelled" && "line-through")}>{s.title}</p>
-      <p className={cn("truncate", s.worker ? "text-foreground" : "font-medium text-warning")}>{s.worker ?? "Open"}</p>
+      {!(hideWorker && s.worker) && <p className={cn("truncate", s.worker ? "text-foreground" : "font-medium text-warning")}>{s.worker ?? "Open"}</p>}
       {showSite && s.site_name && <p className="truncate text-muted-foreground">{s.site_name}</p>}
       <div className="flex flex-wrap items-center gap-1.5">
         <StateChip state={s.state} />
@@ -292,7 +292,7 @@ function WeekGrid({ rows, days, by, onOpen }: {
             </div>
             {days.map((d) => (
               <div key={d} role="cell" className={cn("space-y-1.5 border-b border-l border-border p-1.5", d === today && "bg-accent/40")}>
-                {shiftsOn(row.shifts, d).map((s) => <ShiftCard key={s.id} s={s} onOpen={onOpen} showSite={by === "worker"} />)}
+                {shiftsOn(row.shifts, d).map((s) => <ShiftCard key={s.id} s={s} onOpen={onOpen} showSite={by === "worker"} hideWorker={by === "worker"} />)}
               </div>
             ))}
           </div>

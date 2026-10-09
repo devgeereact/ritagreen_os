@@ -83,7 +83,8 @@ export function CheckResult({ check, name }: { check: AssignmentCheck; name: str
           {check.blocking.map((b, i) => (
             <ConflictLine key={i} c={b} />
           ))}
-          {check.eligibility.blocking.length > 0 && (
+          {/* The gate's reason already names a single missing requirement. */}
+          {check.eligibility.blocking.length > 1 && (
             <ul className="ml-5 list-disc text-xs text-muted-foreground">
               {check.eligibility.blocking.map((b) => (
                 <li key={b.requirement}>

@@ -120,7 +120,7 @@ export default function Requests() {
         <div className="space-y-2">
           {data.requests.map((r) => (
             <Card key={`${r.type}-${r.id}`}>
-              <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_14rem_auto] md:items-start">
+              <CardContent className="grid gap-3 p-4 md:grid-cols-[1fr_14rem_9rem] md:items-start">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
