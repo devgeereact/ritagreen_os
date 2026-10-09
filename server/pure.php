@@ -2006,3 +2006,126 @@ function rg_timesheet_can(string $action, string $status): bool
     if ($action === 'approve' || $action === 'reject') return true;
     return in_array($status, RG_TIMESHEET_FROM[$action] ?? [], true);
 }
+
+// ---------------------------------------------------------- owner visibility
+
+/**
+ * Which parts of the Action Centre (and the Today page built on it) an account
+ * may see.
+ *
+ * The Action Centre counted everything for everybody: a manager confined to
+ * security was told how many care credentials had expired, and an editor, who
+ * holds no compliance zone, was told who could not be deployed and why. Each
+ * group below mirrors the guard on the endpoint that owns the records, so the
+ * summary never says more than the screen it links to would.
+ *
+ *   compliance   the compliance zone (verifications.php, right-to-work.php)
+ *   recruitment  ats.php: office and trainer
+ *   rota         scheduling.php, incidents.php, enquiries.php, bookings.php,
+ *                leave decisions: office
+ *   payroll      timesheets.php: office and the payroll zone
+ *   finance      invoices: office, and only while the finance switch is on
+ *   approvals    activation approval (workers.php?action=approve): office
+ *   governance   deletion decisions (governance.php): owner
+ *   system       the email queue and form intake carry no service, so a count of
+ *                them is a count across every service: office accounts with no
+ *                service scope only
+ *   training     unlinked enrolments carry no service either: unscoped staff who
+ *                may open the Academy
+ *
+ * @param array<string, bool> $zones    zone => can_view
+ * @param array<string, bool> $features switch => enabled
+ * @return array<string, bool>
+ */
+function rg_action_centre_access(string $role, ?string $scope, array $zones, array $features): array
+{
+    $office = in_array($role, ['super_admin', 'admin', 'manager'], true);
+    $owner = in_array($role, ['super_admin', 'admin'], true);
+    return [
+        'compliance'  => !empty($zones['compliance']),
+        'recruitment' => $office || $role === 'trainer',
+        'rota'        => $office,
+        'payroll'     => $office && !empty($zones['payroll']),
+        'finance'     => $office && !empty($features['finance']),
+        'approvals'   => $office,
+        'governance'  => $owner,
+        'system'      => $office && $scope === null,
+        'training'    => $scope === null && ($office || in_array($role, ['trainer', 'editor'], true)),
+    ];
+}
+
+/**
+ * The DBS level a free-text label names, or null when it names none.
+ *
+ * No column records the level of a DBS check. The nearest thing is the label on
+ * the verification, which is whatever somebody typed (and, for records carried
+ * over in migration 017, the old status word). A client pack must not claim a
+ * level nobody recorded, so anything unrecognised is null and printed as "not
+ * recorded".
+ */
+function rg_dbs_level(?string $label): ?string
+{
+    $l = strtolower(trim((string) $label));
+    if ($l === '') return null;
+    if (str_contains($l, 'enhanced')) {
+        return (str_contains($l, 'barred') || str_contains($l, 'barring')) ? 'Enhanced with barred list' : 'Enhanced';
+    }
+    if (str_contains($l, 'standard')) return 'Standard';
+    if (str_contains($l, 'basic')) return 'Basic';
+    return null;
+}
+
+/**
+ * One CSV cell, quoted, with spreadsheet formula injection neutralised.
+ *
+ * A name typed as "=HYPERLINK(...)" on a public application form would otherwise
+ * run as a formula when the office opens the export. A leading =, +, -, @, tab
+ * or carriage return is prefixed with an apostrophe, which spreadsheets show as
+ * text. Numbers are left alone so a negative count stays a number.
+ */
+function rg_csv_cell($value): string
+{
+    if ($value === null) return '';
+    if (is_bool($value)) return $value ? 'Yes' : 'No';
+    if (is_int($value) || is_float($value)) return (string) $value;
+    $s = (string) $value;
+    if ($s !== '' && strpbrk($s[0], "=+-@\t\r") !== false) $s = "'" . $s;
+    return '"' . str_replace('"', '""', $s) . '"';
+}
+
+/**
+ * A CSV document: a header row of labels, then each row's values in the order
+ * of $columns. Only the listed columns are written, whatever else a row holds,
+ * which is what keeps an export to its authorised fields.
+ *
+ * @param array<string, string> $columns key => header label
+ * @param list<array<string, mixed>> $rows
+ */
+function rg_csv(array $columns, array $rows): string
+{
+    $out = implode(',', array_map('rg_csv_cell', array_values($columns))) . "\r\n";
+    foreach ($rows as $row) {
+        $cells = [];
+        foreach (array_keys($columns) as $key) $cells[] = rg_csv_cell($row[$key] ?? null);
+        $out .= implode(',', $cells) . "\r\n";
+    }
+    return $out;
+}
+
+/**
+ * Is a scheduled job running on time?
+ *
+ *   unknown  no run has ever been recorded. Said plainly rather than read as
+ *            fine: a job that has never reported is exactly the one nobody set up
+ *   late     the last run is older than the expected interval plus a grace of
+ *            half again (a daily job at 02:00 is not late at 03:00)
+ *   ok       otherwise
+ */
+function rg_cron_state(?string $lastRunAt, int $expectEveryHours, ?int $now = null): string
+{
+    if ($lastRunAt === null || $lastRunAt === '') return 'unknown';
+    $t = strtotime($lastRunAt . ' UTC');
+    if ($t === false) return 'unknown';
+    $now ??= time();
+    return ($now - $t) > (int) round($expectEveryHours * 1.5 * 3600) ? 'late' : 'ok';
+}

@@ -13,6 +13,15 @@ $division = $_GET['division'] ?? 'all';
 $allowed = ['all', 'care', 'academy', 'cleaning', 'security'];
 if (!in_array($division, $allowed, true)) $division = 'all';
 
+// A manager confined to one service sees that service, whatever was asked for.
+// 'all' meant the whole company to every account (S5 audit, launch plan Phase 5).
+$scope = service_scope($user);
+if ($scope !== null) $division = $scope;
+// Money only for the office and only while the finance area is on; expiring
+// checks only with the compliance zone. Both were returned to any member of staff.
+$seesMoney = in_array($user['role'], ['super_admin', 'admin', 'manager'], true) && feature_enabled($conn, 'finance');
+$seesCompliance = can_view_zone($conn, $user, 'compliance');
+
 // Single scalar from a query, with the division bound rather than interpolated.
 //
 // $division is already checked against an allowlist above, so the old
@@ -49,13 +58,13 @@ $certificates_issued = scalar($conn, 'SELECT COUNT(*) FROM certificates WHERE st
 $open_shifts = scalar($conn, 'SELECT COUNT(*) FROM shifts WHERE deleted_at IS NULL AND status = "open" AND starts_at > NOW()' .
     $divFilter, $divValue);
 
-$outstanding = scalar($conn, 'SELECT COALESCE(SUM(total_pence),0) FROM invoices WHERE deleted_at IS NULL AND status IN ("sent","overdue")' .
+$outstanding = !$seesMoney ? 0 : scalar($conn, 'SELECT COALESCE(SUM(total_pence),0) FROM invoices WHERE deleted_at IS NULL AND status IN ("sent","overdue")' .
     $divFilter, $divValue);
 
 // Revenue by division (paid invoices).
 $revenue = [];
 $divisions = $division === 'all' ? ['care', 'academy', 'cleaning', 'security'] : [$division];
-foreach ($divisions as $d) {
+foreach ($seesMoney ? $divisions : [] as $d) {
     $pence = scalar($conn, 'SELECT COALESCE(SUM(total_pence),0) FROM invoices WHERE deleted_at IS NULL AND status = "paid" AND division = ?', $d);
     $revenue[] = ['division' => $d, 'pence' => $pence];
 }
@@ -67,7 +76,9 @@ $sql = 'SELECT name, dbs_expiry, sia_expiry FROM workers
         AND ((dbs_expiry IS NOT NULL AND dbs_expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY))
           OR (sia_expiry IS NOT NULL AND sia_expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)))
         ORDER BY LEAST(COALESCE(dbs_expiry, "9999-12-31"), COALESCE(sia_expiry, "9999-12-31")) LIMIT 10';
-if ($divValue === null) {
+if (!$seesCompliance) {
+    $res = false;
+} elseif ($divValue === null) {
     $res = $conn->query($sql);
 } else {
     $stmt = $conn->prepare($sql);
