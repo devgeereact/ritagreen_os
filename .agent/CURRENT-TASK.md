@@ -31,8 +31,8 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S0 | Plan pack, tracker, test toolbox, CI database job fixed | ✅ | `plans/2026-mvp`, PR #9 | CI database job green for the first time (MariaDB, env fix) |
 | S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | ✅ | `mvp/s01-brand-shell`, PR #10 | Seeds keep production behaviour (finance, payments, SMS, inbox on; AI off). Leftover "Care/Academy" copy, og.png and website gradients go to S6/S7 |
 | S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ✅ | `mvp/s02-people-compliance`, PR #11 | Migration 037. Also fixed missing service scope on verifications, right-to-work, leave, employment-contracts, compliance. Follow-up: label checks that are Valid only from a legacy certification record (no verifier) |
-| S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | 🚧 | `mvp/s03-rota` | Phase 4 |
-| S4 | Staff portal (Home, Rota, Records, Me) | ⏳ | `mvp/s04-staff-portal` | Phase 4 |
+| S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ✅ | `mvp/s03-rota`, PR #13 | Migration 038. FullCalendar removed. Service scope added to scheduling/timesheets. Rest-gap setting has API only, no screen |
+| S4 | Staff portal (Home, Rota, Records, Me) | 🚧 | `mvp/s04-staff-portal` | Phase 4 |
 | S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
 | S6 | Website rebuild | ✅ | `mvp/s06-website`, PR #12 | Deploy: upload quotes.php, contact.php, pure.php before frontend; copy .htaccess 301 block by hand. Hero uses stock care photo until real photography |
 | S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
