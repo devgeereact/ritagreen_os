@@ -203,11 +203,17 @@
     font-family: theme("fontFamily.display");
     font-weight: 600;
     font-synthesis: none;
+    letter-spacing: -0.01em;
+  }
+  /* Website body text is 17px (file 04: 17 to 18px), not the app's 14 to 16. */
+  .website {
+    font-size: 1.0625rem;
+    line-height: 1.6;
   }
 
-  /* Small uppercase brand label that sits above headings across the site. */
+  /* Small label above a website heading: green, semibold, sentence case. */
   .eyebrow {
-    @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary;
+    @apply text-sm font-semibold text-primary;
   }
 
   /* Clean card surface: hairline border first, shadow-1 only to lift off canvas. */
@@ -220,63 +226,17 @@
 }
 
 @layer utilities {
-  /* Professional hero base — clean canvas, a faint cool tint sweeping down from
-     the top, and one restrained brand wash in the top corner. No blobs. */
-  .bg-hero-pro {
-    background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(55% 55% at 82% -5%, hsl(var(--primary) / 0.10), transparent 70%),
-      linear-gradient(to bottom, hsl(var(--secondary) / 0.55), transparent 38%);
-  }
-  /* Fine engineering grid for the hero — crisp lines that fade out toward the
-     content with a radial mask, so text stays clean. Reads precise, not busy. */
-  .bg-hero-grid {
-    background-image:
-      linear-gradient(to right, hsl(var(--primary) / 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-    background-size: 56px 56px;
-    -webkit-mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
-    mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
-  }
-  /* Quieter mesh for interior section bands. */
-  .bg-soft-mesh {
-    background-color: hsl(var(--secondary) / 0.5);
-    background-image:
-      radial-gradient(45% 70% at 100% 0%, hsl(var(--primary) / 0.08), transparent 60%),
-      radial-gradient(40% 60% at 0% 100%, hsl(var(--accent) / 0.10), transparent 55%);
-  }
-  /* Hairline grid texture — subtle structure on dark CTA bands. */
-  .bg-grid-faint {
-    background-image:
-      linear-gradient(hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px);
-    background-size: 44px 44px;
-  }
-  /* Tabular figures for tables / metrics / money — reads as "precise". */
+  /* Tabular figures for tables / metrics / money: digits align down a column. */
   .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
   /* Every data table gets aligned figures automatically. */
   table { font-variant-numeric: tabular-nums; }
-  .animation-delay-100 { animation-delay: 0.1s; }
-  .animation-delay-200 { animation-delay: 0.2s; }
-  .animation-delay-300 { animation-delay: 0.3s; }
-  .animation-delay-400 { animation-delay: 0.4s; }
-  .animation-delay-500 { animation-delay: 0.5s; }
-  /* Gentle continuous float for hero cards. Duration/delay varied per card via
-     inline style so they drift independently, not in lockstep. */
-  .animate-float { animation: float 7s ease-in-out infinite; }
-  /* Soft, slow opacity pulse for the decorative hero glow. */
-  .animate-glow { animation: glow 8s ease-in-out infinite; }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes glow {
-  0%, 100% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.08); }
-}
+/* The website's hero gradients, engineering grids, mesh bands, floating cards,
+   pulsing glows and staggered fade-up entrances were removed with the website
+   rebuild (section S6). They read as a generated template (2026 plan, file 04,
+   "What to avoid"). Do not reintroduce them: the website is flat paper, 1px
+   borders and deep green blocks. */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

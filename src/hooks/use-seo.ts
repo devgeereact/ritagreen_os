@@ -13,7 +13,7 @@ const ORIGIN = "https://ritagreenservices.com"
 type Seo = {
   title: string
   description: string
-  /** path only, e.g. "/services" — combined with the production origin */
+  /** path only, e.g. "/healthcare", combined with the production origin */
   path?: string
   /** optional JSON-LD object injected as application/ld+json */
   jsonLd?: Record<string, unknown>
@@ -66,7 +66,7 @@ export function useSeo({ title, description, path, jsonLd, ogType = "website", n
   const jsonLdKey = jsonLd ? JSON.stringify(jsonLd) : ""
 
   useEffect(() => {
-    const fullTitle = title.includes(SITE) ? title : `${title} — ${SITE}`
+    const fullTitle = title.includes(SITE) ? title : `${title} | ${SITE}`
 
     document.title = fullTitle
     setMeta("name", "description", description)
