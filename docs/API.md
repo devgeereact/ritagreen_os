@@ -417,11 +417,13 @@ computed identically everywhere.
 | `quotes.php` | Quoting | Office roles throughout, reads included |
 | `references.php` | Reference checks | Office roles throughout, reads included |
 | `reports.php` | Regulatory export packs | `super_admin`/`admin`/`manager` |
-| `scheduling.php` | Shifts, matching, dispatch, lifecycle | Office roles throughout, reads included |
+| `requests.php` | Cover requests and enquiries in one list, with an owner | Office roles throughout, reads included; service scope. See §54e |
+| `scheduling.php` | The rota: drafts, publish, edit, assign, cancel, offers, copy week | Office roles throughout, reads included; service scope on the list and every record |
+| `sites.php` | A client's sites and what each requires | Office roles throughout, reads included. See §54e |
 | `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
 | `skills.php` | Skills catalogue | Office roles throughout, reads included |
 | `testimonials.php` | Testimonials | **Public read**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve and reject `super_admin`/`admin`/`manager` |
+| `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve, reject, query and correct `super_admin`/`admin`/`manager`; service scope |
 | `users.php` | User and role management | `super_admin`/`admin` |
 | `weather.php` | OpenWeather proxy with shift advisory | Staff |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
@@ -610,16 +612,27 @@ text. Both now run the deployment check and the clash check first, audit
 `shift.blocked` with the reason, and in the offer case expire the offer and tell
 the office.
 
+Since migration 038 (section S3) every branch goes through
+`rg_assignment_check()` and every new shift is a draft; see §54e for the check,
+the states and the notifications. A service-scoped manager sees and changes only
+their own service's shifts (the list is filtered; a record outside it is 403).
+
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `match` | Office roles | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. Eligibility is `rg_deployment_check()`, the same gate assignment uses. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
-| POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
-| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open`. Rate-limited (12 per 10 minutes) — every broadcast sends a chargeable message per worker and nothing stopped the same shift being sent round repeatedly. Offers now carry `expires_at` (the shift's start) and are unique per worker per shift, so a re-broadcast refreshes the link rather than sending a second live one. Eligibility screening passes `persist: false`, so a GET no longer writes a `person_services` row per worker |
-| GET | — | Office roles | `from`, `to` (default: current month) | `{shifts}` for the calendar |
-| POST | `assign` | Office roles | `id`, body `{worker_id}` | `{ok, status, worker, division}`; fills an open shift or moves a scheduled one. Runs the same deployment gate and clash check as creating, so a refusal carries the blocking requirements. 409 on a completed shift |
-| POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; takes the worker off and returns the shift to `open` so it can be broadcast. 409 if nobody is on it |
-| POST | `cancel` | Office roles | `id` | `{ok, status: "cancelled"}`; the row stays on the rota as a record, drawn muted. 409 on a completed shift |
-| POST | — | Office roles | body `{worker_id, title, client_id?, site_name?, starts_at, ends_at}` | `{shift}` 201; 409 on missing right-to-work, a lapsed required check, or an overlapping scheduled shift |
+| GET | — | Office roles | `from`, `to` (default this week), `division?`, `site_id?` | `{shifts, rest_gap_min_hours}`. Each shift: `id, worker_id, worker, division, title, site_id, site_name, client_id, client, starts_at, ends_at, status, is_draft, cancel_reason, live_offers, state, conflicts`. `conflicts` is the assignment check re-run for assigned shifts still to be worked, as `{severity: block|warning, code, reason}`, so a credential that lapsed or leave approved after booking shows on the shift |
+| GET | — (with `id`) | Office roles | `id` | `{shift, history, offers}`. `history` is the audit log for the shift (`entity_type = 'shift'`), newest first |
+| GET | `check` | Office roles | `id`, `worker_id` | `{worker, check: {ok, blocking, warnings, eligibility}}`, without writing anything |
+| GET | `match` | Office roles | `id` **or** `division`, `starts_at`, `ends_at`, `site_id?`; `skill_id?` | `{workers, bucket}`: available workers the check does not block, each with any `warnings`, ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` or `days`, matched against the worker's standing availability pattern |
+| POST | — or `open` | Office roles | body `{title, division, starts_at, ends_at, site_id?, client_id?, site_name?, worker_id?, acknowledge_warnings?}` | `{id, shift}` 201, a **draft**. `site_id` sets the client and site name; a closed site is 409. With `worker_id` (not on `open`) the shift takes the worker's service and the check runs |
+| POST | `update` | Office roles | `id`, body any of `{title, starts_at, ends_at, site_id, division, acknowledge_warnings}` | `{ok, changed, notified, shift}`. A booked shift is re-checked. Audited `shift.edit` with before and after; a published change tells the worker what changed and expires live offers |
+| POST | `assign` | Office roles | `id`, body `{worker_id, acknowledge_warnings?}` | `{ok, status, worker, division, warnings_acknowledged}`; fills or moves. Expires live offers; on a published shift tells the new worker and the one taken off |
+| POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; on a published shift the worker is told |
+| POST | `cancel` | Office roles | `id`, body `{reason}` | `{ok, status, notified}`. The reason is required and stored (`cancel_reason`, `cancelled_at`, `cancelled_by`); offers expire; the worker on a published shift is told why |
+| POST | `publish` | Office roles | body `{from, to, division?, site_id?}` or `{ids}` | `{published, workers_notified}`; one notice per worker. Audited per shift and as `rota.publish` |
+| POST | `copy_week` | Office roles | body `{week_start, division?, site_id?}` | `{created, skipped, unassigned}`: last week's shifts as drafts seven days on, skipping any already there. The worker is copied only when the check passes with no warnings; otherwise the copy is open and `unassigned` says why |
+| POST | `broadcast` | Office roles | `id` | `{offered}`. Published open shifts only (409 for a draft). Offers every available worker the check passes without warnings: in the app, by email and by text through `message_worker()`. Rate-limited, 12 per 10 minutes. Offers expire when the shift starts and are unique per worker per shift |
+| POST | `offer` | Office roles | `id`, body `{worker_ids, acknowledge_warnings?}` | `{offered, refused}`. Up to 50 named workers; blocked ones are listed in `refused`; warnings need acknowledging (409 with `warned`) |
+| GET / POST | `settings` | Read: office roles; change: `super_admin`, `admin` | body `{rest_gap_min_hours}` (0 to 24) | `{rest_gap_min_hours}`. Stored in `app_settings`, audited |
 
 ---
 
@@ -629,7 +642,7 @@ the office.
 |---|---|---|---|---|
 | GET | — | Office roles | — | `{templates}` |
 | POST | `toggle` | Office roles | `id` | `{ok: true}`; flips `active` |
-| POST | `generate` | Office roles | `weeks` (clamped to 1–12, default 4) | `{created: n}`; creates open shifts from every active template, skipping duplicates by division + title + start time |
+| POST | `generate` | Office roles | `weeks` (clamped to 1–12, default 4) | `{created: n}`; creates open **draft** shifts from every active template (migration 038), linked to the site record when the template's site name matches one of its client's sites. A slot is skipped when that template already made a shift at that time, whatever its status: it read `status = "open"`, so a generated shift that had been assigned or cancelled was made again |
 | POST | — | Office roles | body `{title, division, client_id?, site_name?, weekday, start_time, end_time}` | `{ok: true}` 201; weekday is ISO 1–7, times `HH:MM` |
 
 ---
@@ -679,7 +692,10 @@ worker's hours for every day on record.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?` | `{timesheets, totals: {pending_minutes, approved_minutes, rejected_minutes}, truncated}`, 500 rows per read. Totals are **payable** minutes (`minutes - break_minutes`), which is what the approval decision and the pay run act on. Dates are `YYYY-MM-DD`; `status` is `pending`, `approved` or `rejected`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
+| GET | — (with `id`) | Payroll zone | `id` | `{timesheet, history}`; the history is the audit log for the entry, each row with `before`, `after` and `reason` |
+| POST | `query` | Office roles | `id`, body `{note}` | `{ok, status: "queried"}` from `draft` or `pending` (409 otherwise). The note is required; the worker is told in the app and by email and answers by submitting again |
+| POST | `correct` | Office roles | `id`, body `{work_date?, start_time?, end_time?, break_minutes?, reason}` | `{ok, changed}`. Not on an approved entry (409: reject it first). Minutes are recalculated; the audit row keeps before, after and the reason |
+| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?`, `division?` | `{timesheets, totals: {draft_minutes, pending_minutes, approved_minutes, rejected_minutes, queried_minutes}, truncated}`, 500 rows per read. Each row carries `source` (`clock` or `office`) and `submitted_at`. A service-scoped manager sees their own service only. Totals are **payable** minutes (`minutes - break_minutes`), which is what the approval decision and the pay run act on. Dates are `YYYY-MM-DD`; `status` is `draft`, `pending`, `approved`, `rejected` or `queried`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
 | POST | `approve` | Office roles | `id` | `{ok: true}`; records `approved_by` and `decided_at` |
 | POST | `reject` | Office roles | `id`, body `{note}` | `{ok: true}`; the reason is required and stored in `decision_note`. Rejected hours are excluded from pay without deleting the claim |
 | POST | — | Office roles | body `{worker_id, work_date, start_time, end_time, break_minutes?, shift_id?}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours. `break_minutes` is unpaid time and must be shorter than the shift. `shift_id` links the hours to the rota entry — optional, because hours are recorded for call-outs that never had a shift, but when given it must be that worker's shift and that shift must not already have a timesheet, so the same shift cannot be claimed and paid twice |
@@ -866,7 +882,7 @@ The client-facing front door to cover.
 | POST | — | **Public**, rate-limited | body `{contact_name, email, phone?, division, site_name?, detail, preferred_start?, preferred_end?, consent}` | `{ok: true}` 201; links to an existing client by email, writes a `consent_log` row, raises a broadcast notification and emails the office |
 | GET | — | Office roles | — | `{requests}`, 300 most recent |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}` |
-| POST | `confirm` | Office roles | `id` | `{ok: true, shift_id}`; turns the request into an open shift and emails the requester. 409 if a shift already exists |
+| POST | `confirm` | Office roles, the request's service scope | `id`, body `{site_id?, title?, slots?: [{starts_at, ends_at}]}` | `{ok, shift_id, shift_ids}` 201; one or more open **draft** shifts at the site (default: one, from the preferred times), the request marked `confirmed`, and a confirmation queued to the requester. 409 if it already has shifts. Shown as "Create shifts" on Rota, Requests (§54e) |
 
 **Header comment discrepancy.** `bookings.php:5` says the status route sets
 `quoted/declined`; the code also accepts `new` (`bookings.php:87`).
@@ -899,10 +915,12 @@ whose `worker_id` is set; otherwise 403 (`me.php:11`).
 |---|---|---|---|
 | GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only. Scoped by the token — `worker_id` in the query string is ignored, verified. Shown in the worker app as "My hours this month"; it returned this all along and nothing called it |
 | POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. Runs `rg_claim_check()` first — the deployment gate and the clash check — so a worker with a lapsed credential, or one already booked over that window, is refused with the reason. Division was the only test. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
-| GET | — | — | `{worker, compliance, shifts, open_shifts}` |
+| GET | — | — | `{worker, compliance, shifts, open_shifts}`; published shifts only (never a draft), with the site's address, access notes and contact |
+| | `timesheets`, `submit_timesheet`, `availability`, `availability_remove` | | See §54e |
 
 Clock-in, clock-out, check-in and panic are not here; they go through
-`field.php`, which reads `worker_id` off the token.
+`field.php`, which reads `worker_id` off the token. Clocking out now also makes
+the draft timesheet for the shift (`rg_timesheet_from_clock()`).
 
 ---
 
@@ -1678,6 +1696,101 @@ service, falling back to the old fixed list only when a service has none.
 - **`compliance.php`**: the credential list is filtered by service scope and carries
   `person_id`; `pack`, `eligibility`, `eligibility_all` and adding a certification apply the
   scope to the worker.
+
+## 54e. The rota (S3)
+
+Migration 038. The office plans a week as drafts, publishes it, and every change
+after publishing tells the worker what changed. Who may be put on a shift is
+decided in one place.
+
+### The assignment check
+
+`rg_assignment_check($conn, $workerId, $shift, $persist)` in `compliance-lib.php`
+is called by every path that puts a worker on a shift: office create, assign and
+edit (`scheduling.php`), matching and broadcast, offers to named workers, offer
+acceptance by link (`offer.php`, through `rg_claim_check()`) and claiming in the
+app (`me.php?action=accept`, the same). It returns `{ok, reason, blocking,
+warnings, gate}`:
+
+| Code | Kind | Meaning |
+|---|---|---|
+| `employment` | blocks | Archived, left, suspended, inactive, onboarding outstanding, not approved (`rg_employment_gate()`) |
+| `evidence` | blocks | A mandatory requirement is missing, expired or rejected, counting the **site's own requirements** (`site_requirements`, loaded by `rg_load_rules(..., $siteId)` as mandatory rules) |
+| `clash` | blocks | Already booked on an overlapping shift (`rg_shift_clash()`) |
+| `leave` | blocks | Approved or taken leave on any date the shift touches (`rg_leave_conflict()`); the kind of leave is not said, because sickness is health data |
+| `unavailable` | warning | The worker marked the period unavailable (`availability_blocks`) |
+| `rest` | warning | Less than `app_settings.rest_gap_min_hours` (default 11) between this shift and another, measured in real time in Europe/London (`rg_rest_gap_warnings()`), so a night across 29 March is an hour shorter than it reads and one across 25 October an hour longer |
+
+The office paths refuse with **409** and `{error, check}` on a blocking reason,
+audited `shift.blocked`; and with **409** and `{error, needs_acknowledgement:
+true, check}` on a warning until the request carries `acknowledge_warnings:
+true`, which is audited `shift.warnings_acknowledged` with the reasons. A worker
+choosing a shift (`me.php`, `offer.php`) is not held by a warning; the office's
+notification says what it was. Broadcast skips anybody with a warning, because it
+cannot acknowledge on anyone's behalf. The site verdict is returned, never stored:
+`person_services` keeps the service verdict only.
+
+### Shift state
+
+`shifts.status` is unchanged (`open`, `scheduled`, `completed`, `cancelled`).
+`shifts.is_draft` (default 0, so every shift that existed counts as published)
+says whether workers can see it. `rg_shift_state()` derives one word for the
+screen: `draft`, `open`, `offered` (open with a live offer), `assigned`,
+`completed`, `cancelled`.
+
+**Drafts are invisible to workers.** `me.php` (own shifts and open shifts),
+`offer.php` (an offer on a draft reads as not found), `field.php` (a worker
+cannot read or post events on a draft), the client portal and the field board
+all filter `is_draft = 0`; broadcast and offers refuse a draft with 409.
+
+### Notifications
+
+`rg_notify_worker()` in `server/rota-lib.php`: an in-app notification to every
+live login linked to the worker, and an email through the queue to the address on
+the person record. Sent on publish (one notice per worker listing their new
+shifts), assign, unassign or move, an edit that changes time, site or role, a
+cancellation (with the reason), an offer, and a timesheet query or rejection.
+Nothing is sent for drafts. Text messages for rota changes are not sent yet (plan
+file 03: "later"); offers keep the existing text through `message_worker()`,
+which honours the `sms_whatsapp` switch.
+
+### `sites.php`
+
+Office roles throughout, reads included (access notes can be door codes).
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | — | `client_id?` | `{sites, requirements}`. Each site carries `requirements` (`{id, req_key, label}`); `requirements` is the active catalogue for the picker. Without `client_id`, every site with its client's name |
+| POST | — | body `{client_id, name, address?, postcode?, access_notes?, contact_name?, contact_phone?, requirement_ids?, active?}` | `{id}` 201. 409 for a second live site with the same name under one client; 400 for a phone nobody could ring; 404 for an unknown requirement |
+| POST | `update` | `id`; any subset of the body above | `{ok}`. `requirement_ids` replaces the set. Audited with before and after; access notes and the contact phone are named, not copied |
+
+A closed site (`active: false`) takes no new shifts (409 from `scheduling.php`).
+
+### `requests.php`
+
+Office roles throughout. Cover requests (`service_requests`) and website
+enquiries (`contact_enquiries`) in one list, scoped to the account's service.
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | — | `type?` (`cover`, `enquiry`), `status?` (`open`, `closed`) | `{requests}`: `type, id, name, email, phone, division, summary, status, open, owner_id, owner, client_id, client, site_name, preferred_start, preferred_end, shift_id, created_at`, newest first |
+| POST | `owner` | `type`, `id`; body `{user_id|null}` | `{ok}`. The owner must be a live office account (`super_admin`, `admin`, `manager`); 422 otherwise. Audited |
+
+Statuses still change through `bookings.php?action=status` and
+`enquiries.php?action=handled`.
+
+### `me.php` additions (for the staff portal, S4)
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | `timesheets` | — | `{timesheets}`, the worker's own 60 most recent, with `status`, `source` and the office's `decision_note` |
+| POST | `submit_timesheet` | `id`; body `{break_minutes?}` | `{ok, status: "pending"}`. Only the worker's own entry, and only from `draft` or `queried` (409 otherwise). Audited with before and after |
+| GET | `availability` | — | `{unavailable}`: the worker's own marked periods still to come |
+| POST | `availability` | body `{starts_at, ends_at, note?}` | `{ok, id}` 201; up to three months at a time |
+| POST | `availability_remove` | `id` | `{ok}`; archives the worker's own period, 404 for anybody else's |
+
+`GET me.php` now also returns each shift's `cancel_reason` and the site's
+address, postcode, access notes and contact.
 
 ## 55. Public / unauthenticated surface
 

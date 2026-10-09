@@ -7,6 +7,53 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: the rota, section S3 (2026-10-09, local, not deployed)
+
+Launch plan Phase 4, office side. Migration 038.
+
+- **Drafts and publishing.** Every new shift is a draft (`shifts.is_draft`); every shift that
+  already existed counts as published. Workers, offers, the client portal and the field board
+  never see a draft. "Publish drafts" publishes the week shown, as filtered, and tells each
+  booked worker once. Cancelling needs a reason, which the worker is told. Editing, moving or
+  taking somebody off a published shift tells them what changed, in the app and by email
+  (`rg_notify_worker()` in the new `server/rota-lib.php`). A shift's history is its audit log.
+- **One assignment check on every path.** `rg_assignment_check()` in `compliance-lib.php`:
+  employment and evidence, clash and approved leave block; a period the worker marked
+  unavailable and a rest gap under `app_settings.rest_gap_min_hours` (11 by default) are
+  warnings the office must acknowledge, and the acknowledgement is audited. Office create,
+  assign and edit, "Find eligible", broadcast, offers by name, accepting an offer by link and
+  claiming in the app all use it. Rest is measured in real time in Europe/London, so a night
+  across 29 March is an hour shorter than it reads and one across 25 October an hour longer.
+- **Sites as records** (`server/sites.php`, a Sites tab on the client page): address, postcode,
+  access notes, a site contact, open or closed, and the training the site requires. Site
+  requirements join the service's rules as mandatory ones in `rg_load_rules()`; the site
+  verdict is never written to `person_services`. Shifts link to `site_id`.
+- **The Rota screen** replaces "Scheduling & dispatch": a week by site or by worker on desktop
+  and one day at a time on a phone, conflicts written on each shift, and a side panel to edit,
+  assign (showing the eligibility result and reasons first), acknowledge warnings, offer,
+  cancel and read the history. "Copy last week" makes drafts and skips what is already there;
+  weekly patterns generate drafts. FullCalendar is removed: only this page used it.
+- **Timesheets from the clock.** Clocking out makes a draft timesheet in Europe/London time.
+  The worker submits it with their break (`me.php?action=submit_timesheet`, for the staff
+  portal); the office approves, queries with a reason the worker is told, or corrects with a
+  reason, the values before and after kept in the entry's history. The Timesheets screen opens
+  on the week and filters by service and status.
+- **Requests** (`/app/requests`, `server/requests.php`): website cover requests and enquiries in
+  one list with an owner. "Create shifts" turns a cover request into one or more draft shifts
+  at a site. `/app/enquiries` and `/app/bookings` still work.
+- `me.php` gains `timesheets`, `submit_timesheet` and `availability` for section S4, and returns
+  the site's address, access notes and contact with each shift.
+
+### Fixed in S3
+
+- `scheduling.php` applied no service scope at all: a manager confined to security could read
+  and change the care rota. The list is filtered and every record is held to the scope now, as
+  are timesheets and cover-request confirmation.
+- Shift template generation looked for a duplicate only among `open` shifts, so a generated
+  shift that had been assigned or cancelled was generated again on the next run.
+- `rg_load_rules()` described itself as memoised and never stored its result.
+- `me.php` listed archived shifts in the worker's rota and open shifts.
+
 ### Added: people and compliance, section S2 (2026-10-09, local, not deployed)
 
 Launch plan Phase 3's missing screens, and the person profile.

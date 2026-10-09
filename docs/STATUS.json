@@ -490,6 +490,36 @@
           "name": "Blocked deployments are audited",
           "status": "done",
           "note": "A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt"
+        },
+        {
+          "name": "Rota drafts, publish and change notices",
+          "status": "done",
+          "note": "Migration 038 adds shifts.is_draft (existing rows count as published), published_at/by and cancel_reason/at/by. Every new shift is a draft; workers, offers, the client portal and the field board never see one. Publish a week (audited), edit, reassign and cancel with a reason; after publishing the worker is told what changed in the app and by email (rg_notify_worker in server/rota-lib.php). Copy last week makes drafts and skips duplicates; templates generate drafts. History is the audit log for the shift. server/tests/db/cases/160_rota.php"
+        },
+        {
+          "name": "Sites as records, with site requirements in eligibility",
+          "status": "done",
+          "note": "server/sites.php creates and edits sites under a client: address, postcode, access notes, contact, active, and the requirements the site insists on (site_requirements). rg_load_rules(..., $siteId) adds them as mandatory rules, so the same evaluator decides and the service verdict in person_services is untouched. Shifts link to site_id; site_name stays as history. Sites tab on the client page"
+        },
+        {
+          "name": "Leave, unavailability and rest checked on every assignment path",
+          "status": "done",
+          "note": "rg_assignment_check() in compliance-lib.php: employment and evidence (with the site), clash and approved leave block; marked unavailability and a rest gap below app_settings.rest_gap_min_hours (default 11) are warnings the office must acknowledge, audited. Used by office create, assign, edit, matching, broadcast, offers by name, offer.php and me.php. Rest is measured in Europe/London real time; tested across 29 March and 25 October 2026 in server/tests/run.php, and every path in server/tests/db/cases/160_rota.php"
+        },
+        {
+          "name": "Office rota screen",
+          "status": "done",
+          "note": "/app/scheduling is now Rota: week picker, Today, service and site filters, Add shift, Copy last week, Publish drafts; a week grid by site or by worker on desktop and a day list on phones. Each shift shows time, role, worker or Open, service and state, with conflicts written on it. The shift panel edits, assigns with the eligibility result and reasons, takes warnings acknowledgement, offers, cancels with a reason and shows history. FullCalendar removed. Checked in a browser at 1280 and 375"
+        },
+        {
+          "name": "Timesheets from clock events, submitted and approved or queried",
+          "status": "partial",
+          "note": "Clocking out makes a draft timesheet (rg_timesheet_from_clock, Europe/London times). The worker submits it with their break through me.php?action=submit_timesheet; the office approves, queries with a reason the worker is told, or corrects with a reason kept as before and after in the audit log. Office screen filters by week, service and status. Partial: the worker's screens for this are the staff portal (S4)"
+        },
+        {
+          "name": "Requests: cover requests and enquiries with an owner",
+          "status": "done",
+          "note": "server/requests.php lists both with type, owner and status; /app/requests sets the owner, closes them, and creates one or more draft shifts at a site from a cover request (bookings.php?action=confirm). /app/enquiries and /app/bookings still work"
         }
       ]
     },
