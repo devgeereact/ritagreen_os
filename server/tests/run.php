@@ -1592,6 +1592,8 @@ group('owner visibility: weeks and scheduled jobs');
 check('a Thursday belongs to its Monday', rg_week_start('2026-10-08'), '2026-10-05');
 check('a Monday is its own week', rg_week_start('2026-10-05 09:00:00'), '2026-10-05');
 check('a Sunday belongs to the Monday before', rg_week_start('2026-10-11'), '2026-10-05');
+check('expiry bands', array_map('rg_expiry_band', [-1, 0, 30, 31, 60, 61, 90, 91, null]),
+    ['expired', '30', '30', '60', '60', '90', '90', null, null]);
 $cronNow = (int) strtotime('2026-10-09 12:00:00 UTC');
 check('never recorded is unknown', rg_cron_state(null, 24, $cronNow), 'unknown');
 check('a daily job that ran this morning is fine', rg_cron_state('2026-10-09 02:00:00', 24, $cronNow), 'ok');

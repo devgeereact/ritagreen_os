@@ -2289,6 +2289,20 @@ function rg_csv(array $columns, array $rows): string
 }
 
 /**
+ * Which reporting band an expiry falls in: '30', '60' or '90' days from today,
+ * 'expired' when already past, or null when further out or undated.
+ */
+function rg_expiry_band(?int $days): ?string
+{
+    if ($days === null) return null;
+    if ($days < 0) return 'expired';
+    if ($days <= 30) return '30';
+    if ($days <= 60) return '60';
+    if ($days <= 90) return '90';
+    return null;
+}
+
+/**
  * Is a scheduled job running on time?
  *
  *   unknown  no run has ever been recorded. Said plainly rather than read as
