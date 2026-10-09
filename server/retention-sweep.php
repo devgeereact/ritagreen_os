@@ -47,6 +47,8 @@ if (!$isCli) {
     header('Content-Type: text/plain; charset=utf-8');
 }
 
+rg_cron_started($conn, 'retention_sweep');
+
 $today = date('Y-m-d');
 
 /** "1 month" / "18 months" — a reason line that reads like English. */
@@ -228,6 +230,8 @@ if ($unmapped) {
     echo "  Add it to SWEEPABLE, or the policy is decorative.\n\n";
 }
 
+rg_cron_succeeded($conn, 'retention_sweep', sprintf('%s: %d due, %d archived',
+    $go ? 'applied' : 'report only', $totals['due'], $totals['archived']));
 printf(
     "%s: %d past their period — %d for review, %d archived, %d deletion request(s).\n",
     $go ? 'Applied' : 'Dry run',

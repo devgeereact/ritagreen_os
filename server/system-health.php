@@ -11,6 +11,11 @@ require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin', 'manager');
+// The email queue, form intake and the workload table carry no service, so any
+// count here is a count across every service. A manager confined to one service
+// is refused rather than shown company-wide figures (S5 audit; the Action
+// Centre applies the same rule through rg_action_centre_access()).
+if (service_scope($user) !== null) fail('You do not have access to this.', 403);
 if (method() !== 'GET') fail('Method not allowed.', 405);
 
 $action = $_GET['action'] ?? '';
@@ -153,6 +158,89 @@ if (!is_dir($backupDir)) {
 $add('restore_test', 'Backup restore test', 'warn',
     'Not automated. A backup that has never been restored is an assumption — see docs/RULES.md rule 15.');
 
+// ---- Scheduled jobs (migration 041) ---------------------------------------
+// When each job last reported. A job with no row has never reported since the
+// heartbeat was added; that is "unknown", said plainly, never "ok".
+const HEALTH_JOBS = [
+    'backup' => ['label' => 'Database backup', 'every_hours' => 24],
+    'expiry_alerts' => ['label' => 'Expiry alerts and eligibility', 'every_hours' => 24],
+    'retention_sweep' => ['label' => 'Retention sweep', 'every_hours' => 24 * 7],
+    'send_queued_mail' => ['label' => 'Send queued mail', 'every_hours' => 1],
+];
+$runs = [];
+$heartbeatReady = true;
+try {
+    $res = $conn->query('SELECT job, last_started_at, last_finished_at, last_success_at, last_detail, runs FROM cron_runs');
+    while ($row = $res->fetch_assoc()) $runs[$row['job']] = $row;
+} catch (Throwable $e) {
+    // Migration 041 not applied yet: every job is unknown, and the reason is given.
+    $heartbeatReady = false;
+}
+$jobs = [];
+foreach (HEALTH_JOBS as $key => $job) {
+    $r = $runs[$key] ?? null;
+    $state = rg_cron_state($r['last_success_at'] ?? null, $job['every_hours']);
+    $jobs[] = [
+        'key' => $key, 'label' => $job['label'], 'every_hours' => $job['every_hours'],
+        'state' => $state,
+        'last_started_at' => $r['last_started_at'] ?? null,
+        'last_success_at' => $r['last_success_at'] ?? null,
+        'last_detail' => $r['last_detail'] ?? null,
+        'runs' => isset($r['runs']) ? (int) $r['runs'] : 0,
+        'note' => !$heartbeatReady ? 'Run migration 041 to start recording runs.'
+            : ($r === null ? 'No run recorded since run times started being kept.'
+            : ($r['last_success_at'] === null ? 'Started but never finished successfully.' : null)),
+    ];
+}
+$unknownJobs = count(array_filter($jobs, static fn($j) => $j['state'] === 'unknown'));
+$lateJobs = count(array_filter($jobs, static fn($j) => $j['state'] === 'late'));
+$add('cron', 'Scheduled jobs',
+    $lateJobs ? 'fail' : ($unknownJobs ? 'warn' : 'ok'),
+    $lateJobs ? "$lateJobs late" . ($unknownJobs ? ", $unknownJobs unknown" : '')
+        : ($unknownJobs ? "$unknownJobs of " . count($jobs) . ' have never reported' : 'All ran on time'));
+
+// ---- Email queue -------------------------------------------------------------
+// Counts by status and the most recent failures. The subject and the error are
+// shown, never the recipient: Settings is for fixing the system, not for
+// reading who was written to.
+$queue = ['queued' => 0, 'sending' => 0, 'sent' => 0, 'failed' => 0, 'cancelled' => 0];
+$res = $conn->query('SELECT status, COUNT(*) AS n FROM email_queue GROUP BY status');
+while ($row = $res->fetch_assoc()) $queue[$row['status']] = (int) $row['n'];
+$failures = [];
+$res = $conn->query(
+    'SELECT id, subject, template_key, attempts, last_error, created_at
+       FROM email_queue WHERE status = "failed" ORDER BY id DESC LIMIT 10'
+);
+while ($row = $res->fetch_assoc()) {
+    $row['id'] = (int) $row['id'];
+    $row['attempts'] = (int) $row['attempts'];
+    $failures[] = $row;
+}
+
+// ---- Form intake -----------------------------------------------------------
+$forms = [];
+$res = $conn->query(
+    'SELECT i.id, i.name, i.active, (i.secret_hash IS NOT NULL) AS live, i.expect_within_hours,
+            i.last_success_at, i.last_failure_at, i.last_failure_reason,
+            (SELECT COUNT(*) FROM integration_submissions s WHERE s.integration_id = i.id AND s.status = "failed") AS failed
+       FROM integrations i ORDER BY i.name'
+);
+while ($row = $res->fetch_assoc()) {
+    $live = (bool) $row['live'] && (bool) $row['active'];
+    $quiet = $live && $row['expect_within_hours'] !== null
+        && ($row['last_success_at'] === null || strtotime($row['last_success_at'] . ' UTC') < time() - (int) $row['expect_within_hours'] * 3600);
+    $forms[] = [
+        'id' => (int) $row['id'], 'name' => $row['name'],
+        'state' => !$live ? 'off' : ((int) $row['failed'] > 0 || $quiet ? 'fail' : 'ok'),
+        'live' => $live,
+        'last_success_at' => $row['last_success_at'],
+        'last_failure_at' => $row['last_failure_at'],
+        'last_failure_reason' => $row['last_failure_reason'],
+        'failed' => (int) $row['failed'],
+        'quiet' => $quiet,
+    ];
+}
+
 $states = array_column($checks, 'state');
 $overall = in_array('fail', $states, true) ? 'fail' : (in_array('warn', $states, true) ? 'warn' : 'ok');
 
@@ -160,5 +248,8 @@ json_out([
     'overall' => $overall,
     'checks' => $checks,
     'counts' => array_count_values($states),
+    'jobs' => $jobs,
+    'mail_queue' => ['counts' => $queue, 'enabled' => mail_enabled(), 'recent_failures' => $failures],
+    'forms' => $forms,
     'generated_at' => date('Y-m-d H:i'),
 ]);

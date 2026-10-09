@@ -26,6 +26,8 @@ if (!$isCli) {
     }
 }
 
+rg_cron_started($conn, 'backup');
+
 if (!function_exists('shell_exec')) {
     echo "shell_exec is disabled on this host — use cPanel's scheduled backups instead.\n";
     exit;
@@ -69,4 +71,5 @@ foreach (glob("$dir/ritagreen_os-*.sql.gz") as $old) {
 }
 
 $size = round(filesize($file) / 1024, 1);
-echo "Backup OK: $file ({$size} KB). Pruned $pruned old dump(s).\n";
+rg_cron_succeeded($conn, 'backup', "{$size} KB, pruned $pruned");
+echo "Backup OK:$file ({$size} KB). Pruned $pruned old dump(s).\n";

@@ -47,6 +47,8 @@ if (!$isCli) {
     }
 }
 
+rg_cron_started($conn, 'expiry_alerts');
+
 $today = date('Y-m-d');
 
 // Reassessment runs FIRST, and unconditionally.
@@ -93,6 +95,8 @@ while ($row = $res->fetch_assoc()) {
 }
 
 echo "\nEligibility reassessed: $assessed person-service pairs, $blocked not eligible.\n";
+// Reassessment is the duty that matters most; reminders after it are mail.
+rg_cron_succeeded($conn, 'expiry_alerts', "$assessed reassessed, $blocked not eligible");
 
 // ----- Derive worker status -------------------------------------------------
 //
