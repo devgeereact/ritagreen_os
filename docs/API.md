@@ -4,13 +4,13 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- **54 application endpoint files**, counted from the tree at `server/`. Four more are
+- **57 application endpoint files**, counted from the tree at `server/`. Four more are
   reachable over HTTP but are cron scripts, not part of the application: `backup.php`,
   `expiry-alerts.php`, `retention-sweep.php` and `send-queued-mail.php` each need
-  `ALERTS_KEY`, in an `X-Cron-Key` header or as `?key=`, and otherwise run from the command line. 58 files answer an HTTP request in
+  `ALERTS_KEY`, in an `X-Cron-Key` header or as `?key=`, and otherwise run from the command line. 61 files answer an HTTP request in
   total.
-- Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
-  database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
+- Alongside them sit five libraries: `lib.php` (the kernel), `pure.php` (domain logic with no
+  database or config), `pay-lib.php`, `compliance-lib.php` and `people-lib.php`, plus `config.sample.php`.
 - Four command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`,
   `backfill-people.php` and `create-admin.php`. Each refuses to run outside the CLI. See
   `docs/ARCHITECTURE.md` §7a and §10.
@@ -409,7 +409,9 @@ computed identically everywhere.
 | `me.php` | Worker self-service (mobile PWA) | Auth **and** a linked `worker_id` |
 | `notifications.php` | Notification bell | Auth, any role |
 | `offer.php` | Shift offer accept/decline from an SMS link | **Public, token in the URL is the secret** |
+| `onboarding-templates.php` | The onboarding checklist for each service | `super_admin`/`admin`/`manager` throughout, reads included; a scoped account sees and edits its own service only. See §54d |
 | `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager`. Everything except the webhook needs the `online_payments` switch on |
+| `people.php` | The person profile: one aggregate read, emergency contacts, training records | Staff in `super_admin`/`admin`/`manager`/`trainer`/`employee` (not `editor`), reads included; the person's service scope; a zone per section. See §54d |
 | `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager`, and the `payroll` zone |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
 | `quotes.php` | Quoting | Office roles throughout, reads included |
@@ -548,6 +550,13 @@ above their handlers.
 | POST | `availability` | Office roles | `id`; body `{avail_days, avail_nights, avail_weekends, travel_radius_mi, home_postcode}` | `{ok: true}` |
 | POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type, effective_from?, note?}` | `{ok: true, effective_from}`; pay type ∈ paye/umbrella. Writes a row to `worker_pay_rates` (migration 022) so payroll can price past work at the rate that was in force then; a second change on the same date replaces the first. `effective_from` defaults to today and may be backdated. `workers.pay_rate_pence` — the current rate, shown on the profile and used to cost a new shift — only moves when the change takes effect today or earlier, so a rise dated next month does not change what today costs |
 | POST | — | Office roles | body `{name, email?, phone?, role?, division?, right_to_work?, pay_rate_pence?, pay_type?}` | `{worker}` 201; role ∈ carer/nurse/cleaner/guard/trainer, created as `onboarding` |
+| POST | `approve` | Office roles, service scope | `id`; body `{note?}` | `{ok, approved: true}`. Refused 409 with the first reason from `rg_approval_blockers()`: onboarding outstanding, suspended, left, or no signed contract that has been reviewed. Moves the application that produced the worker from `onboarding` to `onboarded`, with a stage-history row |
+| POST | `unapprove` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, approved: false}` |
+| POST | `suspend` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, status: "suspended"}`; records `suspended_at`, `suspended_by`, `suspension_reason` (migration 037). Approval is kept |
+| POST | `reinstate` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, status}`: `active` when the worker was approved, otherwise `onboarding` |
+
+The GET list carries `person_id`, so a row can open the person profile. Every write above
+recalculates the worker's derived status immediately and is audited with its reason.
 
 Until this was gated, any authenticated user — a `client`-role portal login
 included — could read the full workforce list with pay rates and DBS/SIA detail
@@ -1529,6 +1538,11 @@ would be signing off nothing — and a check already verified cannot be verified
 A future-dated check is refused. `workers.right_to_work` is kept in step with the latest check
 so anything still reading the old flag does not disagree with the record.
 
+Every branch applies the person's service scope (`require_person_scope()`), and the `due` list
+drops people outside it. An `evidence_file_id` must be a document filed against the same
+person, directly or through their worker record, or the check is refused with 422. Recording
+and verifying a check recalculate the person's workers' derived status at once.
+
 ## 15a. `compliance.php` — eligibility
 
 Added in Milestone 2, alongside the existing summary and pack actions.
@@ -1555,6 +1569,7 @@ stays stable and comparable.
 |---|---|---|
 | `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff **and** the `compliance` zone to read; office to write. See §54a |
 | `verifications.php` | The generalised verification lifecycle for every other credential | Staff **and** the `compliance` zone to read; office to write |
+| `employment-contracts.php` | Employment contract evidence: draft, agreed version, sent, accepted, signed copy, review, supersede | Staff **and** the `compliance` zone to read; office to write; the person's service scope. See §54d |
 | `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own; staff see all |
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
 | `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
@@ -1596,6 +1611,73 @@ after; setting a switch to the value it already has writes nothing.
 
 The seeds keep production as it was, except the AI assistant, which the 2026 plan retires.
 A server whose PHP is uploaded before migration 036 runs reads the same defaults.
+
+## 54d. The person profile and the compliance screens (S2)
+
+### `people.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | (none) | Staff in `super_admin`/`admin`/`manager`/`trainer`/`employee`; the person in scope | `id` (a `people.id`) | The aggregate below |
+| POST | `emergency` | Office roles **and** `can_edit_zone('employment')`; the person in scope | `id`; body with the six `emergency_contact*` fields | `{ok, emergency}`. 422 when `rg_validate_emergency_contacts()` refuses: a name without a number, a number without a name, or a number that cannot be rung |
+| POST | `training` | Office roles **and** the `compliance` zone; the person in scope | `id`; body `{course, completed_on, expires_on?, provider_id?, evidence_file_id?}` | `{ok, id}` 201. Written to `enrolments` with `person_id` and no programme; the name is not copied |
+
+The GET answers, in one read: `person` (identity from `people`), `services` (one entry per
+service with `status` ∈ applicant, onboarding, active, suspended, inactive, left, from
+`rg_service_statuses()`), `payroll_no`, `next_action` (`rg_person_next_action()`, with the tab
+to open and, where there is one, the record it is about), `next_shift`, `zones`, `can`,
+`workers` (each with `approval.blockers` from `rg_approval_blockers()`, empty when the server
+would accept an approval), `applications` with their onboarding tasks, `checks`, `training`,
+`shifts`, `employment` (`contracts`, `pay_rates`, `leave`), `emergency` and `activity`.
+
+Access is applied in layers, and a section the account may not see is returned as
+`{"restricted": true}` rather than as data:
+
+| Section | Needs |
+|---|---|
+| `checks`, `training`, `employment.contracts` | the `compliance` zone |
+| `checks.references` | office roles (a referee's details), otherwise `null` |
+| `employment.pay_rates`, and the pay figure on a contract | the `payroll` zone |
+| leave `reason` and `return_to_work_note` | the `health` zone; otherwise `null` with `health_redacted` |
+| `emergency` | the `employment` zone |
+| `activity` | office roles; `worker.pay` entries also need the `payroll` zone. Action, detail, reason, time and actor only: no IP, no before and after values |
+
+A scoped account sees only the worker records, applications, shifts, contracts and documents
+belonging to its own service, even on a person who also works elsewhere. Requirements are
+assessed with `persist = false`: opening a profile is not a decision about the person, so
+nothing is written to `person_services`.
+
+### `onboarding-templates.php`
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | (none) | (none) | `{services: {care, cleaning, security, academy}}`, each a list of `{id, label, sort_order, active}`; a scoped account gets its own service only |
+| POST | (none) | body `{service, label}` | `{ok, id}` 201; 409 for a duplicate in the same list |
+| POST | `update` | `id`; body `{label?, sort_order?, active?}` | `{ok}`. Items are retired with `active: false`, never deleted |
+
+`ats.php?action=onboard` seeds a new worker's checklist from the active items for their
+service, falling back to the old fixed list only when a service has none.
+
+### Changes to existing endpoints
+
+- **`verifications.php`**: every branch applies the person's service scope. `queue` takes
+  `service` and `requirement` filters, drops people outside the caller's scope, and returns
+  each person's `services` and the allowed `next` transitions. The bare POST and
+  `received` accept an `evidence_file_id`, which must be filed against the same person (422
+  otherwise). The lifecycle map is `RG_VERIFY_TRANSITIONS` in `pure.php`.
+- **`employment-contracts.php`**: the person read uses `require_person_scope()` (it used to
+  check only the first worker record, and nothing for an applicant). Drafting accepts
+  `document_file_id`, the agreed version; `?action=document&id=N {document_file_id}` attaches
+  it to a draft and is refused once the contract has been sent. The lifecycle map is
+  `RG_CONTRACT_TRANSITIONS` in `pure.php`.
+- **`leave.php`**: staff reads and writes for another person, `decide` and `return` apply the
+  person's scope; `pending` and `calendar` drop people outside it.
+- **`files.php`**: upload accepts `person_id`, and a `worker_id` upload is also filed against
+  that worker's person. Either is refused outside the caller's scope. The upload is audited
+  with its entity.
+- **`compliance.php`**: the credential list is filtered by service scope and carries
+  `person_id`; `pack`, `eligibility`, `eligibility_all` and adding a certification apply the
+  scope to the worker.
 
 ## 55. Public / unauthenticated surface
 

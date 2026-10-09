@@ -1,4 +1,6 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
+import { personPath } from "@/lib/people"
 import { CalendarClock, CheckCircle2, UserRound } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -174,6 +176,11 @@ function ApplicantDialog({ id, onOpenChange, onChanged }: { id: number | null; o
                 <Badge variant={STAGE_VARIANT[data.applicant.stage]} className="capitalize">{data.applicant.stage}</Badge>
                 {data.applicant.worker_id && <Badge variant="default">Worker #{data.applicant.worker_id}</Badge>}
                 {data.applicant.role_applied && <span className="text-sm text-muted-foreground">{data.applicant.role_applied}</span>}
+                {data.applicant.person_id && (
+                  <Link to={personPath(data.applicant.person_id)} className="ml-auto text-sm font-medium text-primary underline-offset-2 hover:underline">
+                    Open profile
+                  </Link>
+                )}
               </div>
 
               {data.applicant.outcome_reason && (

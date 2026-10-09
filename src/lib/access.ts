@@ -66,6 +66,8 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
 
   // People
   { path: "/app/workers", roles: COMPLIANCE },
+  // The person profile. Same roles as server/people.php: no editor.
+  { path: "/app/people", roles: COMPLIANCE },
   { path: "/app/compliance", roles: COMPLIANCE },
   { path: "/app/ats", roles: OFFICE_PLUS_TRAINER },
   { path: "/app/academy", roles: [...OFFICE, "trainer", "editor"] },

@@ -3,7 +3,8 @@
 //
 //   GET  /employment-contracts.php?person_id=N     every contract for one person
 //   GET  /employment-contracts.php?action=queue    contracts waiting on somebody
-//   POST /employment-contracts.php                 draft a contract
+//   POST /employment-contracts.php                 draft a contract {person_id, document_file_id?, ...}
+//   POST /employment-contracts.php?action=document&id=N  attach the agreed version to a draft
 //   POST /employment-contracts.php?action=sent&id=N      record that it went out
 //   POST /employment-contracts.php?action=accepted&id=N  record that they agreed
 //   POST /employment-contracts.php?action=signed&id=N    attach the signed copy
@@ -36,17 +37,9 @@ const EC_ENGAGEMENTS = ['employee', 'worker', 'bank', 'agency', 'self_employed',
 const EC_FREQUENCIES = ['hourly', 'daily', 'weekly', 'fortnightly', 'monthly'];
 
 // The only transitions that make sense, in the order the work actually happens.
-// Anything else is refused rather than silently allowed: a contract that jumped
-// from draft to signed would record an agreement nobody made.
-const EC_TRANSITIONS = [
-    'draft'    => ['sent', 'declined'],
-    'sent'     => ['viewed', 'accepted', 'signed', 'declined', 'expired'],
-    'viewed'   => ['accepted', 'signed', 'declined', 'expired'],
-    'accepted' => ['signed', 'declined'],
-    'signed'   => ['superseded'],
-    'declined' => ['superseded'],
-    'expired'  => ['superseded'],
-];
+// Defined in pure.php (RG_CONTRACT_TRANSITIONS) so the person profile reads the
+// same rules rather than keeping its own copy.
+const EC_TRANSITIONS = RG_CONTRACT_TRANSITIONS;
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -83,12 +76,10 @@ if (method() === 'GET') {
     $personId = (int) ($_GET['person_id'] ?? 0);
     if ($personId <= 0) fail('A person is required.');
 
-    // The person's service comes from their worker record, where there is one.
-    $stmt = $conn->prepare('SELECT division FROM workers WHERE person_id = ? AND deleted_at IS NULL ORDER BY id LIMIT 1');
-    $stmt->bind_param('i', $personId);
-    $stmt->execute();
-    $w = $stmt->get_result()->fetch_assoc();
-    if ($w) require_service_scope($user, $w['division']);
+    // Scoped by every service the person holds. This read the FIRST worker
+    // record's division and applied no scope at all to a person with no worker
+    // record, so an applicant in another service was readable by id.
+    require_person_scope($conn, $user, $personId);
 
     $stmt = $conn->prepare(
         'SELECT c.*, u.name AS created_by_name, r.name AS reviewed_by_name
@@ -167,18 +158,21 @@ if ($action === '') {
     $startVal = $start !== '' ? $start : null;
     $freqVal = $frequency !== '' ? $frequency : null;
     $rateVal = ($rate === null || $rate === '') ? null : (int) $rate;
+    // The agreed version, prepared outside the system and uploaded. Optional at
+    // drafting: it can be attached to the draft afterwards with action=document.
+    $documentId = ec_person_file($conn, $data['document_file_id'] ?? null, $personId, $workerId);
 
     $stmt = $conn->prepare(
         'INSERT INTO employment_contracts
             (person_id, worker_id, reference, engagement_type, job_title, start_date,
              place_of_work, pay_rate_pence, pay_frequency, hours_pattern,
-             notice_period_worker, notice_period_employer, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+             notice_period_worker, notice_period_employer, document_file_id, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->bind_param(
-        'iissssssssssi',
+        'iissssssssssii',
         $personId, $workerId, $reference, $engagement, $jobTitle, $startVal,
-        $place, $rateVal, $freqVal, $hours, $notice, $noticeEmployer, $uid
+        $place, $rateVal, $freqVal, $hours, $notice, $noticeEmployer, $documentId, $uid
     );
     $stmt->execute();
     $id = (int) $conn->insert_id;
@@ -217,6 +211,23 @@ function ec_require_transition(string $from, string $to): void
             409
         );
     }
+}
+
+// ----- The agreed version -----
+// Attached while the contract is still a draft. Once it has been sent, the
+// version the person received is the version on file; changing it then would
+// make the record say they were sent something they were not. Supersede instead.
+if ($action === 'document') {
+    if ($was !== 'draft') fail('The agreed version can only be attached to a draft. Supersede this contract to change it.', 409);
+    $fileId = ec_person_file($conn, body()['document_file_id'] ?? null, (int) $contract['person_id'],
+        $contract['worker_id'] !== null ? (int) $contract['worker_id'] : null);
+    if ($fileId === null) fail('Attach the agreed version.');
+    $stmt = $conn->prepare('UPDATE employment_contracts SET document_file_id = ? WHERE id = ?');
+    $stmt->bind_param('ii', $fileId, $id);
+    $stmt->execute();
+    audit($conn, $uid, 'contract.document', $contract['reference'], 'employment_contract', $id,
+        ['document_file_id' => $contract['document_file_id']], ['document_file_id' => $fileId]);
+    json_out(['ok' => true, 'document_file_id' => $fileId]);
 }
 
 // ----- It went out -----
@@ -342,3 +353,22 @@ if ($action === 'supersede') {
 }
 
 fail('Unknown action.', 404);
+
+/**
+ * A document id from the request, refused unless it is filed against this person
+ * or their worker record. Null when none was given.
+ */
+function ec_person_file(mysqli $conn, $raw, int $personId, ?int $workerId): ?int
+{
+    if ($raw === null || $raw === '' || (int) $raw <= 0) return null;
+    $fileId = (int) $raw;
+    $stmt = $conn->prepare('SELECT person_id, worker_id FROM files WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('i', $fileId);
+    $stmt->execute();
+    $file = $stmt->get_result()->fetch_assoc();
+    if (!$file) fail('That document is not in the vault.', 404);
+    $belongs = ($file['person_id'] !== null && (int) $file['person_id'] === $personId)
+        || ($file['worker_id'] !== null && $workerId !== null && (int) $file['worker_id'] === $workerId);
+    if (!$belongs) fail('That document is filed against a different person.', 422);
+    return $fileId;
+}

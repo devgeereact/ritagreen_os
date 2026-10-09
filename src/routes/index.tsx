@@ -64,6 +64,7 @@ const Blog = lazy(() => import("@/pages/app/Blog"))
 const TestimonialsAdmin = lazy(() => import("@/pages/app/Testimonials"))
 const ContentStudio = lazy(() => import("@/pages/app/ContentStudio"))
 const Workers = lazy(() => import("@/pages/app/Workers"))
+const PersonProfile = lazy(() => import("@/pages/app/PersonProfile"))
 const Compliance = lazy(() => import("@/pages/app/Compliance"))
 const Scheduling = lazy(() => import("@/pages/app/Scheduling"))
 const Jobs = lazy(() => import("@/pages/app/Jobs"))
@@ -178,6 +179,11 @@ export const router = createBrowserRouter([
           { path: "reports", element: page(<Reports />) },
           { path: "inbox", element: page(<Mailbox />) },
           { path: "workers", element: page(<Workers />) },
+          // One page per person, keyed by people.id. /app/people itself is the
+          // staff list, which still lives at /app/workers until the People area
+          // is rebuilt around it.
+          { path: "people", element: <Navigate to="/app/workers" replace /> },
+          { path: "people/:personId", element: page(<PersonProfile />) },
           { path: "scheduling", element: page(<Scheduling />) },
           // /app/timetable was a second, worse copy of Timesheets: the same
           // endpoint, the same totals, the same table and the same dialog, minus

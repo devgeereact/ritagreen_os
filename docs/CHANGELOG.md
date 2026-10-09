@@ -7,6 +7,52 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: people and compliance, section S2 (2026-10-09, local, not deployed)
+
+Launch plan Phase 3's missing screens, and the person profile.
+
+- **Person profile** at `/app/people/:personId`, read through the new `server/people.php`:
+  Overview, Checks and documents, Training, Shifts, Employment, Emergency contacts and
+  Activity. The header shows each service with the person's status in it and the single next
+  action the server works out (`rg_person_next_action()`). A section the account's zone does
+  not cover comes back as `{restricted: true}` and the tab says so. Linked from the Workers
+  list, the applicant dialog, the compliance list and the verification queue.
+- **Checks and documents**: every requirement for every service with a calculated chip
+  (Valid, Due soon, Expired, Awaiting review, Missing), the evidence file, verifier, date
+  checked and expiry. Upload evidence, verify with what was checked, reject with a reason.
+- **Compliance** gains a Verification queue (oldest first, filtered by service and type of
+  check), a Right to work screen (method, date, outcome, follow-up date, reviewer) and
+  Onboarding lists.
+- **Onboarding checklists per service** (`onboarding_template_items`, migration 037,
+  `server/onboarding-templates.php`). Starting onboarding seeds from the list for the
+  service; a cleaner is no longer asked for a DBS check, and a security officer is asked for
+  the SIA licence.
+- **Contract evidence** on the Employment tab: agreed version, sent, accepted, signed copy,
+  review, new version. `employment-contracts.php` accepts the agreed version
+  (`document_file_id`, and `?action=document` on a draft).
+- **Approval** is offered only when `rg_approval_blockers()` is empty, which is the rule
+  `workers.php?action=approve` enforces; otherwise the reasons are listed. Approval now moves
+  the application to `onboarded`. **Suspension** with a reason (`?action=suspend`,
+  `?action=reinstate`), recorded in `workers.suspended_at`, `suspended_by`,
+  `suspension_reason`.
+- **Emergency contacts**: a second contact (migration 037), validated and audited by field
+  name only, through `rg_save_emergency_contacts()` in the new `server/people-lib.php`, which
+  the worker portal can reuse.
+- **Training records** added from the profile go to `enrolments` with `person_id`;
+  `learner_name` is now nullable so the name is not copied.
+
+### Fixed: person-level endpoints ignored service scope (2026-10-09)
+
+`verifications.php`, `right-to-work.php`, `leave.php` and `employment-contracts.php` took a
+person id and applied no service scope (contracts checked the first worker record only, and
+nothing for an applicant), and the verification queue, right-to-work due list and leave lists
+named everybody to every manager. `compliance.php`'s credential list, pack and eligibility
+reads did the same with worker ids. They now use `require_person_scope()` or the worker's
+service. Evidence files named by a verification, a right-to-work check, a contract or a
+training record must be filed against the same person. Recording or verifying a right-to-work
+check recalculates derived status immediately. Covered by
+`server/tests/db/cases/140_person_profile.php` and `150_onboarding_and_approval.php`.
+
 ### Added: brand and shell, section S1 of the 2026 plan (2026-10-09, local, not deployed)
 
 - **The company green replaces navy and mint.** `src/index.css` and `tailwind.config.ts` are

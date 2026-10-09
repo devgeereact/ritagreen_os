@@ -1,7 +1,7 @@
 <?php
 // Files & document centre.
 // GET  /files.php                       -> { files: [...] }  filtered per file
-// POST /files.php  (multipart: file, category, client_id?, worker_id?) -> upload
+// POST /files.php  (multipart: file, category, client_id?, worker_id?, person_id?) -> upload
 // GET  /files.php?action=download&id=5  -> stream the file
 // GET  /files.php?action=extract&id=5   -> { text } for the browser to summarise
 // POST /files.php?action=delete&id=5    -> soft delete
@@ -202,6 +202,28 @@ if (method() === 'POST') {
     if (!in_array($category, ['contract', 'certificate', 'policy', 'rams', 'id', 'other'], true)) $category = 'other';
     $clientId = isset($_POST['client_id']) && $_POST['client_id'] !== '' ? (int) $_POST['client_id'] : null;
     $workerId = isset($_POST['worker_id']) && $_POST['worker_id'] !== '' ? (int) $_POST['worker_id'] : null;
+    $personId = isset($_POST['person_id']) && $_POST['person_id'] !== '' ? (int) $_POST['person_id'] : null;
+
+    // Evidence about a named person is filed against that person, so the profile,
+    // a verification and a contract can all find it -- including for an applicant
+    // who has no worker record yet. A worker's file is filed against their person
+    // too. Either way the caller has to be allowed to see that person.
+    if ($workerId !== null) {
+        $stmt = $conn->prepare('SELECT person_id, division FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+        $stmt->bind_param('i', $workerId);
+        $stmt->execute();
+        $w = $stmt->get_result()->fetch_assoc();
+        if (!$w) fail('Worker not found.', 404);
+        require_service_scope($user, $w['division']);
+        if ($personId !== null && $w['person_id'] !== null && (int) $w['person_id'] !== $personId) {
+            fail('That worker record belongs to a different person.', 422);
+        }
+        $personId ??= $w['person_id'] !== null ? (int) $w['person_id'] : null;
+    }
+    if ($personId !== null) {
+        if (!row_exists($conn, 'people', $personId)) fail('Person not found.', 404);
+        require_person_scope($conn, $user, $personId);
+    }
 
     if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
     $stored = bin2hex(random_bytes(16)) . '.' . $ext;
@@ -213,14 +235,15 @@ if (method() === 'POST') {
     $size = (int) $file['size'];
     $uid = (int) $user['id'];
     $stmt = $conn->prepare(
-        'INSERT INTO files (stored_name, original_name, mime, size_bytes, category, client_id, worker_id, uploaded_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO files (stored_name, original_name, mime, size_bytes, category, client_id, worker_id, person_id, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $stmt->bind_param('sssisiii', $stored, $original, $mime, $size, $category, $clientId, $workerId, $uid);
+    $stmt->bind_param('sssisiiii', $stored, $original, $mime, $size, $category, $clientId, $workerId, $personId, $uid);
     $stmt->execute();
     $id = $conn->insert_id;
 
-    audit($conn, $uid, 'file.upload', $original);
+    audit($conn, $uid, 'file.upload', $original, 'file', (int) $id,
+        null, ['person_id' => $personId, 'worker_id' => $workerId, 'category' => $category]);
     json_out([
         'file' => [
             'id' => (int) $id, 'original_name' => $original, 'mime' => $mime,

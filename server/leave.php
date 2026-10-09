@@ -46,6 +46,8 @@ if (method() === 'GET' && $action === '') {
         $personId = $own;
     }
     if ($personId <= 0) fail('A person is required.');
+    // Staff reading somebody else's leave are held to their service scope.
+    if ($personId !== $own) require_person_scope($conn, $user, $personId);
 
     $year = trim((string) ($_GET['year'] ?? rg_leave_year(date('Y-m-d'), LEAVE_YEAR_START_MONTH)));
 
@@ -118,13 +120,15 @@ if (method() === 'GET' && $action === 'calendar') {
     $stmt->bind_param('ss', $to, $from);
     $stmt->execute();
     $res = $stmt->get_result();
-    $items = [];
-    while ($row = $res->fetch_assoc()) {
+    $rows = [];
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+    $items = leave_in_scope($conn, $user, $rows);
+    foreach ($items as &$row) {
         $row['id'] = (int) $row['id'];
         $row['person_id'] = (int) $row['person_id'];
         $row['hours'] = (float) $row['hours'];
-        $items[] = $row;
     }
+    unset($row);
     json_out(['from' => $from, 'to' => $to, 'items' => $items]);
 }
 
@@ -137,9 +141,12 @@ if (method() === 'GET' && $action === 'pending') {
          FROM leave_records l JOIN people p ON p.id = l.person_id
          WHERE l.status = "requested" ORDER BY l.starts_on'
     );
+    $rows = [];
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
     $items = [];
-    while ($row = $res->fetch_assoc()) {
+    foreach (leave_in_scope($conn, $user, $rows) as $row) {
         $row['id'] = (int) $row['id'];
+        $row['person_id'] = (int) $row['person_id'];
         $row['hours'] = (float) $row['hours'];
         if (!$seesHealth) {
             $row['reason'] = null;
@@ -164,6 +171,7 @@ if (method() === 'POST' && $action === '') {
         $personId = $own;
     }
     if ($personId <= 0) fail('A person is required.');
+    if ($isStaff && $personId !== $own) require_person_scope($conn, $user, $personId);
 
     $kind = trim((string) ($data['kind'] ?? 'annual'));
     $start = trim((string) ($data['starts_on'] ?? ''));
@@ -241,6 +249,7 @@ if (method() === 'POST' && $action === 'decide') {
     $stmt->execute();
     $rec = $stmt->get_result()->fetch_assoc();
     if (!$rec) fail('Leave record not found.', 404);
+    require_person_scope($conn, $user, (int) $rec['person_id']);
 
     $uid = (int) $user['id'];
     $stmt = $conn->prepare('UPDATE leave_records SET status = ?, decided_by = ?, decided_at = NOW() WHERE id = ?');
@@ -260,6 +269,12 @@ if (method() === 'POST' && $action === 'return') {
     $note = trim((string) ($data['note'] ?? ''));
     if ($id <= 0) fail('A leave record is required.');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $on)) fail('The date must be YYYY-MM-DD.');
+    $stmt = $conn->prepare('SELECT person_id FROM leave_records WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $rec = $stmt->get_result()->fetch_assoc();
+    if (!$rec) fail('Leave record not found.', 404);
+    require_person_scope($conn, $user, (int) $rec['person_id']);
 
     $noteVal = $note !== '' ? $note : null;
     $stmt = $conn->prepare('UPDATE leave_records SET return_to_work_on = ?, return_to_work_note = ? WHERE id = ?');
@@ -275,3 +290,20 @@ if (method() === 'POST' && $action === 'return') {
 }
 
 fail('Method not allowed.', 405);
+
+/**
+ * The rows of a people-wide leave list this account may see.
+ *
+ * The calendar and the pending list named everybody's leave to every member of
+ * staff, whatever service they were confined to.
+ */
+function leave_in_scope(mysqli $conn, array $user, array $rows): array
+{
+    $scope = service_scope($user);
+    if ($scope === null) return $rows;
+    $services = rg_people_services($conn, array_column($rows, 'person_id'));
+    return array_values(array_filter(
+        $rows,
+        static fn(array $row): bool => rg_person_in_scope($scope, $services[(int) $row['person_id']] ?? [])
+    ));
+}

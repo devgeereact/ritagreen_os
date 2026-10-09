@@ -30,7 +30,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 |---|---|---|---|---|
 | S0 | Plan pack, tracker, test toolbox, CI database job fixed | ✅ | `plans/2026-mvp`, PR #9 | CI database job green for the first time (MariaDB, env fix) |
 | S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | ✅ | `mvp/s01-brand-shell`, PR #10 | Seeds keep production behaviour (finance, payments, SMS, inbox on; AI off). Leftover "Care/Academy" copy, og.png and website gradients go to S6/S7 |
-| S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ⏳ | `mvp/s02-people-compliance` | Launch plan Phase 3 UI |
+| S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | 🚧 | `mvp/s02-people-compliance`, PR #11 | Launch plan Phase 3 UI; agent on ubuntu-dev |
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ⏳ | `mvp/s03-rota` | Phase 4 |
 | S4 | Staff portal (Home, Rota, Records, Me) | ⏳ | `mvp/s04-staff-portal` | Phase 4 |
 | S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
@@ -113,7 +113,7 @@ deployment is a separate authorisation and is not part of this contract.
 | 0 — reproducible local baseline | ✅ done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
 | 1 — foundation and one person record | ✅ done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
 | 2 — recruitment and communications | ✅ done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
-| 3 — verification, onboarding, activation | backend done, UI in S2 | `100_evidence_precedence`, `110_activation`; migrations 034, 035 |
+| 3 — verification, onboarding, activation | backend done, UI in PR #11 | `100_evidence_precedence`, `110_activation`; migrations 034, 035 |
 | 4 — workforce and worker portal | S3, S4 | |
 | 5 — owner visibility and launch readiness | S5, S10 | |
 | 6 — external Academy integration | deferred, no provider | |

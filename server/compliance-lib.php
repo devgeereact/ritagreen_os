@@ -351,6 +351,43 @@ function rg_onboarding_outstanding(mysqli $conn, int $personId): int
 }
 
 /**
+ * Does this person have a signed employment contract that somebody has reviewed?
+ *
+ * A signature is evidence that the worker agreed; a review is evidence that the
+ * company did. Approval needs both (migration 034).
+ */
+function rg_has_reviewed_contract(mysqli $conn, int $personId): bool
+{
+    $stmt = $conn->prepare(
+        'SELECT COUNT(*) FROM employment_contracts
+          WHERE person_id = ? AND status = "signed" AND reviewed_at IS NOT NULL'
+    );
+    $stmt->bind_param('i', $personId);
+    $stmt->execute();
+    return (int) $stmt->get_result()->fetch_row()[0] > 0;
+}
+
+/**
+ * What stands between this worker and an approval, from the database.
+ *
+ * The facts rg_approval_blockers() needs, gathered in one place so the approve
+ * action and the profile that offers it ask the same question the same way.
+ * $worker is a workers row with person_id, status, left_on, approved_at and
+ * deleted_at.
+ *
+ * @return list<array{code:string,reason:string}>
+ */
+function rg_approval_readiness(mysqli $conn, array $worker): array
+{
+    $personId = (int) $worker['person_id'];
+    return rg_approval_blockers(
+        $worker,
+        rg_onboarding_outstanding($conn, $personId),
+        rg_has_reviewed_contract($conn, $personId)
+    );
+}
+
+/**
  * Is this worker already booked over this window?
  *
  * Lived in scheduling.php, which is an endpoint and cannot be required, so the

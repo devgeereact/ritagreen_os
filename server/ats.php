@@ -16,6 +16,10 @@ require __DIR__ . '/lib.php';
 
 $action = $_GET['action'] ?? '';
 
+// The fallback checklist, used only when a service has no active items in
+// onboarding_template_items (migration 037). The per-service lists are what
+// normally seeds a checklist; this keeps onboarding working if somebody retires
+// every item for a service.
 const ONBOARDING_CHECKLIST = [
     'Right to work verified',
     'DBS check submitted',
@@ -106,6 +110,7 @@ if (method() === 'GET' && isset($_GET['id'])) {
     // another service's candidate in full: name, email, phone and every note.
     require_service_scope($user, $app['division']);
     $app['id'] = (int) $app['id'];
+    $app['person_id'] = $app['person_id'] !== null ? (int) $app['person_id'] : null;
     $app['worker_id'] = $app['worker_id'] !== null ? (int) $app['worker_id'] : null;
     $app['recruiter_id'] = $app['recruiter_id'] !== null ? (int) $app['recruiter_id'] : null;
 
@@ -456,11 +461,13 @@ if ($action === 'onboard' && method() === 'POST') {
         record_stage($conn, $id, (string) $app['stage'], 'onboarding',
             "Onboarding started — worker #$workerId created", (int) $user['id']);
 
-        // Seed the onboarding checklist if none exists yet.
+        // Seed the onboarding checklist if none exists yet, from the list kept for
+        // this service (migration 037). Tasks already added by hand are left as
+        // they are: an existing checklist is somebody's work in progress.
         $existing = $conn->query('SELECT COUNT(*) FROM onboarding_tasks WHERE applicant_id = ' . $id)->fetch_row()[0];
         if ((int) $existing === 0) {
             $ins = $conn->prepare('INSERT INTO onboarding_tasks (applicant_id, label) VALUES (?, ?)');
-            foreach (ONBOARDING_CHECKLIST as $label) {
+            foreach (onboarding_checklist_for($conn, (string) $app['division']) as $label) {
                 $ins->bind_param('is', $id, $label);
                 $ins->execute();
             }
@@ -701,4 +708,26 @@ function read_task_assignment(mysqli $conn, array $data): array
     }
 
     return [$ownerId, $dueOn];
+}
+
+/**
+ * The checklist a new worker in this service starts with.
+ *
+ * The office keeps one list per service in onboarding_template_items, so a
+ * cleaner is not asked for a DBS check and a security officer is asked for an
+ * SIA licence. Falls back to the old fixed list only when a service has none.
+ *
+ * @return list<string>
+ */
+function onboarding_checklist_for(mysqli $conn, string $service): array
+{
+    $stmt = $conn->prepare(
+        'SELECT label FROM onboarding_template_items WHERE service = ? AND active = 1 ORDER BY sort_order, id'
+    );
+    $stmt->bind_param('s', $service);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $labels = [];
+    while ($row = $res->fetch_assoc()) $labels[] = (string) $row['label'];
+    return $labels !== [] ? $labels : ONBOARDING_CHECKLIST;
 }

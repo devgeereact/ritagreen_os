@@ -102,6 +102,11 @@
           "name": "One person across every creation path",
           "status": "done",
           "note": "find_or_create_person() in lib.php is used by the public application, self-registration, the learner handoff, worker creation and user creation. A login linked to a worker inherits that worker's person"
+        },
+        {
+          "name": "Person profile, one page per person",
+          "status": "done",
+          "note": "server/people.php and /app/people/:personId: the seven tabs of docs/Plans 2026/02, read in one call behind the staff role, the person's service scope and a zone per section. Linked from the Workers list, the recruitment applicant dialog, the compliance list and the verification queue. Verified in server/tests/db/cases/140_person_profile.php and in the browser at 1280px and 375px"
         }
       ]
     },
@@ -217,6 +222,11 @@
           "name": "A super admin cannot lock themselves out",
           "status": "done",
           "note": "Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it"
+        },
+        {
+          "name": "Person-level endpoints apply service scope",
+          "status": "done",
+          "note": "require_person_scope() in lib.php, from rg_person_in_scope() in pure.php: a person is in scope when any service they hold is the account's. verifications.php, right-to-work.php, leave.php, employment-contracts.php and people.php took a person id and applied none, and the verification queue, right-to-work due list and leave lists named everybody. Verified in 140_person_profile.php"
         }
       ]
     },
@@ -274,6 +284,11 @@
           "name": "Raw submissions retained",
           "status": "done",
           "note": "The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed"
+        },
+        {
+          "name": "Onboarding checklists per service",
+          "status": "done",
+          "note": "onboarding_template_items (migration 037) and server/onboarding-templates.php, edited under Compliance, Onboarding lists. Starting onboarding seeds from the active items for the service; ad-hoc tasks are still added per person. Verified in 150_onboarding_and_approval.php"
         }
       ]
     },
@@ -329,7 +344,7 @@
         {
           "name": "Compliance status read-only in the UI",
           "status": "partial",
-          "note": "The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields"
+          "note": "The person profile's checks tab shows each requirement as a calculated chip (Valid, Due soon, Expired, Awaiting review, Missing) from rg_requirement_chip(); its actions add evidence or record a decision and never set a status. The Workers list still shows raw DBS/SIA fields"
         },
         {
           "name": "Right to work check record",
@@ -400,6 +415,21 @@
           "name": "Seeded rules match prior enforcement",
           "status": "done",
           "note": "Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused"
+        },
+        {
+          "name": "Verification queue screen",
+          "status": "done",
+          "note": "Compliance, Verification queue: everything requested, received or under review, oldest first, filtered by service and type of check, scoped to the caller's service. Upload evidence, verify with what was checked, reject with a reason. Exercised in the browser as the scoped security manager"
+        },
+        {
+          "name": "Right-to-work screen",
+          "status": "done",
+          "note": "Compliance, Right to work, and the person profile: record a check with method, date checked, outcome, follow-up date and evidence, and sign it off as the named reviewer. Recording and verifying recalculate derived status at once"
+        },
+        {
+          "name": "Evidence files belong to the person they evidence",
+          "status": "done",
+          "note": "A verification, right-to-work check, contract or training record that names a document filed against somebody else is refused with 422. files.php uploads can be filed against a person directly"
         }
       ]
     },
@@ -475,8 +505,8 @@
         },
         {
           "name": "Employment contract lifecycle",
-          "status": "partial",
-          "note": "employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not"
+          "status": "done",
+          "note": "server/employment-contracts.php and the Employment tab of the person profile: draft with the agreed version attached (document_file_id, action=document while still a draft), sent, accepted, signed copy filed against the same person, review by a named person, and supersede, which keeps the old version. Verified in server/tests/db/cases/110_activation.php and 150_onboarding_and_approval.php. Not a document designer or e-signature service, by design: documents are prepared and signed outside"
         },
         {
           "name": "Contract versioning",
@@ -517,6 +547,21 @@
           "name": "Overlapping leave is refused",
           "status": "done",
           "note": "Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash"
+        },
+        {
+          "name": "Emergency contacts",
+          "status": "done",
+          "note": "Two contacts on people (migration 001 plus the second in 037). Edited on the profile by office roles holding the employment zone, validated by rg_validate_emergency_contacts(), audited by field name without the values. rg_save_emergency_contacts() in server/people-lib.php is the function the worker portal (S4) will call"
+        },
+        {
+          "name": "Activation approval shows its blockers",
+          "status": "done",
+          "note": "rg_approval_blockers() in pure.php is the rule workers.php?action=approve enforces and the profile shows before the button is offered. Approval moves the application to onboarded"
+        },
+        {
+          "name": "Suspension recorded with a reason",
+          "status": "done",
+          "note": "workers.php?action=suspend and reinstate, with suspended_at, suspended_by and suspension_reason (migration 037). The gate refuses a suspended worker; lifting it returns them to active only if they were approved"
         }
       ]
     },
@@ -555,6 +600,11 @@
           "name": "Training records linked to the person",
           "status": "done",
           "note": "academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith"
+        },
+        {
+          "name": "Training records added from the person profile",
+          "status": "done",
+          "note": "people.php?action=training: provider, course, completion, expiry and certificate, written to enrolments with person_id and no copy of the name. Records, certifications and renewal dates are shown on the Training tab. No lessons or quizzes"
         }
       ]
     },
@@ -802,7 +852,7 @@
         {
           "name": "Sensitive zones enforced",
           "status": "partial",
-          "note": "can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet"
+          "note": "can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet. The person profile (server/people.php) returns each section behind its zone -- compliance for checks, training and contracts, payroll for pay history, health for leave reasons, employment for emergency contacts -- as {restricted: true} rather than data"
         },
         {
           "name": "Privacy documentation",

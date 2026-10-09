@@ -1164,6 +1164,164 @@ check('the map applies stored values', rg_feature_map(['finance' => 0])['finance
 check('the map ignores rows for unknown names', array_key_exists('teleport', rg_feature_map(['teleport' => 1])), false);
 
 // ---------------------------------------------------------------------------
+group('rg_person_in_scope');
+
+// A person holds services through several records. In scope when any of them is
+// the account's; never when the person holds none.
+check('an unscoped account sees anyone', rg_person_in_scope(null, []), true);
+check('a scoped account sees a person in its service', rg_person_in_scope('security', ['care', 'security']), true);
+check('but not a person only in another', rg_person_in_scope('security', ['care']), false);
+check('and not a person with no service at all', rg_person_in_scope('security', []), false);
+check('a NULL service is not a match', rg_person_in_scope('security', [null, '']), false);
+
+// ---------------------------------------------------------------------------
+group('rg_service_statuses');
+
+$today = '2026-10-09';
+$s = rg_service_statuses([], [['id' => 1, 'division' => 'care', 'stage' => 'interview']], $today);
+check('an application alone reads as applicant', $s['care']['status'], 'applicant');
+check('with its stage', $s['care']['detail'], 'Application at interview');
+
+$s = rg_service_statuses(
+    [['id' => 7, 'division' => 'care', 'status' => 'onboarding', 'approved_at' => null, 'payroll_no' => 'RG-000007']],
+    [['id' => 1, 'division' => 'care', 'stage' => 'onboarding']],
+    $today
+);
+check('a worker record outranks the application for the same service', $s['care']['status'], 'onboarding');
+check('and keeps the application it came from', $s['care']['applicant_id'], 1);
+check('with the payroll number', $s['care']['payroll_no'], 'RG-000007');
+
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'active', 'approved_at' => null]], [], $today);
+// Active with nobody's approval cannot be put on a shift, so it must not read as active.
+check('active but unapproved reads as onboarding', $s['care']['status'], 'onboarding');
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'active', 'approved_at' => '2026-01-01']], [], $today);
+check('active and approved reads as active', $s['care']['status'], 'active');
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'suspended', 'approved_at' => '2026-01-01']], [], $today);
+check('a suspension is shown as one', $s['care']['status'], 'suspended');
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'suspended', 'left_on' => '2026-09-30']], [], $today);
+check('having left outranks a suspension', $s['care']['status'], 'left');
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'active', 'approved_at' => 'x', 'left_on' => '2026-12-31']], [], $today);
+check('a leaving date in the future has not happened yet', $s['care']['status'], 'active');
+
+$s = rg_service_statuses(
+    [['id' => 7, 'division' => 'care', 'status' => 'active', 'approved_at' => 'x']],
+    [['id' => 2, 'division' => 'security', 'stage' => 'rejected']],
+    $today
+);
+check('one person, a different answer per service', [$s['care']['status'], $s['security']['status']], ['active', 'applicant']);
+check('an exit is described as one', $s['security']['detail'], 'Application rejected');
+$s = rg_service_statuses([], [
+    ['id' => 3, 'division' => 'care', 'stage' => 'applied'],
+    ['id' => 9, 'division' => 'care', 'stage' => 'offer'],
+], $today);
+check('the newest application for a service wins', $s['care']['applicant_id'], 9);
+$s = rg_service_statuses([['id' => 7, 'division' => 'care', 'status' => 'active', 'deleted_at' => '2026-01-01']], [], $today);
+check('an archived worker record is not a status', $s, []);
+
+// ---------------------------------------------------------------------------
+group('rg_requirement_chip');
+
+check('met is Valid', rg_requirement_chip('met'), ['chip' => 'valid', 'label' => 'Valid']);
+check('expiring is Due soon', rg_requirement_chip('expiring')['chip'], 'due_soon');
+check('expired is Expired', rg_requirement_chip('expired')['chip'], 'expired');
+check('missing is Missing', rg_requirement_chip('missing')['chip'], 'missing');
+check('on file but unchecked is Awaiting review', rg_requirement_chip('unverified')['chip'], 'awaiting_review');
+check('on file with no expiry is Awaiting review', rg_requirement_chip('undated')['chip'], 'awaiting_review');
+// Evidence that has arrived is the next thing to deal with, not the gap.
+check('missing with evidence received is Awaiting review', rg_requirement_chip('missing', 'received')['chip'], 'awaiting_review');
+check('expired with a renewal under review is Awaiting review', rg_requirement_chip('expired', 'under_review')['chip'], 'awaiting_review');
+check('a request alone is still Missing', rg_requirement_chip('missing', 'requested')['chip'], 'missing');
+// A renewal in the queue does not make a valid credential stop being valid.
+check('met with a renewal received stays Valid', rg_requirement_chip('met', 'received')['chip'], 'valid');
+
+// ---------------------------------------------------------------------------
+group('rg_approval_blockers');
+
+$pending = ['status' => 'onboarding', 'approved_at' => null, 'left_on' => null];
+check('nothing outstanding and a reviewed contract: approvable', rg_approval_blockers($pending, 0, true, $today), []);
+check('already approved says so',
+    array_column(rg_approval_blockers(['status' => 'active', 'approved_at' => '2026-01-01'], 0, true, $today), 'code'), ['approved']);
+$b = rg_approval_blockers($pending, 2, false, $today);
+check('every blocker is listed, in order', array_column($b, 'code'), ['employment', 'contract']);
+check('naming the outstanding onboarding', str_contains($b[0]['reason'], '2 onboarding tasks'), true);
+check('and the contract', str_contains($b[1]['reason'], 'reviewed'), true);
+check('a suspended worker cannot be approved',
+    array_column(rg_approval_blockers(['status' => 'suspended', 'approved_at' => null], 0, true, $today), 'code'), ['employment']);
+check('nor a leaver',
+    rg_approval_blockers(['status' => 'onboarding', 'approved_at' => null, 'left_on' => '2026-01-01'], 0, true, $today)[0]['code'],
+    'employment');
+
+// ---------------------------------------------------------------------------
+group('rg_person_next_action');
+
+$key = static fn(array $f): ?string => rg_person_next_action($f)['key'] ?? null;
+$worker = ['has_worker' => true];
+check('nothing known, nothing to do', rg_person_next_action([]), null);
+check('a suspension comes first', $key($worker + ['suspended' => true, 'awaiting_review' => ['DBS check']]), 'review_suspension');
+check('evidence waiting on a reviewer before anything else',
+    rg_person_next_action($worker + ['awaiting_review' => ['DBS check'], 'onboarding_outstanding' => 3]),
+    ['key' => 'verify', 'label' => 'Verify DBS check', 'tab' => 'checks']);
+check('then an unverified right-to-work check', $key($worker + ['rtw_needs_verify' => true, 'contract' => 'signed_unreviewed']), 'verify_rtw');
+check('then a signed contract nobody has read', $key($worker + ['contract' => 'signed_unreviewed', 'onboarding_outstanding' => 1]), 'review_contract');
+check('then the onboarding checklist',
+    rg_person_next_action($worker + ['onboarding_outstanding' => 1])['label'], 'Finish onboarding (1 task)');
+check('then missing mandatory evidence',
+    rg_person_next_action($worker + ['blocking' => ['Right to work'], 'contract' => 'none'])['label'], 'Request right to work');
+check('initials keep their capitals', rg_person_next_action($worker + ['awaiting_review' => ['DBS check']])['label'], 'Verify DBS check');
+check('then the contract, from a draft', $key($worker + ['contract' => 'none']), 'draft_contract');
+check('a draft is sent', $key($worker + ['contract' => 'draft']), 'send_contract');
+check('a sent contract waits for the signed copy', $key($worker + ['contract' => 'sent']), 'record_signature');
+check('then approval, when nothing blocks it', $key($worker + ['contract' => 'reviewed', 'approvable' => true]), 'approve');
+check('an approved worker is not offered approval',
+    $key($worker + ['contract' => 'reviewed', 'approvable' => false, 'approved' => true]), null);
+check('a credential running out is renewed', $key($worker + ['approved' => true, 'contract' => 'reviewed', 'expiring' => ['SIA licence']]), 'renew');
+check('an applicant at offer is ready for onboarding', $key(['applicant_stage' => 'offer']), 'start_onboarding');
+check('an applicant earlier on needs reviewing', $key(['applicant_stage' => 'screened']), 'review_application');
+check('a rejected applicant needs nothing', $key(['applicant_stage' => 'rejected']), null);
+
+// ---------------------------------------------------------------------------
+group('rg_valid_phone');
+
+check('a UK mobile', rg_valid_phone('07700 900123'), true);
+check('international form', rg_valid_phone('+44 7700 900123'), true);
+check('with brackets and hyphens', rg_valid_phone('(020) 7946-0018'), true);
+check('letters are not a number', rg_valid_phone('call me'), false);
+check('too short to ring', rg_valid_phone('12345'), false);
+check('longer than any real number', rg_valid_phone('+44 7700 900123 4567'), false);
+check('a plus in the middle is not a number', rg_valid_phone('07700+900123'), false);
+check('empty is not a number', rg_valid_phone(''), false);
+
+// ---------------------------------------------------------------------------
+group('rg_validate_emergency_contacts');
+
+$ok = rg_validate_emergency_contacts([
+    'emergency_contact_name' => ' Jo Bloggs ', 'emergency_contact_phone' => '07700 900456',
+    'emergency_contact_relationship' => 'Sister',
+]);
+check('one complete contact is accepted', $ok['ok'], true);
+check('trimmed', $ok['values']['emergency_contact_name'], 'Jo Bloggs');
+check('and the second left empty', $ok['values']['emergency_contact2_name'], null);
+check('everything empty clears both', rg_validate_emergency_contacts([])['ok'], true);
+$bad = rg_validate_emergency_contacts(['emergency_contact_name' => 'Jo Bloggs']);
+check('a name with no number is refused', $bad['ok'], false);
+check('saying which is missing', $bad['errors'], ['Give a phone number for the first contact.']);
+$bad = rg_validate_emergency_contacts(['emergency_contact2_phone' => '07700 900456']);
+check('a number with no name is refused', $bad['errors'], ['Give a name for the second contact.']);
+$bad = rg_validate_emergency_contacts(['emergency_contact_name' => 'Jo', 'emergency_contact_phone' => 'not a phone']);
+check('a number nobody could ring is refused',
+    $bad['errors'], ["The first contact's phone number is not a number that can be rung."]);
+
+// ---------------------------------------------------------------------------
+group('lifecycle maps shared with the endpoints');
+
+// The profile reads these to say what may happen next, so they must keep the
+// rules the endpoints enforce: no jumping from requested or draft to the end.
+check('a requested check cannot be verified directly', in_array('verified', RG_VERIFY_TRANSITIONS['requested'], true), false);
+check('a received check can be', in_array('verified', RG_VERIFY_TRANSITIONS['received'], true), true);
+check('a draft contract cannot be signed', in_array('signed', RG_CONTRACT_TRANSITIONS['draft'], true), false);
+check('a signed contract can only be superseded', RG_CONTRACT_TRANSITIONS['signed'], ['superseded']);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

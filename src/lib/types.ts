@@ -52,6 +52,8 @@ export type ServiceRequest = {
 
 export type Worker = {
   id: number
+  /** The person this employment record belongs to; the profile is keyed by it. */
+  person_id?: number | null
   name: string
   email: string | null
   phone: string | null
@@ -231,6 +233,8 @@ export type ShiftEvent = {
 
 export type Applicant = {
   id: number
+  /** Only sent on the detail read. The person profile is keyed by it. */
+  person_id?: number | null
   name: string
   email: string
   phone: string | null
@@ -293,6 +297,7 @@ export type AssignableStaff = { id: number; name: string; role: string }
 
 export type ComplianceItem = {
   worker_id: number
+  person_id?: number | null
   worker: string
   division: DivisionId
   type: string
@@ -656,6 +661,334 @@ export type Person = {
   /** 'e:<email>' or 'p:<digits>'. Unique, so no two people share an identity. */
   match_key: string | null
   created_at: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The person profile (server/people.php)
+//
+// One read for the whole page. A section the account may not see arrives as
+// { restricted: true } rather than as data, so the screen can say so. Every
+// status below is calculated by the server; none of it is ever POSTed back.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Restricted = { restricted: true }
+
+/** Where a person stands in one service. */
+export type ServiceStatus = "applicant" | "onboarding" | "active" | "suspended" | "inactive" | "left"
+
+export type PersonService = {
+  service: ServiceId
+  status: ServiceStatus
+  detail: string
+  worker_id: number | null
+  applicant_id: number | null
+  payroll_no: string | null
+  stage: string | null
+  /** Present when the account holds the compliance zone. */
+  eligibility?: EligibilityStatus
+}
+
+/** The five status chips on the checks tab. Always shown with a symbol and a word. */
+export type RequirementChip = "valid" | "due_soon" | "expired" | "awaiting_review" | "missing"
+
+export type VerificationStatus = "requested" | "received" | "under_review" | "verified" | "rejected" | "expired"
+
+export type ProfileRequirement = AssessedRequirement & {
+  chip: RequirementChip
+  chip_label: string
+  expiry: string | null
+  verification_id: number | null
+  verification_status: VerificationStatus | null
+  open_verification_id: number | null
+  open_status: VerificationStatus | null
+  /** What the latest verification for this requirement may become next. */
+  next: VerificationStatus[]
+  rejection_reason: string | null
+  verified_by: string | null
+  checked_on: string | null
+  evidence_file_id: number | null
+  evidence_file_name: string | null
+}
+
+export type ProfileAssessment = {
+  service: ServiceId
+  status: EligibilityStatus
+  eligible: boolean
+  score: number
+  reason: string
+  items: ProfileRequirement[]
+}
+
+export type ProfileVerification = {
+  id: number
+  requirement_key: string
+  requirement: string
+  subject_type: string
+  subject_label: string | null
+  status: VerificationStatus
+  requested_at: string | null
+  received_at: string | null
+  reviewed_at: string | null
+  verified_at: string | null
+  expires_on: string | null
+  method: string | null
+  outcome_note: string | null
+  rejection_reason: string | null
+  evidence_file_id: number | null
+  evidence_file_name: string | null
+  verified_by: string | null
+  next: VerificationStatus[]
+}
+
+export type ProfileFile = {
+  id: number
+  original_name: string
+  mime: string
+  category: string
+  created_at: string
+  expires_on: string | null
+  uploaded_by: string | null
+}
+
+export type ApprovalBlocker = { code: "employment" | "contract"; reason: string }
+
+export type ProfileWorker = {
+  id: number
+  payroll_no: string | null
+  role: string
+  division: ServiceId
+  status: "active" | "onboarding" | "inactive" | "suspended"
+  derived_status: string | null
+  derived_status_reason: string | null
+  left_on: string | null
+  approved_at: string | null
+  approved_by_name: string | null
+  approval_note: string | null
+  suspended_at: string | null
+  suspended_by_name: string | null
+  suspension_reason: string | null
+  created_at: string
+  approval: { approved: boolean; blockers: ApprovalBlocker[] }
+}
+
+export type ProfileApplication = {
+  id: number
+  division: ServiceId
+  stage: Applicant["stage"] | "withdrawn"
+  role_applied: string | null
+  source: string | null
+  created_at: string
+  outcome_reason: string | null
+  worker_id: number | null
+  recruiter_name: string | null
+  tasks: (Omit<OnboardingTask, "owner_id"> & { applicant_id: number })[]
+}
+
+export type ProfileShift = {
+  id: number
+  worker_id: number
+  division: ServiceId
+  title: string
+  site_name: string | null
+  client_name: string | null
+  starts_at: string
+  ends_at: string
+  status: "open" | "scheduled" | "completed" | "cancelled"
+  /** What was booked, not hours worked: those are timesheets, the payroll zone. */
+  minutes: number
+}
+
+export type ContractStatus = "draft" | "sent" | "viewed" | "accepted" | "signed" | "declined" | "expired" | "superseded"
+
+export type ProfileContract = {
+  id: number
+  reference: string
+  version: number
+  status: ContractStatus
+  engagement_type: string
+  job_title: string | null
+  start_date: string | null
+  /** Null without the payroll zone. */
+  pay_rate_pence: number | null
+  pay_frequency: string | null
+  hours_pattern: string | null
+  supersedes_id: number | null
+  document_file_id: number | null
+  document_file_name: string | null
+  signed_file_id: number | null
+  signed_file_name: string | null
+  sent_at: string | null
+  accepted_at: string | null
+  signed_at: string | null
+  signed_name: string | null
+  reviewed_at: string | null
+  reviewed_by_name: string | null
+  review_note: string | null
+  created_at: string
+  next: ContractStatus[]
+}
+
+export type ProfilePayRate = {
+  id: number
+  worker_id: number
+  rate_pence: number
+  pay_type: "paye" | "umbrella"
+  effective_from: string
+  note: string | null
+  set_by_name: string | null
+}
+
+export type ProfileLeave = {
+  id: number
+  kind: string
+  status: "requested" | "approved" | "declined" | "cancelled" | "taken"
+  starts_on: string
+  ends_on: string
+  hours: number
+  leave_year: string | null
+  /** Null, with health_redacted set, without the health zone. */
+  reason: string | null
+  return_to_work_on: string | null
+  return_to_work_note: string | null
+  decided_at: string | null
+  decided_by: string | null
+  health_redacted?: boolean
+}
+
+/** rg_leave_balance() in server/pure.php. Hours, not days. */
+export type LeaveBalance = {
+  entitlement_known: boolean
+  entitlement: number
+  carried_in: number
+  taken: number
+  approved: number
+  requested: number
+  paid_in_lieu: number
+  /** Null until an entitlement is recorded, rather than a misleading negative. */
+  remaining: number | null
+  used: number
+}
+
+export type EmergencyContacts = {
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
+  emergency_contact2_name: string | null
+  emergency_contact2_phone: string | null
+  emergency_contact2_relationship: string | null
+}
+
+export type ProfileTrainingRecord = {
+  id: number
+  status: string
+  course: string | null
+  provider: string | null
+  completed_on: string | null
+  expires_on: string | null
+  certificate_public_id: string | null
+  evidence_file_id: number | null
+  evidence_file_name: string | null
+  rag: "valid" | "expiring" | "expired" | "unknown" | null
+  days: number | null
+}
+
+export type ProfileCertification = {
+  id: number
+  worker_id: number
+  type: string
+  number: string | null
+  expiry: string | null
+  status: string
+  rag: "valid" | "expiring" | "expired" | "unknown"
+  days: number | null
+}
+
+export type ProfileActivity = {
+  id: number
+  action: string
+  entity_type: string | null
+  entity_id: number | null
+  detail: string
+  reason: string | null
+  created_at: string
+  user: string | null
+}
+
+export type NextAction = {
+  key: string
+  label: string
+  tab: "overview" | "checks" | "training" | "shifts" | "employment" | "emergency" | "activity"
+  target_id: number | null
+}
+
+export type PersonProfile = {
+  person: {
+    id: number
+    full_name: string
+    preferred_name: string | null
+    email: string | null
+    phone: string | null
+    address_line1: string | null
+    address_line2: string | null
+    city: string | null
+    postcode: string | null
+    created_at: string
+    start_date: string | null
+  }
+  services: PersonService[]
+  payroll_no: string | null
+  next_action: NextAction | null
+  next_shift: ProfileShift | null
+  zones: { compliance: boolean; payroll: boolean; health: boolean; employment: boolean }
+  can: { manage: boolean; approve: boolean; edit_emergency: boolean }
+  workers: ProfileWorker[]
+  applications: ProfileApplication[]
+  checks:
+    | {
+        assessments: ProfileAssessment[]
+        verifications: ProfileVerification[]
+        right_to_work: { current: RightToWorkCheck | null; checks: RightToWorkCheck[] }
+        /** Null for anybody outside the office: a third party's contact details. */
+        references: WorkerReference[] | null
+        files: ProfileFile[]
+      }
+    | Restricted
+  training: { certifications: ProfileCertification[]; records: ProfileTrainingRecord[]; providers: { id: number; name: string }[] } | Restricted
+  shifts: { upcoming: ProfileShift[]; past: ProfileShift[] }
+  employment: {
+    contracts: ProfileContract[] | Restricted
+    pay_rates: ProfilePayRate[] | Restricted
+    leave: { leave_year: string; balance: LeaveBalance; records: ProfileLeave[] }
+  }
+  emergency: EmergencyContacts | Restricted
+  activity: ProfileActivity[] | Restricted
+}
+
+/** One row of the verification queue (verifications.php?action=queue). */
+export type VerificationQueueItem = {
+  id: number
+  person_id: number
+  full_name: string
+  requirement_key: string
+  requirement: string
+  subject_label: string | null
+  status: VerificationStatus
+  requested_at: string | null
+  received_at: string | null
+  expires_on: string | null
+  evidence_file_id: number | null
+  waiting_days: number | null
+  services: ServiceId[]
+  next: VerificationStatus[]
+}
+
+export type OnboardingTemplateItem = {
+  id: number
+  service: ServiceId
+  label: string
+  sort_order: number
+  active: boolean
+  updated_at: string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

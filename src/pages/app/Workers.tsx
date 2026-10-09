@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { Plus, Search, ShieldAlert, ShieldCheck, ShieldQuestion, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ import type { Worker, Skill } from "@/lib/types"
 import { shortDate, gbp } from "@/lib/format"
 import { EligibilityDialog } from "@/components/app/eligibility-dialog"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { personPath } from "@/lib/people"
 
 const ROLES = [
   { value: "carer", label: "Carer", division: "care" },
@@ -110,7 +112,12 @@ export default function Workers() {
               {filtered.map((w) => (
                 <TableRow key={w.id}>
                   <TableCell>
-                    <div className="font-medium">{w.name}</div>
+                    {/* One profile per person, keyed by person rather than worker. */}
+                    {w.person_id ? (
+                      <Link to={personPath(w.person_id)} className="font-medium text-primary underline-offset-2 hover:underline">{w.name}</Link>
+                    ) : (
+                      <div className="font-medium">{w.name}</div>
+                    )}
                     {w.email && <div className="text-xs text-muted-foreground">{w.email}</div>}
                   </TableCell>
                   <TableCell className="capitalize">{w.role}</TableCell>
