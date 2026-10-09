@@ -175,7 +175,7 @@ export default function Careers() {
           <SectionTitle
             id="interest-title"
             title="Not seeing your role? Register your interest"
-            intro={`Tell us the work you do and we will contact you when something fits. Questions first? Call the office on ${company.phone.display}, ${company.officeHours.toLowerCase()}.`}
+            intro={`Tell us the work you do and we will contact you when something fits. Questions first? Call the office on ${company.phone.display} (${company.officeHours}).`}
           />
           <div className="rounded-lg border border-border bg-card p-5 sm:p-8">
             <ApplicationForm submitLabel="Send my details" />

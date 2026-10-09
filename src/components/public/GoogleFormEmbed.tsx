@@ -52,7 +52,7 @@ export function GoogleFormEmbed({
       <a href={company.phone.href} className="font-semibold text-foreground underline underline-offset-4">
         {company.phone.display}
       </a>
-      , {company.officeHours.toLowerCase()}, and we will take your details by phone.
+      {" "}({company.officeHours}) and we will take your details by phone.
     </p>
   )
 

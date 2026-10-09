@@ -259,8 +259,8 @@ export default function WebsiteForms() {
                   <Select value={draft.display} onValueChange={(x) => set("display", x as Draft["display"])}>
                     <SelectTrigger id="f-display"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="embedded">Embedded, after the visitor chooses to load it</SelectItem>
-                      <SelectItem value="link">A link that opens Google Forms</SelectItem>
+                      <SelectItem value="embedded">Embedded, after a click</SelectItem>
+                      <SelectItem value="link">Link only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

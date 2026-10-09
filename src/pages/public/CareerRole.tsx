@@ -64,7 +64,7 @@ function RolePage({ slug }: { slug: string }) {
   useSeo(
     v
       ? {
-          title: `${v.title}${v.location ? `, ${v.location}` : ""}`,
+          title: v.location && !v.title.includes(v.location) ? `${v.title}, ${v.location}` : v.title,
           description: v.summary.slice(0, 155),
           path: `/careers/${v.slug}`,
           jsonLd: jobPostingLd(company, v),

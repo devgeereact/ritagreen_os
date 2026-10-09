@@ -48,6 +48,8 @@ if ($m === 'GET' && $action === '') {
 $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin');
 require_staff($user);
+// The office copy is never cached: after a save it must show what is stored.
+header('Cache-Control: no-store');
 
 if ($m === 'GET' && $action === 'edit') {
     $row = company_row($conn);

@@ -47,20 +47,24 @@ export default function CompanyDetails() {
   if (error) return <ErrorBlock message={error} onRetry={reload} />
   if (!data) return null
   // Keyed by the last save, so the form starts from what is stored after each one.
-  return <Editor key={data.updated_at ?? "never"} loaded={data} onSaved={reload} />
+  return <Editor key={data.updated_at ?? "never"} loaded={data} />
 }
 
-function Editor({ loaded, onSaved }: { loaded: Loaded; onSaved: () => void }) {
+function Editor({ loaded }: { loaded: Loaded }) {
   const [values, setValues] = useState<CompanyRecord>(loaded.company)
+  // What is stored now: the record as loaded, then as the server returned it
+  // after each save (trimmed and normalised), so the form never shows a stale copy.
+  const [saved, setSaved] = useState<CompanyRecord>(loaded.company)
   const [saving, setSaving] = useState(false)
-  const changed = (Object.keys(values) as (keyof CompanyRecord)[]).some((k) => values[k] !== loaded.company[k])
+  const changed = (Object.keys(values) as (keyof CompanyRecord)[]).some((k) => values[k] !== saved[k])
 
   async function save() {
     setSaving(true)
     try {
-      await api("company.php?action=update", { method: "POST", body: values })
+      const res = await api<{ company: CompanyRecord }>("company.php?action=update", { method: "POST", body: values })
+      setSaved(res.company)
+      setValues(res.company)
       toast.success("Saved. The website shows the change within five minutes.")
-      onSaved()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Could not save the company details.")
     } finally {
@@ -113,7 +117,7 @@ function Editor({ loaded, onSaved }: { loaded: Loaded; onSaved: () => void }) {
       </Card>
 
       <div className="flex max-w-3xl justify-end gap-2">
-        <Button variant="outline" disabled={!changed || saving} onClick={() => setValues(loaded.company)}>
+        <Button variant="outline" disabled={!changed || saving} onClick={() => setValues(saved)}>
           Undo changes
         </Button>
         <Button disabled={!changed || saving} onClick={save}>
