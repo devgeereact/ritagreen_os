@@ -97,7 +97,7 @@ function ContractCard({ contract: c, profile, onChanged }: { contract: ProfileCo
       <dl className="grid gap-3 sm:grid-cols-3">
         <Fact label="Engagement"><span className="capitalize">{c.engagement_type.replace("_", " ")}</span></Fact>
         <Fact label="Start date">{c.start_date ? dateOnly(c.start_date) : "Not set"}</Fact>
-        <Fact label="Pay">{c.pay_rate_pence !== null ? `${gbp(c.pay_rate_pence)}${c.pay_frequency ? ` ${c.pay_frequency}` : ""}` : "Not shown"}</Fact>
+        <Fact label="Pay">{c.pay_rate_pence !== null ? `${gbp(c.pay_rate_pence)}${c.pay_frequency ? ` ${c.pay_frequency}` : ""}` : profile.zones.payroll ? "Not recorded" : "Not shown"}</Fact>
         <Fact label="Agreed version"><FileLink id={c.document_file_id} name={c.document_file_name} /></Fact>
         <Fact label="Sent">{c.sent_at ? dateOnly(c.sent_at) : "Not yet"}</Fact>
         <Fact label="Accepted">{c.accepted_at ? dateOnly(c.accepted_at) : "Not yet"}</Fact>

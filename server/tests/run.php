@@ -1266,7 +1266,8 @@ check('then a signed contract nobody has read', $key($worker + ['contract' => 's
 check('then the onboarding checklist',
     rg_person_next_action($worker + ['onboarding_outstanding' => 1])['label'], 'Finish onboarding (1 task)');
 check('then missing mandatory evidence',
-    rg_person_next_action($worker + ['blocking' => ['Right to work'], 'contract' => 'none'])['label'], 'Request Right to work');
+    rg_person_next_action($worker + ['blocking' => ['Right to work'], 'contract' => 'none'])['label'], 'Request right to work');
+check('initials keep their capitals', rg_person_next_action($worker + ['awaiting_review' => ['DBS check']])['label'], 'Verify DBS check');
 check('then the contract, from a draft', $key($worker + ['contract' => 'none']), 'draft_contract');
 check('a draft is sent', $key($worker + ['contract' => 'draft']), 'send_contract');
 check('a sent contract waits for the signed copy', $key($worker + ['contract' => 'sent']), 'record_signature');

@@ -78,14 +78,19 @@ export function ChecksTab({ profile, onChanged, onOpenEmployment }: {
         >
           <ul className="divide-y divide-border">
             {a.items.map((item) => (
-              <li key={item.key} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_auto] sm:items-start">
+              <li key={item.key} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,2fr)_10rem] sm:items-start">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{item.label}</span>
                     <StatusChip chip={item.chip} label={item.chip_label} />
                   </div>
                   <p className="mt-0.5 text-xs capitalize text-muted-foreground">{item.weight}</p>
-                  {item.reason && <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>}
+                  {/* The engine's reason describes the evidence it counts. Evidence that
+                      has arrived and is waiting for a reviewer does not count yet, so
+                      say that instead of "no evidence on file". */}
+                  {item.open_status === "received" || item.open_status === "under_review" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">Evidence received, waiting for a reviewer.</p>
+                  ) : item.reason && <p className="mt-1 text-xs text-muted-foreground">{item.reason}</p>}
                   {item.rejection_reason && (
                     <p className="mt-1 text-xs"><span className="font-medium">Rejected:</span> {item.rejection_reason}</p>
                   )}

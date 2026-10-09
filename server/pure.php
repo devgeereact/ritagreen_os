@@ -1570,13 +1570,17 @@ function rg_person_next_action(array $f): ?array
 {
     $act = static fn(string $key, string $label, string $tab): array =>
         ['key' => $key, 'label' => $label, 'tab' => $tab];
+    // "Right to work" mid-sentence is "right to work"; "DBS check" and "SIA
+    // licence" keep their capitals, because they are initials.
+    $inSentence = static fn(string $label): string =>
+        preg_match('/^[A-Z][a-z]/', $label) ? lcfirst($label) : $label;
     $hasWorker = !empty($f['has_worker']);
 
     if (!empty($f['suspended'])) {
         return $act('review_suspension', 'Review suspension', 'overview');
     }
     if (!empty($f['awaiting_review'])) {
-        return $act('verify', 'Verify ' . $f['awaiting_review'][0], 'checks');
+        return $act('verify', 'Verify ' . $inSentence($f['awaiting_review'][0]), 'checks');
     }
     if (!empty($f['rtw_needs_verify'])) {
         return $act('verify_rtw', 'Verify right to work', 'checks');
@@ -1591,7 +1595,7 @@ function rg_person_next_action(array $f): ?array
             'Finish onboarding (' . $outstanding . ' ' . ($outstanding === 1 ? 'task' : 'tasks') . ')', 'overview');
     }
     if ($hasWorker && !empty($f['blocking'])) {
-        return $act('request_evidence', 'Request ' . $f['blocking'][0], 'checks');
+        return $act('request_evidence', 'Request ' . $inSentence($f['blocking'][0]), 'checks');
     }
     if ($hasWorker && empty($f['approved'])) {
         if ($contract === 'none') return $act('draft_contract', 'Draft contract', 'employment');
@@ -1602,7 +1606,7 @@ function rg_person_next_action(array $f): ?array
         if (!empty($f['approvable'])) return $act('approve', 'Approve activation', 'overview');
     }
     if (!empty($f['expiring'])) {
-        return $act('renew', 'Renew ' . $f['expiring'][0], 'checks');
+        return $act('renew', 'Renew ' . $inSentence($f['expiring'][0]), 'checks');
     }
     if (!$hasWorker) {
         $stage = $f['applicant_stage'] ?? null;

@@ -26,7 +26,7 @@ export function OverviewTab({ profile, onChanged }: { profile: PersonProfile; on
           <Fact label="Email">{p.email ?? "Not recorded"}</Fact>
           <Fact label="Phone">{p.phone ?? "Not recorded"}</Fact>
           <Fact label="Address">{address || "Not recorded"}</Fact>
-          <Fact label="Start date">{p.start_date ? dateOnly(p.start_date) : "No agreed contract yet"}</Fact>
+          <Fact label="Start date">{p.start_date ? dateOnly(p.start_date) : "Not recorded"}</Fact>
           <Fact label="Payroll number"><span className="tabular-nums">{profile.payroll_no ?? "Not issued"}</span></Fact>
           <Fact label="Next shift">
             {profile.next_shift
