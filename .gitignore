@@ -32,3 +32,8 @@ server/uploads/
 *.sln
 *.sw?
 *.tsbuildinfo
+
+# Local environment files may contain credentials. Keep only the example public.
+.env
+.env.*
+!.env.example
