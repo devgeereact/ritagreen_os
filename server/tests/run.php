@@ -1322,6 +1322,130 @@ check('a draft contract cannot be signed', in_array('signed', RG_CONTRACT_TRANSI
 check('a signed contract can only be superseded', RG_CONTRACT_TRANSITIONS['signed'], ['superseded']);
 
 // ---------------------------------------------------------------------------
+group('rota: settings');
+
+check('the rest gap defaults to 11 hours', rg_setting_int('rest_gap_min_hours', []), 11);
+check('a stored value is used', rg_setting_int('rest_gap_min_hours', ['rest_gap_min_hours' => '10']), 10);
+check('a value that is not a number falls back', rg_setting_int('rest_gap_min_hours', ['rest_gap_min_hours' => 'eleven']), 11);
+check('a value out of bounds falls back', rg_setting_int('rest_gap_min_hours', ['rest_gap_min_hours' => '72']), 11);
+$threw = false;
+try { rg_setting_int('no_such_setting', []); } catch (InvalidArgumentException $e) { $threw = true; }
+check('an unknown setting is a programming error', $threw, true);
+
+// ---------------------------------------------------------------------------
+group('rota: real time across the clock changes (Europe/London)');
+
+check('an ordinary night is ten hours', rg_wall_minutes_between('2026-06-13 22:00:00', '2026-06-14 08:00:00'), 600);
+check('across 29 March 2026 (clocks forward) it is nine',
+    rg_wall_minutes_between('2026-03-28 22:00:00', '2026-03-29 08:00:00'), 540);
+check('across 25 October 2026 (clocks back) it is eleven',
+    rg_wall_minutes_between('2026-10-24 22:00:00', '2026-10-25 08:00:00'), 660);
+check('negative when the order is reversed', rg_wall_minutes_between('2026-06-14 08:00:00', '2026-06-13 22:00:00'), -600);
+check('minutes label', [rg_minutes_label(540), rg_minutes_label(630), rg_minutes_label(45)], ['9h', '10h 30m', '45m']);
+
+// ---------------------------------------------------------------------------
+group('rota: rest gap');
+
+$night = ['starts_at' => '2026-06-13 20:00:00', 'ends_at' => '2026-06-14 08:00:00'];
+$early = ['id' => 7, 'starts_at' => '2026-06-14 16:00:00', 'ends_at' => '2026-06-14 22:00:00'];
+$w = rg_rest_gap_warnings($night, [$early], 11);
+check('eight hours after a night shift is a warning', count($w), 1);
+check('naming the gap and the other shift', $w[0]['reason'] ?? '',
+    'Only 8h rest before the shift starting Sun 14 Jun 16:00 (the minimum is 11h).');
+check('and which shift it is', $w[0]['shift_id'] ?? null, 7);
+check('eleven hours exactly is enough',
+    rg_rest_gap_warnings($night, [['starts_at' => '2026-06-14 19:00:00', 'ends_at' => '2026-06-14 23:00:00']], 11), []);
+check('measured from the earlier shift too',
+    count(rg_rest_gap_warnings(['starts_at' => '2026-06-15 06:00:00', 'ends_at' => '2026-06-15 14:00:00'],
+        [['starts_at' => '2026-06-14 18:00:00', 'ends_at' => '2026-06-14 23:00:00']], 11)), 1);
+check('across midnight: 23:00 to 06:00 next day is seven hours',
+    rg_rest_gap_warnings(['starts_at' => '2026-06-15 06:00:00', 'ends_at' => '2026-06-15 14:00:00'],
+        [['starts_at' => '2026-06-14 15:00:00', 'ends_at' => '2026-06-14 23:00:00']], 11)[0]['gap_minutes'] ?? null, 420);
+check('an overlap is not a rest question (the clash check refuses it)',
+    rg_rest_gap_warnings($night, [['starts_at' => '2026-06-14 07:00:00', 'ends_at' => '2026-06-14 12:00:00']], 11), []);
+// Wall-clock gap of 10h 30m either side of each change.
+$springBefore = ['starts_at' => '2026-03-28 14:00:00', 'ends_at' => '2026-03-28 21:30:00'];
+$springAfter = ['starts_at' => '2026-03-29 08:00:00', 'ends_at' => '2026-03-29 16:00:00'];
+check('29 March: 21:30 to 08:00 reads 10h 30m and is 9h 30m',
+    rg_rest_gap_warnings($springAfter, [$springBefore], 11)[0]['gap_minutes'] ?? null, 570);
+$autumnBefore = ['starts_at' => '2026-10-24 14:00:00', 'ends_at' => '2026-10-24 21:30:00'];
+$autumnAfter = ['starts_at' => '2026-10-25 08:00:00', 'ends_at' => '2026-10-25 16:00:00'];
+check('25 October: the same times are 11h 30m, so no warning',
+    rg_rest_gap_warnings($autumnAfter, [$autumnBefore], 11), []);
+check('a minimum of zero switches the check off', rg_rest_gap_warnings($night, [$early], 0), []);
+
+// ---------------------------------------------------------------------------
+group('rota: leave and unavailability');
+
+check('a day shift touches one date', rg_shift_dates('2026-06-13 08:00:00', '2026-06-13 16:00:00'), ['2026-06-13']);
+check('a night shift touches two', rg_shift_dates('2026-06-13 20:00:00', '2026-06-14 08:00:00'), ['2026-06-13', '2026-06-14']);
+check('ending at midnight touches one', rg_shift_dates('2026-06-13 16:00:00', '2026-06-14 00:00:00'), ['2026-06-13']);
+
+$leave = [
+    ['starts_on' => '2026-06-14', 'ends_on' => '2026-06-20', 'status' => 'approved', 'kind' => 'annual'],
+    ['starts_on' => '2026-07-01', 'ends_on' => '2026-07-03', 'status' => 'requested', 'kind' => 'annual'],
+    ['starts_on' => '2026-08-01', 'ends_on' => '2026-08-01', 'status' => 'declined', 'kind' => 'annual'],
+];
+check('approved leave on the day blocks', rg_leave_conflict($leave, '2026-06-15 08:00:00', '2026-06-15 16:00:00')['kind'] ?? null, 'annual');
+check('a night shift running into the first day of leave blocks',
+    rg_leave_conflict($leave, '2026-06-13 20:00:00', '2026-06-14 08:00:00') !== null, true);
+check('the evening before leave, ending at midnight, does not',
+    rg_leave_conflict($leave, '2026-06-13 16:00:00', '2026-06-14 00:00:00'), null);
+check('a request still waiting does not block', rg_leave_conflict($leave, '2026-07-02 08:00:00', '2026-07-02 16:00:00'), null);
+check('declined leave does not block', rg_leave_conflict($leave, '2026-08-01 08:00:00', '2026-08-01 16:00:00'), null);
+check('taken leave blocks too',
+    rg_leave_conflict([['starts_on' => '2026-05-01', 'ends_on' => '2026-05-01', 'status' => 'taken']],
+        '2026-05-01 09:00:00', '2026-05-01 10:00:00') !== null, true);
+
+$blocks = [['starts_at' => '2026-06-15 00:00:00', 'ends_at' => '2026-06-15 12:00:00']];
+check('marked unavailable over the shift', rg_unavailability_conflict($blocks, '2026-06-15 08:00:00', '2026-06-15 16:00:00') !== null, true);
+check('touching ends are fine', rg_unavailability_conflict($blocks, '2026-06-15 12:00:00', '2026-06-15 20:00:00'), null);
+
+// ---------------------------------------------------------------------------
+group('rota: lifecycle words and change notices');
+
+check('draft', rg_shift_state(['status' => 'open', 'is_draft' => 1]), 'draft');
+check('a draft with a worker is still a draft', rg_shift_state(['status' => 'scheduled', 'is_draft' => 1]), 'draft');
+check('published open', rg_shift_state(['status' => 'open', 'is_draft' => 0]), 'open');
+check('offered', rg_shift_state(['status' => 'open', 'is_draft' => 0], 2), 'offered');
+check('assigned', rg_shift_state(['status' => 'scheduled', 'is_draft' => 0]), 'assigned');
+check('cancelled wins over draft', rg_shift_state(['status' => 'cancelled', 'is_draft' => 1]), 'cancelled');
+check('completed', rg_shift_state(['status' => 'completed', 'is_draft' => 0]), 'completed');
+
+$before = ['title' => 'Day carer', 'site_name' => 'Oakleaf', 'starts_at' => '2026-06-15 08:00:00', 'ends_at' => '2026-06-15 16:00:00'];
+check('nothing changed, nothing to say', rg_shift_change_lines($before, $before), []);
+check('a time change says both times',
+    rg_shift_change_lines($before, ['starts_at' => '2026-06-15 09:00:00', 'ends_at' => '2026-06-15 17:00:00'] + $before),
+    ['Time: Mon 15 Jun 08:00 to 16:00 is now Mon 15 Jun 09:00 to 17:00.']);
+check('a site change', rg_shift_change_lines($before, ['site_name' => 'Bramley Court'] + $before),
+    ['Site: Oakleaf is now Bramley Court.']);
+
+check('copying a week moves by seven days on the wall clock',
+    rg_add_days('2026-10-19 22:00:00', 7), '2026-10-26 22:00:00');
+check('across the clock change too', rg_add_days('2026-03-22 08:00:00', 7), '2026-03-29 08:00:00');
+check('week start of a Sunday', rg_week_start('2026-10-11'), '2026-10-05');
+check('week start of a Monday', rg_week_start('2026-10-05'), '2026-10-05');
+
+// ---------------------------------------------------------------------------
+group('rota: timesheets from the clock');
+
+check('summer clock events are converted to BST',
+    rg_clock_to_timesheet('2026-07-01 06:02:41', '2026-07-01 14:31:05'),
+    ['work_date' => '2026-07-01', 'start_time' => '07:02', 'end_time' => '15:31']);
+check('winter clock events are GMT',
+    rg_clock_to_timesheet('2026-12-01 07:00:00', '2026-12-01 15:00:00'),
+    ['work_date' => '2026-12-01', 'start_time' => '07:00', 'end_time' => '15:00']);
+check('a night shift keeps the start date',
+    rg_clock_to_timesheet('2026-12-01 20:00:00', '2026-12-02 08:00:00')['work_date'], '2026-12-01');
+check('a worker submits a draft', rg_timesheet_can('submit', 'draft'), true);
+check('or answers a query', rg_timesheet_can('submit', 'queried'), true);
+check('but cannot resubmit an approved entry', rg_timesheet_can('submit', 'approved'), false);
+check('the office queries what is waiting', rg_timesheet_can('query', 'pending'), true);
+check('not what it has approved', rg_timesheet_can('query', 'approved'), false);
+check('a correction never touches approved hours', rg_timesheet_can('correct', 'approved'), false);
+check('approve stays permissive', rg_timesheet_can('approve', 'rejected'), true);
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {
