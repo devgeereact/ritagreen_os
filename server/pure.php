@@ -2401,7 +2401,7 @@ function rg_import_guess_field(string $header): string
         'first_name'             => '/^first name|^forename|^given name/',
         'last_name'              => '/^last name|^surname|^family name/',
         'name'                   => '/full name|^name$|your name|^applicant name/',
-        'phone'                  => '/phone|mobile|telephone|contact number|^tel/',
+        'phone'                  => '/phone|mobile|contact number|^tel$|^tel\\b/',
         'postcode'               => '/post ?code|postal code/',
         'address'                => '/address/',
         'right_to_work'          => '/right to work|eligible to work|work in the uk/',

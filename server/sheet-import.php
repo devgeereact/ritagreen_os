@@ -177,10 +177,17 @@ if ($action === 'upload') {
         if ($score > $bestScore) { $best = $m; $bestScore = $score; }
     }
     $columns = [];
+    $taken = [];
     foreach ($normalised as $h) {
-        $columns[$h] = $best !== null
-            ? ((json_decode((string) $best['columns_json'], true) ?: [])[$h] ?? 'ignore')
-            : rg_import_guess_field($h);
+        // The saved mapping for headings it knows, a guess for any it does not
+        // (a question added to the form since the mapping was saved).
+        $saved = $best !== null ? (json_decode((string) $best['columns_json'], true) ?: []) : [];
+        $field = $saved[$h] ?? rg_import_guess_field($h);
+        // One column per field: a second column that looks like the same field
+        // is left for the person mapping to decide.
+        if ($field !== 'ignore' && isset($taken[$field])) $field = 'ignore';
+        $taken[$field] = true;
+        $columns[$h] = $field;
     }
     $mappingId = $best !== null ? (int) $best['id'] : null;
     $purpose = $best['purpose'] ?? 'applications';

@@ -1595,6 +1595,7 @@ check('emergency phone is not taken for phone', rg_import_guess_field('Emergency
 check('emergency name', rg_import_guess_field('Emergency contact name'), 'emergency_name');
 check('next of kin relationship', rg_import_guess_field('Next of kin relationship'), 'emergency_relationship');
 check('mobile', rg_import_guess_field('Mobile number'), 'phone');
+check('"tell us" is not a telephone', rg_import_guess_field('Tell us about your experience'), 'experience');
 check('role', rg_import_guess_field('Which role are you applying for?'), 'role');
 check('right to work', rg_import_guess_field('Do you have the right to work in the UK?'), 'right_to_work');
 check('how heard', rg_import_guess_field('How did you hear about us?'), 'how_heard');
