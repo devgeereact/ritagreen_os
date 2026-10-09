@@ -94,6 +94,13 @@ CREATE TABLE IF NOT EXISTS vacancies (
 -- public page through company.php. src/lib/company.ts keeps the same facts as the
 -- fallback, so the site still shows a phone number if the API is down.
 -- An empty social URL means "do not show that network".
+--
+-- Not app_settings (migration 038): that table holds owner-tunable numbers as
+-- name/value pairs of VARCHAR(255) with defaults in rg_setting_defaults(). This
+-- is one public record, published as a unit with an explicit field list, whose
+-- addresses can exceed 255 characters, and whose public read must never be able
+-- to return a setting that was not meant for the website. Typed columns make
+-- that list the schema rather than a filter.
 
 CREATE TABLE IF NOT EXISTS company_settings (
   id TINYINT UNSIGNED NOT NULL PRIMARY KEY,

@@ -1960,3 +1960,35 @@ and after and the reason (`timesheets.php?action=correct`), which is the entry's
 
 **`service_requests.owner_id`** and **`contact_enquiries.owner_id`** `INT NULL`, indexed. Who in
 the office owns the request (`requests.php`). No foreign key: users are archived, not deleted.
+
+## Careers, forms and company details: migration 039
+
+Re-runnable throughout (`CREATE TABLE IF NOT EXISTS`, `INSERT IGNORE`). Created by the
+migration only, not in `schema.sql`. Applied locally by the database suite; **not** applied to
+production.
+
+**`website_forms`**: the forms directory. `id`, `title` `VARCHAR(160)`, `purpose`
+`ENUM('recruitment','training','other')`, `service` ENUM of the four services, NULL for any,
+`google_form_id` `VARCHAR(200)` (the id only, never the pasted address; checked by
+`rg_parse_google_form()`), `display` `ENUM('embedded','link')`, `active` `TINYINT(1)`, `owner_id`
+FK → `users(id)` **ON DELETE SET NULL**, `integration_id` FK → `integrations(id)` **ON DELETE SET
+NULL** (the intake key its Apps Script posts to), `last_reviewed_at` `DATE` (set to today on
+create and by "reviewed"), `created_by` FK → `users(id)`, `created_at`, `updated_at`,
+`deleted_at`. Previous values are kept in `audit_log` (`website_form.update`), not a history
+table.
+
+**`vacancies`**: roles for `/careers`. `id`, `slug` `VARCHAR(80)` UNIQUE (fixed once
+`published_at` is set), `title`, `service` ENUM NOT NULL, `location`, `hours_text`, `pay_text`
+`VARCHAR(160) NULL` (free text, optional), `summary` `TEXT NOT NULL`, `requirements`, `checks`
+(`TEXT`, one item per line; `checks` prefilled per service), `status`
+`ENUM('draft','published','closed')`, `form_id` FK → `website_forms(id)` **ON DELETE SET NULL**,
+`owner_id` FK → `users(id)` **ON DELETE SET NULL**, `published_at` (first publication, kept on
+reopening), `closed_at`, `created_by`, `created_at`, `updated_at`, `deleted_at` (archive).
+
+**`company_settings`**: one row, `id = 1`. `trading_name`, `legal_name`, `company_no`, `phone`,
+`urgent_phone`, `email`, `office_hours`, `area`, `registered_address`, `instagram_url`,
+`facebook_url`, `linkedin_url`, `tiktok_url`, `whatsapp_url` (empty means "not shown"),
+`updated_by` FK → `users(id)` **ON DELETE SET NULL**, `updated_at`. Seeded from
+`src/lib/company.ts`. A separate table rather than `app_settings` (migration 038), whose rows are
+owner-tunable numbers as name/value pairs of 255 characters: this is one public record with a
+fixed field list, read whole by the website.
