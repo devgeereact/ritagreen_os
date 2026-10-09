@@ -145,10 +145,12 @@ Four surfaces, one bundle, one domain (`ritagreenservices.com`):
 
 ### Current Screens
 
-**Public (`src/pages/public/`, eager):** Home · Services · ServiceDetail · Sectors · About ·
-Accreditations · Careers · Apply · Contact · Quote · RequestCover · Resources · Article ·
-Verify (public certificate verification) · Offer (tokenised shift acceptance, no login) ·
-Legal · NotFoundPublic.
+**Public (`src/pages/public/`, lazy except Home; rebuilt in S6):** Home · ServicePage (the six
+service pages: Healthcare, Staffing, Supported living, Cleaning, Security, Training) · Request ·
+About · Careers · Contact · News · Article · Verify (public certificate verification) · Offer
+(tokenised shift acceptance, no login) · Legal · DataRequest · NotFoundPublic. The previous
+site's Services, ServiceDetail, Sectors, Accreditations, Quote, RequestCover, Resources and Apply
+pages are gone; their addresses redirect (`src/lib/public-routes.ts`, `public/.htaccess`).
 
 **Auth (`src/pages/auth/`):** Login · Register (creates an *applicant*, never a user) ·
 ForgotPassword · ResetPassword · GoogleCallback.
@@ -185,8 +187,8 @@ motion ≤200ms. Components: shadcn/ui `new-york` over Radix, 37 vendored into
 `src/components/ui/`. Icons: Lucide, one set. Dark mode via `next-themes`, every token
 redefined under `.dark`.
 
-Division accents (`src/lib/divisions.ts`) are a dot or a rule, never a page background:
-Care `#0C447C` · Academy `#B7791F` · Cleaning `#5DCAA5` · Security `#1B2A3C`.
+Service accents (`src/lib/services.ts`) are a dot or a rule, never a page background:
+Healthcare `#33512D` · Cleaning `#2C6E7F` · Security `#3B4452` · Training `#B7791F`.
 
 The repository previously carried **four competing brand palettes**; three were retired.
 Multi-tenancy reintroduces exactly this risk at scale — see Part B §3 on tenant theming, and do
@@ -340,7 +342,7 @@ src/
   routes/index.tsx      every route, in one file
   pages/                public/ · app/ · auth/ · portal/ · worker/
   components/ui/        37 vendored shadcn components
-  lib/                  access.ts · divisions.ts · types.ts · pdf.ts · csv.ts · api client
+  lib/                  access.ts · services.ts · service-pages.ts · types.ts · pdf.ts · csv.ts · api client
   providers/            auth context
   hooks/use-api.ts      the one fetch hook
 server/
@@ -1258,18 +1260,19 @@ their evidence pack is exported for an inspector.
 
 ### 1. A stranger arrives — the public site
 
-The 17 public pages carry the marketing story (Home, Services, ServiceDetail, Sectors, About,
-Accreditations, Resources, Article, Legal), the two commercial front doors (Contact, Quote,
-RequestCover) and the two recruitment front doors (Careers, Apply). Two further pages exist for
+The public pages (rebuilt in S6) carry the story (Home, six service pages, About, News,
+Article, Legal), one commercial front door (Request, with four focused forms, plus the general
+form on Contact) and one recruitment front door (Careers). Two further pages exist for
 people who arrive holding a link rather than an intention: **Verify**, which resolves a
 certificate id, and **Offer**, which resolves a shift-offer token.
 
-Four public writes exist, all rate-limited, all consent-logged where they concern a person:
+Five public writes exist, all rate-limited, all consent-logged where they concern a person:
 
 | Route | Creates | Also does |
 |---|---|---|
-| `contact.php` POST | `contact_enquiries` | Office alert with the sender as `Reply-To`, plus an autoresponder. CR/LF stripped from every header value. A message beginning `CAREERS APPLICATION` switches both to careers wording |
+| `contact.php` POST | `contact_enquiries` | Office alert with the sender as `Reply-To`, plus an autoresponder. CR/LF stripped from every header value. `type` care or training (S6) files it under Healthcare or Training and opens the message with the type. A message beginning `CAREERS APPLICATION` switches both to careers wording |
 | `bookings.php` POST | `service_requests` | Links to an existing client by email, writes `consent_log`, raises a broadcast notification, emails the office |
+| `quotes.php?action=request` POST | `service_requests` (division `cleaning`, detail opens "Cleaning quote request") | The website's cleaning quote (S6). The same as bookings, never a priced quote |
 | `ats.php` POST | `applicants` (source `careers`) | `consent_log`, broadcast notification, office email |
 | `auth.php?action=register` | `applicants` (source `self-registration`) | The same three |
 
@@ -1280,7 +1283,7 @@ Enquiries land in `enquiries.php` for the office and can be marked handled. Cove
 
 Four intake routes, all of which resolve to **one person**:
 
-1. `/apply` on the public site.
+1. `/careers` on the public site (`/apply` redirects there).
 2. Self-registration through `auth.php?action=register`.
 3. **Google Forms**, through `forms-intake.php`. Apps Script POSTs with a shared secret in the
    `X-RitaGreen-Secret` header, compared with `hash_equals`; an integration with no secret
@@ -1838,7 +1841,7 @@ eligible for Security" for cleaners.
 | Guard | `src/auth/RequireAuth.tsx` | Redirects to the user's own home, not to a dead end |
 | Auth context | `src/providers/auth-provider.tsx` | The `Role` union and token handling. `homeFor()` sits in `src/lib/access.ts`, beside the other account-kind helpers |
 | Fetch hook | `src/hooks/use-api.ts` | A hand-rolled GET hook with a monotonic request-id guard, so a slow earlier response cannot overwrite a faster later one. No cache, no mutation layer, no optimistic update |
-| Divisions | `src/lib/divisions.ts` | Single source for names, taglines, audiences, assurances, services and accents — drives the mega-menu, the services pages, the home page and the footer |
+| Services | `src/lib/services.ts`, `src/lib/service-pages.ts` | Public names and accents for the four services; the words for the six service pages |
 | Types | `src/lib/types.ts` | Including `Person`, `EligibilityVerdict`, `RequirementState`, `RightToWorkCheck`, `AuditEntry`, `QueuedEmail` |
 | Export | `src/lib/pdf.ts`, `src/lib/csv.ts` | jsPDF; SheetJS plus file-saver |
 | Shells | `PublicLayout`, `AppLayout` | Marketing nav and footer; collapsible sidebar rail with sticky header carrying global search, the AI assistant, theme toggle, notifications and the account menu |

@@ -53,7 +53,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| The public can apply | `applicants` | `server/ats.php` | `src/pages/public/Apply.tsx` | none |
+| The public can apply | `applicants` | `server/ats.php` | `src/pages/public/Careers.tsx` | none |
 | Applications move through stages | `applicants.stage` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Onboarding generates tasks | `onboarding_tasks` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | A learner can become a candidate | `applicants.source` | `server/ats.php` | `src/pages/app/Academy.tsx` | none |
@@ -148,6 +148,8 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
 | The office is emailed on an enquiry | `contact_enquiries` | `server/contact.php` | `src/pages/public/Contact.tsx` | none |
+| Each website enquiry reaches the right queue (staff, cleaning quote, care, training, general) | `service_requests`, `contact_enquiries` | `server/bookings.php`, `server/quotes.php?action=request`, `server/contact.php` (`type`) | `src/components/public/forms/`, `src/pages/public/Request.tsx` | `server/tests/db/cases/130_website_enquiries.php` |
+| Old website addresses still land | — | `public/.htaccess` (301) | `src/routes/legacy-redirects.tsx` | `src/lib/__tests__/public-routes.test.ts` |
 | Staff can reply from the app | — | `server/inbox.php` | `src/pages/app/Mailbox.tsx` | none |
 | Workers are reachable by SMS or WhatsApp | `sms_log` | `send_sms()` in `server/lib.php` | `src/pages/app/Comms.tsx` | none |
 | Staff see in-app notifications | `notifications` | `server/notifications.php` | `src/components/notification-dropdown.tsx` | none |
@@ -162,8 +164,8 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Sensitive actions are audited | `audit_log` | `audit()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
 | Audit records before and after values | `audit_log.before_json`, `after_json` | `audit_diff()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
 | A record's own history is retrievable | `audit_log.entity_type`, `entity_id` | `server/audit.php` | planned | none |
-| Consent is recorded | `consent_log` | `server/ats.php`, `server/bookings.php`, `server/auth.php` | the four consent checkboxes | none |
-| Marketing is opt-in and reversible | `consent_log` (`kind = 'marketing'`) | `server/contact.php`, `server/unsubscribe.php` | `src/pages/public/Contact.tsx`, `src/pages/public/Quote.tsx` | `server/tests/run.php` (token) |
+| Consent is recorded | `consent_log` | `server/ats.php`, `server/bookings.php`, `server/quotes.php`, `server/auth.php` | the consent checkboxes on the website forms | `server/tests/db/cases/130_website_enquiries.php` (quote) |
+| Marketing is opt-in and reversible | `consent_log` (`kind = 'marketing'`) | `server/contact.php`, `server/quotes.php`, `server/unsubscribe.php` | `src/components/public/forms/ContactForms.tsx`, `src/components/public/forms/CleaningQuoteForm.tsx` | `server/tests/run.php` (token), `server/tests/db/cases/130_website_enquiries.php` |
 | Subject data can be exported | resolved through `people` | `server/gdpr.php` | `src/pages/app/Settings.tsx` | none |
 | A person can make a request | `data_requests` | `server/data-request.php` | `src/pages/public/DataRequest.tsx` | none |
 | Deletion requires approval | `deletion_requests` | `server/governance.php` | planned | none |

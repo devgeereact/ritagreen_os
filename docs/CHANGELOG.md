@@ -7,6 +7,64 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Changed: the public website rebuilt, section S6 (2026-10-09, local, not deployed)
+
+The website now follows the 2026 plan (file 05) and the homepage mock.
+
+- **New look on every public page.** Warm paper, white surfaces with 1px borders, deep green
+  blocks, Source Serif 4 headings, 8px radius, no shadow outside menus and the storage notice.
+  The hero gradients, engineering grids, mesh bands, floating and tilted cards, pulsing glows,
+  fade-up entrances and animated counters are removed, with their CSS. Header: Healthcare,
+  Cleaning, Security, Training, Careers, About, Contact, a Staff login link and one Request
+  staff button (shown on phones too), with a slim phone and hours bar. Footer from
+  `useCompanyDetails()`; the registered address is left out while unconfirmed; X is dropped.
+- **New pages.** Home with the file 05 sections and copy. Six service pages on one pattern
+  (`/healthcare`, `/healthcare/staffing`, `/healthcare/supported-living`, `/cleaning`,
+  `/security`, `/training`), content in `src/lib/service-pages.ts`. `/request` with four
+  focused forms. `/news` and `/news/:slug` replace `/resources`. About, Contact, Careers,
+  Verify, Article, the 404 and the legal pages are restyled.
+- **Enquiries reach the right queue.** Request staff goes to `bookings.php`. The cleaning quote
+  goes to the new public `quotes.php?action=request`, which files a Cleaning request in the
+  Bookings queue rather than a priced quote; the old `/quote` form posted to `contact.php`.
+  Care, training and general enquiries go to `contact.php` with a `type`; a care enquiry is
+  filed under Healthcare, a training one under Training, and the stored message opens with the
+  type so the office Enquiries screen shows it. No schema change.
+- **Every form**: labels, "(optional)" on optional fields, inline errors tied to their field,
+  focus to the first error, input kept on failure with a plain failure message and the phone
+  number, a success panel that takes focus, and a privacy notice link.
+- **Old addresses redirect**, in the app and with 301 rules in `public/.htaccess`: `/services`
+  to the services overview on the home page (it listed all four, so Healthcare alone would be
+  wrong; `/services#care` and the other old anchors go to their own pages), the twelve
+  `/services/:slug` pages to their new pages, `/sectors` and `/accreditations` to `/about`,
+  `/resources` to `/news`, `/apply` to `/careers`, `/quote` to `/request?type=cleaning`.
+- **SEO.** Titles and descriptions per page (the separator is now a pipe, not a dash).
+  JSON-LD: `EmploymentAgency` and `LocalBusiness` on home, `Service` on service pages,
+  `Article` on posts. `dist/sitemap.xml` is generated at build time from
+  `src/lib/public-routes.ts`; `public/sitemap.xml` is removed. Static pages only (posts are in
+  the database). `index.html` meta and Open Graph copy rewritten; `public/og.png` redrawn.
+- **Healthcare and Training** replace Care and Academy in public copy, `index.html` and
+  `Verify.tsx`. Stored blog categories (`Care`, `Academy`) and the certificate issuer in
+  `server/certificates.php` are **not** migrated; the frontend shows them as Healthcare,
+  Training and "RitaGreen Services (Training)".
+- **Nothing invented is shown.** The bundled sample posts (shown whenever the API returned
+  nothing) and six sample testimonials with a "5.0 from 27" summary are removed; news and
+  testimonials appear only when real ones are published in the office app. Claims the plan
+  does not support are gone: 100%, a guaranteed interview, insurance figures, accreditation
+  and regulator alignment statements. Supported living says "talk to us", not a registration.
+- **Images**: the five stock photographs stay as placeholders, listed in
+  `src/lib/site-images.ts` with neutral alt text and never captioned as staff or clients.
+- **Retired**: `Services`, `ServiceDetail`, `Sectors`, `Accreditations`, `Quote`,
+  `RequestCover`, `Resources` and `Apply` pages, `src/lib/divisions.ts`,
+  `src/lib/division-icons.tsx`, `src/components/public/marketing.tsx`,
+  `src/hooks/use-count-up.ts`.
+- **Tests**: `server/tests/db/cases/130_website_enquiries.php` (all three routes, refusals,
+  rate limit, the staff side stays closed); pure tests for the cleaning option lists;
+  `src/lib/__tests__/public-routes.test.ts` (sitemap, redirect map, 301 rules in step).
+
+**Deploy order.** Upload `server/quotes.php`, `server/contact.php` and `server/pure.php`
+before the frontend: until then the cleaning quote form would reach the staff-only quotes
+endpoint and fail. Copy the new redirect block into the live `.htaccess` by hand.
+
 ### Added: people and compliance, section S2 (2026-10-09, local, not deployed)
 
 Launch plan Phase 3's missing screens, and the person profile.

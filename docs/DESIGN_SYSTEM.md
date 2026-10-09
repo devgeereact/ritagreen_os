@@ -81,7 +81,7 @@ button or a filled surface.
 | Security | `security` | `#3B4452` |
 | Training | `academy` | `#B7791F` |
 
-Defined once in `src/lib/services.ts`. `src/lib/divisions.ts` (the public site's service copy)
+Defined once in `src/lib/services.ts`. `src/lib/service-pages.ts` (the public site's service copy)
 and `src/lib/format.ts` (`DIVISION_LABELS`, `DIVISION_ACCENTS` for the office pages) read
 from it. Training shares ochre with `--highlight`, so on a screen that shows service colours,
 "open" or "attention" is `--warning`, not ochre: the rota's open shifts are drawn that way.
@@ -136,9 +136,9 @@ variable, not individual components. 1px borders.
 
 Interface motion is 150 to 200ms: `fade-in` and the accordion run at 200ms, the sidebar chevron
 at 150ms. Motion shows a relationship between states; it is never decoration. Reduced-motion
-settings are honoured globally in `src/index.css`. `fade-up` (600ms) and the hero
-`animate-float` / `animate-glow` utilities are website leftovers that section S6 removes with the
-website rebuild.
+settings are honoured globally in `src/index.css`. The website's `fade-up` entrances, the hero
+`animate-float` / `animate-glow` utilities, the gradient and grid backgrounds and the animated
+counters were removed in S6; do not bring them back.
 
 Focus rings are always visible: `:focus-visible` draws a 2px `--ring` outline on every
 interactive element.
@@ -149,7 +149,13 @@ Container centred, 1.5rem padding, capped at 1200px at `2xl`.
 
 Shells:
 
-- `PublicLayout`: the website. Navigation, footer, storage notice, light only.
+- `PublicLayout`: the website. Navigation, footer, storage notice, light only. Its building
+  blocks (S6) are in `src/components/public/section.tsx` (`PageHeader`, `Section`,
+  `SectionTitle`, `Steps`, `CheckList`, `ServiceTag`, `CareersBand`, `CtaBand`),
+  `site-button.ts` (44px website buttons) and `forms/` (labelled native fields with errors tied
+  by `aria-describedby`, focus to the first error, input kept on failure, a success panel that
+  takes focus). The wordmark is `src/components/brand/Wordmark.tsx`. Website photographs are
+  placeholders listed in `src/lib/site-images.ts`, never captioned as RitaGreen staff or clients.
 - `AppLayout`: the office app. Sidebar rail, sticky header with search, theme toggle,
   notifications and the account menu. The AI assistant appears in the header only while its
   feature switch is on (it is being retired).
@@ -218,8 +224,9 @@ ImageMagick, for example:
 convert -background none -density 1536 public/favicon.svg -resize 512x512 -depth 8 -strip PNG32:public/icon-512.png
 ```
 
-Regenerate them whenever the mark changes. `public/og.png`, the social share image, predates v3
-(an older green and the retired "Care" label) and is redone with the website in S6.
+Regenerate them whenever the mark changes. `public/og.png`, the social share image, was redrawn in S6: 1200 by 630, green-700, the
+wordmark and "Healthcare staffing, cleaning, security and training in London" in the
+self-hosted fonts, rendered with headless Chrome from a one-off HTML page.
 
 ## 8. Retired artefacts
 
