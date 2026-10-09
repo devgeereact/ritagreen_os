@@ -346,6 +346,61 @@ function require_service_scope_tx(mysqli $conn, array $user, ?string $service): 
 }
 
 /**
+ * Every service each of these people is connected to, keyed by person id.
+ *
+ * A person holds a service through a worker record, an application or a
+ * person_services row (migration 001). Lists that show people rather than
+ * workers -- the verification queue, right-to-work checks due, leave waiting on a
+ * decision -- need this to apply a service scope, and asking once for the whole
+ * page is cheaper than once per row.
+ *
+ * @param list<int> $personIds
+ * @return array<int, list<string>>
+ */
+function rg_people_services(mysqli $conn, array $personIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $personIds), static fn($id) => $id > 0)));
+    if ($ids === []) return [];
+
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $stmt = $conn->prepare(
+        "SELECT person_id, division AS service FROM workers WHERE person_id IN ($marks) AND deleted_at IS NULL
+         UNION SELECT person_id, division FROM applicants WHERE person_id IN ($marks) AND deleted_at IS NULL
+         UNION SELECT person_id, service FROM person_services WHERE person_id IN ($marks) AND active = 1"
+    );
+    $params = array_merge($ids, $ids, $ids);
+    $stmt->bind_param($types . $types . $types, ...$params);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $out = [];
+    while ($row = $res->fetch_assoc()) {
+        $out[(int) $row['person_id']][] = (string) $row['service'];
+    }
+    foreach ($out as $id => $services) $out[$id] = array_values(array_unique($services));
+    return $out;
+}
+
+/**
+ * Refuse a person who is outside this account's service scope.
+ *
+ * The person-level endpoints (verifications, right to work, leave, the profile)
+ * took a person id and applied no scope at all, so a manager confined to security
+ * could read a care worker's vetting record by changing a number. The rule is
+ * rg_person_in_scope() in pure.php: in scope when any service the person holds is
+ * the account's. Records belonging to the person's OTHER services are then
+ * filtered by the caller, record by record.
+ */
+function require_person_scope(mysqli $conn, array $user, int $personId): void
+{
+    $scope = service_scope($user);
+    if ($scope === null) return;
+    $services = rg_people_services($conn, [$personId])[$personId] ?? [];
+    if (!rg_person_in_scope($scope, $services)) fail('You do not have access to this.', 403);
+}
+
+/**
  * Find the person these details describe, or create them.
  *
  * Every path that creates a candidate, worker or login goes through here, which

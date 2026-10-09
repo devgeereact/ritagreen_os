@@ -40,6 +40,7 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'pack') {
     $stmt->execute();
     $w = $stmt->get_result()->fetch_assoc();
     if (!$w) fail('Worker not found.', 404);
+    require_service_scope($user, $w['division']);
 
     $credentials = [];
     if ($w['dbs_expiry'] || $w['dbs_status']) {
@@ -103,6 +104,7 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility') {
     $service = trim((string) ($_GET['service'] ?? ''));
     $valid = ['care', 'academy', 'cleaning', 'security'];
     if ($service !== '' && !in_array($service, $valid, true)) fail('Unknown service.');
+    require_service_scope($user, worker_division($conn, $workerId));
 
     $verdict = rg_deployment_check($conn, $workerId, $service !== '' ? $service : null);
     json_out($verdict);
@@ -114,11 +116,12 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility_all') {
     $workerId = (int) ($_GET['worker_id'] ?? 0);
     if ($workerId <= 0) fail('A worker is required.');
 
-    $stmt = $conn->prepare('SELECT person_id, name, role FROM workers WHERE id = ? AND deleted_at IS NULL');
+    $stmt = $conn->prepare('SELECT person_id, name, role, division FROM workers WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $workerId);
     $stmt->execute();
     $w = $stmt->get_result()->fetch_assoc();
     if (!$w) fail('Worker not found.', 404);
+    require_service_scope($user, $w['division']);
 
     $services = [];
     foreach (['care', 'academy', 'cleaning', 'security'] as $service) {
@@ -136,17 +139,21 @@ if (method() === 'GET' && ($_GET['action'] ?? '') === 'eligibility_all') {
 
 if (method() === 'GET') {
     $items = [];
+    // A manager confined to one service saw every service's credentials here.
+    $scope = service_scope($user);
 
     // DBS + SIA held on the worker row.
     $res = $conn->query(
-        'SELECT id, name, division, dbs_status, dbs_expiry, sia_number, sia_expiry
+        'SELECT id, person_id, name, division, dbs_status, dbs_expiry, sia_number, sia_expiry
          FROM workers WHERE deleted_at IS NULL'
     );
     while ($w = $res->fetch_assoc()) {
+        if (!rg_in_service_scope($scope, $w['division'])) continue;
+        $personId = $w['person_id'] !== null ? (int) $w['person_id'] : null;
         if ($w['dbs_expiry'] || $w['dbs_status']) {
             $c = classify($w['dbs_expiry']);
             $items[] = [
-                'worker_id' => (int) $w['id'], 'worker' => $w['name'], 'division' => $w['division'],
+                'worker_id' => (int) $w['id'], 'person_id' => $personId, 'worker' => $w['name'], 'division' => $w['division'],
                 'type' => 'DBS check', 'identifier' => null,
                 'expiry' => $w['dbs_expiry'], 'status' => $c['status'], 'days' => $c['days'],
             ];
@@ -154,7 +161,7 @@ if (method() === 'GET') {
         if ($w['sia_number'] || $w['sia_expiry']) {
             $c = classify($w['sia_expiry']);
             $items[] = [
-                'worker_id' => (int) $w['id'], 'worker' => $w['name'], 'division' => $w['division'],
+                'worker_id' => (int) $w['id'], 'person_id' => $personId, 'worker' => $w['name'], 'division' => $w['division'],
                 'type' => 'SIA licence', 'identifier' => $w['sia_number'],
                 'expiry' => $w['sia_expiry'], 'status' => $c['status'], 'days' => $c['days'],
             ];
@@ -163,14 +170,17 @@ if (method() === 'GET') {
 
     // Extra certifications.
     $res = $conn->query(
-        'SELECT c.worker_id, w.name AS worker, w.division, c.type, c.number, c.expiry
+        'SELECT c.worker_id, w.person_id, w.name AS worker, w.division, c.type, c.number, c.expiry
          FROM certifications c JOIN workers w ON w.id = c.worker_id
          WHERE w.deleted_at IS NULL'
     );
     while ($row = $res->fetch_assoc()) {
+        if (!rg_in_service_scope($scope, $row['division'])) continue;
         $c = classify($row['expiry']);
         $items[] = [
-            'worker_id' => (int) $row['worker_id'], 'worker' => $row['worker'], 'division' => $row['division'],
+            'worker_id' => (int) $row['worker_id'],
+            'person_id' => $row['person_id'] !== null ? (int) $row['person_id'] : null,
+            'worker' => $row['worker'], 'division' => $row['division'],
             'type' => $row['type'], 'identifier' => $row['number'],
             'expiry' => $row['expiry'], 'status' => $c['status'], 'days' => $c['days'],
         ];
@@ -198,11 +208,13 @@ if (method() === 'POST') {
     if ($workerId <= 0 || $type === '') fail('A worker and certification type are required.');
     if ($expiry !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiry)) fail('Expiry must be a date (YYYY-MM-DD).');
 
-    // Worker must exist.
-    $stmt = $conn->prepare('SELECT id FROM workers WHERE id = ? AND deleted_at IS NULL');
+    // Worker must exist, and be in the caller's service.
+    $stmt = $conn->prepare('SELECT id, division FROM workers WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $workerId);
     $stmt->execute();
-    if (!$stmt->get_result()->fetch_assoc()) fail('Worker not found.', 404);
+    $target = $stmt->get_result()->fetch_assoc();
+    if (!$target) fail('Worker not found.', 404);
+    require_service_scope($user, $target['division']);
 
     $expiryVal = $expiry !== '' ? $expiry : null;
     $stmt = $conn->prepare('INSERT INTO certifications (worker_id, type, number, expiry) VALUES (?, ?, ?, ?)');

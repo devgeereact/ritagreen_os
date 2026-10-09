@@ -27,7 +27,7 @@ if (method() === 'GET') {
     // A division-scoped account sees only its own division's workforce.
     $scope = service_scope($user);
     $res = $conn->query(
-        'SELECT id, name, email, phone, role, division, status, right_to_work,
+        'SELECT id, person_id, name, email, phone, role, division, status, right_to_work,
                 dbs_status, dbs_expiry, sia_number, sia_expiry,
                 pay_rate_pence, pay_type, holiday_hours,
                 home_postcode, travel_radius_mi, avail_days, avail_nights, avail_weekends, created_at
@@ -38,6 +38,8 @@ if (method() === 'GET') {
     $workers = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
+        // The person profile is keyed by person, not worker: one human, one page.
+        $row['person_id'] = $row['person_id'] !== null ? (int) $row['person_id'] : null;
         $row['right_to_work'] = (bool) $row['right_to_work'];
         $row['pay_rate_pence'] = (int) $row['pay_rate_pence'];
         $row['holiday_hours'] = (float) $row['holiday_hours'];
@@ -168,33 +170,17 @@ if ($action === 'approve' && method() === 'POST') {
     if (!$w) fail('Worker not found.', 404);
     require_service_scope($user, $w['division']);
 
-    if ($w['approved_at'] !== null) fail('This worker is already approved.', 409);
-
     // Approval does not override the things it sits on top of. Approving somebody
     // whose onboarding is unfinished would make the approval mean nothing, and
     // approving a leaver or a suspended worker is not a decision anybody means to
-    // make. Checked with the same function the gate uses, minus the approval test
-    // itself -- which is what is being granted here.
-    $outstanding = rg_onboarding_outstanding($conn, (int) $w['person_id']);
-    // array_merge, not `+`. The union operator keeps the LEFT operand's keys, and
-    // $w already carries approved_at => null -- so the placeholder never landed
-    // and the gate refused every approval for want of the approval being granted.
-    $gate = rg_employment_gate(
-        array_merge($w, ['approved_at' => 'granting']),
-        ['onboarding_outstanding' => $outstanding]
-    );
-    if (!$gate['ok']) fail('This worker cannot be approved yet. ' . $gate['reason'], 409);
-
-    // A signed contract that somebody with the authority has read. A signature is
-    // evidence that the worker agreed; a review is evidence that the company did.
-    $stmt = $conn->prepare(
-        'SELECT COUNT(*) FROM employment_contracts
-          WHERE person_id = ? AND status = "signed" AND reviewed_at IS NOT NULL'
-    );
-    $stmt->bind_param('i', $w['person_id']);
-    $stmt->execute();
-    if ((int) $stmt->get_result()->fetch_row()[0] === 0) {
-        fail('This worker has no signed employment contract that has been reviewed.', 409);
+    // make. Then a signed contract that somebody with the authority has read.
+    //
+    // rg_approval_blockers() in pure.php holds the rule, so the person profile can
+    // show the same reasons before anybody presses the button.
+    $blockers = rg_approval_readiness($conn, $w);
+    if ($blockers) {
+        $first = $blockers[0];
+        fail(($first['code'] === 'employment' ? 'This worker cannot be approved yet. ' : '') . $first['reason'], 409);
     }
 
     $uid = (int) $user['id'];
@@ -208,6 +194,31 @@ if ($action === 'approve' && method() === 'POST') {
     // Another request got there first. Reporting success would attribute the
     // approval to whoever asked second.
     if ($stmt->affected_rows === 0) fail('This worker is already approved.', 409);
+
+    // The application that produced this worker reaches 'onboarded' here and
+    // nowhere else. rg_stage_transition() refuses it by hand ("approving
+    // activation sets this stage") and nothing set it, so a candidate approved
+    // for work still read as half way through onboarding on the recruitment board.
+    $stmt = $conn->prepare(
+        'SELECT id FROM applicants WHERE worker_id = ? AND stage = "onboarding" AND deleted_at IS NULL'
+    );
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $apps = [];
+    while ($row = $res->fetch_assoc()) $apps[] = (int) $row['id'];
+    foreach ($apps as $appId) {
+        $stmt = $conn->prepare('UPDATE applicants SET stage = "onboarded" WHERE id = ?');
+        $stmt->bind_param('i', $appId);
+        $stmt->execute();
+        $reasonText = 'Approved for work';
+        $stmt = $conn->prepare(
+            'INSERT INTO applicant_stage_history (applicant_id, from_stage, to_stage, reason, changed_by)
+             VALUES (?, "onboarding", "onboarded", ?, ?)'
+        );
+        $stmt->bind_param('isi', $appId, $reasonText, $uid);
+        $stmt->execute();
+    }
 
     // Recalculated now, not at the next cron run. A worker who has just been
     // approved and whose dashboard still says "pre-employment" until tomorrow
@@ -249,6 +260,65 @@ if ($action === 'unapprove' && method() === 'POST') {
     audit($conn, $uid, 'worker.unapprove', $w['name'], 'worker', $id,
         ['approved_at' => $w['approved_at']], ['approved_at' => null, 'reason' => $reason]);
     json_out(['ok' => true, 'approved' => false]);
+}
+
+// ----- Suspend a worker, or lift the suspension -----
+// POST /workers.php?action=suspend&id=N   {reason}
+// POST /workers.php?action=reinstate&id=N {reason}
+//
+// Migration 035 let the status column hold 'suspended' and nothing could write
+// it, so standing somebody down while a concern was looked into meant marking
+// them inactive -- which says something else. Suspension does not withdraw the
+// approval: it is a pause, and rg_employment_gate() refuses a suspended worker on
+// its own. Lifting it returns them to where they were.
+if (($action === 'suspend' || $action === 'reinstate') && method() === 'POST') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id <= 0) fail('A worker is required.');
+    $reason = trim((string) (body()['reason'] ?? ''));
+    if ($reason === '') {
+        fail($action === 'suspend' ? 'A reason is required to suspend a worker.' : 'A reason is required to lift a suspension.');
+    }
+    if (mb_strlen($reason) > 255) fail('Please keep the reason under 255 characters.');
+
+    $stmt = $conn->prepare(
+        'SELECT id, name, division, status, approved_at FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $w = $stmt->get_result()->fetch_assoc();
+    if (!$w) fail('Worker not found.', 404);
+    require_service_scope($user, $w['division']);
+
+    $uid = (int) $user['id'];
+    if ($action === 'suspend') {
+        if ($w['status'] === 'suspended') fail('This worker is already suspended.', 409);
+        $stmt = $conn->prepare(
+            'UPDATE workers SET status = "suspended", suspended_at = NOW(), suspended_by = ?, suspension_reason = ?
+              WHERE id = ? AND status <> "suspended"'
+        );
+        $stmt->bind_param('isi', $uid, $reason, $id);
+        $stmt->execute();
+        if ($stmt->affected_rows === 0) fail('This worker is already suspended.', 409);
+        $to = 'suspended';
+    } else {
+        if ($w['status'] !== 'suspended') fail('This worker is not suspended.', 409);
+        // Back to active only if somebody had approved them; otherwise they were
+        // still onboarding when the suspension started, and still are.
+        $to = $w['approved_at'] !== null ? 'active' : 'onboarding';
+        $stmt = $conn->prepare(
+            'UPDATE workers SET status = ?, suspended_at = NULL, suspended_by = NULL, suspension_reason = NULL
+              WHERE id = ? AND status = "suspended"'
+        );
+        $stmt->bind_param('si', $to, $id);
+        $stmt->execute();
+        if ($stmt->affected_rows === 0) fail('This worker is not suspended.', 409);
+    }
+
+    rg_refresh_worker_status($conn, $id);
+    audit($conn, $uid, 'worker.' . $action, $w['name'], 'worker', $id,
+        ['status' => $w['status']], ['status' => $to], $reason);
+    json_out(['ok' => true, 'status' => $to]);
 }
 
 if (method() === 'POST') {
