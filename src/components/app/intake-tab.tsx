@@ -1,5 +1,7 @@
+import { useState } from "react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
-import { AlertTriangle, RefreshCw } from "lucide-react"
+import { AlertTriangle, KeyRound, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,6 +12,13 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import { shortDate } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { IntakeBadge } from "@/components/app/intake-badge"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { useAuth } from "@/providers/auth-provider"
+import type { WebsiteForm } from "@/lib/types"
 
 /**
  * Linked form intake: is it working, and what has it dropped.
@@ -18,6 +27,11 @@ import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-blo
  * it, so a form that silently stopped feeding the system looked exactly like a
  * quiet week, and a submission that failed to map was a person who applied and
  * then vanished. Both are now on a screen somebody looks at.
+ *
+ * Section S7 added the website's forms directory above them (forms not reviewed
+ * for 90 days, and each form's intake health), and the owner's "Set a new
+ * secret" action, which is how an integration gets the shared secret its Apps
+ * Script sends. See docs/runbooks/google-forms-intake.md.
  */
 
 type Integration = {
@@ -50,8 +64,28 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
 }
 
 export function IntakeTab() {
+  const { hasRole } = useAuth()
+  const isOwner = hasRole("super_admin", "admin")
   const health = useApi<{ integrations: Integration[] }>("forms-intake.php?action=health")
   const subs = useApi<{ submissions: Submission[] }>("forms-intake.php?action=submissions")
+  const websiteForms = useApi<{ forms: WebsiteForm[] }>("website-forms.php")
+  const [shown, setShown] = useState<{ key: string; secret: string } | null>(null)
+
+  async function setSecret(i: Integration) {
+    const replacing = i.configured
+      ? "This replaces the current secret. The form stops feeding the system until its Apps Script is given the new one. Continue?"
+      : "Create a secret for this form?"
+    if (!window.confirm(replacing)) return
+    try {
+      const res = await api<{ integration_key: string; secret: string }>(
+        `forms-intake.php?action=set_secret&id=${i.id}`, { method: "POST", body: {} },
+      )
+      setShown({ key: res.integration_key, secret: res.secret })
+      health.reload()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not set the secret.")
+    }
+  }
 
   async function retry(id: number) {
     try {
@@ -71,15 +105,62 @@ export function IntakeTab() {
   const submissions = subs.data?.submissions ?? []
   const failed = submissions.filter((s) => s.status === "failed")
 
+  const forms = websiteForms.data?.forms ?? []
+  const dueForms = forms.filter((f) => f.active && f.review_due)
+
   return (
     <div className="space-y-6">
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold">Linked forms</h2>
+        <h2 className="text-sm font-semibold">
+          Website forms
+          {dueForms.length > 0 && <span className="ml-2 text-destructive">{dueForms.length} not reviewed for 90 days</span>}
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          The Google Forms on role pages, from <Link to="/app/website-forms" className="underline">Website, Forms</Link>.
+        </p>
+        {websiteForms.loading && <LoadingBlock rows={2} />}
+        {websiteForms.error && <ErrorBlock message={websiteForms.error} onRetry={websiteForms.reload} />}
+        {websiteForms.data && (
+          forms.length === 0 ? (
+            <EmptyBlock title="No website forms" hint="Add one in Website, Forms." />
+          ) : (
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Form</TableHead>
+                    <TableHead>Intake</TableHead>
+                    <TableHead>Last reviewed</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {forms.map((f) => (
+                    <TableRow key={f.id}>
+                      <TableCell>
+                        <div className="font-medium">{f.title}{!f.active && <Badge variant="secondary" className="ml-2">Off</Badge>}</div>
+                        <div className="text-xs text-muted-foreground">{f.integration_name ?? "Not connected to an intake key"}</div>
+                      </TableCell>
+                      <TableCell><IntakeBadge status={f.intake_status} /></TableCell>
+                      <TableCell className="text-sm">
+                        {f.last_reviewed_at ? shortDate(f.last_reviewed_at) : "Never"}
+                        {f.active && f.review_due && <Badge variant="destructive" className="ml-2">Review due</Badge>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold">Intake keys</h2>
         {health.loading && <LoadingBlock rows={3} />}
         {health.error && <ErrorBlock message={health.error} onRetry={health.reload} />}
         {health.data && (
           integrations.length === 0 ? (
-            <EmptyBlock title="No linked forms" hint="Forms are configured in the database and post to forms-intake.php." />
+            <EmptyBlock title="No intake keys" hint="Intake keys are created by migration 011 and post to forms-intake.php." />
           ) : (
             <Card>
               <Table>
@@ -89,6 +170,7 @@ export function IntakeTab() {
                     <TableHead>State</TableHead>
                     <TableHead>Last submission</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    {isOwner && <TableHead></TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -115,6 +197,13 @@ export function IntakeTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{i.submissions_total}</TableCell>
+                      {isOwner && (
+                        <TableCell className="text-right">
+                          <Button size="sm" variant="outline" onClick={() => setSecret(i)}>
+                            <KeyRound className="mr-1 size-3.5" /> {i.configured ? "New secret" : "Set secret"}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -178,6 +267,29 @@ export function IntakeTab() {
           )
         )}
       </section>
+      <Dialog open={!!shown} onOpenChange={(o) => !o && setShown(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Copy this secret now</DialogTitle>
+            <DialogDescription>
+              It is shown once and stored only as a hash. Paste it into the form's Apps Script as the
+              Script Property RG_SECRET, with RG_KEY set to {shown?.key}. Do not email it or put it in a document.
+            </DialogDescription>
+          </DialogHeader>
+          <Input readOnly value={shown?.secret ?? ""} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" aria-label="Shared secret" />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (shown) navigator.clipboard?.writeText(shown.secret).then(() => toast.success("Copied."), () => {})
+              }}
+            >
+              Copy
+            </Button>
+            <Button onClick={() => setShown(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
