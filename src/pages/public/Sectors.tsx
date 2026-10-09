@@ -12,6 +12,7 @@ import {
 import { PageHeader, Section, CtaBand } from "@/components/public/section"
 import { SectionHeading } from "@/components/public/marketing"
 import { useSeo } from "@/hooks/use-seo"
+import { SERVICE_ACCENTS, SERVICE_IDS, SERVICE_LABELS } from "@/lib/services"
 
 const SECTORS = [
   {
@@ -64,12 +65,9 @@ const SECTORS = [
   },
 ]
 
-const DIVISION_LABEL: Record<string, { label: string; accent: string }> = {
-  care: { label: "Care", accent: "#0C447C" },
-  academy: { label: "Academy", accent: "#B7791F" },
-  cleaning: { label: "Cleaning", accent: "#5DCAA5" },
-  security: { label: "Security", accent: "#1B2A3C" },
-}
+const DIVISION_LABEL: Record<string, { label: string; accent: string }> = Object.fromEntries(
+  SERVICE_IDS.map((id) => [id, { label: SERVICE_LABELS[id], accent: SERVICE_ACCENTS[id] }]),
+)
 
 export default function Sectors() {
   useSeo({

@@ -74,9 +74,9 @@ function wrap(text: string, maxChars: number): string[] {
 }
 
 function buildCardSvg(card: Card): string {
-  const navy = "#0C447C"
-  const mint = "#5DCAA5"
-  const font = "'Plus Jakarta Sans','Segoe UI',Arial,sans-serif"
+  const ground = "#1F3219" // green-900
+  const leaf = "#9FB995" // green-300
+  const font = "'Source Sans 3','Segoe UI',Arial,sans-serif"
   const hl = wrap(card.headline, 17)
   const hlStart = 560 - (hl.length - 1) * 52
   const hlTspans = hl
@@ -85,19 +85,19 @@ function buildCardSvg(card: Card): string {
   const sub = wrap(card.sub, 42)
   const subTspans = sub.map((l, i) => `<tspan x="96" dy="${i === 0 ? 0 : 44}">${escapeXml(l)}</tspan>`).join("")
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" style="width:100%;height:auto;display:block">
-  <rect width="1080" height="1080" fill="${navy}"/>
+  <rect width="1080" height="1080" fill="${ground}"/>
   <circle cx="980" cy="120" r="260" fill="#ffffff" opacity="0.05"/>
-  <rect x="0" y="0" width="1080" height="10" fill="${mint}"/>
+  <rect x="0" y="0" width="1080" height="10" fill="${leaf}"/>
   <g transform="translate(96,96)">
-    <rect width="64" height="64" rx="16" fill="${mint}"/>
-    <path d="M20 46c0-12 9-22 24-24-2 12-11 21-24 24z" fill="#0C447C"/>
+    <rect width="64" height="64" rx="16" fill="${leaf}"/>
+    <path d="M20 46c0-12 9-22 24-24-2 12-11 21-24 24z" fill="${ground}"/>
     <text x="86" y="44" font-family="${font}" font-size="38" font-weight="800" fill="#ffffff">RitaGreen</text>
   </g>
-  <text x="96" y="430" font-family="${font}" font-size="26" letter-spacing="5" fill="${mint}" font-weight="700">RITAGREEN SERVICES</text>
+  <text x="96" y="430" font-family="${font}" font-size="26" letter-spacing="5" fill="${leaf}" font-weight="700">RITAGREEN SERVICES</text>
   <text y="${hlStart}" font-family="${font}" font-size="92" font-weight="800" fill="#ffffff">${hlTspans}</text>
-  <text y="760" font-family="${font}" font-size="36" fill="#c6d6ea">${subTspans}</text>
-  <text x="96" y="1004" font-family="${font}" font-size="26" fill="#9fb6d1">ritagreenservices.com</text>
-  <text x="96" y="1044" font-family="${font}" font-size="22" fill="#7c97b8">Care · Training · Cleaning · Security</text>
+  <text y="760" font-family="${font}" font-size="36" fill="#D9E3D4">${subTspans}</text>
+  <text x="96" y="1004" font-family="${font}" font-size="26" fill="#C6D6BF">ritagreenservices.com</text>
+  <text x="96" y="1044" font-family="${font}" font-size="22" fill="#9FB995">Healthcare · Cleaning · Security · Training</text>
 </svg>`
 }
 

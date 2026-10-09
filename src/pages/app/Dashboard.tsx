@@ -19,13 +19,14 @@ import { useAuth } from "@/providers/auth-provider"
 import { useApi } from "@/hooks/use-api"
 import type { DashboardSummary, Shift, Invoice, Enquiry } from "@/lib/types"
 import { gbp, DIVISION_LABELS, DIVISION_ACCENTS } from "@/lib/format"
+import { SERVICE_ACCENTS } from "@/lib/services"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
 import { WeatherWidget } from "@/components/app/weather-widget"
 
 const DIVISION_TABS = [
   { id: "all", label: "All divisions" },
-  { id: "care", label: "Care" },
-  { id: "academy", label: "Academy" },
+  { id: "care", label: "Healthcare" },
+  { id: "academy", label: "Training" },
   { id: "cleaning", label: "Cleaning" },
   { id: "security", label: "Security" },
 ]
@@ -284,7 +285,7 @@ function Kpi({
 function RevenueChart({ data }: { data: { division: string; pence: number }[] }) {
   const categories = data.map((d) => DIVISION_LABELS[d.division] ?? d.division)
   const series = [{ name: "Revenue", data: data.map((d) => Math.round(d.pence / 100)) }]
-  const colors = data.map((d) => DIVISION_ACCENTS[d.division] ?? "#0C447C")
+  const colors = data.map((d) => DIVISION_ACCENTS[d.division] ?? SERVICE_ACCENTS.care)
 
   const options: ApexOptions = {
     chart: { type: "bar", toolbar: { show: false }, fontFamily: "inherit" },

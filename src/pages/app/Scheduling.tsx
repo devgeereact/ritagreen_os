@@ -48,8 +48,8 @@ function isoDate(d: Date) {
 }
 
 const DIVISIONS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]
@@ -124,11 +124,13 @@ export default function Scheduling() {
   // for cover that is still standing.
   const events = shifts.map((s) => {
     const cancelled = s.status === "cancelled"
+    // Tokens rather than hexes, so the rota follows the theme. "Open" uses the
+    // warning colour: ochre is the Training service's accent.
     const colour = cancelled
-      ? "#94A3B8"
+      ? "hsl(var(--muted-foreground))"
       : s.status === "open"
-        ? "#B7791F"
-        : DIVISION_ACCENTS[s.division] ?? "#0C447C"
+        ? "hsl(var(--warning))"
+        : DIVISION_ACCENTS[s.division] ?? "hsl(var(--primary))"
     return {
       id: String(s.id),
       title: cancelled
@@ -210,12 +212,12 @@ export default function Scheduling() {
       </Card>
 
       <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#B7791F" }} /> open</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full" style={{ backgroundColor: "#94A3B8" }} /> cancelled</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-warning" /> open</span>
+        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-muted-foreground" /> cancelled</span>
         {Object.entries(DIVISION_ACCENTS).map(([id, color]) => (
-          <span key={id} className="flex items-center gap-1.5 capitalize">
+          <span key={id} className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
-            {id}
+            {DIVISION_LABELS[id] ?? id}
           </span>
         ))}
       </div>

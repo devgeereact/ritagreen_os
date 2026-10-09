@@ -170,7 +170,7 @@ export const STATS = [
 // Standards & assurance — the compliance backbone.
 export const ASSURANCE = [
   {
-    title: "Care",
+    title: "Healthcare",
     body: "Care delivered against the Care Certificate (16 standards), aligned to CQC expectations and Skills for Care frameworks.",
   },
   {

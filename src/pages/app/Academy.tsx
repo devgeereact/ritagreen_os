@@ -58,7 +58,7 @@ export default function Academy() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Academy</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Training</h1>
           <p className="text-sm text-muted-foreground">
             Courses, learners and certificates. Completed learners get a verifiable certificate.
           </p>
@@ -191,8 +191,8 @@ function NewProgrammeDialog({
               <Select value={division} onValueChange={setDivision}>
                 <SelectTrigger id="division"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="academy">Academy</SelectItem>
-                  <SelectItem value="care">Care</SelectItem>
+                  <SelectItem value="academy">Training</SelectItem>
+                  <SelectItem value="care">Healthcare</SelectItem>
                   <SelectItem value="cleaning">Cleaning</SelectItem>
                   <SelectItem value="security">Security</SelectItem>
                 </SelectContent>
