@@ -1334,3 +1334,344 @@ function rg_feature_map(array $stored): array
     }
     return $out;
 }
+
+
+// ---------------------------------------------------------------- person profile
+
+/**
+ * The verification lifecycle, as the only transitions that make sense.
+ *
+ * Here rather than in verifications.php so the person profile can say what may
+ * happen next to a check without keeping a second copy of the rules. A
+ * verification that jumped straight from requested to verified would record an
+ * assurance nobody gave.
+ */
+const RG_VERIFY_TRANSITIONS = [
+    'requested'    => ['received', 'rejected'],
+    'received'     => ['under_review', 'verified', 'rejected'],
+    'under_review' => ['verified', 'rejected'],
+    'verified'     => ['expired'],
+    'rejected'     => ['requested'],
+    'expired'      => ['requested'],
+];
+
+/**
+ * The employment contract lifecycle, in the order the work actually happens.
+ * Shared with employment-contracts.php for the same reason as above. A contract
+ * that jumped from draft to signed would record an agreement nobody made.
+ */
+const RG_CONTRACT_TRANSITIONS = [
+    'draft'    => ['sent', 'declined'],
+    'sent'     => ['viewed', 'accepted', 'signed', 'declined', 'expired'],
+    'viewed'   => ['accepted', 'signed', 'declined', 'expired'],
+    'accepted' => ['signed', 'declined'],
+    'signed'   => ['superseded'],
+    'declined' => ['superseded'],
+    'expired'  => ['superseded'],
+];
+
+/**
+ * Is a person in this account's service scope?
+ *
+ * A person has no service of their own. They hold one through a worker record,
+ * an application or a person_services row, and they can hold several: one human
+ * can be a care worker and a security applicant at once. $services is that set.
+ *
+ * In scope when ANY of them is the account's service. A security manager opening
+ * somebody who works in care and has applied for security is looking at their own
+ * candidate; what they may see of the care side is filtered record by record
+ * after this. A person with no service at all is out of scope for a scoped
+ * account, for the same reason rg_in_service_scope() refuses a NULL division:
+ * "unknown" is not "yours".
+ *
+ * @param list<?string> $services
+ */
+function rg_person_in_scope(?string $scope, array $services): bool
+{
+    if ($scope === null) return true;
+    foreach ($services as $service) {
+        if (rg_in_service_scope($scope, $service)) return true;
+    }
+    return false;
+}
+
+/**
+ * The status a person has in each service they are connected to.
+ *
+ * One of applicant, onboarding, active, suspended, inactive, left. An
+ * employment record outranks an application for the same service: once somebody
+ * is a worker in care, their care application is history.
+ *
+ * "Active" needs an approval as well as an active status (migration 034). A
+ * worker the office marked active but nobody approved reads as onboarding,
+ * because rg_employment_gate() will refuse to put them on a shift and the profile
+ * must not say otherwise.
+ *
+ * @param list<array<string,mixed>> $workers    id, division, status, left_on, approved_at, payroll_no, deleted_at
+ * @param list<array<string,mixed>> $applicants id, division, stage, deleted_at
+ * @return array<string, array{service:string,status:string,detail:string,worker_id:?int,applicant_id:?int,payroll_no:?string,stage:?string}>
+ */
+function rg_service_statuses(array $workers, array $applicants, ?string $today = null): array
+{
+    $today ??= date('Y-m-d');
+    $out = [];
+
+    // Oldest first, so the newest application per service is the one kept, and a
+    // worker row then replaces it.
+    usort($applicants, static fn($a, $b) => (int) $a['id'] <=> (int) $b['id']);
+    foreach ($applicants as $a) {
+        if (!empty($a['deleted_at'])) continue;
+        $stage = (string) $a['stage'];
+        $out[$a['division']] = [
+            'service' => (string) $a['division'],
+            'status' => 'applicant',
+            'detail' => in_array($stage, RG_STAGE_EXITS, true)
+                ? 'Application ' . $stage
+                : 'Application at ' . $stage,
+            'worker_id' => null,
+            'applicant_id' => (int) $a['id'],
+            'payroll_no' => null,
+            'stage' => $stage,
+        ];
+    }
+
+    usort($workers, static fn($a, $b) => (int) $a['id'] <=> (int) $b['id']);
+    foreach ($workers as $w) {
+        if (!empty($w['deleted_at'])) continue;
+        $leftOn = $w['left_on'] ?? null;
+        $status = (string) ($w['status'] ?? 'onboarding');
+
+        if ($leftOn !== null && $leftOn !== '' && strtotime((string) $leftOn) <= strtotime($today)) {
+            [$state, $detail] = ['left', 'Left on ' . $leftOn];
+        } elseif ($status === 'suspended') {
+            [$state, $detail] = ['suspended', 'Suspended'];
+        } elseif ($status === 'inactive') {
+            [$state, $detail] = ['inactive', 'Marked inactive'];
+        } elseif ($status === 'active' && !empty($w['approved_at'])) {
+            [$state, $detail] = ['active', 'Approved for work'];
+        } else {
+            [$state, $detail] = ['onboarding', 'Not yet approved for work'];
+        }
+
+        $previous = $out[$w['division']] ?? null;
+        $out[$w['division']] = [
+            'service' => (string) $w['division'],
+            'status' => $state,
+            'detail' => $detail,
+            'worker_id' => (int) $w['id'],
+            'applicant_id' => $previous['applicant_id'] ?? null,
+            'payroll_no' => $w['payroll_no'] ?? null,
+            'stage' => $previous['stage'] ?? null,
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * The status chip for one requirement on the profile's checks tab.
+ *
+ * Five chips, from the plan (docs/Plans 2026/04): valid, due_soon, expired,
+ * awaiting_review, missing. They are a presentation of rg_assess_requirement()'s
+ * state, never a stored value, and never something the screen can set.
+ *
+ * $openStatus is the newest verification still in progress for the requirement,
+ * if any. Evidence that has arrived and is waiting for somebody outranks
+ * "expired" and "missing", because the next thing to do is review it, not chase
+ * it. It does not outrank a requirement that is already met: a renewal sitting in
+ * the queue does not make a valid credential stop being valid.
+ *
+ * @return array{chip:string,label:string}
+ */
+function rg_requirement_chip(string $state, ?string $openStatus = null): array
+{
+    $labels = [
+        'valid' => 'Valid',
+        'due_soon' => 'Due soon',
+        'expired' => 'Expired',
+        'awaiting_review' => 'Awaiting review',
+        'missing' => 'Missing',
+    ];
+    $pick = static fn(string $chip): array => ['chip' => $chip, 'label' => $labels[$chip]];
+
+    if ($state === 'met') return $pick('valid');
+    if ($state === 'expiring') return $pick('due_soon');
+    if (in_array($openStatus, ['received', 'under_review'], true)) return $pick('awaiting_review');
+    if ($state === 'expired') return $pick('expired');
+    // On file but unchecked, or on file with no expiry recorded: either way a
+    // reviewer has to look at it before it counts.
+    if ($state === 'unverified' || $state === 'undated') return $pick('awaiting_review');
+    return $pick('missing');
+}
+
+/**
+ * What stops a worker being approved for work, in the order to fix it.
+ *
+ * The same test workers.php?action=approve applies, kept here so the profile can
+ * show the reasons before anybody presses the button, and so the button and the
+ * endpoint cannot disagree. Empty means approval may be granted.
+ *
+ * The employment gate is asked with the approval itself assumed, because that is
+ * the one thing being granted. A suspended worker, a leaver or one with
+ * onboarding outstanding cannot be approved; nor can one without a signed
+ * contract that an authorised person has reviewed.
+ *
+ * @return list<array{code:string,reason:string}> code ∈ approved | employment | contract
+ */
+function rg_approval_blockers(array $worker, int $onboardingOutstanding, bool $hasReviewedContract, ?string $today = null): array
+{
+    if (!empty($worker['approved_at'])) {
+        return [['code' => 'approved', 'reason' => 'This worker is already approved.']];
+    }
+
+    $blockers = [];
+    // array_merge, not `+`: the union keeps the left operand's approved_at => null.
+    $gate = rg_employment_gate(
+        array_merge($worker, ['approved_at' => 'granting']),
+        ['onboarding_outstanding' => $onboardingOutstanding],
+        $today
+    );
+    if (!$gate['ok']) {
+        $blockers[] = ['code' => 'employment', 'reason' => $gate['reason']];
+    }
+    if (!$hasReviewedContract) {
+        $blockers[] = ['code' => 'contract', 'reason' => 'This worker has no signed employment contract that has been reviewed.'];
+    }
+    return $blockers;
+}
+
+/**
+ * The single most important thing to do next for a person.
+ *
+ * One action, not a list: the profile header shows it as the main button, and a
+ * header offering six things offers none. The order follows the launch plan's
+ * journey -- evidence, then onboarding, then the contract, then approval -- with
+ * two exceptions. A suspension is a decision under review and comes first. Work
+ * that is waiting on a reviewer (evidence received, a contract signed) comes
+ * before work that is waiting on the person, because only the first can be done
+ * from this screen today.
+ *
+ * Facts, all optional:
+ *   suspended               bool
+ *   awaiting_review         list of requirement labels with evidence received
+ *   rtw_needs_verify        bool, a right-to-work check recorded and not signed off
+ *   contract                none | draft | sent | accepted | signed_unreviewed | reviewed
+ *   onboarding_outstanding  int
+ *   blocking                list of mandatory requirement labels not met
+ *   approvable              bool, a worker with nothing in rg_approval_blockers()
+ *   approved                bool, every worker record already approved
+ *   expiring                list of requirement labels inside the expiry window
+ *   has_worker              bool
+ *   applicant_stage         ?string, the newest application's stage when there is no worker
+ *
+ * @return array{key:string,label:string,tab:string}|null
+ */
+function rg_person_next_action(array $f): ?array
+{
+    $act = static fn(string $key, string $label, string $tab): array =>
+        ['key' => $key, 'label' => $label, 'tab' => $tab];
+    $hasWorker = !empty($f['has_worker']);
+
+    if (!empty($f['suspended'])) {
+        return $act('review_suspension', 'Review suspension', 'overview');
+    }
+    if (!empty($f['awaiting_review'])) {
+        return $act('verify', 'Verify ' . $f['awaiting_review'][0], 'checks');
+    }
+    if (!empty($f['rtw_needs_verify'])) {
+        return $act('verify_rtw', 'Verify right to work', 'checks');
+    }
+    $contract = (string) ($f['contract'] ?? 'none');
+    if ($hasWorker && $contract === 'signed_unreviewed') {
+        return $act('review_contract', 'Review contract', 'employment');
+    }
+    $outstanding = (int) ($f['onboarding_outstanding'] ?? 0);
+    if ($hasWorker && $outstanding > 0) {
+        return $act('finish_onboarding',
+            'Finish onboarding (' . $outstanding . ' ' . ($outstanding === 1 ? 'task' : 'tasks') . ')', 'overview');
+    }
+    if ($hasWorker && !empty($f['blocking'])) {
+        return $act('request_evidence', 'Request ' . $f['blocking'][0], 'checks');
+    }
+    if ($hasWorker && empty($f['approved'])) {
+        if ($contract === 'none') return $act('draft_contract', 'Draft contract', 'employment');
+        if ($contract === 'draft') return $act('send_contract', 'Send contract', 'employment');
+        if ($contract === 'sent' || $contract === 'accepted') {
+            return $act('record_signature', 'Record signed contract', 'employment');
+        }
+        if (!empty($f['approvable'])) return $act('approve', 'Approve activation', 'overview');
+    }
+    if (!empty($f['expiring'])) {
+        return $act('renew', 'Renew ' . $f['expiring'][0], 'checks');
+    }
+    if (!$hasWorker) {
+        $stage = $f['applicant_stage'] ?? null;
+        if ($stage === 'offer') return $act('start_onboarding', 'Start onboarding', 'overview');
+        if ($stage !== null && !in_array($stage, RG_STAGE_EXITS, true)) {
+            return $act('review_application', 'Review application', 'overview');
+        }
+    }
+    return null;
+}
+
+/**
+ * Is this a telephone number somebody could ring?
+ *
+ * Digits, spaces, a leading plus, brackets, dots and hyphens; between 7 and 15
+ * digits, 15 being the longest an international number can be. Not a UK-only
+ * test, because an emergency contact can live anywhere.
+ */
+function rg_valid_phone(?string $phone): bool
+{
+    $phone = trim((string) $phone);
+    if ($phone === '') return false;
+    if (!preg_match('/^\+?[0-9 ().\-]+$/', $phone)) return false;
+    $digits = strlen(preg_replace('/\D+/', '', $phone) ?? '');
+    return $digits >= 7 && $digits <= 15;
+}
+
+/** The emergency contact columns on people, in the order the form shows them. */
+const RG_EMERGENCY_FIELDS = [
+    'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+    'emergency_contact2_name', 'emergency_contact2_phone', 'emergency_contact2_relationship',
+];
+
+/**
+ * Validate an emergency contact form.
+ *
+ * Shared by the office profile and, from S4, the worker's own portal, so both
+ * accept exactly the same thing. Empty fields clear a contact. A contact needs a
+ * name and a number together: a name with no number cannot be rung, and a number
+ * with no name cannot be asked for.
+ *
+ * @return array{ok:bool,errors:list<string>,values:array<string,?string>}
+ */
+function rg_validate_emergency_contacts(array $data): array
+{
+    $values = [];
+    foreach (RG_EMERGENCY_FIELDS as $field) {
+        $v = trim((string) ($data[$field] ?? ''));
+        $values[$field] = $v !== '' ? $v : null;
+    }
+
+    $errors = [];
+    foreach (['emergency_contact' => 'first', 'emergency_contact2' => 'second'] as $prefix => $which) {
+        $name = $values[$prefix . '_name'];
+        $phone = $values[$prefix . '_phone'];
+        $relationship = $values[$prefix . '_relationship'];
+
+        if ($name !== null && mb_strlen($name) > 160) $errors[] = "The $which contact's name is too long.";
+        if ($relationship !== null && mb_strlen($relationship) > 80) {
+            $errors[] = "The $which contact's relationship is too long.";
+        }
+        if ($phone !== null && !rg_valid_phone($phone)) {
+            $errors[] = "The $which contact's phone number is not a number that can be rung.";
+        }
+        if ($name !== null && $phone === null) $errors[] = "Give a phone number for the $which contact.";
+        if ($name === null && ($phone !== null || $relationship !== null)) {
+            $errors[] = "Give a name for the $which contact.";
+        }
+    }
+
+    return ['ok' => $errors === [], 'errors' => $errors, 'values' => $values];
+}
