@@ -39,6 +39,16 @@
   # Uploaded files are served only through files.php (which checks auth).
   RewriteRule ^uploads/ - [F,L]
 
+  # Server-side files that sit beside index.html because server/ is uploaded to
+  # the document root by hand. None is meant for a browser: the schema and
+  # migrations describe every table, the tests and notes describe the internals,
+  # and the CLI tools already refuse HTTP but need not be reachable at all.
+  # NOT YET ON THE SERVER as of 2026-10-08: copy this block into the live
+  # .htaccess by hand (see server/README.md), then confirm /schema.sql is 403.
+  RewriteRule ^(migrations|tests)(/|$) - [F,L]
+  RewriteRule \.(sql|md)$ - [F,NC,L]
+  RewriteRule ^(migrate|seed|backfill-people)\.php$ - [F,NC,L]
+
   # Don't rewrite requests for the PHP API or other real files/directories.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d

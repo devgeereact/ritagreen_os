@@ -1128,6 +1128,20 @@ foreach ($guardProblems as $problem) {
 check('no endpoint reads before it authorises', $guardProblems, []);
 
 // ---------------------------------------------------------------------------
+group('rg_cron_key');
+
+// The header keeps the key out of the access log; the query string must keep
+// working, because the crontabs on the server already use it.
+check('reads the X-Cron-Key header', rg_cron_key(['HTTP_X_CRON_KEY' => 'h'], []), 'h');
+check('falls back to ?key=', rg_cron_key([], ['key' => 'q']), 'q');
+check('the header wins when both are sent', rg_cron_key(['HTTP_X_CRON_KEY' => 'h'], ['key' => 'q']), 'h');
+check('an empty header falls back to ?key=', rg_cron_key(['HTTP_X_CRON_KEY' => ''], ['key' => 'q']), 'q');
+check('nothing sent is an empty key', rg_cron_key([], []), '');
+// ?key[]=x arrives as an array. It must read as no key (a 403), not reach
+// hash_equals as an array or raise an "Array to string" warning (a 500).
+check('an array ?key is no key', rg_cron_key([], ['key' => ['x']]), '');
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

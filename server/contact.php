@@ -29,6 +29,11 @@ if ($name === '' || $email === '' || $message === '') {
 }
 if (mb_strlen($name) > 160) fail('That name is too long.');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
+// Caps match the contact_enquiries columns (email VARCHAR(190), phone
+// VARCHAR(40)) and bookings.php. Without them an oversized value reached MySQL
+// in strict mode and came back as a 500 instead of a message the sender can fix.
+if (mb_strlen($email) > 190) fail('That email is too long.');
+if (mb_strlen($phone) > 40) fail('That phone number is too long.');
 if (mb_strlen($message) > 5000) fail('That message is too long.');
 
 // Normalise the division to a known value, else store as "other".

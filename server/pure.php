@@ -1252,3 +1252,28 @@ function rg_employment_gate(array $worker, array $facts, ?string $today = null):
 
     return ['ok' => true, 'reason' => ''];
 }
+
+// ---------------------------------------------------------------- cron triggers
+
+/**
+ * The key a cron caller presented over HTTP, for comparison with ALERTS_KEY.
+ *
+ * The X-Cron-Key header is preferred: a query string is written to the server
+ * access log and a request header is not. `?key=` is still read, because the
+ * crontabs already on the server use it, and removing it would silently stop the
+ * reminders, the mail queue and the backups.
+ *
+ * When the header is present it wins outright, even if a query key is also
+ * sent. A value that is not a string (`?key[]=x`) reads as no key, so it is
+ * refused with a 403 rather than raising a warning.
+ *
+ * @param array $server $_SERVER, where the header arrives as HTTP_X_CRON_KEY
+ * @param array $query  $_GET
+ */
+function rg_cron_key(array $server, array $query): string
+{
+    $header = $server['HTTP_X_CRON_KEY'] ?? '';
+    if (is_string($header) && $header !== '') return $header;
+    $key = $query['key'] ?? '';
+    return is_string($key) ? $key : '';
+}

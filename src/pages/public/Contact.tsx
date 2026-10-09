@@ -95,7 +95,7 @@ export default function Contact() {
         intro="One enquiry reaches the right division — staff, training, cleaning or security. We'll get the right people ready, usually the same day."
       />
       <Section className="grid gap-12 md:grid-cols-3">
-        {/* Form */}
+        {/* Form. maxLength values mirror the caps in server/contact.php. */}
         <form onSubmit={onSubmit} className="space-y-5 md:col-span-2" noValidate>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -106,6 +106,7 @@ export default function Contact() {
                 id="name"
                 name="name"
                 required
+                maxLength={160}
                 autoComplete="name"
                 aria-invalid={!!errors.name}
                 aria-describedby={errors.name ? "name-error" : undefined}
@@ -122,6 +123,7 @@ export default function Contact() {
                 name="email"
                 type="email"
                 required
+                maxLength={190}
                 autoComplete="email"
                 aria-invalid={!!errors.email}
                 aria-describedby={errors.email ? "email-error" : undefined}
@@ -131,7 +133,7 @@ export default function Contact() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="phone">Phone (optional)</Label>
-              <Input id="phone" name="phone" type="tel" autoComplete="tel" />
+              <Input id="phone" name="phone" type="tel" maxLength={40} autoComplete="tel" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="division">What is this about?</Label>
@@ -159,6 +161,7 @@ export default function Contact() {
               name="message"
               rows={5}
               required
+              maxLength={5000}
               placeholder="Tell us the role, the site and the times you need covered."
               aria-invalid={!!errors.message}
               aria-describedby={errors.message ? "message-error" : undefined}

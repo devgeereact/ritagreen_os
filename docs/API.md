@@ -369,7 +369,7 @@ computed identically everywhere.
 | `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else office roles plus `trainer`, reads included; writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
 | `audit.php` | Audit-log viewer | `super_admin`/`admin` |
 | `auth.php` | Login, 2FA, sessions, reset, registration, Google SSO | **Mixed** — see §8 |
-| `backup.php` | Cron mysqldump | **CLI, or HTTP with `?key=ALERTS_KEY`** |
+| `backup.php` | Cron mysqldump | **CLI, or HTTP with `ALERTS_KEY`** in an `X-Cron-Key` header (or `?key=`) |
 | `blog.php` | Blog posts | **Public reads**; admin `super_admin`/`admin`/`manager`/`editor` |
 | `bookings.php` | Cover requests | **POST with no action is public**; rest office roles throughout, reads included |
 | `certificates.php` | Certificate verification and Open Badges | **Public** |
@@ -381,7 +381,7 @@ computed identically everywhere.
 | `credit-notes.php` | Credit notes against invoices | Office roles throughout, reads included |
 | `dashboard.php` | Command-centre summary | Staff |
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
-| `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
+| `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`)** |
 | `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts; coordinates additionally need the `employment` zone |
 | `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
 | `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
@@ -1016,8 +1016,10 @@ Same shape as `blog.php`, including the self-migrating
 | POST | **Public**, rate-limited | `{name, email, phone?, division?, message}` | `{ok: true}` 201 |
 
 Name, phone and the subject line are stripped of CR/LF before interpolation
-into mail headers (`contact.php:12-16`). Name ≤ 160 chars, message ≤ 5000. An
-unrecognised division is stored as `other`. When mail is enabled it sends two
+into mail headers (`contact.php:12-16`). Name ≤ 160 chars, email ≤ 190, phone ≤ 40,
+message ≤ 5000, matching the `contact_enquiries` columns; each over-length field
+returns 400 with an `error` message. The public Contact and Quote forms carry the
+same caps as `maxLength`. An unrecognised division is stored as `other`. When mail is enabled it sends two
 messages: an office alert with the sender as `Reply-To`, and an autoresponder
 to the sender with the office as `Reply-To`. A message beginning
 `CAREERS APPLICATION` switches both to careers wording (`contact.php:40`).
@@ -1443,8 +1445,8 @@ Compliance renewal reminder engine, designed to run once a day.
 
 | Trigger | Auth |
 |---|---|
-| CLI: `php expiry-alerts.php` | None needed — `PHP_SAPI === 'cli'` bypasses the key check (`expiry-alerts.php:20`) |
-| HTTP: `GET /expiry-alerts.php?key=…` | **`?key` must `hash_equals` `ALERTS_KEY`**, else 403. An unset or `CHANGE_ME` key refuses every HTTP request |
+| CLI: `php expiry-alerts.php` | None needed — `PHP_SAPI === 'cli'` bypasses the key check (`expiry-alerts.php:23`) |
+| HTTP: `GET /expiry-alerts.php` with header `X-Cron-Key: …` (preferred), or `?key=…` | **The key must `hash_equals` `ALERTS_KEY`**, else 403. An unset or `CHANGE_ME` key refuses every HTTP request. `rg_cron_key()` in `pure.php` reads the header first and falls back to `?key`, so existing crontabs keep working; the header keeps the key out of the access log |
 
 It scans DBS and SIA expiries on the worker row, `certifications` rows with an
 expiry, and company `insurance` policies, buckets each into a 90 / 60 / 30-day
@@ -1461,7 +1463,7 @@ expired tiers only. Output is plain text for the cron log.
 | Trigger | Auth |
 |---|---|
 | CLI: `php backup.php` | None needed |
-| HTTP: `GET /backup.php?key=…` | **`?key` must `hash_equals` `ALERTS_KEY`**, else 403 |
+| HTTP: `GET /backup.php` with header `X-Cron-Key: …` (preferred), or `?key=…` | **The key must `hash_equals` `ALERTS_KEY`**, else 403. Same `rg_cron_key()` rule as §53 |
 
 Writes a gzipped `mysqldump` to `dirname(__DIR__) . '/backups'` — one level
 **above** the document root, so it is never web-accessible — and prunes dumps
@@ -1532,7 +1534,7 @@ stays stable and comparable.
 | `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
 | `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
 | `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
-| `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `?key=ALERTS_KEY` |
+| `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) |
 | `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` | Schema, fixtures and the first administrator | **CLI only.** Refuse to run over HTTP at all. `migrate.php`, `seed.php` and `backfill-people.php` additionally read `RG_ENV` from `config.php` to decide what they may do; a config that does not declare it counts as production |
 
 Two auth mechanisms here are neither a bearer token nor a role, and are worth stating plainly:
@@ -1541,7 +1543,7 @@ Two auth mechanisms here are neither a bearer token nor a role, and are worth st
   header, compared using `hash_equals`, because Google Apps Script has no login. It is rate
   limited, and an integration with no secret configured refuses every submission.
 - **`send-queued-mail.php`** follows `expiry-alerts.php` and `backup.php`: CLI, or HTTP with
-  `?key=` matching `ALERTS_KEY`.
+  `ALERTS_KEY` in an `X-Cron-Key` header, or `?key=` for existing crontabs.
 
 ## 55. Public / unauthenticated surface
 
@@ -1575,7 +1577,7 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | Route | Method | Throttle | Secret |
 |---|---|---|---|
 | `/forms-intake.php?key=<integration>` | POST | `intake` 120/5 min | `X-RitaGreen-Secret` header, SHA-256 compared with `hash_equals`. An integration with no secret refuses everything |
-| `/send-queued-mail.php?key=` | GET | none | `hash_equals` against `ALERTS_KEY`; also runs from CLI with no key |
+| `/send-queued-mail.php` | GET | `cron-key` 10/10 min | `X-Cron-Key` header (preferred) or `?key=`, `hash_equals` against `ALERTS_KEY`; also runs from CLI with no key |
 
 ### Open but secured by an unguessable token in the URL
 
@@ -1592,15 +1594,17 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/payments.php?action=webhook` | POST | HMAC-SHA256 of `t.payload` against `STRIPE_WEBHOOK_SECRET`, `hash_equals`, plus a 300-second replay window. Amount and currency re-checked against the invoice before marking it paid |
 | `/gocardless.php?action=webhook` | POST | HMAC-SHA256 of the raw body against `GC_WEBHOOK_SECRET`, `hash_equals`. No replay window, but settlement is idempotent and credits only the amount actually collected |
 
-### Open but secured by a shared secret in a query parameter
+### Open but secured by a shared secret in a header or query parameter
 
 | Route | Method | Secret |
 |---|---|---|
-| `/expiry-alerts.php?key=` | GET | `hash_equals` against `ALERTS_KEY`; refuses everything if the key is unset or `CHANGE_ME` |
-| `/backup.php?key=` | GET | Same |
+| `/expiry-alerts.php` | GET | `X-Cron-Key` header (preferred) or `?key=`, `hash_equals` against `ALERTS_KEY`; refuses everything if the key is unset or `CHANGE_ME` |
+| `/backup.php` | GET | Same |
 
 Both also run from the CLI with no key at all. A key passed in the query string
-lands in the server access log, so prefer the CLI trigger where possible.
+lands in the server access log; the `X-Cron-Key` header does not. Prefer the CLI
+trigger, then the header. When both are sent the header wins (`rg_cron_key()` in
+`pure.php`).
 
 ### Not public, despite appearances
 

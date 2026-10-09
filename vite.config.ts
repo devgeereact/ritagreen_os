@@ -91,7 +91,8 @@ export default defineConfig({
           {
             // Read-only worker data, network-first: fresh when online, and the
             // last known answer when not. Writes are never served from here.
-            urlPattern: /\/(me|notifications)\.php/,
+            // Payslips are excluded: pay data must not outlive the session on the device.
+            urlPattern: /\/(?:me\.php(?![^#]*[?&]action=payslip)|notifications\.php)/,
             handler: "NetworkFirst",
             method: "GET",
             options: {
