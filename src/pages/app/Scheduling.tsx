@@ -1,16 +1,8 @@
-import { useEffect, useState } from "react"
-import FullCalendar from "@fullcalendar/react"
-import dayGridPlugin from "@fullcalendar/daygrid"
-import timeGridPlugin from "@fullcalendar/timegrid"
-import interactionPlugin from "@fullcalendar/interaction"
-import type { DatesSetArg } from "@fullcalendar/core"
-import { Plus, Radio, Sparkles, CalendarPlus, UserMinus, Ban } from "lucide-react"
+import { useMemo, useState } from "react"
+import { CalendarClock, ChevronLeft, ChevronRight, Copy, Megaphone, Plus, Repeat } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -18,730 +10,331 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { api, ApiError } from "@/lib/api"
-import type { Shift, Client, Skill, MatchWorker, ShiftTemplate } from "@/lib/types"
-import { DIVISION_ACCENTS, DIVISION_LABELS } from "@/lib/format"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ErrorBlock, LoadingBlock } from "@/components/app/state-block"
+import { ShiftPanel } from "@/components/rota/shift-panel"
+import { AddShiftDialog, TemplatesDialog } from "@/components/rota/dialogs"
+import { ConflictLine, ServiceDot, StateChip } from "@/components/rota/bits"
+import { useApi } from "@/hooks/use-api"
+import { api, ApiError } from "@/lib/api"
+import { addDays, dayLabel, rotaRows, shiftsOn, shiftTimes, todayIso, weekDays, weekLabel, weekStart } from "@/lib/rota"
+import { SERVICE_OPTIONS } from "@/lib/services"
+import { cn } from "@/lib/utils"
+import type { RotaShift, Site } from "@/lib/types"
 
-/** "2026-09-10 20:00:00" -> "10 Sep 2026, 20:00". The API returns SQL datetimes. */
-function whenLabel(sql: string): string {
-  const [date, time] = sql.replace("T", " ").split(" ")
-  const d = new Date(`${date}T00:00:00Z`)
-  const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
-  return `${day}, ${(time ?? "").slice(0, 5)}`
-}
+// The office rota (plan file 03, "Office rota screen").
+//
+// A week at a time, in rows by site (the default) or by worker on a desktop and
+// as one day's list on a phone. Every shift says its time, role, who is on it or
+// "Open", its service and its state, and anything wrong with the booking is
+// written on the shift itself. Clicking a shift opens the panel where it is
+// edited, assigned, offered or cancelled.
+//
+// FullCalendar used to draw this page. Its free build has no rows by site or by
+// worker (that is the paid resource timeline), and its month grid could not
+// show a status chip and a conflict reason on each shift, so the week is a plain
+// grid of buttons now: keyboard-reachable, and nothing needs dragging.
 
-function isoDate(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
-}
-
-const DIVISIONS = [
-  { value: "care", label: "Healthcare" },
-  { value: "academy", label: "Training" },
-  { value: "cleaning", label: "Cleaning" },
-  { value: "security", label: "Security" },
-]
+type Data = { shifts: RotaShift[]; rest_gap_min_hours: number }
+const ALL = "all"
 
 export default function Scheduling() {
-  const [range, setRange] = useState<{ from: string; to: string } | null>(null)
-  const [shifts, setShifts] = useState<Shift[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loadedKey, setLoadedKey] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [monday, setMonday] = useState(() => weekStart(todayIso()))
+  const [service, setService] = useState(ALL)
+  const [site, setSite] = useState(ALL)
+  const [by, setBy] = useState<"site" | "worker">("site")
+  const [day, setDay] = useState(() => todayIso())
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [templates, setTemplates] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [created, setCreated] = useState<RotaShift | null>(null)
 
-  /** Identifies the request the visible data should correspond to. */
-  const fetchKey = range ? `${range.from}|${range.to}|${refreshKey}` : null
+  const days = weekDays(monday)
+  const sunday = days[6]
+  const filters = `${service !== ALL ? `&division=${service}` : ""}${site !== ALL ? `&site_id=${site}` : ""}`
+  const rota = useApi<Data>(`scheduling.php?from=${monday}&to=${sunday}${filters}`, [monday, filters])
+  const sitesApi = useApi<{ sites: Site[] }>("sites.php")
+  const sites = useMemo(() => sitesApi.data?.sites ?? [], [sitesApi.data])
 
-  // One fetch path, driven by the visible range and a manual refresh counter.
-  //
-  // It was a `load()` callback invoked from the effect body, which sets state
-  // synchronously inside the effect, and had no cancellation: paging the
-  // calendar quickly could let an earlier response land after a later one and
-  // paint the wrong week. The `alive` flag closes that.
-  useEffect(() => {
-    if (!range) return
-    let alive = true
-    api<{ shifts: Shift[] }>(`scheduling.php?from=${range.from}&to=${range.to}`)
-      .then((res) => {
-        if (!alive) return
-        setShifts(res.shifts)
-        setError(null)
-      })
-      .catch((err) => {
-        if (!alive) return
-        setError(err instanceof ApiError ? err.message : "Could not load the rota.")
-      })
-      .finally(() => {
-        if (alive) setLoadedKey(fetchKey)
-      })
-    return () => {
-      alive = false
-    }
-  }, [range, refreshKey, fetchKey])
+  const shifts = useMemo(() => rota.data?.shifts ?? [], [rota.data])
+  const rows = useMemo(() => rotaRows(shifts, by), [shifts, by])
+  const drafts = shifts.filter((s) => s.state === "draft").length
+  const selected = shifts.find((s) => s.id === selectedId) ?? (created?.id === selectedId ? created : null)
 
-  // Derived rather than a setState in the effect body: a request is outstanding
-  // whenever the range being shown is not the one that last came back.
-  const loading = fetchKey !== null && loadedKey !== fetchKey
+  // The phone view shows one day; keep it inside the week being looked at.
+  const phoneDay = days.includes(day) ? day : monday
 
-  const selected = shifts.find((s) => s.id === selectedId) ?? null
-
-  const reload = () => setRefreshKey((k) => k + 1)
-
-  function onDatesSet(arg: DatesSetArg) {
-    const from = isoDate(arg.start)
-    const to = isoDate(arg.end)
-    setRange((prev) => (prev?.from === from && prev?.to === to ? prev : { from, to }))
+  function goWeek(next: string) {
+    const m = weekStart(next)
+    setMonday(m)
+    setDay(days.includes(next) ? next : m)
   }
 
-  async function broadcast(id: number) {
+  async function copyLastWeek() {
+    setBusy(true)
     try {
-      const r = await api<{ offered: number }>(`scheduling.php?action=broadcast&id=${id}`, { method: "POST", body: {} })
-      toast.success(`Offer sent to ${r.offered} eligible worker${r.offered === 1 ? "" : "s"}.`)
-      reload()
+      const r = await api<{ created: number; skipped: number; unassigned: { title: string; worker: string; reason: string }[] }>(
+        "scheduling.php?action=copy_week",
+        {
+          method: "POST",
+          body: { week_start: monday, ...(service !== ALL ? { division: service } : {}), ...(site !== ALL ? { site_id: Number(site) } : {}) },
+        },
+      )
+      toast.success(`${r.created} draft ${r.created === 1 ? "shift" : "shifts"} copied from last week${r.skipped ? `, ${r.skipped} already here` : ""}.`, {
+        description: r.unassigned.length
+          ? r.unassigned.map((u) => `${u.title}: ${u.worker} left off (${u.reason})`).join(" ")
+          : undefined,
+      })
+      rota.reload()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not broadcast.")
+      toast.error(err instanceof ApiError ? err.message : "Could not copy last week.")
+    } finally {
+      setBusy(false)
     }
   }
 
-  const openShifts = shifts.filter((s) => s.status === "open")
-
-  // A cancelled shift stays in the data -- it is a record that the booking
-  // existed -- but it is drawn muted and struck through so it cannot be mistaken
-  // for cover that is still standing.
-  const events = shifts.map((s) => {
-    const cancelled = s.status === "cancelled"
-    // Tokens rather than hexes, so the rota follows the theme. "Open" uses the
-    // warning colour: ochre is the Training service's accent.
-    const colour = cancelled
-      ? "hsl(var(--muted-foreground))"
-      : s.status === "open"
-        ? "hsl(var(--warning))"
-        : DIVISION_ACCENTS[s.division] ?? "hsl(var(--primary))"
-    return {
-      id: String(s.id),
-      title: cancelled
-        ? `CANCELLED — ${s.title}`
-        : s.worker
-          ? `${s.title} — ${s.worker}`
-          : `OPEN — ${s.title}`,
-      start: s.starts_at.replace(" ", "T"),
-      end: s.ends_at.replace(" ", "T"),
-      backgroundColor: colour,
-      borderColor: colour,
+  async function publish() {
+    setBusy(true)
+    try {
+      const r = await api<{ published: number; workers_notified: number }>("scheduling.php?action=publish", {
+        method: "POST",
+        body: { from: monday, to: sunday, ...(service !== ALL ? { division: service } : {}), ...(site !== ALL ? { site_id: Number(site) } : {}) },
+      })
+      toast.success(`${r.published} ${r.published === 1 ? "shift" : "shifts"} published. ${r.workers_notified} ${r.workers_notified === 1 ? "worker" : "workers"} told.`)
+      setPublishing(false)
+      rota.reload()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not publish.")
+    } finally {
+      setBusy(false)
     }
-  })
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Scheduling & dispatch</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Rota</h1>
           <p className="text-sm text-muted-foreground">
-            One rota across the divisions. Smart match shows only eligible workers; clashes and lapsed checks are blocked.
+            Plan the week as drafts, then publish. Workers see a shift once it is published, and are told when it changes.
           </p>
         </div>
-        <div className="flex gap-2">
-          <TemplatesDialog onGenerated={reload} />
-          <NewShiftDialog open={open} onOpenChange={setOpen} onChanged={reload} />
+        <Button onClick={() => setAdding(true)}>
+          <Plus className="size-4" /> Add shift
+        </Button>
+      </div>
+
+      {/* Filter row: the week, then what to show, then the week's actions. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" className="size-9" aria-label="Previous week" onClick={() => goWeek(addDays(monday, -7))}>
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Input
+            type="date"
+            aria-label="Week of"
+            className="h-9 w-[9.5rem]"
+            value={monday}
+            onChange={(e) => e.target.value && goWeek(e.target.value)}
+          />
+          <Button variant="outline" size="icon" className="size-9" aria-label="Next week" onClick={() => goWeek(addDays(monday, 7))}>
+            <ChevronRight className="size-4" />
+          </Button>
+          <Button variant="outline" className="h-9" onClick={() => goWeek(todayIso())}>Today</Button>
+        </div>
+        <p className="text-sm font-medium tabular-nums" aria-live="polite">{weekLabel(monday)}</p>
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <Select value={service} onValueChange={setService}>
+            <SelectTrigger className="h-9 w-[9.5rem]" aria-label="Service"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All services</SelectItem>
+              {SERVICE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={site} onValueChange={setSite}>
+            <SelectTrigger className="h-9 w-[11rem]" aria-label="Site"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All sites</SelectItem>
+              {sites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <ToggleGroup type="single" value={by} onValueChange={(v) => v && setBy(v as "site" | "worker")}
+            className="hidden rounded-md border border-border md:flex" aria-label="Rows">
+            <ToggleGroupItem value="site" className="h-9 px-3 text-sm">By site</ToggleGroupItem>
+            <ToggleGroupItem value="worker" className="h-9 px-3 text-sm">By worker</ToggleGroupItem>
+          </ToggleGroup>
         </div>
       </div>
 
-      {error && !loading && <ErrorBlock message={error} onRetry={reload} />}
-      {loading && shifts.length === 0 && <LoadingBlock rows={4} />}
-
-      {openShifts.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Radio className="size-4 text-warning" /> Open shifts needing cover ({openShifts.length})
-            </div>
-            <div className="space-y-2">
-              {openShifts.map((s) => (
-                <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-                  <button type="button" className="text-left" onClick={() => setSelectedId(s.id)}>
-                    <p className="text-sm font-medium underline-offset-4 hover:underline">{s.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {DIVISION_LABELS[s.division] ?? s.division} · {whenLabel(s.starts_at)}
-                      {s.site_name ? ` · ${s.site_name}` : ""}
-                    </p>
-                  </button>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setSelectedId(s.id)}>
-                      Assign
-                    </Button>
-                    <Button size="sm" onClick={() => broadcast(s.id)}>
-                      <Radio className="mr-1 size-4" /> Broadcast to eligible
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="p-4 [&_.fc]:text-sm [&_.fc-toolbar-title]:text-base [&_.fc-toolbar-title]:font-semibold">
-        <FullCalendar
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
-          headerToolbar={{ left: "prev,next today", center: "title", right: "dayGridMonth,timeGridWeek,timeGridDay" }}
-          height="auto"
-          events={events}
-          datesSet={onDatesSet}
-          eventClick={(arg) => {
-            arg.jsEvent.preventDefault()
-            setSelectedId(Number(arg.event.id))
-          }}
-          nowIndicator
-          firstDay={1}
-        />
-      </Card>
-
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-warning" /> open</span>
-        <span className="flex items-center gap-1.5"><span className="size-2.5 rounded-full bg-muted-foreground" /> cancelled</span>
-        {Object.entries(DIVISION_ACCENTS).map(([id, color]) => (
-          <span key={id} className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-full" style={{ backgroundColor: color }} />
-            {DIVISION_LABELS[id] ?? id}
-          </span>
-        ))}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={copyLastWeek} disabled={busy}>
+          <Copy className="size-4" /> Copy last week
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setTemplates(true)}>
+          <Repeat className="size-4" /> Weekly patterns
+        </Button>
+        <Button size="sm" variant={drafts > 0 ? "default" : "outline"} onClick={() => setPublishing(true)} disabled={drafts === 0}>
+          <Megaphone className="size-4" /> Publish drafts{drafts > 0 ? ` (${drafts})` : ""}
+        </Button>
       </div>
 
-      <ShiftDialog shift={selected} onClose={() => setSelectedId(null)} onChanged={reload} />
+      {rota.error && <ErrorBlock message={rota.error} onRetry={rota.reload} />}
+      {rota.loading && !rota.data && <LoadingBlock rows={5} />}
+
+      {rota.data && (
+        <>
+          <WeekGrid rows={rows} days={days} by={by} onOpen={setSelectedId} />
+          <DayList shifts={shifts} days={days} day={phoneDay} onDay={setDay} onOpen={setSelectedId} />
+          <p className="text-xs text-muted-foreground">
+            Minimum rest between shifts: {rota.data.rest_gap_min_hours} hours. Shorter gaps need acknowledging when booking.
+          </p>
+        </>
+      )}
+
+      <ShiftPanel shift={selected} sites={sites} onClose={() => setSelectedId(null)} onChanged={rota.reload} />
+      <AddShiftDialog
+        open={adding}
+        onOpenChange={setAdding}
+        sites={sites}
+        defaultDate={days.includes(todayIso()) ? todayIso() : monday}
+        defaultService={service !== ALL ? service : "care"}
+        onCreated={(s) => {
+          setCreated(s)
+          setSelectedId(s.id)
+          if (!days.includes(s.starts_at.slice(0, 10))) goWeek(s.starts_at.slice(0, 10))
+          rota.reload()
+        }}
+      />
+      <TemplatesDialog open={templates} onOpenChange={setTemplates} onGenerated={rota.reload} />
+      <Dialog open={publishing} onOpenChange={setPublishing}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish {drafts} draft {drafts === 1 ? "shift" : "shifts"}?</DialogTitle>
+            <DialogDescription>
+              For the week {weekLabel(monday)}{service !== ALL || site !== ALL ? ", as filtered" : ""}. Workers booked on them are
+              told in the staff app and by email. Open shifts become visible to eligible workers.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPublishing(false)}>Not yet</Button>
+            <Button onClick={publish} disabled={busy}>{busy ? "Publishing…" : "Publish"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-/**
- * One shift, and the things that can be done to it after it exists.
- *
- * Scheduling could previously only create. If the worker fell ill, the client
- * moved the booking or it went to the wrong person, the rota had no answer and
- * the row stayed wrong. Assigning here runs the same deployment gate and clash
- * check as creating does -- who ends up on the rota is what matters, not which
- * screen put them there -- so a refusal arrives with the reason attached.
- */
-function ShiftDialog({
-  shift,
-  onClose,
-  onChanged,
-}: {
-  shift: Shift | null
-  onClose: () => void
-  onChanged: () => void
-}) {
-  const [matches, setMatches] = useState<MatchWorker[] | null>(null)
-  const [matching, setMatching] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [confirmCancel, setConfirmCancel] = useState(false)
-
-  function close() {
-    setMatches(null)
-    setConfirmCancel(false)
-    onClose()
-  }
-
-  async function findEligible() {
-    if (!shift) return
-    setMatching(true)
-    setMatches(null)
-    try {
-      const q = new URLSearchParams({
-        action: "match",
-        division: shift.division,
-        starts_at: shift.starts_at,
-        ends_at: shift.ends_at,
-      })
-      const r = await api<{ workers: MatchWorker[] }>(`scheduling.php?${q.toString()}`)
-      setMatches(r.workers)
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not match workers.")
-    } finally {
-      setMatching(false)
-    }
-  }
-
-  // One path for all three lifecycle actions: they differ only in what they send
-  // and what they say afterwards.
-  async function act(action: "assign" | "unassign" | "cancel", body: object, done: string) {
-    if (!shift) return
-    setBusy(true)
-    try {
-      await api(`scheduling.php?action=${action}&id=${shift.id}`, { method: "POST", body })
-      toast.success(done)
-      close()
-      onChanged()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not update the shift.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const live = shift !== null && shift.status !== "cancelled" && shift.status !== "completed"
-
+/** One shift, as a button: time, role, who, service, state, and what is wrong. */
+function ShiftCard({ s, onOpen, showSite }: { s: RotaShift; onOpen: (id: number) => void; showSite?: boolean }) {
+  const blocked = s.conflicts.some((c) => c.severity === "block")
   return (
-    <Dialog open={shift !== null} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        {shift && (
-          <>
-            <DialogHeader>
-              <DialogTitle>{shift.title}</DialogTitle>
-              <DialogDescription>
-                {whenLabel(shift.starts_at)} to {whenLabel(shift.ends_at).split(", ")[1]} ·{" "}
-                {DIVISION_LABELS[shift.division] ?? shift.division}
-                {shift.client ? ` · ${shift.client}` : ""}
-                {shift.site_name ? ` · ${shift.site_name}` : ""}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="flex items-center gap-2 text-sm">
-              <Badge variant={shift.status === "cancelled" ? "outline" : "default"} className="capitalize">
-                {shift.status}
-              </Badge>
-              <span className="text-muted-foreground">
-                {shift.worker ? `Covered by ${shift.worker}` : "Nobody assigned"}
-              </span>
-            </div>
-
-            {live && (
-              <div className="grid gap-2 rounded-lg border p-3">
-                <div className="flex items-center justify-between">
-                  <Label>{shift.worker ? "Move to another worker" : "Assign a worker"}</Label>
-                  <Button type="button" size="sm" variant="outline" onClick={findEligible} disabled={matching}>
-                    <Sparkles className="mr-1 size-3.5" /> {matching ? "Matching…" : "Find eligible"}
-                  </Button>
-                </div>
-                {matches === null ? (
-                  <p className="text-xs text-muted-foreground">
-                    Compliant, available and clash-free workers for this slot appear here.
-                  </p>
-                ) : matches.length === 0 ? (
-                  <p className="text-xs text-destructive">
-                    Nobody is eligible for this slot. Broadcast it, or widen the shift.
-                  </p>
-                ) : (
-                  <div className="grid gap-1">
-                    {matches.map((m) => (
-                      <button
-                        type="button"
-                        key={m.id}
-                        disabled={busy}
-                        onClick={() => act("assign", { worker_id: m.id }, `${m.name} is on this shift.`)}
-                        className="flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-                      >
-                        <span>{m.name} · <span className="text-muted-foreground">{m.role}</span></span>
-                        <Badge variant="outline">{m.upcoming_shifts} upcoming</Badge>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <DialogFooter className="gap-2 sm:justify-between">
-              {live ? (
-                <>
-                  <div className="flex gap-2">
-                    {shift.worker && (
-                      <Button
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => act("unassign", {}, "Shift is open again.")}
-                      >
-                        <UserMinus className="mr-1 size-4" /> Take off shift
-                      </Button>
-                    )}
-                    {shift.status === "open" && (
-                      <Button variant="outline" disabled={busy} onClick={() => void broadcastFrom(shift.id, onChanged, close)}>
-                        <Radio className="mr-1 size-4" /> Broadcast
-                      </Button>
-                    )}
-                  </div>
-                  {confirmCancel ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Cancel this shift?</span>
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>
-                        Keep it
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => act("cancel", {}, "Shift cancelled.")}
-                      >
-                        {busy ? "Cancelling…" : "Yes, cancel"}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmCancel(true)}>
-                      <Ban className="mr-1 size-4" /> Cancel shift
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {shift.status === "completed"
-                    ? "This shift has been worked. It is a record now, not a plan."
-                    : "This shift is cancelled. Create a new one to re-cover the slot."}
-                </p>
-              )}
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+    <button
+      type="button"
+      onClick={() => onOpen(s.id)}
+      className={cn(
+        "w-full space-y-1 rounded-md border bg-card p-2 text-left text-xs transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        s.state === "draft" && "border-dashed",
+        s.state === "cancelled" && "opacity-70",
+        blocked ? "border-destructive/60" : "border-border",
+      )}
+    >
+      <p className="font-semibold tabular-nums">{shiftTimes(s.starts_at, s.ends_at)}</p>
+      <p className={cn("truncate", s.state === "cancelled" && "line-through")}>{s.title}</p>
+      <p className={cn("truncate", s.worker ? "text-foreground" : "font-medium text-warning")}>{s.worker ?? "Open"}</p>
+      {showSite && s.site_name && <p className="truncate text-muted-foreground">{s.site_name}</p>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StateChip state={s.state} />
+        <ServiceDot service={s.division} />
+      </div>
+      {s.conflicts.map((c, i) => <ConflictLine key={i} c={c} compact />)}
+    </button>
   )
 }
 
-/** Broadcast from inside the shift dialog, then close it. */
-async function broadcastFrom(id: number, onChanged: () => void, close: () => void) {
-  try {
-    const r = await api<{ offered: number }>(`scheduling.php?action=broadcast&id=${id}`, { method: "POST", body: {} })
-    toast.success(`Offer sent to ${r.offered} eligible worker${r.offered === 1 ? "" : "s"}.`)
-    close()
-    onChanged()
-  } catch (err) {
-    toast.error(err instanceof ApiError ? err.message : "Could not broadcast.")
+function WeekGrid({ rows, days, by, onOpen }: {
+  rows: ReturnType<typeof rotaRows>
+  days: string[]
+  by: "site" | "worker"
+  onOpen: (id: number) => void
+}) {
+  const today = todayIso()
+  if (rows.length === 0) {
+    return (
+      <div className="hidden rounded-lg border border-dashed border-border p-10 text-center md:block">
+        <CalendarClock className="mx-auto size-6 text-muted-foreground" aria-hidden />
+        <p className="mt-2 font-medium">Nothing on the rota this week</p>
+        <p className="text-sm text-muted-foreground">Add a shift, or copy last week to start from what happened then.</p>
+      </div>
+    )
   }
-}
-
-const WEEKDAYS = [
-  { value: "1", label: "Monday" },
-  { value: "2", label: "Tuesday" },
-  { value: "3", label: "Wednesday" },
-  { value: "4", label: "Thursday" },
-  { value: "5", label: "Friday" },
-  { value: "6", label: "Saturday" },
-  { value: "7", label: "Sunday" },
-]
-
-function TemplatesDialog({ onGenerated }: { onGenerated: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [templates, setTemplates] = useState<ShiftTemplate[]>([])
-  const [division, setDivision] = useState("care")
-  const [weekday, setWeekday] = useState("1")
-  const [title, setTitle] = useState("")
-  const [start, setStart] = useState("")
-  const [end, setEnd] = useState("")
-  const [busy, setBusy] = useState(false)
-
-  const load = () => api<{ templates: ShiftTemplate[] }>("shift-templates.php").then((r) => setTemplates(r.templates)).catch(() => {})
-  useEffect(() => {
-    if (open) load()
-  }, [open])
-
-  async function add() {
-    if (!title || !start || !end) {
-      toast.error("Add a title and times.")
-      return
-    }
-    setBusy(true)
-    try {
-      await api("shift-templates.php", { method: "POST", body: { title, division, weekday: Number(weekday), start_time: start, end_time: end } })
-      toast.success("Template added.")
-      setTitle(""); setStart(""); setEnd("")
-      load()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not add template.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function toggle(id: number) {
-    await api(`shift-templates.php?action=toggle&id=${id}`, { method: "POST", body: {} }).catch(() => {})
-    load()
-  }
-
-  async function generate() {
-    setBusy(true)
-    try {
-      const r = await api<{ created: number }>("shift-templates.php?action=generate&weeks=4", { method: "POST", body: {} })
-      toast.success(`Generated ${r.created} open shift${r.created === 1 ? "" : "s"} for the next 4 weeks.`)
-      onGenerated()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not generate.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline"><CalendarPlus className="mr-1 size-4" /> Templates</Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Recurring shift templates</DialogTitle>
-          <DialogDescription>Define weekly patterns, then generate open shifts to broadcast.</DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-3 rounded-lg border p-3">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title e.g. Nightly guard — Acme" />
-          <div className="grid grid-cols-2 gap-3">
-            <Select value={division} onValueChange={setDivision}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{DIVISIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={weekday} onValueChange={setWeekday}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>{WEEKDAYS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Input type="time" value={start} onChange={(e) => setStart(e.target.value)} />
-            <Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} />
+    <div className="hidden overflow-x-auto rounded-lg border border-border bg-card md:block">
+      <div className="grid min-w-[880px]" style={{ gridTemplateColumns: "11rem repeat(7, minmax(0, 1fr))" }} role="table" aria-label="Week rota">
+        <div className="sticky left-0 border-b border-border bg-muted/50 p-2 text-xs font-medium text-muted-foreground" role="columnheader">
+          {by === "site" ? "Site" : "Worker"}
+        </div>
+        {days.map((d) => (
+          <div key={d} role="columnheader"
+            className={cn("border-b border-l border-border bg-muted/50 p-2 text-xs font-medium tabular-nums", d === today && "text-primary")}>
+            {dayLabel(d)}
           </div>
-          <Button size="sm" onClick={add} disabled={busy}><Plus className="mr-1 size-4" /> Add template</Button>
-        </div>
-
-        <div className="space-y-2">
-          {templates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No templates yet.</p>
-          ) : (
-            templates.map((t) => (
-              <div key={t.id} className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm">
-                <div>
-                  <p className="font-medium">{t.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {WEEKDAYS.find((d) => d.value === String(t.weekday))?.label} · {t.start_time.slice(0, 5)}–{t.end_time.slice(0, 5)} · {DIVISION_LABELS[t.division] ?? t.division}
-                  </p>
-                </div>
-                <button onClick={() => toggle(t.id)}>
-                  <Badge variant={t.active ? "default" : "outline"}>{t.active ? "Active" : "Paused"}</Badge>
-                </button>
+        ))}
+        {rows.map((row) => (
+          <div key={row.key} className="contents" role="row">
+            <div className="border-b border-border p-2 text-sm" role="rowheader">
+              <p className="font-medium leading-tight">{row.label}</p>
+              {row.sub && <p className="text-xs text-muted-foreground">{row.sub}</p>}
+            </div>
+            {days.map((d) => (
+              <div key={d} role="cell" className={cn("space-y-1.5 border-b border-l border-border p-1.5", d === today && "bg-accent/40")}>
+                {shiftsOn(row.shifts, d).map((s) => <ShiftCard key={s.id} s={s} onOpen={onOpen} showSite={by === "worker"} />)}
               </div>
-            ))
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button onClick={generate} disabled={busy || templates.filter((t) => t.active).length === 0}>
-            Generate next 4 weeks
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function NewShiftDialog({
-  open,
-  onOpenChange,
-  onChanged,
-}: {
-  open: boolean
-  onOpenChange: (o: boolean) => void
-  onChanged: () => void
+/** The phone view: one day at a time, shifts in time order. */
+function DayList({ shifts, days, day, onDay, onOpen }: {
+  shifts: RotaShift[]
+  days: string[]
+  day: string
+  onDay: (d: string) => void
+  onOpen: (id: number) => void
 }) {
-  const [mode, setMode] = useState<"assign" | "open">("assign")
-  const [clients, setClients] = useState<Client[]>([])
-  const [skills, setSkills] = useState<Skill[]>([])
-  const [division, setDivision] = useState("care")
-  const [skillId, setSkillId] = useState("")
-  const [clientId, setClientId] = useState("")
-  const [title, setTitle] = useState("")
-  const [site, setSite] = useState("")
-  const [starts, setStarts] = useState("")
-  const [ends, setEnds] = useState("")
-  const [matches, setMatches] = useState<MatchWorker[] | null>(null)
-  const [workerId, setWorkerId] = useState("")
-  const [matching, setMatching] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    api<{ clients: Client[] }>("clients.php").then((r) => setClients(r.clients)).catch(() => {})
-    api<{ skills: Skill[] }>("skills.php").then((r) => setSkills(r.skills)).catch(() => {})
-  }, [open])
-
-  async function findEligible() {
-    if (!division || !starts || !ends) {
-      toast.error("Pick a division, start and end first.")
-      return
-    }
-    setMatching(true)
-    setMatches(null)
-    setWorkerId("")
-    try {
-      const q = new URLSearchParams({ action: "match", division, starts_at: starts, ends_at: ends })
-      if (skillId) q.set("skill_id", skillId)
-      const r = await api<{ workers: MatchWorker[] }>(`scheduling.php?${q.toString()}`)
-      setMatches(r.workers)
-      if (r.workers.length === 0) toast("No eligible workers for that slot.")
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not match workers.")
-    } finally {
-      setMatching(false)
-    }
-  }
-
-  async function submitAssign() {
-    if (!workerId || !title || !starts || !ends) {
-      toast.error("Find and pick a worker, and add a title.")
-      return
-    }
-    setSubmitting(true)
-    try {
-      await api("scheduling.php", {
-        method: "POST",
-        body: { worker_id: Number(workerId), client_id: clientId || null, title, site_name: site, starts_at: starts, ends_at: ends },
-      })
-      toast.success("Shift scheduled.")
-      close()
-      onChanged()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not schedule the shift.")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function submitOpen() {
-    if (!title || !division || !starts || !ends) {
-      toast.error("Add a title, division, start and end.")
-      return
-    }
-    setSubmitting(true)
-    try {
-      await api("scheduling.php?action=open", {
-        method: "POST",
-        body: { title, division, client_id: clientId || null, site_name: site, starts_at: starts, ends_at: ends },
-      })
-      toast.success("Open shift created — broadcast it to fill it.")
-      close()
-      onChanged()
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not create the open shift.")
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  function close() {
-    onOpenChange(false)
-    setMatches(null); setWorkerId(""); setTitle(""); setSite(""); setStarts(""); setEnds(""); setClientId(""); setSkillId("")
-  }
-
+  const list = shiftsOn(shifts, day)
   return (
-    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-      <DialogTrigger asChild>
-        <Button><Plus className="mr-1 size-4" /> New shift</Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>New shift</DialogTitle>
-          <DialogDescription>Assign an eligible worker, or open it for broadcast to whoever can cover.</DialogDescription>
-        </DialogHeader>
-
-        <div className="mb-2 inline-flex rounded-lg border p-1 text-sm">
-          <button type="button" onClick={() => setMode("assign")} className={`rounded-md px-3 py-1 ${mode === "assign" ? "bg-primary text-primary-foreground" : ""}`}>Assign</button>
-          <button type="button" onClick={() => setMode("open")} className={`rounded-md px-3 py-1 ${mode === "open" ? "bg-primary text-primary-foreground" : ""}`}>Open / broadcast</button>
-        </div>
-
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Night cover — Rosewood" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="division">Division</Label>
-              <Select value={division} onValueChange={setDivision}>
-                <SelectTrigger id="division"><SelectValue /></SelectTrigger>
-                <SelectContent>{DIVISIONS.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="skill">Skill needed (optional)</Label>
-              <Select value={skillId} onValueChange={setSkillId}>
-                <SelectTrigger id="skill"><SelectValue placeholder="Any" /></SelectTrigger>
-                <SelectContent>{skills.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="starts">Starts</Label>
-              <Input id="starts" type="datetime-local" value={starts} onChange={(e) => setStarts(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ends">Ends</Label>
-              <Input id="ends" type="datetime-local" value={ends} onChange={(e) => setEnds(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="client">Client (optional)</Label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger id="client"><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="site">Site (optional)</Label>
-              <Input id="site" value={site} onChange={(e) => setSite(e.target.value)} />
-            </div>
-          </div>
-
-          {mode === "assign" && (
-            <div className="grid gap-2 rounded-lg border p-3">
-              <div className="flex items-center justify-between">
-                <Label>Eligible workers</Label>
-                <Button type="button" size="sm" variant="outline" onClick={findEligible} disabled={matching}>
-                  <Sparkles className="mr-1 size-3.5" /> {matching ? "Matching…" : "Find eligible"}
-                </Button>
-              </div>
-              {matches === null ? (
-                <p className="text-xs text-muted-foreground">Compliant + available + clash-free workers appear here.</p>
-              ) : matches.length === 0 ? (
-                <p className="text-xs text-destructive">No eligible workers for that slot. Try opening it for broadcast.</p>
-              ) : (
-                <div className="grid gap-1">
-                  {matches.map((m) => (
-                    <button
-                      type="button"
-                      key={m.id}
-                      onClick={() => setWorkerId(String(m.id))}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${workerId === String(m.id) ? "border-primary bg-primary/5" : ""}`}
-                    >
-                      <span>{m.name} · <span className="text-muted-foreground">{m.role}</span></span>
-                      <Badge variant="outline">{m.upcoming_shifts} upcoming</Badge>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="mt-2">
-          {mode === "assign" ? (
-            <Button onClick={submitAssign} disabled={submitting || !workerId}>
-              {submitting ? "Scheduling…" : "Schedule shift"}
-            </Button>
-          ) : (
-            <Button onClick={submitOpen} disabled={submitting}>
-              <CalendarPlus className="mr-1 size-4" /> {submitting ? "Creating…" : "Create open shift"}
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <div className="space-y-3 md:hidden">
+      <div className="grid grid-cols-7 gap-1" role="tablist" aria-label="Day">
+        {days.map((d) => {
+          const n = shiftsOn(shifts, d).length
+          return (
+            <button key={d} type="button" role="tab" aria-selected={d === day} onClick={() => onDay(d)}
+              className={cn(
+                "flex min-h-11 flex-col items-center justify-center rounded-md border text-xs tabular-nums",
+                d === day ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card",
+              )}>
+              <span>{dayLabel(d).split(" ")[0]}</span>
+              <span className="font-semibold">{d.slice(8)}</span>
+              {n > 0 && <span className="sr-only">{n} shifts</span>}
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-sm font-medium">{dayLabel(day, true)}</p>
+      {list.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No shifts this day.</p>
+      ) : (
+        <div className="space-y-2">{list.map((s) => <ShiftCard key={s.id} s={s} onOpen={onOpen} showSite />)}</div>
+      )}
+    </div>
   )
 }
