@@ -387,6 +387,7 @@ computed identically everywhere.
 | `bookings.php` | Cover requests | **POST with no action is public**; rest office roles throughout, reads included |
 | `certificates.php` | Certificate verification and Open Badges | **Public** |
 | `clients.php` | CRM | Office roles throughout, reads included |
+| `company.php` | Company details and social links for the website (S7) | **Public read** of named fields, cached five minutes; edit `super_admin`/`admin`, audited. See §54f |
 | `comms.php` | Announcements | Staff to read; POST `super_admin`/`admin`/`manager` |
 | `compliance.php` | Credential register and audit packs | Staff **and** the `compliance` zone throughout, reads included; POST `super_admin`/`admin`/`manager` |
 | `contact.php` | Public enquiry forms: general, care, training (`type`) | **Public** |
@@ -423,10 +424,13 @@ computed identically everywhere.
 | `sites.php` | A client's sites and what each requires | Office roles throughout, reads included. See §54e |
 | `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
 | `skills.php` | Skills catalogue | Office roles throughout, reads included |
+| `sitemap.php` | Published role pages and posts as a sitemap (S7) | **Public**, XML, cached an hour |
 | `testimonials.php` | Testimonials | **Public read**; admin `super_admin`/`admin`/`manager`/`editor` |
 | `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve, reject, query and correct `super_admin`/`admin`/`manager`; service scope |
 | `users.php` | User and role management | `super_admin`/`admin` |
+| `vacancies.php` | Vacancies and role pages (S7) | **Public read of published roles**, named fields only; manage `super_admin`/`admin`/`manager`/`editor`, internal staff, service scope on every branch, audited. See §54f |
 | `weather.php` | OpenWeather proxy with shift advisory | Staff |
+| `website-forms.php` | The forms directory: approved Google Forms (S7) | `super_admin`/`admin`/`manager`/`editor`, internal staff, reads included; service scope; audited. No public read. See §54f |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
 
 Throughout the tables below, "office roles" means
@@ -1820,6 +1824,66 @@ Statuses still change through `bookings.php?action=status` and
 `GET me.php` now also returns each shift's `cancel_reason` and the site's
 address, postcode, access notes and contact.
 
+## 54f. Careers, the forms directory and company details (S7)
+
+Migration 039. The website reads these through endpoints that return an explicit
+list of public fields, never whole rows. Drafts are never public, and published
+changes reach the site within five minutes (`Cache-Control: public, max-age=300`).
+
+### `vacancies.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | none | **Public** | none | `{vacancies}`: published roles, `slug, title, service, location, hours_text, pay_text, summary, published_at` |
+| GET | none | **Public** | `slug` | `{vacancy}`: the fields above plus `requirements, checks, apply, form`. `apply` is `form` (an active linked form), `closed` (a linked form switched off) or `native` (no form: the short ats.php form). `form` is `{id, display}` with the Google Form id only, or null. A closed role answers **410** `{error, closed, title}`; a draft or unknown slug **404** |
+| GET | `all` | `super_admin`/`admin`/`manager`/`editor`, staff | none | `{vacancies, default_checks}`; a scoped account sees its service only |
+| GET | `get` | Same | `id` | `{vacancy}`; 403 outside scope |
+| POST | `create` | Same | body `{title, service, summary, location?, hours_text?, pay_text?, requirements?, checks?, slug?, form_id?, owner_id?}` | `{ok, id, slug}` 201, as a draft. Empty `checks` is filled from `rg_vacancy_default_checks()`; a taken slug gets `-2`, `-3` |
+| POST | `update` | Same | `id`; same body | `{ok, slug}`. The slug may change only while the role has never been published (422 after) |
+| POST | `status` | Same | `id`; body `{status}` | `{ok, status}`. draft to published or closed, published to closed, closed to published; never back to draft (422). `published_at` is the first publication and is kept on reopening |
+| POST | `delete` | Same | `id` | `{ok}`; archive (soft delete) |
+
+The service in the body is scope-checked as well as the stored one. The owner must pass
+`is_assignable_staff()` (now in `lib.php`). Audit actions: `vacancy.create`,
+`vacancy.update` (changed fields, before and after), `vacancy.status`, `vacancy.archive`.
+
+### `website-forms.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | none | `super_admin`/`admin`/`manager`/`editor`, staff | none | `{forms, integrations}`. Each form carries `url` rebuilt from the id, `review_due` (90 days, or never reviewed), `intake_status` (`ok`, `silent`, `paused`, `not_configured`, `not_linked`, the same reading as `forms-intake.php?action=health`) and the titles of the vacancies using it |
+| GET | `history` | Same | `id` | `{history}`: the form's audit entries with before and after values |
+| POST | `create` | Same | body `{title, url, purpose?, service?, display?, active?, owner_id?, integration_id?}` | `{ok, id}` 201 |
+| POST | `update` | Same | `id`; same body, `url` optional | `{ok}` |
+| POST | `reviewed` | Same | `id` | `{ok}`; sets `last_reviewed_at` to today |
+
+`url` must be `https://docs.google.com/forms/d/e/<id>/viewform`, optionally with
+`?usp=...` (`rg_parse_google_form()`); anything else is **422**, with advice for the
+short link and the editing address. Only the id is stored.
+
+### `company.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | none | **Public** | none | `{company}`: `trading_name, legal_name, company_no, phone, urgent_phone, email, office_hours, area, registered_address, instagram_url, facebook_url, linkedin_url, tiktok_url, whatsapp_url` |
+| GET | `edit` | `super_admin`/`admin` | none | `{company, updated_at, updated_by_name}` |
+| POST | `update` | Same | any of the fields above; a field left out keeps its value | `{ok, company}`. Phones must be ringable (`rg_valid_phone()`), the email valid, each social link https on that network's own host (`rg_social_url_ok()`). Audited as `company.update` with only the changed fields |
+
+### `sitemap.php`
+
+Public XML: `/careers/<slug>` for each published vacancy and `/news/<slug>` for each
+published post. The static pages stay in the build-time `dist/sitemap.xml`; `robots.txt`
+names both.
+
+### `forms-intake.php?action=set_secret&id=N`
+
+POST, `super_admin`/`admin`. Generates a random shared secret, stores only its SHA-256
+hash, and returns `{ok, integration_key, secret}` once. Replaces any previous secret.
+Audited as `intake.secret_set` without the secret. Set-up guide:
+`docs/runbooks/google-forms-intake.md`.
+
+---
+
 ## 55. Public / unauthenticated surface
 
 Every route below is reachable with **no bearer token**. This is the full list.
@@ -1835,6 +1899,9 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/certificates.php?action=badge&id=` | GET | none | Same data as an Open Badges 3.0 assertion |
 | `/blog.php` | GET | none | Published posts; `?slug=` for one |
 | `/testimonials.php` | GET | none | Published testimonials |
+| `/vacancies.php` | GET | none (cached 5 min) | Published roles only, named fields; `?slug=` for one, 410 if closed, 404 for a draft |
+| `/company.php` | GET | none (cached 5 min) | Company details and social links, named fields only |
+| `/sitemap.php` | GET | none (cached 1 h) | Slugs of published roles and posts |
 | `/ats.php` | POST (no `action`) | `ats` 8/10 min | Creates an applicant and a consent record |
 | `/bookings.php` | POST (no `action`) | `booking` 8/10 min | Creates a service request and a consent record |
 | `/quotes.php?action=request` | POST | `quote` 5/10 min | The cleaning quote request: a `service_requests` row (division `cleaning`) and a consent record; never a priced quote |

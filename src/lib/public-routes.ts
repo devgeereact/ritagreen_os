@@ -15,9 +15,10 @@ export const SITE_ORIGIN = "https://ritagreenservices.com"
 export type PublicPage = { path: string; priority: number }
 
 // Every page a visitor can land on from a search. Not listed: /login and the
-// account flows (robots.txt disallows them), /news/:slug and /verify/:id (one
-// per record; posts are added when the sitemap can read them), the 404, and the
-// legacy addresses below, which redirect.
+// account flows (robots.txt disallows them), /verify/:id (one per certificate),
+// the 404, and the legacy addresses below, which redirect. /news/:slug and
+// /careers/:slug are one per database record, so server/sitemap.php lists them
+// (robots.txt names both sitemaps).
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", priority: 1.0 },
   { path: "/healthcare", priority: 0.9 },
@@ -28,6 +29,7 @@ export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/training", priority: 0.8 },
   { path: "/request", priority: 0.9 },
   { path: "/careers", priority: 0.8 },
+  { path: "/links", priority: 0.3 },
   { path: "/about", priority: 0.6 },
   { path: "/news", priority: 0.6 },
   { path: "/contact", priority: 0.7 },
@@ -109,9 +111,9 @@ function escapeXml(s: string): string {
  * The sitemap for a list of pages.
  *
  * No <lastmod>: the build cannot know when a page's content last changed, and a
- * build date on every URL tells a crawler nothing. Published posts are not
- * included because they live in the database, which the build (in CI) cannot
- * reach; see docs/ARCHITECTURE.md.
+ * build date on every URL tells a crawler nothing. Published posts and role
+ * pages are not included because they live in the database, which the build
+ * (in CI) cannot reach; server/sitemap.php lists those. See docs/ARCHITECTURE.md.
  */
 export function buildSitemapXml(pages: PublicPage[] = PUBLIC_PAGES, origin: string = SITE_ORIGIN): string {
   const urls = pages

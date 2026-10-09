@@ -35,6 +35,9 @@ import Home from "@/pages/public/Home"
 const ServicePage = lazy(() => import("@/pages/public/ServicePage"))
 const About = lazy(() => import("@/pages/public/About"))
 const Careers = lazy(() => import("@/pages/public/Careers"))
+// Section S7: role pages from the Website area, and the link-in-bio page.
+const CareerRole = lazy(() => import("@/pages/public/CareerRole"))
+const Links = lazy(() => import("@/pages/public/Links"))
 const News = lazy(() => import("@/pages/public/News"))
 const Article = lazy(() => import("@/pages/public/Article"))
 const Contact = lazy(() => import("@/pages/public/Contact"))
@@ -70,6 +73,10 @@ const Mailbox = lazy(() => import("@/pages/app/Mailbox"))
 const Comms = lazy(() => import("@/pages/app/Comms"))
 const Blog = lazy(() => import("@/pages/app/Blog"))
 const TestimonialsAdmin = lazy(() => import("@/pages/app/Testimonials"))
+// Website area, section S7.
+const VacanciesAdmin = lazy(() => import("@/pages/app/Vacancies"))
+const WebsiteForms = lazy(() => import("@/pages/app/WebsiteForms"))
+const CompanyDetailsAdmin = lazy(() => import("@/pages/app/CompanyDetails"))
 const ContentStudio = lazy(() => import("@/pages/app/ContentStudio"))
 const Workers = lazy(() => import("@/pages/app/Workers"))
 const PersonProfile = lazy(() => import("@/pages/app/PersonProfile"))
@@ -127,6 +134,8 @@ export const router = createBrowserRouter([
       { path: "training", element: page(<ServicePage key="training" pageKey="training" />) },
       { path: "about", element: page(<About />) },
       { path: "careers", element: page(<Careers />) },
+      { path: "careers/:slug", element: page(<CareerRole />) },
+      { path: "links", element: page(<Links />) },
       { path: "news", element: page(<News />) },
       { path: "news/:slug", element: page(<Article />) },
       { path: "contact", element: page(<Contact />) },
@@ -242,6 +251,10 @@ export const router = createBrowserRouter([
           { path: "comms", element: page(<Comms />) },
           { path: "blog", element: page(<Blog />) },
           { path: "testimonials", element: page(<TestimonialsAdmin />) },
+          // Website area (S7): vacancies, the forms directory, company details.
+          { path: "vacancies", element: page(<VacanciesAdmin />) },
+          { path: "website-forms", element: page(<WebsiteForms />) },
+          { path: "company", element: page(<CompanyDetailsAdmin />) },
           { path: "content-studio", element: page(<ContentStudio />) },
           { path: "profile", element: page(<Profile />) },
           { path: "notifications", element: page(<Notifications />) },

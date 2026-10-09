@@ -7,6 +7,48 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: careers, the forms directory, company details and socials, section S7 (2026-10-09, local, not deployed)
+
+- **Vacancies** (migration 039, `server/vacancies.php`, Website, Vacancies). Draft, published,
+  closed; the address is fixed once published; checks prefilled per service from plan file 01.
+  Editors and office roles, service scope on every branch including the service in the body,
+  every change audited. The public read returns named fields of published roles only; a draft is
+  404 and a closed role 410.
+- **Careers on the website.** `/careers` lists published roles with a service filter, an empty
+  state and a "register your interest" form. `/careers/:slug` shows the role, what you need, the
+  checks, then one way to apply: the linked Google Form, or the short native form when the role
+  has none, never both. A closed or unknown role gets a friendly page with other roles. JobPosting
+  structured data with no salary.
+- **Forms directory** (`website_forms`, `server/website-forms.php`, Website, Forms). Only
+  `https://docs.google.com/forms/d/e/<id>/viewform` is accepted and only the id is stored;
+  redirectors, other hosts, `javascript:` and pasted HTML are refused with 422. History of each
+  form from the audit log. Settings, Form intake shows forms not reviewed for 90 days and each
+  form's intake health.
+- **Click to load.** The Google Form is not in the page until the visitor presses "Load the
+  application form from Google"; "Open the form in a new tab" and the phone number are always
+  shown. CSP gains `frame-src 'self' https://docs.google.com` and nothing else. Cookie notice 2.1
+  and the privacy notice say so. **Deploy:** copy the CSP line in `public/.htaccess` to the server
+  by hand, or the frame is blocked and the page falls back to the link.
+- **Company details and social links from the CMS** (`company_settings`, `server/company.php`,
+  Website, Company details). Owner only, audited, public read cached five minutes, seeded from
+  `src/lib/company.ts`, which stays as the fallback. Instagram, Facebook, LinkedIn, TikTok and a
+  WhatsApp enquiry link, each checked against its own host. X is not offered.
+- **`/links`**, the link-in-bio page: Request staff, Arrange care, Current roles, Training,
+  Contact, the phone number and the active socials.
+- **Live sitemap.** `server/sitemap.php` lists published role pages and posts; `robots.txt`
+  names it beside the build-time `sitemap.xml`.
+- **Intake secrets.** `forms-intake.php?action=set_secret` lets an owner create an
+  integration's shared secret in Settings, shown once, stored hashed. Set-up guide with the Apps
+  Script: `docs/runbooks/google-forms-intake.md`.
+- `is_assignable_staff()` moved from `ats.php` to `lib.php` so the Website area applies the same
+  owner test.
+- Tests: `server/tests/db/cases/170_careers_cms.php` (108 assertions), pure tests for form
+  address parsing, slugs, vacancy states, review age and social links, and
+  `src/lib/__tests__/google-forms.test.ts`, `company.test.ts`.
+- **Deploy order:** run migration 039, upload `vacancies.php`, `website-forms.php`,
+  `company.php`, `sitemap.php`, `forms-intake.php`, `lib.php`, `ats.php` and `pure.php`, then the
+  frontend (which carries `robots.txt`), then the `.htaccess` CSP line by hand.
+
 ### Added: the rota, section S3 (2026-10-09, local, not deployed)
 
 Launch plan Phase 4, office side. Migration 038.
