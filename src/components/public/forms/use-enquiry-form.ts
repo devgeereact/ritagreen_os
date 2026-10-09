@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { ApiError } from "@/lib/api"
 import { COMPANY_DETAILS } from "@/lib/company"
 
@@ -38,7 +38,6 @@ export function useEnquiryForm<V extends Record<string, string | boolean>>(opts:
   const [errors, setErrors] = useState<FieldErrors<V>>({})
   const [status, setStatus] = useState<FormStatus>("idle")
   const [failure, setFailure] = useState<string | null>(null)
-  const formRef = useRef<HTMLFormElement>(null)
 
   function set<K extends keyof V>(key: K, value: V[K]) {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -47,13 +46,14 @@ export function useEnquiryForm<V extends Record<string, string | boolean>>(opts:
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const formEl = e.currentTarget
     if (status === "sending") return
     setFailure(null)
     const found = opts.validate(values)
     setErrors(found)
     if (Object.values(found).some(Boolean)) {
       // After the render that sets aria-invalid.
-      window.setTimeout(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus(), 0)
+      window.setTimeout(() => formEl.querySelector<HTMLElement>("[aria-invalid='true']")?.focus(), 0)
       return
     }
     setStatus("sending")
@@ -73,5 +73,5 @@ export function useEnquiryForm<V extends Record<string, string | boolean>>(opts:
     setStatus("idle")
   }
 
-  return { values, set, errors, status, failure, onSubmit, reset, formRef }
+  return { values, set, errors, status, failure, onSubmit, reset }
 }
