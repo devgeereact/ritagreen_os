@@ -35,12 +35,13 @@ function FieldShell({ id, label, optional, hint, error, className, children }: C
         {label}
         {optional && <span className="font-normal text-muted-foreground"> (optional)</span>}
       </label>
+      {/* The hint sits under the control, so fields side by side line up. */}
+      {children}
       {hint && (
         <p id={`${id}-hint`} className="text-sm text-muted-foreground">
           {hint}
         </p>
       )}
-      {children}
       {error && (
         <p id={`${id}-error`} className="flex items-start gap-1.5 text-sm font-medium text-destructive">
           <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />

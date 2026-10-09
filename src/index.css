@@ -199,7 +199,7 @@
      (PublicLayout carries the class), so the office app and the staff portal
      keep Source Sans 3 headings. Only 500 and 600 are shipped, so a heading
      asking for bold gets 600 rather than a synthesised bold. */
-  .website :is(h1, h2) {
+  .website :where(h1, h2) {
     font-family: theme("fontFamily.display");
     font-weight: 600;
     font-synthesis: none;

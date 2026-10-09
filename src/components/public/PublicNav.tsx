@@ -74,7 +74,7 @@ export function PublicNav() {
       <div className="border-b border-border">
         <nav
           aria-label="Main"
-          className="mx-auto flex max-w-6xl items-center gap-x-7 px-4 py-3.5 sm:px-6"
+          className="mx-auto flex max-w-6xl items-center gap-x-4 lg:gap-x-7 px-4 py-3.5 sm:px-6"
         >
           <Link to="/" aria-label="RitaGreen Services, home" className="shrink-0 rounded-md py-1">
             <Wordmark />
@@ -90,14 +90,14 @@ export function PublicNav() {
             ))}
           </ul>
 
-          <div className="ml-auto flex items-center gap-4">
+          <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <Link
               to={account.to}
               className="hidden text-[15px] font-semibold text-primary underline-offset-4 hover:underline sm:inline"
             >
               {account.label}
             </Link>
-            <Link to="/request" className={cn(siteButton({ size: "sm" }), "hidden sm:inline-flex")}>
+            <Link to="/request" className={cn(siteButton({ size: "sm" }), "px-3 sm:px-3.5")}>
               Request staff
             </Link>
 
