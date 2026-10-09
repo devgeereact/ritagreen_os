@@ -28,7 +28,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 
 | ID | Section | State | Branch / PR | Notes |
 |---|---|---|---|---|
-| S0 | Plan pack, tracker, test toolbox | 🚧 | `plans/2026-mvp` | Docs only |
+| S0 | Plan pack, tracker, test toolbox, CI database job fixed | ✅ | `plans/2026-mvp`, PR #9 | CI database job green for the first time (MariaDB, env fix) |
 | S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | ⏳ | `mvp/s01-brand-shell` | |
 | S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ⏳ | `mvp/s02-people-compliance` | Launch plan Phase 3 UI |
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ⏳ | `mvp/s03-rota` | Phase 4 |
@@ -98,7 +98,7 @@ were exercised, the commands and their results, what remains broken, and what wa
 
 ### Machines without PHP or MySQL
 
-Use Docker (see the "Docker toolbox" section of `docs/TESTING.md` once S0 lands).
+Use Docker: the "Docker toolbox" section of `docs/TESTING.md`.
 
 ## Completion
 
