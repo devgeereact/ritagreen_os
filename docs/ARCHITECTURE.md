@@ -243,8 +243,9 @@ Divisions drive real behaviour: `dashboard.php` filters the whole command centre
 `analytics.php` and `margin.php` report by one; `scheduling.php` uses the division to decide
 *which* compliance check is mandatory; `comms.php` targets an announcement at one.
 
-`src/lib/divisions.ts` is the single source of truth for the public site — one array driving
-the navigation mega-menu, the services pages, the home page and the footer.
+On the public site the names come from `src/lib/services.ts` (Healthcare, Cleaning, Security,
+Training for `care`, `cleaning`, `security`, `academy`) and the words for the six service pages
+from `src/lib/service-pages.ts`. `src/lib/divisions.ts` was retired with the 2026 website (S6).
 
 **Known cost:** adding or renaming a division is a schema migration against every ENUM column
 plus the TypeScript literals. `clients.divisions` sidesteps this with a comma-separated string,
@@ -349,7 +350,17 @@ blocks `^uploads/` so uploaded documents are only ever reachable through `files.
 authentication check. It also refuses `*.sql`, `*.md`, `migrations/`, `tests/` and the six
 CLI-only tools, which land in the document root when `server/` is uploaded beside `index.html`.
 It is a mirror of the hand-maintained server copy, so a change to it is live only once
-copied across by hand; see `server/README.md`.
+copied across by hand; see `server/README.md`. Since S6 it also carries the 301 redirects from
+the previous website's addresses (`/services/*`, `/sectors`, `/accreditations`, `/resources/*`,
+`/apply`, `/quote`); the same table drives the in-app redirects in `src/lib/public-routes.ts`.
+
+**The sitemap is generated at build time** (S6). A small plugin in `vite.config.ts` writes
+`dist/sitemap.xml` from `PUBLIC_PAGES` in `src/lib/public-routes.ts`, the same table the router
+and its redirects read, so there is no hand-kept `public/sitemap.xml` to fall out of date.
+That file is imported by `vite.config.ts` as well as the app, which is why it has no imports
+of its own and is listed in `tsconfig.node.json`. It holds static pages only: published posts
+live in the database, which the build in CI cannot reach. Adding posts (and S7's vacancies)
+means a server-rendered sitemap, for example a `sitemap.php` the static file points to.
 
 ## 10. Development environment
 

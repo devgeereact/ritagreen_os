@@ -1163,6 +1163,18 @@ check('the map lists every switch, in order',
 check('the map applies stored values', rg_feature_map(['finance' => 0])['finance'], false);
 check('the map ignores rows for unknown names', array_key_exists('teleport', rg_feature_map(['teleport' => 1])), false);
 
+group('website cleaning quote options');
+
+// The public quote form posts these keys; quotes.php refuses anything else. The
+// frontend copy of the list (src/components/public/forms/options.ts) must match.
+check('site types are the plan\'s cleaning buyers plus other',
+    array_keys(rg_cleaning_site_types()), ['residential', 'void', 'school', 'construction', 'office', 'care', 'other']);
+check('frequencies run from one-off to not sure',
+    array_keys(rg_cleaning_frequencies()), ['one_off', 'daily', 'several_weekly', 'weekly', 'fortnightly', 'monthly', 'not_sure']);
+check('every site type has a label the office can read',
+    count(array_filter(rg_cleaning_site_types(), static fn ($l) => trim($l) === '')), 0);
+check('every frequency has a label', count(array_filter(rg_cleaning_frequencies(), static fn ($l) => trim($l) === '')), 0);
+
 // ---------------------------------------------------------------------------
 group('rg_person_in_scope');
 

@@ -1,396 +1,199 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import {
-  GraduationCap,
-  BadgeCheck,
-  HeartHandshake,
-  CalendarCheck,
-  Check,
-  ArrowRight,
-} from "lucide-react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { PageHeader, Section, SectionAlt, CtaBand } from "@/components/public/section"
-import { CounterBand } from "@/components/public/marketing"
+import { CheckList, PageHeader, Section, SectionTitle, Steps } from "@/components/public/section"
 import { Faqs } from "@/components/public/Faqs"
-
-const ACADEMY_STATS = [
-  { n: "16", l: "Care Certificate standards" },
-  { n: "12wk", l: "Recommended induction window" },
-  { n: "100%", l: "DBS-checked before first shift" },
-  { n: "1", l: "Guaranteed interview route" },
-] as const
-import { api, ApiError } from "@/lib/api"
-import { COMPANY } from "@/lib/company"
+import { siteButton } from "@/components/public/site-button"
+import { api } from "@/lib/api"
+import { useCompanyDetails } from "@/lib/company"
 import { useSeo } from "@/hooks/use-seo"
+import { EMAIL_PATTERN, useEnquiryForm, type FieldErrors } from "@/components/public/forms/use-enquiry-form"
+import {
+  CheckField,
+  FormFailure,
+  FormSuccess,
+  PrivacyNote,
+  SelectField,
+  SubmitButton,
+  TextAreaField,
+  TextField,
+} from "@/components/public/forms/fields"
+import type { Option } from "@/components/public/forms/options"
+
+// /careers: work with RitaGreen. Restyled in S6 with new copy; the application
+// still goes to ats.php, the applicant tracker, exactly as before. Vacancies
+// managed in the office app, role pages and embedded application forms are
+// section S7, which replaces the general form below with real roles.
+
+// `division` is the ATS column an application is filed under, so the choice
+// decides which recruiter sees it. "New to care" is the training route (they
+// train first and are placed after), which is why it is filed under Training.
+const ROLES: (Option & { division: "care" | "academy" | "cleaning" | "security" })[] = [
+  { value: "Care assistant or support worker", label: "Care assistant or support worker", division: "care" },
+  { value: "Senior carer", label: "Senior carer", division: "care" },
+  { value: "Registered nurse (RGN or RMN)", label: "Registered nurse (RGN or RMN)", division: "care" },
+  { value: "New to care, training first", label: "New to care, I would like to train first", division: "academy" },
+  { value: "Cleaner", label: "Cleaner or cleaning supervisor", division: "cleaning" },
+  { value: "Security officer", label: "Security officer or door supervisor", division: "security" },
+  { value: "Something else", label: "Something else", division: "care" },
+]
 
 const STEPS = [
+  { title: "Apply", body: "Tell us the work you are looking for. It takes a few minutes on a phone." },
+  { title: "We talk", body: "Someone from the office calls you about the role and what happens next." },
+  { title: "Checks, then shifts", body: "We complete your checks with you. Once they are done and you are approved, you can be booked." },
+]
+
+const WE_CHECK = [
+  "Your right to work in the UK",
+  "An enhanced DBS, where the role needs one",
+  "References from previous employers",
+  "Your qualifications: the Care Certificate, an NMC registration, an SIA licence or COSHH training, depending on the role",
+]
+
+const FAQS = [
   {
-    icon: GraduationCap,
-    step: "01",
-    title: "Train with us",
-    body: "Complete the Care Certificate (16 standards) plus mandatory training — moving & handling, first aid, safeguarding, medication awareness — with assessor support.",
+    q: "Do I need experience?",
+    a: "For most healthcare, cleaning and security roles, yes, or the right qualification. If you are new to care, choose the training option and we will talk you through how to start.",
   },
   {
-    icon: BadgeCheck,
-    step: "02",
-    title: "Get checked",
-    body: "We complete your enhanced DBS, references and right-to-work, so you're ready to work the day your training signs off.",
+    q: "What happens after I apply?",
+    a: "Someone from the office will contact you about the role. If it is a match, we arrange your checks together. You can be booked once they are complete and you have been approved.",
   },
   {
-    icon: HeartHandshake,
-    step: "03",
-    title: "Get hired",
-    body: "Strong learners get a guaranteed interview with RitaGreen Care. Real training, a real job at the end — no experience needed, just the right attitude.",
+    q: "What documents will I need?",
+    a: "Proof of your right to work, your qualifications and licences for the role, and details of people who can give a reference. We will tell you exactly what we need when we call.",
+  },
+  {
+    q: "Is there a fee to apply or to work with you?",
+    a: "No. We never charge you to apply.",
   },
 ]
 
-const LEARN = [
-  "All 16 Care Certificate standards",
-  "Moving & handling",
-  "Basic life support and first aid",
-  "Safeguarding adults",
-  "Medication awareness",
-  "Infection prevention and control",
-]
-
-const PERKS = [
-  "Guaranteed interview with RitaGreen Care for strong learners",
-  "No experience needed — we teach you from the ground up",
-  "Classroom and blended delivery to fit around your life",
-  "A verifiable certificate employers can check online",
-  "Ongoing shifts and a named contact once you're placed",
-  "A real route into a career that matters",
-]
-
-const FAQS_CAREERS = [
-  {
-    q: "Do I need experience to start?",
-    a: "No. You don't need experience, just the right attitude. We teach the 16 Care Certificate standards, moving & handling, first aid and safeguarding, then help you into your first role.",
-  },
-  {
-    q: "Is there really a job at the end?",
-    a: "Strong learners get a guaranteed interview with RitaGreen Care. We train the carers we place, so completing the course with us puts you first in line for our own shifts.",
-  },
-  {
-    q: "How long does the training take?",
-    a: "The Care Certificate is designed to be completed inside the recommended 12-week induction window. We'll confirm the exact intake dates when we get in touch.",
-  },
-  {
-    q: "What does it cost?",
-    a: "Costs depend on the intake and any funding available. Tell us a bit about yourself and we'll explain your options on the next intake.",
-  },
-]
-
-// `division` is the ATS column an application is filed under, so the choice made
-// here decides which recruiter sees it. "Become a carer" is the academy route --
-// they train first and are placed after -- which is why it is not `care`.
-const ROLES = [
-  { value: "carer", label: "Become a carer (Care Certificate)", division: "academy" },
-  { value: "cleaning", label: "Cleaning operative", division: "cleaning" },
-  { value: "security", label: "Security officer (SIA)", division: "security" },
-  { value: "other", label: "Something else", division: "care" },
-] as const
+type Values = { name: string; email: string; phone: string; role: string; about: string; consent: boolean }
 
 export default function Careers() {
+  const company = useCompanyDetails()
   useSeo({
-    title: "Careers — train as a carer and get hired",
+    title: "Careers: healthcare, cleaning and security jobs in London",
     description:
-      "Train with RitaGreen Academy and start a career in care. Complete the Care Certificate, get DBS-checked, and strong learners get a guaranteed interview with RitaGreen Care. No experience needed.",
+      "Work with RitaGreen Services. Care assistant, support worker, nurse, cleaning and security roles across London. Apply in a few minutes.",
     path: "/careers",
   })
 
-  const [submitting, setSubmitting] = useState(false)
-  const [role, setRole] = useState("carer")
-  // Explicit consent, not an inferred one. ats.php writes a consent_log row for
-  // every application; before this the form only showed a privacy notice, so
-  // that row recorded a consent nobody had actually given.
-  const [consent, setConsent] = useState(false)
-  const [errors, setErrors] = useState<{ name?: string; email?: string; about?: string; consent?: string }>({})
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
-    const data = new FormData(form)
-    const name = String(data.get("name") || "").trim()
-    const email = String(data.get("email") || "").trim()
-    const phone = String(data.get("phone") || "").trim()
-    const about = String(data.get("about") || "").trim()
-    const chosen = ROLES.find((r) => r.value === role)
-    const roleLabel = chosen?.label ?? role
-
-    // Inline per-field validation so the offending field is marked, not just a toast.
-    const next: typeof errors = {}
-    if (!name) next.name = "Please tell us your name."
-    if (!email) next.email = "Please add an email so we can reply."
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "That email doesn't look right."
-    if (!about) next.about = "Tell us a few words about you."
-    if (!consent) next.consent = "Please agree to be contacted about your application."
-    setErrors(next)
-    if (Object.keys(next).length > 0) {
-      form.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      // The applicant tracker, not the enquiry inbox.
-      //
-      // This posted to contact.php with the role flattened into a message body
-      // prefixed "CAREERS APPLICATION". Every application from the website
-      // therefore landed in contact_enquiries and NOTHING reached /app/ats — the
-      // recruitment pipeline the CMS is built around, with stages, onboarding
-      // checklists and the hand-off into a worker record, was fed by nothing.
-      // ats.php also resolves the applicant to the person spine, so somebody who
-      // applies twice lands on the record they already have.
-      await api("ats.php", {
+  const form = useEnquiryForm<Values>({
+    initial: { name: "", email: "", phone: "", role: "", about: "", consent: false },
+    validate: (v) => {
+      const e: FieldErrors<Values> = {}
+      if (!v.name.trim()) e.name = "Tell us your name."
+      if (!v.email.trim()) e.email = "Add an email so we can reply."
+      else if (!EMAIL_PATTERN.test(v.email.trim())) e.email = "That email does not look right. Check it and try again."
+      if (!v.role) e.role = "Choose the work you are interested in."
+      if (!v.about.trim()) e.about = "Tell us a little about yourself."
+      if (!v.consent) e.consent = "Tick the box so we can contact you about your application."
+      return e
+    },
+    // The applicant tracker, not the enquiry inbox: ats.php files the applicant
+    // under the chosen service and resolves them to the one person record, so
+    // somebody who applies twice lands on the record they already have.
+    send: (v) => {
+      const role = ROLES.find((r) => r.value === v.role)
+      return api("ats.php", {
         method: "POST",
-        body: {
-          name,
-          email,
-          phone,
-          division: chosen?.division ?? "care",
-          role_applied: roleLabel,
-          notes: about,
-          consent,
-        },
         auth: false,
+        body: {
+          name: v.name.trim(),
+          email: v.email.trim(),
+          phone: v.phone.trim(),
+          division: role?.division ?? "care",
+          role_applied: v.role,
+          notes: v.about.trim(),
+          consent: v.consent,
+        },
       })
-      toast.success("Thanks. We've got your application and will be in touch about the next intake.")
-      form.reset()
-      setRole("carer")
-      setConsent(false)
-      setErrors({})
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
-      toast.error(msg)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+    },
+  })
+  const { values: v, set, errors } = form
 
   return (
     <>
       <PageHeader
-        eyebrow="Careers · RitaGreen Academy"
-        title="Train as a carer — and get hired"
-        intro="We train the next wave of carers, then help them into work. Complete the Care Certificate with us and, if you're strong, get a guaranteed interview with RitaGreen Care. No experience needed — just the right attitude."
-      />
-
-      {/* How it works */}
-      <Section>
-        <div className="max-w-2xl">
-          <p className="eyebrow">The route in</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">
-            Train, get checked, get hired
-          </h2>
-          <p className="mt-4 leading-relaxed text-muted-foreground">
-            Most training leaves you with a certificate and another job hunt. Ours leads somewhere
-            real — because we hire the people we train.
+        eyebrow="Careers"
+        title="Join a team that looks after its people"
+        intro={
+          <p>
+            We are looking for care assistants, support workers, nurses, cleaners and security officers across London.
+            Tell us what you do and the office will be in touch.
           </p>
-        </div>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {STEPS.map((s) => (
-            <div key={s.step} className="surface-interactive p-7">
-              <span className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/10">
-                <s.icon className="size-6" strokeWidth={1.75} />
-              </span>
-              <div className="mt-5 flex items-center gap-2">
-                <span className="font-mono text-sm font-bold text-primary">{s.step}</span>
-                <h3 className="font-semibold">{s.title}</h3>
-              </div>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
-            </div>
-          ))}
+        }
+      >
+        <a href="#apply" className={siteButton()}>
+          Apply now
+        </a>
+      </PageHeader>
+
+      <Section tone="surface" labelledBy="how-title">
+        <SectionTitle id="how-title" title="How it works" />
+        <Steps items={STEPS} />
+      </Section>
+
+      <Section labelledBy="check-title">
+        <div className="grid gap-10 md:grid-cols-2">
+          <div>
+            <SectionTitle
+              id="check-title"
+              title="What we check"
+              intro="The same checks for everyone, so the people you work beside have been checked too:"
+            />
+            <CheckList items={WE_CHECK} className="mt-6" />
+          </div>
+          <div>
+            <h2 id="faq-title" className="text-[1.625rem] leading-tight md:text-[2.125rem]">
+              Questions
+            </h2>
+            <Faqs items={FAQS} className="mt-6" />
+          </div>
         </div>
       </Section>
 
-      {/* What you learn + why */}
-      <SectionAlt className="grid gap-10 md:grid-cols-2">
-          <div>
-            <h2 className="text-2xl font-bold">What you'll learn</h2>
-            <p className="mt-3 text-muted-foreground">
-              Content mapped to Skills for Care guidance and the Care Certificate framework, with a
-              verifiable certificate on completion.
-            </p>
-            <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-              {LEARN.map((l) => (
-                <li key={l} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {l}
-                </li>
-              ))}
-            </ul>
+      <Section tone="surface" id="apply" labelledBy="apply-title">
+        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+          <SectionTitle
+            id="apply-title"
+            title="Apply"
+            intro={`Questions first? Call the office on ${company.phone.display}, ${company.officeHours.toLowerCase()}.`}
+          />
+          <div className="rounded-lg border border-border bg-background p-5 sm:p-8">
+            {form.status === "sent" ? (
+              <FormSuccess title="Thank you, we have your application" onReset={form.reset} resetLabel="Send another application">
+                <p>Someone from the office will be in touch about the role and what happens next.</p>
+              </FormSuccess>
+            ) : (
+              <form onSubmit={form.onSubmit} noValidate className="grid gap-5" aria-label="Job application">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <TextField id="ap-name" label="Full name" value={v.name} onChange={(x) => set("name", x)} error={errors.name} autoComplete="name" maxLength={160} />
+                  <TextField id="ap-phone" label="Phone" optional type="tel" value={v.phone} onChange={(x) => set("phone", x)} autoComplete="tel" inputMode="tel" maxLength={40} />
+                  <TextField id="ap-email" label="Email" type="email" value={v.email} onChange={(x) => set("email", x)} error={errors.email} autoComplete="email" inputMode="email" maxLength={190} className="sm:col-span-2" />
+                </div>
+                <SelectField id="ap-role" label="The work you are interested in" value={v.role} onChange={(x) => set("role", x)} options={ROLES} error={errors.role} />
+                <TextAreaField
+                  id="ap-about"
+                  label="A little about you"
+                  rows={5}
+                  value={v.about}
+                  onChange={(x) => set("about", x)}
+                  error={errors.about}
+                  maxLength={3000}
+                  hint="Your experience, qualifications or licences, where you can travel to and when you can work."
+                />
+                <CheckField id="ap-consent" checked={v.consent} onChange={(x) => set("consent", x)} error={errors.consent} required>
+                  RitaGreen may keep these details and contact me about my application.
+                </CheckField>
+                <FormFailure message={form.failure} />
+                <SubmitButton sending={form.status === "sending"}>Send application</SubmitButton>
+                <PrivacyNote>We use these details to consider your application.</PrivacyNote>
+              </form>
+            )}
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">Why train with RitaGreen</h2>
-            <ul className="mt-5 space-y-3">
-              {PERKS.map((p) => (
-                <li key={p} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <Check className="mt-0.5 size-4 shrink-0 text-primary" /> {p}
-                </li>
-              ))}
-            </ul>
-          </div>
-      </SectionAlt>
-
-      {/* Academy counter band */}
-      <CounterBand stats={ACADEMY_STATS} />
-
-      {/* Apply form */}
-      <Section id="apply" className="scroll-mt-24 grid gap-12 md:grid-cols-3">
-        <div className="md:col-span-2">
-          <h2 className="text-2xl font-bold tracking-tight">Apply for the next intake</h2>
-          <p className="mt-3 text-muted-foreground">
-            Tell us a little about you. We'll be in touch with intake dates, costs and what happens
-            next — no commitment.
-          </p>
-          <form onSubmit={onSubmit} className="mt-6 space-y-5" noValidate>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="name">
-                  Full name <span className="text-destructive" aria-hidden="true">*</span>
-                </Label>
-                <Input
-                  id="name"
-                  name="name"
-                  required
-                  autoComplete="name"
-                  aria-invalid={!!errors.name}
-                  aria-describedby={errors.name ? "name-error" : undefined}
-                  onChange={() => errors.name && setErrors((p) => ({ ...p, name: undefined }))}
-                />
-                {errors.name && <p id="name-error" className="text-xs text-destructive">{errors.name}</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">
-                  Email <span className="text-destructive" aria-hidden="true">*</span>
-                </Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  aria-invalid={!!errors.email}
-                  aria-describedby={errors.email ? "email-error" : undefined}
-                  onChange={() => errors.email && setErrors((p) => ({ ...p, email: undefined }))}
-                />
-                {errors.email && <p id="email-error" className="text-xs text-destructive">{errors.email}</p>}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="phone">Phone (optional)</Label>
-                <Input id="phone" name="phone" type="tel" autoComplete="tel" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="role">I'm interested in</Label>
-                <Select value={role} onValueChange={setRole}>
-                  <SelectTrigger id="role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>
-                        {r.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="about">
-                A bit about you <span className="text-destructive" aria-hidden="true">*</span>
-              </Label>
-              <Textarea
-                id="about"
-                name="about"
-                rows={5}
-                required
-                placeholder="Why care work? Any availability, location or experience worth mentioning?"
-                aria-invalid={!!errors.about}
-                aria-describedby={errors.about ? "about-error" : undefined}
-                onChange={() => errors.about && setErrors((p) => ({ ...p, about: undefined }))}
-              />
-              {errors.about && <p id="about-error" className="text-xs text-destructive">{errors.about}</p>}
-            </div>
-            <div className="grid gap-2">
-              <label className="flex items-start gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={consent}
-                  onCheckedChange={(v) => {
-                    setConsent(!!v)
-                    if (v) setErrors((p) => ({ ...p, consent: undefined }))
-                  }}
-                  aria-invalid={!!errors.consent}
-                  aria-describedby={errors.consent ? "consent-error" : undefined}
-                  className="mt-0.5"
-                />
-                <span>
-                  I agree that RitaGreen may store these details and contact me about my
-                  application, as described in the{" "}
-                  {/* Link, not <a href>. A full page load here threw away everything
-                      typed into the form -- so reading the privacy policy before
-                      agreeing to it cost the applicant their application. */}
-                  <Link to="/privacy" className="font-medium text-primary hover:underline">
-                    privacy policy
-                  </Link>
-                  .
-                </span>
-              </label>
-              {errors.consent && (
-                <p id="consent-error" role="alert" className="text-xs text-destructive">
-                  {errors.consent}
-                </p>
-              )}
-            </div>
-            <Button type="submit" size="lg" disabled={submitting}>
-              {submitting ? "Sending…" : "Send application"}
-            </Button>
-          </form>
         </div>
-
-        <aside className="space-y-5 text-sm">
-          <div className="surface p-6">
-            <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
-              <CalendarCheck className="size-6" strokeWidth={1.75} />
-            </span>
-            <h3 className="mt-4 font-semibold">Rolling intakes</h3>
-            <p className="mt-2 leading-relaxed text-muted-foreground">
-              We run regular intakes through the year. Apply any time and we'll place you on the next
-              available cohort.
-            </p>
-          </div>
-          <div className="surface bg-soft-mesh p-6 text-muted-foreground">
-            <p>Employer upskilling a team instead?</p>
-            <Link to="/services#academy" className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:underline">
-              See academy training <ArrowRight className="size-3.5" />
-            </Link>
-          </div>
-        </aside>
       </Section>
-
-      {/* FAQ */}
-      <SectionAlt className="max-w-3xl">
-        <p className="eyebrow">FAQ</p>
-        <h2 className="mt-3 text-2xl font-bold md:text-3xl">Questions about training</h2>
-        <Faqs items={FAQS_CAREERS} className="mt-8" />
-      </SectionAlt>
-
-      <CtaBand
-        title="Ready to start?"
-        body={`Apply for the next intake, or call us on ${COMPANY.phone} to talk it through.`}
-      />
     </>
   )
 }

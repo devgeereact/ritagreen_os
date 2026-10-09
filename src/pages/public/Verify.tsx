@@ -2,8 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import QRCode from "qrcode"
 import { BadgeCheck, XCircle, Search } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { siteButton } from "@/components/public/site-button"
 import { PageHeader, Section } from "@/components/public/section"
 import { api, API_BASE, ApiError } from "@/lib/api"
 import { useSeo } from "@/hooks/use-seo"
@@ -16,13 +15,19 @@ type Certificate = {
   status: string
 }
 
-// Public certificate verification — no login. Employers check a RitaGreen
-// academy certificate is genuine by its id.
+// Public certificate verification, no login. Employers check a certificate
+// RitaGreen issued is genuine by its id.
+//
+// The issuer is shown as "RitaGreen Services (Training)". The stored and issued
+// data is not changed: server/certificates.php still names "RitaGreen Academy"
+// as the issuer in the Open Badge JSON, because that is what the badges already
+// handed out say, and re-issuing them is not a display decision.
+const ISSUER = "RitaGreen Services (Training)"
 export default function Verify() {
   useSeo({
-    title: "Verify a certificate — RitaGreen Academy",
+    title: "Check a training certificate",
     description:
-      "Confirm a RitaGreen Academy certificate is genuine. Enter the certificate ID to see the learner, course and issue date.",
+      "Confirm a certificate issued by RitaGreen Services training is genuine. Enter the certificate ID to see the name, course and issue date.",
     path: "/verify",
   })
 
@@ -100,38 +105,50 @@ export default function Verify() {
   return (
     <>
       <PageHeader
-        eyebrow="Certificate verification"
-        title="Check a RitaGreen Academy certificate"
-        intro="Enter the certificate ID printed on the certificate to confirm it is genuine."
+        eyebrow="Training"
+        breadcrumb="Check a certificate"
+        title="Check a training certificate"
+        intro={<p>Enter the ID printed on the certificate to confirm we issued it.</p>}
       />
-      <Section className="max-w-2xl">
-        <form onSubmit={onSubmit} className="flex gap-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. RG-2026-00123"
-            aria-label="Certificate ID"
-          />
-          <Button type="submit">
-            <Search className="mr-1 size-4" /> Verify
-          </Button>
+      <Section tone="surface" className="max-w-2xl">
+        <form onSubmit={onSubmit} className="grid gap-2">
+          <label htmlFor="certificate-id" className="text-[15px] font-semibold">
+            Certificate ID
+          </label>
+          <p id="certificate-id-hint" className="text-sm text-muted-foreground">
+            For example RG-2026-00123
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              id="certificate-id"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-describedby="certificate-id-hint"
+              autoComplete="off"
+              className="h-11 w-full rounded-lg border border-input bg-card px-3 text-base focus:border-primary focus:outline focus:outline-2 focus:outline-offset-1 focus:outline-primary"
+            />
+            <button type="submit" className={siteButton()}>
+              <Search aria-hidden="true" className="size-4" /> Check
+            </button>
+          </div>
         </form>
 
-        <div className="mt-8">
-          {loading && <p className="text-muted-foreground">Checking…</p>}
+        <div className="mt-8" aria-live="polite">
+          {loading && <p className="text-muted-foreground">Checking...</p>}
 
           {!loading && result && (
-            <div className="surface overflow-hidden border-primary/30 shadow-elevate animate-fade-up">
-              <div className="flex items-center gap-3 border-b border-primary/20 bg-primary/10 px-6 py-4 text-primary">
-                <BadgeCheck className="size-6" />
-                <span className="font-semibold">Valid certificate</span>
+            <div className="overflow-hidden rounded-lg border border-success/30 bg-card">
+              {/* "Valid" uses the status green, never the brand green (docs/DESIGN_SYSTEM.md). */}
+              <div className="flex items-center gap-3 border-b border-success/20 bg-success-soft px-6 py-4 text-success">
+                <BadgeCheck aria-hidden="true" className="size-6" />
+                <h2 className="font-sans text-base font-semibold">Valid certificate, issued by {ISSUER}</h2>
               </div>
               <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-start sm:justify-between">
                 <dl className="grid flex-1 gap-5 text-sm sm:grid-cols-2">
-                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Certificate ID</dt><dd className="mt-1 font-medium">{result.id}</dd></div>
-                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Learner</dt><dd className="mt-1 font-medium">{result.learner_name}</dd></div>
-                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
-                  <div><dt className="text-xs uppercase tracking-wide text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Certificate ID</dt><dd className="mt-1 font-medium">{result.id}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Name</dt><dd className="mt-1 font-medium">{result.learner_name}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Course</dt><dd className="mt-1 font-medium">{result.course}</dd></div>
+                  <div><dt className="text-sm text-muted-foreground">Issued</dt><dd className="mt-1 font-medium">{result.issued_on}</dd></div>
                 </dl>
                 {qrUrl && (
                   <div className="text-center">
@@ -140,7 +157,7 @@ export default function Verify() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-wrap gap-3 border-t border-primary/10 px-6 py-4 text-sm">
+              <div className="flex flex-wrap gap-4 border-t border-border px-6 py-4 text-[15px]">
                 <a
                   className="font-medium text-primary hover:underline"
                   target="_blank"
@@ -150,7 +167,7 @@ export default function Verify() {
                     new URLSearchParams({
                       startTask: "CERTIFICATION_NAME",
                       name: result.course,
-                      organizationName: "RitaGreen Academy",
+                      organizationName: "RitaGreen Services",
                       certId: result.id,
                       certUrl: `${window.location.origin}/verify/${result.id}`,
                     }).toString()
@@ -171,23 +188,23 @@ export default function Verify() {
           )}
 
           {!loading && unavailable && (
-            <div className="surface overflow-hidden border-warning/30 animate-fade-up">
-              <div className="flex items-center gap-3 border-b border-warning/20 bg-warning/10 px-6 py-4 text-warning">
-                <XCircle className="size-6" />
-                <span className="font-semibold">Could not check this certificate</span>
+            <div className="overflow-hidden rounded-lg border border-warning/30 bg-card">
+              <div className="flex items-center gap-3 border-b border-warning/20 bg-warning-soft px-6 py-4 text-warning">
+                <XCircle aria-hidden="true" className="size-6" />
+                <h2 className="font-sans text-base font-semibold">Could not check this certificate</h2>
               </div>
               <p className="p-6 text-sm leading-relaxed text-muted-foreground">
                 We could not reach the verification service. This does not mean the certificate is
-                invalid — check your connection and try again, or contact us.
+                invalid. Check your connection and try again, or contact us.
               </p>
             </div>
           )}
 
           {!loading && notFound && (
-            <div className="surface overflow-hidden border-destructive/30 animate-fade-up">
-              <div className="flex items-center gap-3 border-b border-destructive/20 bg-destructive/10 px-6 py-4 text-destructive">
-                <XCircle className="size-6" />
-                <span className="font-semibold">No certificate found</span>
+            <div className="overflow-hidden rounded-lg border border-destructive/30 bg-card">
+              <div className="flex items-center gap-3 border-b border-destructive/20 bg-destructive-soft px-6 py-4 text-destructive">
+                <XCircle aria-hidden="true" className="size-6" />
+                <h2 className="font-sans text-base font-semibold">No certificate found</h2>
               </div>
               <p className="p-6 text-sm leading-relaxed text-muted-foreground">
                 We couldn't find a certificate with that ID. Check the ID and try again, or contact us.

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
-import { Button } from "@/components/ui/button"
+import { Container } from "@/components/public/section"
+import { siteButton } from "@/components/public/site-button"
 import { useSeo } from "@/hooks/use-seo"
 
 export default function NotFoundPublic() {
@@ -8,24 +9,25 @@ export default function NotFoundPublic() {
   // of the homepage.
   useSeo({
     title: "Page not found",
-    description: "The page may have moved or never existed. Try the homepage or get in touch.",
+    description: "The page may have moved or never existed. Try the home page or get in touch.",
     noindex: true,
   })
 
   return (
-    <div className="bg-hero-pro relative flex min-h-[70vh] items-center justify-center overflow-hidden px-4 py-28">
-      <div aria-hidden className="bg-hero-grid pointer-events-none absolute inset-0" />
-      <div className="relative flex max-w-md flex-col items-center text-center animate-fade-up">
-        <p className="font-bold leading-none text-primary text-7xl md:text-8xl">404</p>
-        <h1 className="mt-6 text-2xl font-bold">We can't find that page</h1>
-        <p className="mt-3 leading-relaxed text-muted-foreground">
-          The page may have moved or never existed. Try the homepage or get in touch.
-        </p>
-        <div className="mt-7 flex gap-3">
-          <Button asChild className="shadow-lift"><Link to="/">Back to home</Link></Button>
-          <Button asChild variant="outline"><Link to="/contact">Contact us</Link></Button>
-        </div>
+    <Container className="py-20 md:py-28">
+      <p className="eyebrow">Page not found</p>
+      <h1 className="mt-2 max-w-[22ch] text-[2rem] leading-tight md:text-[2.75rem]">We cannot find that page</h1>
+      <p className="mt-4 max-w-[52ch] text-lg text-muted-foreground">
+        It may have moved when we rebuilt the website, or the address may be mistyped. These will get you back on track.
+      </p>
+      <div className="mt-7 flex flex-wrap gap-3">
+        <Link to="/" className={siteButton()}>
+          Go to the home page
+        </Link>
+        <Link to="/contact" className={siteButton({ variant: "secondary" })}>
+          Contact us
+        </Link>
       </div>
-    </div>
+    </Container>
   )
 }

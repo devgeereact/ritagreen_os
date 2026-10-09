@@ -40,7 +40,7 @@ const STEPS = [
 
 export default function DataRequest() {
   useSeo({
-    title: "Ask about your data — RitaGreen Services",
+    title: "Ask about your data",
     description:
       "Ask for a copy of the information RitaGreen Services holds about you, have it corrected, or ask us to delete it.",
     path: "/data-request",
@@ -99,7 +99,7 @@ export default function DataRequest() {
       <Section className="grid gap-12 md:grid-cols-3">
         <div className="md:col-span-2">
           {ref ? (
-            <div className="surface bg-soft-mesh p-6" role="status">
+            <div className="surface bg-accent p-6" role="status">
               <ShieldCheck className="size-8 text-primary" aria-hidden="true" />
               <h2 className="mt-4 text-lg font-semibold">We have your request</h2>
               <p className="mt-2 leading-relaxed text-muted-foreground">
@@ -160,7 +160,7 @@ export default function DataRequest() {
                     <p id="email-error" className="text-xs text-destructive">{errors.email}</p>
                   ) : (
                     <p id="email-hint" className="text-xs text-muted-foreground">
-                      Use the address we already know you by, if you can — it makes confirming
+                      Use the address we already know you by, if you can: it makes confirming
                       the request quicker.
                     </p>
                   )}
@@ -185,7 +185,7 @@ export default function DataRequest() {
                   id="detail"
                   name="detail"
                   rows={4}
-                  placeholder="If your request is about something specific — a particular record, a date range, an email you had from us — say so here."
+                  placeholder="If your request is about something specific (a particular record, a date range, an email you had from us), say so here."
                 />
               </div>
 

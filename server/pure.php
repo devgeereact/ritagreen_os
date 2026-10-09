@@ -1680,6 +1680,47 @@ function rg_validate_emergency_contacts(array $data): array
     return ['ok' => $errors === [], 'errors' => $errors, 'values' => $values];
 }
 
+/**
+ * The kinds of site the website's cleaning quote form offers, key => label.
+ *
+ * The keys are what the form posts (src/components/public/forms/options.ts holds
+ * the same list); the label is what the office reads in the request. The list is
+ * the cleaning buyers in the 2026 plan (file 01) plus "other", so nobody is
+ * forced into a category that does not fit.
+ *
+ * @return array<string, string>
+ */
+function rg_cleaning_site_types(): array
+{
+    return [
+        'residential' => 'Residential block or communal areas',
+        'void' => 'Void property or end of tenancy',
+        'school' => 'School',
+        'construction' => 'Construction site (builders clean)',
+        'office' => 'Office or commercial premises',
+        'care' => 'Care setting',
+        'other' => 'Something else',
+    ];
+}
+
+/**
+ * How often the cleaning is wanted, key => label. Same pairing rule as above.
+ *
+ * @return array<string, string>
+ */
+function rg_cleaning_frequencies(): array
+{
+    return [
+        'one_off' => 'One-off clean',
+        'daily' => 'Daily',
+        'several_weekly' => 'Several times a week',
+        'weekly' => 'Weekly',
+        'fortnightly' => 'Fortnightly',
+        'monthly' => 'Monthly',
+        'not_sure' => 'Not sure yet',
+    ];
+}
+
 
 
 // ---------------------------------------------------------------- the rota

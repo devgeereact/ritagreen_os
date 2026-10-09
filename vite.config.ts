@@ -2,6 +2,7 @@ import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { VitePWA } from "vite-plugin-pwa"
 import path from "path"
+import { buildSitemapXml } from "./src/lib/public-routes"
 
 // Where the dev server sends *.php. Local by default — see the proxy comment below.
 const API_TARGET = process.env.RG_API_TARGET ?? "http://127.0.0.1:8122"
@@ -18,6 +19,18 @@ export default defineConfig({
   base: "/",
   plugins: [
     react(),
+    // dist/sitemap.xml, written at build time from the public route table in
+    // src/lib/public-routes.ts, the same table the router's redirects read. It
+    // replaced a hand-kept public/sitemap.xml that still listed retired pages.
+    // Static pages only: published posts live in the database, which the build
+    // in CI cannot reach (docs/ARCHITECTURE.md).
+    {
+      name: "rg-sitemap",
+      apply: "build",
+      generateBundle() {
+        this.emitFile({ type: "asset", fileName: "sitemap.xml", source: buildSitemapXml() })
+      },
+    },
     // Replaces the hand-written public/sw.js, which precached four fixed paths
     // and had no idea about hashed asset names. Assets were only cached
     // opportunistically after a first fetch, so offline broke after every

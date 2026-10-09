@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  182 done · 12 partial · 1 to do · 195 tracked
+`#######################.`  186 done · 13 partial · 1 to do · 200 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 18 | 2 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 22 | 3 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 18 done, 2 partial, 0 to do
+Milestone 0 · 22 done, 3 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -49,14 +49,19 @@ Milestone 0 · 18 done, 2 partial, 0 to do
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
 - [x] Migration production guard is meaningful on cPanel — _Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name_
 - [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
+- [x] Old website addresses redirect — _/services, the twelve /services/:slug pages, /sectors, /accreditations, /resources, /resources/:slug, /apply and /quote redirect in the app and with 301 rules in public/.htaccess, kept in step by src/lib/__tests__/public-routes.test.ts. The .htaccess block reaches production only when copied to the server by hand_
 - [x] Owner feature switches — _Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox, ai_assistant. Owner-only and audited; inbox.php, ai.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. server/tests/db/cases/120_feature_switches.php_
 - [x] Prepared statements in dashboard.php — _Every division filter is bound. The value was already allowlisted so it was not injectable, but the guarantee depended on remembering that, and the next person adding a filter had a pattern to copy that did not carry it_
+- [x] Public website rebuilt on the 2026 design (S6) — _Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids, floating cards or scroll animation. Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show. Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
+- [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings, no JobPosting until S7_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
+- [x] Website enquiries reach the right queue — _Request staff to bookings.php; cleaning quote to the new public quotes.php?action=request (a Cleaning request in the Bookings queue, not a priced quote); care, training and general to contact.php with a type. server/tests/db/cases/130_website_enquiries.php, and each form submitted in a browser against a local API_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (466 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
 - [~] Documentation pack — _Milestone 0, in progress_
+- [~] Sitemap generated at build time — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts; the hand-kept public/sitemap.xml is gone. Static pages only: published posts and S7 vacancies live in the database, which the build cannot reach, so they need a server-side sitemap_
 
 ### FOUNDATION — Foundation and person spine
 

@@ -267,6 +267,7 @@ Every call site:
 | `google` | 20 | 300 s | `auth.php:361` |
 | `contact` | 5 | 600 s | `contact.php:9` |
 | `booking` | 8 | 600 s | `bookings.php:13` |
+| `quote` | 5 | 600 s | `quotes.php` (`action=request`, public) |
 | `ats` | 8 | 600 s | `ats.php:25` |
 | `offer` | 20 | 600 s | `offer.php:40` (POST only) |
 
@@ -388,7 +389,7 @@ computed identically everywhere.
 | `clients.php` | CRM | Office roles throughout, reads included |
 | `comms.php` | Announcements | Staff to read; POST `super_admin`/`admin`/`manager` |
 | `compliance.php` | Credential register and audit packs | Staff **and** the `compliance` zone throughout, reads included; POST `super_admin`/`admin`/`manager` |
-| `contact.php` | Public enquiry form | **Public** |
+| `contact.php` | Public enquiry forms: general, care, training (`type`) | **Public** |
 | `contracts.php` | Recurring contracts | Office roles throughout, reads included |
 | `credit-notes.php` | Credit notes against invoices | Office roles throughout, reads included |
 | `dashboard.php` | Command-centre summary | Staff |
@@ -414,7 +415,7 @@ computed identically everywhere.
 | `people.php` | The person profile: one aggregate read, emergency contacts, training records | Staff in `super_admin`/`admin`/`manager`/`trainer`/`employee` (not `editor`), reads included; the person's service scope; a zone per section. See §54d |
 | `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager`, and the `payroll` zone |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
-| `quotes.php` | Quoting | Office roles throughout, reads included |
+| `quotes.php` | Quoting | **POST `action=request` is public** (the website's cleaning quote request, S6); everything else office roles, reads included |
 | `references.php` | Reference checks | Office roles throughout, reads included |
 | `reports.php` | Regulatory export packs | `super_admin`/`admin`/`manager` |
 | `requests.php` | Cover requests and enquiries in one list, with an owner | Office roles throughout, reads included; service scope. See §54e |
@@ -841,8 +842,25 @@ remainder sets the invoice to `void` (`credit-notes.php:67`). Numbers are
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ draft/sent/declined, and the update refuses to touch a quote already `accepted` |
 | POST | `accept` | Office roles | `id` | `{ok: true, invoice_number}` 201; creates a mirroring invoice and links it back. 409 if already accepted |
 | POST | — | Office roles | body `{title, division, net_pence, client_id?}` | `{quote}` 201 |
+| POST | `request` | **Public**, rate-limited (`quote`, 5 per 10 min) | body `{contact_name, email, phone?, organisation?, area?, site_type, size?, frequency, start_date?, notes?, consent, marketing_consent?}` | `{ok: true}` 201 |
 
 Numbers are `QUO-<year>-####`.
+
+**`action=request` (S6).** The website's cleaning quote form. It sits above
+`require_auth()`, so it is the only public branch in this file. It does not
+create a row in `quotes`: a quote is a priced document the office writes. It
+files a `service_requests` row with division `cleaning`, `site_name` set to the
+organisation (or the area), and a `detail` that opens `Cleaning quote request`
+followed by one labelled line per answer, so it appears in the office Bookings
+queue, whose status runs new to quoted. `site_type` must be a key of
+`rg_cleaning_site_types()` and `frequency` a key of `rg_cleaning_frequencies()`
+(`server/pure.php`); anything else is a 400. Caps: name 160, email 190, phone 40,
+organisation 160, area 120, size 200, notes 3000; `start_date` must be a real
+`YYYY-MM-DD`, kept in the detail and never invented into `preferred_start`.
+`consent` is required and written to `consent_log` (`kind = 'quote'`, source
+`cleaning-quote`); `marketing_consent` is recorded only as a yes. Links to an
+existing client by email, notifies the office and queues one office email.
+Tested in `server/tests/db/cases/130_website_enquiries.php`.
 
 ---
 
@@ -1057,7 +1075,7 @@ Same shape as `blog.php`, including the self-migrating
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| POST | **Public**, rate-limited | `{name, email, phone?, division?, message}` | `{ok: true}` 201 |
+| POST | **Public**, rate-limited | `{name, email, phone?, division?, message, type?, marketing_consent?, source?}` | `{ok: true}` 201 |
 
 Name, phone and the subject line are stripped of CR/LF before interpolation
 into mail headers (`contact.php:12-16`). Name ≤ 160 chars, email ≤ 190, phone ≤ 40,
@@ -1068,6 +1086,16 @@ messages: an office alert with the sender as `Reply-To`, and an autoresponder
 to the sender with the office as `Reply-To`. A message beginning
 `CAREERS APPLICATION` switches both to careers wording (`contact.php:40`).
 Mail failures are non-fatal — the enquiry is already saved.
+
+`type` (S6) says which website form sent it: `general` (the default, and what
+an unknown value becomes), `care` or `training`. There is no column for it. A
+care enquiry is stored with division `care` and a training enquiry with
+`academy`, whatever `division` said, and the stored message opens with
+`Enquiry type: Care enquiry` or `Enquiry type: Training enquiry` and a blank
+line, so the office Enquiries screen shows the type on the record. The 5000
+character cap applies to the message as sent. The office email subject names
+the type. Request staff goes to `bookings.php` and a cleaning quote to
+`quotes.php?action=request`; neither comes here.
 
 Any other method returns 405 (`contact.php:6`).
 
@@ -1809,6 +1837,7 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/testimonials.php` | GET | none | Published testimonials |
 | `/ats.php` | POST (no `action`) | `ats` 8/10 min | Creates an applicant and a consent record |
 | `/bookings.php` | POST (no `action`) | `booking` 8/10 min | Creates a service request and a consent record |
+| `/quotes.php?action=request` | POST | `quote` 5/10 min | The cleaning quote request: a `service_requests` row (division `cleaning`) and a consent record; never a priced quote |
 | `/auth.php?action=login` | POST | `login` 10/5 min | |
 | `/auth.php?action=forgot` | POST | `forgot` 5/10 min | Deliberately non-enumerating |
 | `/auth.php?action=reset` | POST | `reset` 10/10 min | Token must be 64 hex chars, single-use, 1-hour expiry |
