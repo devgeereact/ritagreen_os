@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { UserDropdown } from "@/components/UserDropdown"
 import { titleFor } from "@/lib/app-routes"
 import { useDocumentTitle } from "@/hooks/use-document-title"
+import { useFeatures } from "@/hooks/use-features"
 
 export default function AppLayout() {
   const [scrolled, setScrolled] = useState(false)
@@ -28,6 +29,9 @@ export default function AppLayout() {
   const [hovered, setHovered] = useState(false)
   const { user } = useAuth()
   const { pathname } = useLocation()
+  // The assistant is being retired (plan S9). It shows only while the owner has
+  // it switched on, and ai.php refuses otherwise.
+  const { isOn } = useFeatures()
 
   const isExpanded = open || hovered
 
@@ -96,7 +100,7 @@ export default function AppLayout() {
                 <div className="ml-auto">
                     <div className="flex items-center gap-1">
                         <GlobalSearch />
-                        <AiAssistant />
+                        {isOn("ai_assistant") && <AiAssistant />}
                         <ThemeToggle />
                         <div className="relative inline-flex">
                             <NotificationDropdown />

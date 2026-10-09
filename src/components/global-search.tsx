@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/providers/auth-provider"
 import { canAccess } from "@/lib/access"
 import { DESTINATIONS, GROUP_ORDER } from "@/lib/app-routes"
+import { useFeatures } from "@/hooks/use-features"
 
 import { Search, ChevronRight } from "lucide-react"
 
@@ -31,13 +32,14 @@ import { Search, ChevronRight } from "lucide-react"
  * The destinations come from src/lib/app-routes.ts, shared with the document
  * title, and are filtered through canAccess() so the palette never offers a page
  * the user would be bounced off. Keywords live in that list so "invoice" finds
- * Invoicing and "staff" finds Workers without the label having to contain the
+ * Invoicing and "staff" finds People without the label having to contain the
  * word.
  */
 export function GlobalSearch() {
   const [open, setOpen] = React.useState(false)
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isOn } = useFeatures()
 
   // Keyboard Shortcut (Ctrl + K / Cmd + K)
   React.useEffect(() => {
@@ -56,10 +58,11 @@ export function GlobalSearch() {
   }, [])
 
   // Same gate as the sidebar and the router, so the palette cannot offer a page
-  // this account would be redirected away from.
+  // this account would be redirected away from, nor an area the owner has
+  // switched off.
   const allowed = React.useMemo(
-    () => DESTINATIONS.filter((d) => canAccess(user, d.path)),
-    [user],
+    () => DESTINATIONS.filter((d) => canAccess(user, d.path) && (!d.feature || isOn(d.feature))),
+    [user, isOn],
   )
 
   const runCommand = (path: string) => {

@@ -811,3 +811,20 @@ export type QueuedEmail = {
   created_at: string
   sent_at: string | null
 }
+
+// Feature switches (server/features.php, migration 036). The names are fixed in
+// server/pure.php, rg_feature_defaults().
+export type FeatureName = "finance" | "online_payments" | "sms_whatsapp" | "inbox" | "ai_assistant"
+
+export type FeatureSwitch = {
+  name: FeatureName
+  enabled: boolean
+  updated_at: string | null
+  /** Name of the account that last changed it, or null if never changed. */
+  updated_by: string | null
+}
+
+export type FeaturesResponse = {
+  features: Record<FeatureName, boolean>
+  switches: FeatureSwitch[]
+}

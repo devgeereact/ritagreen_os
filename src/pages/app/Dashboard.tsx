@@ -22,6 +22,7 @@ import { gbp, DIVISION_LABELS, DIVISION_ACCENTS } from "@/lib/format"
 import { SERVICE_ACCENTS } from "@/lib/services"
 import { LoadingBlock, ErrorBlock } from "@/components/app/state-block"
 import { WeatherWidget } from "@/components/app/weather-widget"
+import { useFeatures } from "@/hooks/use-features"
 
 const DIVISION_TABS = [
   { id: "all", label: "All divisions" },
@@ -33,6 +34,9 @@ const DIVISION_TABS = [
 
 export default function Dashboard() {
   const { user, hasRole } = useAuth()
+  // The weather widget has no business purpose and is retired in plan S9. Until
+  // then it rides on the AI assistant switch, which starts off.
+  const { isOn } = useFeatures()
   // OpsToday reads scheduling.php, invoices.php and enquiries.php, all of which
   // are office-only on the server. Without this the panels rendered a 403 as an
   // empty state, which reads as "nothing to do" rather than "not yours to see".
@@ -77,7 +81,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <WeatherWidget />
+      {isOn("ai_assistant") && <WeatherWidget />}
 
       {loading && <LoadingBlock rows={4} />}
       {error && <ErrorBlock message={error} onRetry={reload} />}
