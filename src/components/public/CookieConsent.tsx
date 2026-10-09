@@ -34,6 +34,9 @@ function readAck(): Ack | null {
  * This is deliberately a notice and not a consent gate. The site loads no
  * analytics, no advertising, no pixels and — since the webfonts were
  * self-hosted — no third-party requests at all, and it sets nothing optional.
+ * The one third-party frame (a Google Form on a role page, section S7) is not
+ * in the page until the visitor presses a button for it, which is a choice made
+ * at the point of use rather than something to consent to here.
  * There is no choice to offer, so offering one would be theatre: the previous
  * version had Decline and Got it buttons that ran identical code and a stored
  * value nothing read.
