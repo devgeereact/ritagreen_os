@@ -52,7 +52,7 @@ Milestone 0 · 15 done, 2 partial, 0 to do
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
-- [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (308 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
+- [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (466 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
 - [~] Documentation pack — _Milestone 0, in progress_
 
 ### FOUNDATION — Foundation and person spine

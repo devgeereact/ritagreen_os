@@ -3,7 +3,8 @@
 //
 //     php server/retention-sweep.php              report only (the default)
 //     php server/retention-sweep.php --go         act on what it reports
-//     wget -qO- "https://…/retention-sweep.php?key=ALERTS_KEY"   report only
+//     wget -qO- --header="X-Cron-Key: ALERTS_KEY" "https://…/retention-sweep.php"   report only
+//     (the older "?key=ALERTS_KEY" form still works, but lands in the access log)
 //
 // Nothing in this system has ever disposed of anything on a schedule. The
 // retention_policies table has existed since migration 010 with eight record
@@ -35,8 +36,10 @@ $go = $isCli && in_array('--go', $args, true);
 
 if (!$isCli) {
     rate_limit($conn, 'cron-key', 10, 600);
+    // X-Cron-Key header preferred, ?key= still accepted. See rg_cron_key().
+    $key = rg_cron_key($_SERVER, $_GET);
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
-    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, (string) ($_GET['key'] ?? ''))) {
+    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, $key)) {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         exit;

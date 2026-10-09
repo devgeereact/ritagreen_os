@@ -47,7 +47,7 @@
   # .htaccess by hand (see server/README.md), then confirm /schema.sql is 403.
   RewriteRule ^(migrations|tests)(/|$) - [F,L]
   RewriteRule \.(sql|md)$ - [F,NC,L]
-  RewriteRule ^(migrate|seed|backfill-people)\.php$ - [F,NC,L]
+  RewriteRule ^(migrate|seed|backfill-people|backfill-payroll|create-admin|report-activation)\.php$ - [F,NC,L]
 
   # Don't rewrite requests for the PHP API or other real files/directories.
   RewriteCond %{REQUEST_FILENAME} -f [OR]

@@ -245,7 +245,7 @@ MySQL / MariaDB on cPanel shared hosting (host = localhost)
 | Config | 43 `define()` constants in `server/config.php`, gitignored, hand-placed on the server. `config.sample.php` is the tracked template. **No `.env`, no `VITE_*`, nothing secret in the bundle** |
 | Deploy | Push to `main` → GitHub Actions → `npm ci` → `npm run build` → FTPS upload of `dist/` **only**. PHP, `config.php` and `.htaccess` excluded by design; `dangerous-clean-slate` must never be added (rule 16) |
 | Dev | `npm run dev` (Vite, port 5122, `strictPort`) + `npm run dev:api` (`php -S 127.0.0.1:8122 -t server`). Proxy target from `RG_API_TARGET`, defaults local, warns when overridden (rule 13) |
-| Tests | `server/tests/run.php` (308 assertions, no database, no Composer — pure logic plus `server/tests/guards.php`, which fails if any endpoint returns before it authorises) and two vitest files, `src/lib/__tests__/access.test.ts` and `app-routes.test.ts` (37 tests over the permission map, `homeFor()` and the page registry) |
+| Tests | `server/tests/run.php` (466 assertions, no database, no Composer — pure logic plus `server/tests/guards.php`, which fails if any endpoint returns before it authorises) and three vitest files, `src/lib/__tests__/access.test.ts`, `app-routes.test.ts` and `format.test.ts` (44 tests over the permission map, `homeFor()`, the page registry and the display formatters) |
 | CI | typecheck, `eslint --max-warnings 0`, both test suites, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Every one of them blocks |
 
 **Hard host constraints — treat as inputs to every recommendation:**
@@ -349,7 +349,7 @@ server/
   *.php                 54 endpoints, one per resource
   migrations/           001–018
   schema.sql            the from-scratch baseline
-  tests/run.php         308 assertions, no database
+  tests/run.php         466 assertions, no database
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
 ```
@@ -588,7 +588,7 @@ From `docs/PROGRESS.md`, generated from `docs/STATUS.json`: **151 done · 14 par
 
 **Everything still open, in full — do not plan around a rosier picture:**
 
-- Automated tests are partial: 308 server assertions and 37 vitest tests; **endpoints and React
+- Automated tests are partial: 466 server assertions and 44 vitest tests; **endpoints and React
   components have no automated coverage of their own.** The endpoint sweep that found the
   authorisation and 404 defects was run by hand against a local database, and only its invariant
   — no endpoint returns before it authorises — is locked in `server/tests/guards.php`.
@@ -723,7 +723,7 @@ and the blast radius of one bad migration. If it does not, sequence the move so 
 keeps working throughout, and cost it honestly — including the fact that the deploy pipeline
 uploads `dist/` over FTPS today and PHP is placed by hand.
 
-Do not propose a rewrite as the opening move. 54 endpoints, 20 migrations and 308 assertions of
+Do not propose a rewrite as the opening move. 54 endpoints, 20 migrations and 466 assertions of
 tested behaviour are an asset.
 
 ## PHASE 9 — BRAND REPOSITIONING
@@ -1861,8 +1861,8 @@ component — use the token**, and never invent a fourth colour for a compliance
 |---|---|---|
 | `npm run typecheck` | `tsc -b --force` over the referenced strict config | Yes |
 | `npm run build` | Vite production build, plus a source-map assertion | Yes |
-| `npm run test:php` | `server/tests/run.php` — **254 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
-| `npm test` | `src/lib/__tests__/access.test.ts` and `app-routes.test.ts` — 37 tests over the permission map (including that a client or worker account cannot reach `/app`), `homeFor()`, and the page registry behind the ⌘K palette and the browser tab title | Yes |
+| `npm run test:php` | `server/tests/run.php` — **466 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
+| `npm test` | `src/lib/__tests__/access.test.ts`, `app-routes.test.ts` and `format.test.ts` — 44 tests over the permission map (including that a client or worker account cannot reach `/app`), `homeFor()`, the page registry behind the ⌘K palette and the browser tab title, and the display formatters | Yes |
 | `php -l` | Every PHP file | Yes |
 | Config guard | Fails if `server/config.php` is committed | Yes |
 | `python3 scripts/docs_sync.py --check` | `PROGRESS.md` matches `STATUS.json`, and **every backticked source path in `TRACEABILITY.md` resolves**, so a fabricated path fails CI | Yes |

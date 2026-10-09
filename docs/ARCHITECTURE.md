@@ -346,8 +346,8 @@ locally or in CI and ship as static artifacts.
 
 `public/.htaccess` handles SPA routing, passes the `Authorization` header through, and hard
 blocks `^uploads/` so uploaded documents are only ever reachable through `files.php` with an
-authentication check. It also refuses `*.sql`, `*.md`, `migrations/`, `tests/` and the three
-CLI tools, which land in the document root when `server/` is uploaded beside `index.html`.
+authentication check. It also refuses `*.sql`, `*.md`, `migrations/`, `tests/` and the six
+CLI-only tools, which land in the document root when `server/` is uploaded beside `index.html`.
 It is a mirror of the hand-maintained server copy, so a change to it is live only once
 copied across by hand; see `server/README.md`.
 

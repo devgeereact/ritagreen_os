@@ -24,8 +24,9 @@ helpers and token auth.
 ### Files in the document root that must not be served
 
 Because `server/` is uploaded beside `index.html`, `schema.sql`, `migrations/`,
-`tests/`, this `README.md` and the CLI tools (`migrate.php`, `seed.php`,
-`backfill-people.php`) can end up in the document root. `public/.htaccess` refuses
+`tests/`, this `README.md` and the CLI-only tools (`migrate.php`, `seed.php`,
+`backfill-people.php`, `backfill-payroll.php`, `create-admin.php`,
+`report-activation.php`) can end up in the document root. `public/.htaccess` refuses
 them with three `RewriteRule ... [F]` lines next to the `^uploads/` rule. Those
 lines were added to the tracked copy on 2026-10-08 and **must be added to the live
 `.htaccess` by hand**. Afterwards, confirm that `/schema.sql`, `/README.md` and
@@ -64,8 +65,8 @@ endpoints still respond.
 
 ## Cron endpoints
 
-`expiry-alerts.php`, `send-queued-mail.php` and `backup.php` run from the CLI with
-no key. Over HTTP they need `ALERTS_KEY`, preferably in an `X-Cron-Key` header,
+`expiry-alerts.php`, `send-queued-mail.php`, `backup.php` and `retention-sweep.php`
+run from the CLI with no key. Over HTTP they need `ALERTS_KEY`, preferably in an `X-Cron-Key` header,
 which keeps it out of the access log:
 
 ```sh

@@ -7,7 +7,7 @@ the code is documented and the discrepancy is flagged.
 - **54 application endpoint files**, counted from the tree at `server/`. Four more are
   reachable over HTTP but are cron scripts, not part of the application: `backup.php`,
   `expiry-alerts.php`, `retention-sweep.php` and `send-queued-mail.php` each need
-  `?key=ALERTS_KEY` and otherwise run from the command line. 58 files answer an HTTP request in
+  `ALERTS_KEY`, in an `X-Cron-Key` header or as `?key=`, and otherwise run from the command line. 58 files answer an HTTP request in
   total.
 - Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
   database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
@@ -1275,7 +1275,7 @@ rather than sent with a broken unsubscribe.
 |---|---|---|
 | `php server/retention-sweep.php` | CLI | Reports. Changes nothing |
 | `php server/retention-sweep.php --go` | CLI | Acts |
-| `GET ?key=ALERTS_KEY` | **HTTP with the cron key**, rate limited | Reports only. `--go` is CLI-only |
+| `GET` with `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) | **HTTP with the cron key**, rate limited | Reports only. `--go` is CLI-only |
 
 The consumer `retention_policies` never had. It acts only where `retain_months` is set, and all
 fourteen are NULL. `review` raises a task, `archive` sets `deleted_at`, `delete` opens a request
