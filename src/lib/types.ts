@@ -1256,3 +1256,155 @@ export type FeaturesResponse = {
   features: Record<FeatureName, boolean>
   switches: FeatureSwitch[]
 }
+
+// ---- Staff portal (/m), me.php -------------------------------------------------
+
+export type PortalShift = {
+  id: number
+  title: string
+  division: DivisionId
+  site_name: string | null
+  client: string | null
+  starts_at: string
+  ends_at: string
+  status: "scheduled" | "open" | "completed" | "cancelled"
+  cancel_reason: string | null
+  site_address: string | null
+  site_postcode: string | null
+  site_notes: string | null
+  site_contact: string | null
+  site_contact_phone: string | null
+  clocked_in: number
+  clocked_out: number
+  clock_in_opens_at: string
+  can_clock_in: boolean
+}
+
+export type PortalOpenShift = {
+  id: number
+  title: string
+  division: DivisionId
+  site_name: string | null
+  client: string | null
+  starts_at: string
+  ends_at: string
+  /** The assignment check, screened: may this worker pick it up? */
+  eligible: boolean
+  reason: string | null
+}
+
+export type PortalOffer = {
+  id: number
+  shift_id: number
+  title: string
+  division: DivisionId
+  starts_at: string
+  ends_at: string
+  expires_at: string | null
+  site_name: string | null
+  site_address: string | null
+  site_postcode: string | null
+}
+
+export type PortalBlocker = { key: string | null; title: string; todo: string }
+
+export type PortalHome = {
+  worker: { id: number; name: string; role: string; division: DivisionId; status: string }
+  shifts: PortalShift[]
+  open_shifts: PortalOpenShift[]
+  offers: PortalOffer[]
+  eligible: boolean
+  blockers: PortalBlocker[]
+  training_due: { label: string; expires_on: string | null; days: number | null }[]
+  unread: number
+}
+
+export type PortalCheck = {
+  key: string
+  label: string
+  mandatory: boolean
+  chip: RequirementChip
+  chip_label: string
+  expiry: string | null
+  days: number | null
+  waiting: boolean
+  rejection_reason: string | null
+  can_upload: boolean
+}
+
+export type PortalTraining = {
+  id: string
+  course: string
+  provider: string | null
+  status: string
+  completed_on: string | null
+  expires_on: string | null
+  rag: "valid" | "expiring" | "expired" | "unknown" | null
+  days: number | null
+  file_id: number | null
+  file_name: string | null
+}
+
+export type PortalTimesheet = {
+  id: number
+  shift_id: number | null
+  shift_title: string | null
+  site_name: string | null
+  work_date: string
+  start_time: string
+  end_time: string
+  minutes: number
+  break_minutes: number
+  status: "draft" | "pending" | "queried" | "approved" | "rejected"
+  source: string
+  submitted_at: string | null
+  decided_at: string | null
+  decision_note: string | null
+}
+
+export type PortalPerson = {
+  full_name: string
+  preferred_name: string | null
+  email: string | null
+  phone: string | null
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  postcode: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
+  emergency_contact2_name: string | null
+  emergency_contact2_phone: string | null
+  emergency_contact2_relationship: string | null
+}
+
+export type PortalProfile = {
+  person: PortalPerson
+  worker: { role: string; division: DivisionId; payroll_no: string | null; status: string }
+  login_email: string
+}
+
+export type PortalLeave = {
+  person_id: number
+  leave_year: string
+  balance: {
+    entitlement_known: boolean
+    entitlement: number
+    taken: number
+    approved: number
+    requested: number
+    remaining: number | null
+    used: number
+  }
+  records: {
+    id: number
+    kind: string
+    status: "requested" | "approved" | "declined" | "cancelled" | "taken"
+    starts_on: string
+    ends_on: string
+    hours: number
+    reason: string | null
+    decided_at: string | null
+  }[]
+}
