@@ -7,6 +7,15 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Fixed: the CI database job ran on the wrong engine (2026-10-09)
+
+The `database` job used `mysql:8.0`. `schema.sql` and the migrations use MariaDB's
+`ADD COLUMN IF NOT EXISTS`, which MySQL 8 rejects, so the job failed at
+`schema.sql` before any case ran, on every pull request including #8. It now uses
+`mariadb:10.11`, matching the host. The suite itself was green locally on MariaDB:
+377 assertions across 78 groups. `docs/TESTING.md` gains a Docker toolbox for
+machines without PHP or MySQL.
+
 ### Security: audit fix pass (2026-10-08, local, not deployed)
 
 - **Server files in the document root are refused.** `public/.htaccess` now returns 403

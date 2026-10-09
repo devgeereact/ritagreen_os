@@ -131,15 +131,20 @@ jobs:
     # was not working: schema.sql altered a table it never created, and repeated
     # three statements the migrations own, so a new database stopped at migration
     # 020 with eleven migrations unapplied.
+    #
+    # MariaDB, not MySQL: the host runs MariaDB and schema.sql and the migrations
+    # use its ADD COLUMN / ADD KEY IF NOT EXISTS, which stock MySQL 8 rejects
+    # (docs/ARCHITECTURE.md). On mysql:8.0 this job failed at schema.sql before a
+    # single case ran.
     services:
       mysql:
-        image: mysql:8.0
+        image: mariadb:10.11
         env:
-          MYSQL_ROOT_PASSWORD: rg_ci_local_only
+          MARIADB_ROOT_PASSWORD: rg_ci_local_only
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -prg_ci_local_only"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20

@@ -205,3 +205,28 @@ Stated plainly, because a green run is not a claim beyond what was run:
 - Production configuration, the deployed PHP tier, or the live database.
 - Restore from backup, and the application running against a restored database.
 - Dependency vulnerability status and penetration testing.
+
+---
+
+## Docker toolbox — machines without PHP or MySQL
+
+Everything above assumes PHP 8.4 and a local MySQL or MariaDB. Where neither is
+installed, run them in containers. Host networking keeps every address at
+`127.0.0.1`, exactly as the suites expect. Local testing only.
+
+```sh
+# once: build the PHP image, start MariaDB, create the test user from "Setup, once"
+docker build -t rg-php:8.4 -f scripts/docker/php84.Dockerfile scripts/docker
+docker run -d --name rg-mariadb --network host \
+  -e MARIADB_ROOT_PASSWORD=rg_root_local_only mariadb:11 --bind-address=127.0.0.1
+docker exec -i rg-mariadb mariadb -uroot -prg_root_local_only < grants.sql   # the SQL block above
+
+# every time
+alias rgphp='docker run --rm --network host -v "$PWD":/app -w /app -u "$(id -u):$(id -g)" rg-php:8.4'
+rgphp php server/tests/run.php        # npm run test:php
+rgphp php server/tests/db/run.php     # npm run test:db
+rgphp php -S 127.0.0.1:8122 -t server # npm run dev:api (with a local server/config.php)
+```
+
+`docker start rg-mariadb` after a reboot. `pcntl` is in the image because the
+database suite stops its PHP server with `SIGTERM`.

@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RitaGreen Design Direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g50:#F1F5EF;--g100:#E2EBDE;--g200:#C6D6BF;--g300:#9FB995;--g400:#6F9363;
+  --g500:#4E7244;--g600:#3E6136;--g700:#33512D;--g800:#2A4325;--g900:#1F3219;
+  --paper:#F7F6F1;--surface:#FFFFFF;--border:#DEDFD6;--muted:#5A6157;--ink:#1C221B;--ochre:#B7791F;
+  --svc-health:#33512D;--svc-clean:#2C6E7F;--svc-sec:#3B4452;--svc-train:#B7791F;
+  --ok-fg:#1F6F4A;--ok-bg:#E3F1E8;--due-fg:#8A5A00;--due-bg:#FBF0D9;
+  --exp-fg:#A1261B;--exp-bg:#FBE4E1;--wait-fg:#3B4452;--wait-bg:#ECEEF1;
+  --radius:8px;
+  --sans:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.5}
+a{color:var(--g700)}
+h1,h2,h3,p{margin:0}
+.wrap{max-width:1280px;margin:0 auto;padding:0 16px}
+.tnum{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.serif{font-family:var(--serif)}
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* Board */
+.board-head{padding:40px 0 32px}
+.board-head h1{font-size:clamp(26px,3.4vw,36px);line-height:1.2;font-weight:600;max-width:24ch}
+.board-head p{margin-top:12px;max-width:68ch;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:20px;font-size:14px;color:var(--muted);align-items:center}
+.meta b{color:var(--ink);font-weight:600}
+.block{padding:40px 0;border-top:1px solid var(--border)}
+.label{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px}
+.block>.wrap>h2{font-size:24px;line-height:32px;font-weight:600}
+.lede{color:var(--muted);margin:4px 0 24px;max-width:72ch}
+
+/* Palette */
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.sw{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:13px}
+.sw .fill{height:56px;border-bottom:1px solid var(--border)}
+.sw .info{padding:8px 10px 10px}
+.sw .nm{font-weight:600;font-size:14px}
+.sw .hx{color:var(--muted);font-variant-numeric:tabular-nums}
+.sw .cr{display:flex;justify-content:space-between;gap:6px;margin-top:4px;font-variant-numeric:tabular-nums}
+.grade{font-weight:600}
+.g-fail{color:var(--exp-fg)}
+.sub-h{font-size:16px;font-weight:600;margin:28px 0 12px}
+.note{font-size:14px;color:var(--muted);margin-top:12px;max-width:80ch}
+
+/* Type */
+.type-rows{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.type-row{display:grid;grid-template-columns:220px 1fr;gap:16px;padding:16px 20px;border-top:1px solid var(--border);align-items:baseline}
+.type-row:first-child{border-top:0}
+.type-row .spec{font-size:13px;color:var(--muted)}
+.t-h1{font-family:var(--serif);font-size:clamp(32px,4.4vw,52px);line-height:1.1;font-weight:600;letter-spacing:-.01em}
+.t-h2{font-family:var(--serif);font-size:clamp(26px,3vw,34px);line-height:1.2;font-weight:600}
+.t-title{font-size:24px;line-height:32px;font-weight:600}
+.t-body{font-size:16px;line-height:24px}
+.t-small{font-size:14px;line-height:20px;color:var(--muted)}
+.t-time{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* Components */
+.comp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.comp{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.comp h3{font-size:14px;font-weight:600;color:var(--muted);margin-bottom:14px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:var(--radius);font-family:inherit;font-size:16px;font-weight:600;line-height:1;border:1px solid transparent;text-decoration:none;cursor:pointer;white-space:nowrap}
+.btn-primary{background:var(--g700);color:#fff}
+.btn-primary:hover{background:var(--g800)}
+.btn-secondary{background:var(--surface);color:var(--g700);border-color:var(--g700)}
+.btn-secondary:hover{background:var(--g50)}
+.btn-quiet{background:transparent;color:var(--g700);padding:0 6px;text-decoration:underline;text-underline-offset:3px}
+.btn-light{background:#fff;color:var(--g900)}
+.btn:disabled{background:#E9EAE4;color:#5F655C;border-color:#E9EAE4;cursor:not-allowed}
+.btn:focus-visible,.is-focus{outline:2px solid var(--g700);outline-offset:2px}
+.btn-sm{min-height:36px;padding:0 14px;font-size:15px}
+.btn-block{width:100%}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-weight:600;font-size:15px}
+.field .help{font-size:14px;color:var(--muted)}
+.input,.select{height:44px;border:1px solid #BFC2B6;border-radius:var(--radius);padding:0 12px;font-family:inherit;font-size:16px;color:var(--ink);background:var(--surface);width:100%}
+.select{appearance:none;background-image:none;padding-right:36px}
+.select-wrap{position:relative}
+.select-wrap::after{content:"";position:absolute;right:14px;top:17px;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);pointer-events:none}
+.input:focus,.select:focus{outline:2px solid var(--g700);outline-offset:1px;border-color:var(--g700)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px 2px 8px;border-radius:var(--radius);font-size:14px;font-weight:600;line-height:20px;white-space:nowrap}
+.chip .ic{width:14px;height:14px;stroke-width:2.4}
+.c-ok{color:var(--ok-fg);background:var(--ok-bg)}
+.c-due{color:var(--due-fg);background:var(--due-bg)}
+.c-exp{color:var(--exp-fg);background:var(--exp-bg)}
+.c-wait{color:var(--wait-fg);background:var(--wait-bg)}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
+.tag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c,var(--g700));flex:none}
+.s-h{--c:var(--svc-health)}.s-c{--c:var(--svc-clean)}.s-s{--c:var(--svc-sec)}.s-t{--c:var(--svc-train)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th{font-size:13px;font-weight:600;color:var(--muted);text-align:left;padding:10px 16px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:12px 16px;border-top:1px solid var(--border);vertical-align:middle}
+tbody tr:first-child td{border-top:0}
+td small{display:block;color:var(--muted);font-size:13px}
+td.tnum{white-space:nowrap}
+
+/* Frames */
+.frame{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.frame-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);background:#FBFBF8;font-size:13px;color:var(--muted)}
+.frame-bar i{width:9px;height:9px;border-radius:50%;border:1px solid #C9CBC1;display:inline-block}
+.frame-bar span{margin-left:8px}
+
+/* Website mock */
+.site{max-width:1200px;margin:0 auto}
+.s-nav{display:flex;align-items:center;gap:12px 28px;padding:16px 32px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.wordmark{font-weight:700;font-size:22px;color:var(--g700);letter-spacing:-.01em;text-decoration:none}
+.s-links{display:flex;gap:22px;flex:1;flex-wrap:wrap}
+.s-links a{color:var(--ink);text-decoration:none;font-size:15px;font-weight:500}
+.s-actions{display:flex;gap:16px;align-items:center;margin-left:auto}
+.s-actions .login{font-size:15px;font-weight:600;color:var(--g700)}
+.s-menu{display:none}
+.s-hero{background:var(--paper);padding:64px 32px;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.eyebrow{font-size:14px;font-weight:600;color:var(--g700);margin-bottom:12px}
+.s-hero h1{font-family:var(--serif);font-size:clamp(32px,4.4vw,52px);line-height:1.1;font-weight:600;letter-spacing:-.01em;max-width:16ch}
+.s-hero .sup{font-size:18px;line-height:1.55;color:#3D443B;margin-top:18px;max-width:52ch}
+.s-hero .ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.s-hero .work{margin-top:20px;font-size:15px;color:var(--muted)}
+.s-hero .work a{font-weight:600}
+.checks{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:28px;padding-top:20px;border-top:1px solid var(--border);font-size:14px;color:var(--muted)}
+.checks span{display:inline-flex;align-items:center;gap:6px}
+.checks .ic{width:16px;height:16px;color:var(--g700)}
+.photo{min-height:360px;background:#E5E4DC;border:1px solid #D3D3C9;border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);text-align:center;padding:24px}
+.photo .ic{width:32px;height:32px;stroke-width:1.6}
+.photo b{color:#3D443B;font-weight:600}
+.photo small{font-size:13px;max-width:30ch}
+.s-sec{padding:56px 32px}
+.s-sec h2{font-family:var(--serif);font-size:clamp(26px,3vw,34px);line-height:1.2;font-weight:600}
+.s-sec .intro{color:var(--muted);margin-top:8px;max-width:60ch}
+.svc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:28px}
+.svc{border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
+.svc .tag{font-size:17px}
+.svc p{color:#3D443B;font-size:15px;flex:1}
+.svc a{font-weight:600;font-size:15px;text-decoration:none}
+.svc.lead{border-color:var(--g300);background:var(--g50)}
+.how{background:var(--paper);border-top:1px solid var(--border)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:28px;counter-reset:step;list-style:none;padding:0}
+.steps li{display:grid;grid-template-columns:40px 1fr;gap:4px 14px}
+.steps li::before{counter-increment:step;content:counter(step);grid-row:span 2;width:36px;height:36px;border:1px solid var(--g700);border-radius:50%;color:var(--g700);font-weight:700;display:flex;align-items:center;justify-content:center}
+.steps b{font-size:17px}
+.steps p{color:var(--muted);font-size:15px}
+.careers{background:var(--g900);color:#fff;padding:48px 32px;display:flex;flex-wrap:wrap;gap:20px 40px;align-items:center;justify-content:space-between}
+.careers h2{font-family:var(--serif);font-size:clamp(24px,2.8vw,32px);line-height:1.2;font-weight:600;max-width:22ch}
+.careers p{color:#D9E3D4;margin-top:8px;max-width:56ch}
+.s-foot{padding:40px 32px 28px;border-top:1px solid var(--border);display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:28px;font-size:14px;color:var(--muted)}
+.s-foot h4{margin:0 0 8px;font-size:14px;color:var(--ink)}
+.s-foot ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.s-foot a{color:var(--muted);text-decoration:none}
+.s-legal{grid-column:1/-1;border-top:1px solid var(--border);padding-top:16px;display:flex;flex-wrap:wrap;gap:8px 20px}
+
+/* Office app mock */
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);background:var(--paper);min-height:640px}
+.side{background:var(--surface);border-right:1px solid var(--border);padding:18px 12px;display:flex;flex-direction:column;gap:16px}
+.side .wordmark{font-size:19px;padding:0 12px}
+.side nav{display:flex;flex-direction:column;gap:2px}
+.side nav a{display:block;padding:8px 12px;border-radius:var(--radius);color:var(--ink);font-size:15px;font-weight:500;text-decoration:none}
+.side nav a:hover{background:var(--paper)}
+.side nav a.active{background:var(--g50);color:var(--g700);font-weight:600}
+.side nav .sep{border-top:1px solid var(--border);margin:8px 0}
+.app-head{display:flex;gap:12px;align-items:center;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.search{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:var(--radius);padding:0 12px;height:40px;color:var(--muted);background:var(--paper);font-size:15px;min-width:0}
+.search span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alerts{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);font-family:inherit;font-size:15px;font-weight:600;color:var(--ink)}
+.count{background:var(--g700);color:#fff;border-radius:var(--radius);font-size:12px;padding:0 6px;line-height:18px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--g100);color:var(--g800);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.app-body{padding:24px}
+.app-body h1{font-size:24px;line-height:32px;font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0 24px}
+.tile{display:block;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;color:var(--ink);text-decoration:none}
+.tile:hover{border-color:var(--g700)}
+.tile .l{font-weight:600;font-size:15px}
+.tile .n{font-size:34px;line-height:1.15;font-weight:600;font-variant-numeric:tabular-nums;margin:6px 0 2px}
+.tile .d{font-size:14px;color:var(--muted)}
+.tile .go{display:block;margin-top:10px;color:var(--g700);font-weight:600;font-size:14px}
+.app-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:20px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.panel-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.panel-h h2{font-size:17px;font-weight:600}
+.panel-h a{font-size:14px;font-weight:600}
+.panel table{min-width:600px}
+.todo{list-style:none;margin:0;padding:0}
+.todo li{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;padding:12px 16px;border-top:1px solid var(--border)}
+.todo li:first-child{border-top:0}
+.todo .k{font-size:13px;font-weight:600;color:var(--muted)}
+.todo .t{font-size:15px}
+.todo .w{font-size:13px;color:var(--muted)}
+.todo a{font-size:14px;font-weight:600;white-space:nowrap}
+
+/* Phones */
+.phones{display:flex;flex-wrap:wrap;gap:32px;justify-content:center}
+.phone-col{display:flex;flex-direction:column;gap:10px;align-items:center;width:375px;max-width:100%}
+.phone-col .cap{font-size:14px;color:var(--muted);font-weight:600}
+.phone{width:100%;flex:1;border:1px solid #C9CBC1;border-radius:28px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column;min-height:760px}
+.p-status{display:flex;justify-content:space-between;padding:10px 22px 6px;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.p-top{padding:6px 18px 12px;border-bottom:1px solid var(--border)}
+.p-top h1{font-size:22px;line-height:28px;font-weight:600}
+.p-top p{font-size:14px;color:var(--muted)}
+.p-body{flex:1;padding:16px;background:var(--paper);display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card .k{font-size:13px;font-weight:600;color:var(--muted)}
+.card .when{font-size:24px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;margin:2px 0 8px}
+.card .site-n{font-weight:600}
+.card .loc{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;color:var(--muted)}
+.card .loc a{display:inline-flex;align-items:center;gap:4px;font-weight:600;font-size:14px}
+.card .loc .ic{width:16px;height:16px}
+.notes{margin:12px 0 14px;padding:10px 12px;background:var(--paper);border-radius:var(--radius);font-size:14px}
+.notes b{font-weight:600}
+.hint{font-size:13px;color:var(--muted);text-align:center;margin-top:8px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.item .t{font-weight:600;font-size:15px}
+.item .s{font-size:14px;color:var(--muted)}
+.day{font-size:13px;font-weight:600;color:var(--muted);margin:4px 2px -4px}
+.shift{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.shift .tm{font-weight:600;font-variant-numeric:tabular-nums}
+.shift .pl{font-size:14px;color:var(--muted)}
+.offer{border-color:var(--ochre)}
+.offer .k{color:#7A5115}
+.offer .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.open-h{font-size:16px;font-weight:600;margin:8px 2px 0}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);background:var(--surface)}
+.tabs a{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 14px;font-size:12px;color:var(--muted);text-decoration:none;font-weight:500}
+.tabs a.on{color:var(--g700);font-weight:700}
+
+/* Approval */
+.approve{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.approve li{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border)}
+.approve li:first-child{border-top:0}
+.approve ul{list-style:none;margin:0;padding:0}
+.box{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);margin-right:16px}
+.box::before{content:"";width:16px;height:16px;border:1px solid #9A9E93;border-radius:3px}
+.sign{display:flex;flex-wrap:wrap;gap:16px 48px;margin-top:20px;font-size:14px;color:var(--muted)}
+.sign span{border-bottom:1px solid #9A9E93;min-width:200px;display:inline-block;margin-left:8px}
+.board-foot{padding:24px 0 48px;font-size:14px;color:var(--muted);border-top:1px solid var(--border)}
+
+/* Responsive */
+@media (max-width:1000px){
+  .s-links{display:none}.s-menu{display:inline-flex}
+  .app-grid{grid-template-columns:minmax(0,1fr)}
+  .svc-grid{grid-template-columns:repeat(2,1fr)}
+  .s-foot{grid-template-columns:1fr 1fr}
+}
+@media (max-width:820px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{border-right:0;border-bottom:1px solid var(--border)}
+  .side nav{flex-direction:row;flex-wrap:wrap}
+  .side nav .sep{display:none}
+  .s-hero{grid-template-columns:1fr;padding:40px 20px;gap:32px}
+  .photo{min-height:240px}
+  .steps{grid-template-columns:1fr;gap:20px}
+  .type-row{grid-template-columns:1fr;gap:4px}
+}
+@media (max-width:640px){
+  .tiles{grid-template-columns:1fr}
+  .svc-grid{grid-template-columns:1fr}
+  .s-nav,.s-sec,.careers{padding-left:20px;padding-right:20px}
+  .s-foot{grid-template-columns:1fr;padding:32px 20px 24px}
+  .s-actions .login{display:none}
+  .app-head{padding:10px 12px}
+  .alerts .lbl{display:none}
+  .app-body{padding:16px}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-cross" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol>
+  <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5V20h-5v-5.5H9V20H4z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4v13H7z"/><path d="M14 3.5v4h4M10 12.5h5M10 16h5"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20.5c1.2-3.6 4-5.3 7.5-5.3s6.3 1.7 7.5 5.3"/></symbol>
+  <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.3"/><path d="M9 6l1.2-2h3.6L15 6"/></symbol>
+</svg>
+
+<!-- 1. Header -->
+<header class="wrap board-head">
+  <p class="label">Proposal for approval</p>
+  <h1>RitaGreen Services, design direction 2026, proposal for approval</h1>
+  <p>One visual language for the public website, the office app and the staff portal. Calm, organised and easy to read on a phone at the start of a shift. Please look through each section and mark it approved or note what should change at the end of the page.</p>
+  <div class="meta">
+    <span>Prepared <b class="tnum">9 October 2026</b></span>
+    <span>Version <b>1</b></span>
+    <span class="chip c-wait"><svg class="ic"><use href="#i-dot"/></svg>Awaiting review</span>
+  </div>
+</header>
+
+<!-- 2. Palette -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">1. Palette</p>
+    <h2>Colour and contrast</h2>
+    <p class="lede">A single green family carries the brand, on a warm paper background. Ochre is kept for small highlights only. Each swatch shows its contrast ratio against white and against ink (#1C221B), with the WCAG 2.2 grade for normal text: AAA is 7:1 or more, AA is 4.5:1, "Large" means headings and bold text at 24px or more only.</p>
+
+    <h3 class="sub-h">Green scale</h3>
+    <div class="swatches">
+      <div class="sw"><div class="fill" style="background:#F1F5EF"></div><div class="info"><div class="nm">Green 50</div><div class="hx">#F1F5EF</div><div class="cr"><span>White 1.1:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 14.7:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#E2EBDE"></div><div class="info"><div class="nm">Green 100</div><div class="hx">#E2EBDE</div><div class="cr"><span>White 1.2:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 13.3:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#C6D6BF"></div><div class="info"><div class="nm">Green 200</div><div class="hx">#C6D6BF</div><div class="cr"><span>White 1.5:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 10.6:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#9FB995"></div><div class="info"><div class="nm">Green 300</div><div class="hx">#9FB995</div><div class="cr"><span>White 2.1:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 7.6:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#6F9363"></div><div class="info"><div class="nm">Green 400</div><div class="hx">#6F9363</div><div class="cr"><span>White 3.5:1</span><span class="grade">Large</span></div><div class="cr"><span>Ink 4.7:1</span><span class="grade">AA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#4E7244"></div><div class="info"><div class="nm">Green 500</div><div class="hx">#4E7244</div><div class="cr"><span>White 5.5:1</span><span class="grade">AA</span></div><div class="cr"><span>Ink 2.9:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#3E6136"></div><div class="info"><div class="nm">Green 600</div><div class="hx">#3E6136</div><div class="cr"><span>White 7.1:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 2.3:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw" style="border-color:#33512D"><div class="fill" style="background:#33512D"></div><div class="info"><div class="nm">Green 700, brand</div><div class="hx">#33512D</div><div class="cr"><span>White 8.9:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 1.8:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#2A4325"></div><div class="info"><div class="nm">Green 800</div><div class="hx">#2A4325</div><div class="cr"><span>White 10.9:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 1.5:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#1F3219"></div><div class="info"><div class="nm">Green 900</div><div class="hx">#1F3219</div><div class="cr"><span>White 13.7:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 1.2:1</span><span class="grade g-fail">Fill</span></div></div></div>
+    </div>
+
+    <h3 class="sub-h">Neutrals, accent and services</h3>
+    <div class="swatches">
+      <div class="sw"><div class="fill" style="background:#F7F6F1"></div><div class="info"><div class="nm">Paper, page</div><div class="hx">#F7F6F1</div><div class="cr"><span>White 1.1:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 15.0:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#FFFFFF"></div><div class="info"><div class="nm">Surface</div><div class="hx">#FFFFFF</div><div class="cr"><span>White 1.0:1</span><span class="grade g-fail">Fill</span></div><div class="cr"><span>Ink 16.2:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#DEDFD6"></div><div class="info"><div class="nm">Border</div><div class="hx">#DEDFD6</div><div class="cr"><span>White 1.3:1</span><span class="grade g-fail">Line</span></div><div class="cr"><span>Ink 12.1:1</span><span class="grade">AAA</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#5A6157"></div><div class="info"><div class="nm">Muted text</div><div class="hx">#5A6157</div><div class="cr"><span>White 6.4:1</span><span class="grade">AA</span></div><div class="cr"><span>Ink 2.5:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#1C221B"></div><div class="info"><div class="nm">Ink</div><div class="hx">#1C221B</div><div class="cr"><span>White 16.2:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 1.0:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#B7791F"></div><div class="info"><div class="nm">Ochre accent</div><div class="hx">#B7791F</div><div class="cr"><span>White 3.6:1</span><span class="grade">Large</span></div><div class="cr"><span>Ink 4.46:1</span><span class="grade">Large</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#2C6E7F"></div><div class="info"><div class="nm">Cleaning tag</div><div class="hx">#2C6E7F</div><div class="cr"><span>White 5.8:1</span><span class="grade">AA</span></div><div class="cr"><span>Ink 2.8:1</span><span class="grade g-fail">Fill</span></div></div></div>
+      <div class="sw"><div class="fill" style="background:#3B4452"></div><div class="info"><div class="nm">Security tag</div><div class="hx">#3B4452</div><div class="cr"><span>White 9.8:1</span><span class="grade">AAA</span></div><div class="cr"><span>Ink 1.6:1</span><span class="grade g-fail">Fill</span></div></div></div>
+    </div>
+    <p class="note">"Fill" and "Line" mean the colour is for backgrounds or borders only, never for text on that pairing. Ochre falls just short of AA for small text on either background, so it is used for dots, borders and labels set in a darker ochre (#7A5115). The four status pairs below all pass AA: Valid 5.3:1, Due soon 5.2:1, Expired 6.2:1, Awaiting review 8.5:1.</p>
+  </div>
+</section>
+
+<!-- 3. Type -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">2. Type</p>
+    <h2>Type scale</h2>
+    <p class="lede">Source Serif 4 is used for website headlines only. Everything else, including the office app and staff portal, uses Source Sans 3. Times always use tabular figures so columns line up.</p>
+    <div class="type-rows">
+      <div class="type-row"><div class="spec">Website H1<br>Source Serif 4, 52/57, semibold</div><div class="t-h1">Reliable care staff when your rota can't wait.</div></div>
+      <div class="type-row"><div class="spec">Website H2<br>Source Serif 4, 34/41, semibold</div><div class="t-h2">How it works</div></div>
+      <div class="type-row"><div class="spec">App title<br>Source Sans 3, 24/32, semibold</div><div class="t-title">Today, Thursday 9 October</div></div>
+      <div class="type-row"><div class="spec">Body<br>Source Sans 3, 16/24, regular</div><div class="t-body">Every worker is checked before their first shift: identity, right to work, DBS and training records.</div></div>
+      <div class="type-row"><div class="spec">Small<br>Source Sans 3, 14/20, muted</div><div class="t-small">Last updated 08:14. Changes are saved automatically.</div></div>
+      <div class="type-row"><div class="spec">Time<br>Source Sans 3, tabular figures</div><div class="t-time">07:30 to 19:30</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Components -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">3. Components</p>
+    <h2>Building blocks</h2>
+    <p class="lede">Flat surfaces, 1px borders and an 8px corner radius. Buttons are at least 44px tall so they are easy to tap. Status is never shown by colour alone: every chip has a symbol and a word.</p>
+    <div class="comp-grid">
+      <div class="comp">
+        <h3>Buttons</h3>
+        <div class="row">
+          <a class="btn btn-primary" href="#">Request staff</a>
+          <a class="btn btn-secondary" href="#">Arrange care</a>
+          <a class="btn btn-quiet" href="#">See current roles</a>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn btn-primary is-focus" type="button">Keyboard focus</button>
+          <button class="btn" type="button" disabled>Clock in</button>
+        </div>
+      </div>
+      <div class="comp">
+        <h3>Form fields</h3>
+        <div class="field">
+          <label for="pc">Postcode</label>
+          <input class="input" id="pc" value="SE13 5AB">
+          <span class="help">We use this to offer you shifts near home.</span>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label for="svc">Service needed</label>
+          <div class="select-wrap"><select class="select" id="svc"><option>Healthcare</option><option>Cleaning</option><option>Security</option><option>Training</option></select></div>
+        </div>
+      </div>
+      <div class="comp">
+        <h3>Status chips</h3>
+        <div class="row">
+          <span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Valid</span>
+          <span class="chip c-due"><svg class="ic"><use href="#i-clock"/></svg>Due soon</span>
+          <span class="chip c-exp"><svg class="ic"><use href="#i-cross"/></svg>Expired</span>
+          <span class="chip c-wait"><svg class="ic"><use href="#i-dot"/></svg>Awaiting review</span>
+        </div>
+        <h3 style="margin-top:22px">Service tags</h3>
+        <div class="row">
+          <span class="tag s-h">Healthcare</span>
+          <span class="tag s-c">Cleaning</span>
+          <span class="tag s-s">Security</span>
+          <span class="tag s-t">Training</span>
+        </div>
+      </div>
+    </div>
+    <div class="comp" style="margin-top:16px;padding:0">
+      <div class="tbl">
+        <table style="min-width:560px">
+          <thead><tr><th>Time</th><th>Site</th><th>Worker</th><th>Service</th><th>Checks</th></tr></thead>
+          <tbody><tr><td class="tnum">07:30 to 19:30</td><td>Oakwood Care Home<small>Lewisham</small></td><td>Ama Mensah</td><td><span class="tag s-h">Healthcare</span></td><td><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Valid</span></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Website -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">4. Website</p>
+    <h2>Homepage, desktop</h2>
+    <p class="lede">Healthcare leads, because it is most of the work. The other three services sit one scroll down, at the same weight as each other. The photograph must be a real one of the team: no stock images.</p>
+    <div class="frame">
+      <div class="frame-bar"><i></i><i></i><i></i><span>ritagreenservices.com</span></div>
+      <div class="site">
+        <nav class="s-nav" aria-label="Website mock navigation">
+          <a class="wordmark" href="#">RitaGreen</a>
+          <div class="s-links">
+            <a href="#">Healthcare</a><a href="#">Cleaning</a><a href="#">Security</a><a href="#">Training</a><a href="#">Careers</a><a href="#">About</a><a href="#">Contact</a>
+          </div>
+          <div class="s-actions">
+            <a class="login" href="#">Staff login</a>
+            <a class="btn btn-primary btn-sm" href="#">Request staff</a>
+            <a class="btn btn-secondary btn-sm s-menu" href="#">Menu</a>
+          </div>
+        </nav>
+
+        <div class="s-hero">
+          <div>
+            <p class="eyebrow">Healthcare staffing across London</p>
+            <h1>Reliable care staff when your rota can't wait.</h1>
+            <p class="sup">Carers, support workers and nurses for care homes, hospitals and supported living across London. Plus cleaning, security and training from the same team.</p>
+            <div class="ctas">
+              <a class="btn btn-primary" href="#">Request staff</a>
+              <a class="btn btn-secondary" href="#">Arrange care</a>
+            </div>
+            <p class="work">Looking for work? <a href="#">See current roles</a></p>
+            <div class="checks">
+              <span><svg class="ic"><use href="#i-check"/></svg>Right to work checked</span>
+              <span><svg class="ic"><use href="#i-check"/></svg>Enhanced DBS</span>
+              <span><svg class="ic"><use href="#i-check"/></svg>Training in date</span>
+            </div>
+          </div>
+          <div class="photo" role="img" aria-label="Photograph placeholder">
+            <svg class="ic"><use href="#i-photo"/></svg>
+            <b>Real team photograph</b>
+            <small>A RitaGreen carer at work on site, shot in natural light. To be commissioned.</small>
+          </div>
+        </div>
+
+        <div class="s-sec">
+          <h2>What we do</h2>
+          <p class="intro">Four services, one office that answers the phone.</p>
+          <div class="svc-grid">
+            <div class="svc lead"><span class="tag s-h">Healthcare</span><p>Cover for planned leave and last-minute gaps.</p><a href="#">Healthcare staffing →</a></div>
+            <div class="svc"><span class="tag s-c">Cleaning</span><p>Scheduled cleaning for properties, schools and sites.</p><a href="#">Cleaning services →</a></div>
+            <div class="svc"><span class="tag s-s">Security</span><p>Trained, licensed officers for your premises.</p><a href="#">Security staffing →</a></div>
+            <div class="svc"><span class="tag s-t">Training</span><p>Mandatory and refresher courses for care teams.</p><a href="#">Course dates →</a></div>
+          </div>
+        </div>
+
+        <div class="s-sec how">
+          <h2>How it works</h2>
+          <ol class="steps">
+            <li><b>Tell us what you need</b><p>Call us or send the request form with the site, dates, shifts and skills you need.</p></li>
+            <li><b>We match checked staff</b><p>We only offer the shift to people whose checks and training are in date.</p></li>
+            <li><b>They arrive briefed</b><p>Staff get the site notes, contact name and start time in their app before they travel.</p></li>
+          </ol>
+        </div>
+
+        <div class="careers">
+          <div>
+            <h2>Join a team that looks after its people</h2>
+            <p>Flexible shifts in healthcare, cleaning and security, with paid training and an office that knows your name.</p>
+          </div>
+          <a class="btn btn-light" href="#">See current roles</a>
+        </div>
+
+        <footer class="s-foot">
+          <div>
+            <a class="wordmark" href="#">RitaGreen</a>
+            <p style="margin-top:8px">RitaGreen Services Ltd. Registered in England and Wales, company no. 00000000. Office address to be confirmed, London.</p>
+          </div>
+          <div><h4>Services</h4><ul><li><a href="#">Healthcare</a></li><li><a href="#">Cleaning</a></li><li><a href="#">Security</a></li><li><a href="#">Training</a></li></ul></div>
+          <div><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Careers</a></li><li><a href="#">Contact</a></li><li><a href="#">Staff login</a></li></ul></div>
+          <div><h4>Get in touch</h4><ul><li class="tnum">020 0000 0000</li><li>Monday to Friday, 08:00 to 18:00</li><li><a href="#">Send a message</a></li></ul></div>
+          <div class="s-legal"><span>Privacy</span><span>Cookies</span><span>Accessibility</span><span>Modern slavery statement</span></div>
+        </footer>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Office app -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">5. Office app</p>
+    <h2>Today screen, desktop</h2>
+    <p class="lede">The first screen the office sees each morning. Three numbers that need attention, today's shifts, and a short list of things waiting on a person. Each number is a link to the list behind it.</p>
+    <div class="frame">
+      <div class="app">
+        <aside class="side">
+          <span class="wordmark">RitaGreen</span>
+          <nav aria-label="Office app mock navigation">
+            <a class="active" href="#" aria-current="page">Today</a>
+            <a href="#">Recruitment</a>
+            <a href="#">People</a>
+            <a href="#">Compliance</a>
+            <a href="#">Rota</a>
+            <a href="#">Website</a>
+            <a href="#">Reports</a>
+            <div class="sep"></div>
+            <a href="#">Settings</a>
+          </nav>
+        </aside>
+        <div>
+          <div class="app-head">
+            <div class="search"><svg class="ic"><use href="#i-search"/></svg><span>Search people, sites and shifts</span></div>
+            <button class="alerts" type="button"><svg class="ic"><use href="#i-bell"/></svg><span class="lbl">Alerts</span><span class="count tnum">3</span></button>
+            <span class="avatar" title="Joy Okonkwo">JO</span>
+          </div>
+          <div class="app-body">
+            <h1>Today, Thursday 9 October</h1>
+            <p class="muted" style="font-size:14px">Last updated <span class="tnum">08:14</span></p>
+            <div class="tiles">
+              <a class="tile" href="#"><span class="l">Unfilled shifts</span><div class="n">4</div><span class="d">2 start before 14:00</span><span class="go">View unfilled shifts →</span></a>
+              <a class="tile" href="#"><span class="l">Checks to review</span><div class="n">7</div><span class="d">Oldest uploaded 3 days ago</span><span class="go">Review checks →</span></a>
+              <a class="tile" href="#"><span class="l">Evidence expiring in 30 days</span><div class="n">12</div><span class="d">5 are DBS updates</span><span class="go">See expiring evidence →</span></a>
+            </div>
+            <div class="app-grid">
+              <div class="panel">
+                <div class="panel-h"><h2>Today's shifts</h2><a href="#">Open rota</a></div>
+                <div class="tbl">
+                  <table>
+                    <thead><tr><th>Time</th><th>Site</th><th>Worker</th><th>Service</th><th>Checks</th></tr></thead>
+                    <tbody>
+                      <tr><td class="tnum">07:00 to 15:00</td><td>Brook House<small>Supported living, Catford</small></td><td>Daniel Okafor</td><td><span class="tag s-h">Healthcare</span></td><td><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Valid</span></td></tr>
+                      <tr><td class="tnum">07:30 to 19:30</td><td>Riverside Community Hospital<small>Ward 4, Greenwich</small></td><td>Grace Adeyemi</td><td><span class="tag s-h">Healthcare</span></td><td><span class="chip c-due"><svg class="ic"><use href="#i-clock"/></svg>Due soon</span></td></tr>
+                      <tr><td class="tnum">16:00 to 19:00</td><td>Elm Park Primary School<small>Eltham</small></td><td>Tomasz Nowak</td><td><span class="tag s-c">Cleaning</span></td><td><span class="chip c-wait"><svg class="ic"><use href="#i-dot"/></svg>Awaiting review</span></td></tr>
+                      <tr><td class="tnum">19:00 to 07:00</td><td>Canal Wharf site<small>Construction, Bermondsey</small></td><td>Kwame Boateng</td><td><span class="tag s-s">Security</span></td><td><span class="chip c-exp"><svg class="ic"><use href="#i-cross"/></svg>Expired</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-h"><h2>Needs action</h2><span class="muted tnum" style="font-size:14px">3 items</span></div>
+                <ul class="todo">
+                  <li><div><div class="k">New applicant</div><div class="t">Precious Oduya applied for Healthcare Assistant</div><div class="w">12 minutes ago</div></div><a href="#">Review</a></li>
+                  <li><div><div class="k">Document to verify</div><div class="t">DBS certificate uploaded by Grace Adeyemi</div><div class="w">Yesterday, 17:42</div></div><a href="#">Verify</a></li>
+                  <li><div><div class="k">Leave request</div><div class="t">Tomasz Nowak, 20 to 24 October</div><div class="w">Yesterday, 11:05</div></div><a href="#">Decide</a></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. Staff portal -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">6. Staff portal</p>
+    <h2>Phone screens</h2>
+    <p class="lede">Built for one hand on a bus. The next shift is always first, with the address, the site notes and the clock-in button in one card. Offers can be accepted or declined without opening anything else.</p>
+    <div class="phones">
+
+      <div class="phone-col">
+        <span class="cap">a. Home</span>
+        <div class="phone">
+          <div class="p-status"><span>09:41</span><span>RitaGreen</span></div>
+          <div class="p-top"><h1>Morning, Ama</h1><p>Thursday 9 October</p></div>
+          <div class="p-body">
+            <div class="card">
+              <div class="k">Next shift</div>
+              <div class="when">Tomorrow<br>07:30 to 19:30</div>
+              <div class="site-n">Oakwood Care Home</div>
+              <div class="loc"><span>Lewisham, SE13</span><a href="#"><svg class="ic"><use href="#i-pin"/></svg>Open map</a></div>
+              <div class="notes"><b>Site notes:</b> Sign in at reception. Handover with the day nurse in the first-floor office.</div>
+              <button class="btn btn-block" type="button" disabled>Clock in</button>
+              <p class="hint">Available 15 minutes before start</p>
+            </div>
+            <div class="card item">
+              <div><div class="t">Moving and handling refresher</div><div class="s">Due by <span class="tnum">31 October</span></div><a href="#" style="font-size:14px;font-weight:600">Book a place</a></div>
+              <span class="chip c-due"><svg class="ic"><use href="#i-clock"/></svg>Due soon</span>
+            </div>
+            <div class="card item">
+              <div><div class="t">Your records</div><div class="s">Right to work, DBS and training</div></div>
+              <span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Valid</span>
+            </div>
+          </div>
+          <nav class="tabs" aria-label="Portal tabs, home">
+            <a class="on" href="#" aria-current="page"><svg class="ic"><use href="#i-home"/></svg>Home</a>
+            <a href="#"><svg class="ic"><use href="#i-cal"/></svg>Rota</a>
+            <a href="#"><svg class="ic"><use href="#i-doc"/></svg>Records</a>
+            <a href="#"><svg class="ic"><use href="#i-user"/></svg>Me</a>
+          </nav>
+        </div>
+      </div>
+
+      <div class="phone-col">
+        <span class="cap">b. Rota</span>
+        <div class="phone">
+          <div class="p-status"><span>09:41</span><span>RitaGreen</span></div>
+          <div class="p-top"><h1>Rota</h1><p>This week, 6 to 12 October</p></div>
+          <div class="p-body">
+            <div class="day">Friday 10 October</div>
+            <div class="card shift"><div><div class="tm">07:30 to 19:30</div><div class="pl">Oakwood Care Home, Lewisham</div></div><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Confirmed</span></div>
+            <div class="day">Saturday 11 October</div>
+            <div class="card shift"><div><div class="tm">07:30 to 19:30</div><div class="pl">Oakwood Care Home, Lewisham</div></div><span class="chip c-ok"><svg class="ic"><use href="#i-check"/></svg>Confirmed</span></div>
+            <div class="card offer">
+              <div class="k">Offer, reply by 18:00 today</div>
+              <div class="when" style="font-size:20px;margin-top:4px">Sunday 12 October<br>08:00 to 20:00</div>
+              <div class="site-n">Brook House</div>
+              <div class="loc"><span>Supported living, Catford</span></div>
+              <div class="pair"><button class="btn btn-primary" type="button">Accept</button><button class="btn btn-secondary" type="button">Decline</button></div>
+            </div>
+            <h2 class="open-h">Open shifts near you</h2>
+            <div class="card shift"><div><div class="tm">Mon 13 Oct, 14:00 to 22:00</div><div class="pl">Riverside Community Hospital</div><a href="#" style="font-size:14px;font-weight:600">Ask for this shift</a></div><span class="tag s-h">Healthcare</span></div>
+            <div class="card shift"><div><div class="tm">Wed 15 Oct, 07:00 to 15:00</div><div class="pl">Maple Lodge Care Home, Bromley</div><a href="#" style="font-size:14px;font-weight:600">Ask for this shift</a></div><span class="tag s-h">Healthcare</span></div>
+          </div>
+          <nav class="tabs" aria-label="Portal tabs, rota">
+            <a href="#"><svg class="ic"><use href="#i-home"/></svg>Home</a>
+            <a class="on" href="#" aria-current="page"><svg class="ic"><use href="#i-cal"/></svg>Rota</a>
+            <a href="#"><svg class="ic"><use href="#i-doc"/></svg>Records</a>
+            <a href="#"><svg class="ic"><use href="#i-user"/></svg>Me</a>
+          </nav>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Approval -->
+<section class="block">
+  <div class="wrap">
+    <p class="label">7. Sign-off</p>
+    <h2>Approval</h2>
+    <p class="lede">Tick one box per section, or write the change you would like beside it. Nothing is built until each section is approved.</p>
+    <div class="approve">
+      <ul>
+        <li><b>1. Palette</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+        <li><b>2. Type</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+        <li><b>3. Components</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+        <li><b>4. Website homepage</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+        <li><b>5. Office app, Today</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+        <li><b>6. Staff portal</b><span><span class="box">Approved</span><span class="box">Changes needed</span></span></li>
+      </ul>
+    </div>
+    <div class="sign"><span style="border:0;min-width:0;margin:0">Signed<span></span></span><span style="border:0;min-width:0;margin:0">Date<span></span></span></div>
+  </div>
+</section>
+
+<footer class="wrap board-foot">
+  All names, sites, numbers and dates on this page are fictional and for illustration only. RitaGreen Services Ltd, design direction 2026, version 1.
+</footer>
+
+</body>
+</html>
