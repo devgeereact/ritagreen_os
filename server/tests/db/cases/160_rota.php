@@ -328,8 +328,11 @@ Rgt::same('and sees the reason', $mine['decision_note'] ?? null, 'Did you take a
 Rgt::status('she answers by submitting again', $amaraApp->post("/me.php?action=submit_timesheet&id=$tsId", ['break_minutes' => 45]), 200);
 
 Rgt::status('a correction needs a reason', $admin->post("/timesheets.php?action=correct&id=$tsId", ['end_time' => '15:30']), 400);
+// The clock times are now minus eight hours, so after about 22:45 London time a
+// lone end of 15:30 left less than the 45-minute break and the correction was
+// refused. The start is set too, so the case does not depend on the hour it runs.
 Rgt::status('the office corrects it', $admin->post("/timesheets.php?action=correct&id=$tsId",
-    ['end_time' => '15:30', 'reason' => 'Left early, agreed with the home']), 200);
+    ['start_time' => '07:30', 'end_time' => '15:30', 'reason' => 'Left early, agreed with the home']), 200);
 $detail = $admin->get("/timesheets.php?id=$tsId");
 $corr = array_values(array_filter($detail->get('history', []), static fn($h) => $h['action'] === 'timesheet.correct'))[0] ?? [];
 Rgt::same('history keeps the value before', $corr['after']['end_time'] ?? null, '15:30');
