@@ -77,6 +77,9 @@ export const DESTINATIONS: Destination[] = [
 
   { label: "Posts", path: "/app/blog", icon: Newspaper, group: "Website", keywords: "blog articles news website" },
   { label: "Testimonials", path: "/app/testimonials", icon: Star, group: "Website", keywords: "reviews quotes website" },
+  { label: "Vacancies", path: "/app/vacancies", icon: Briefcase, group: "Website", keywords: "jobs roles careers hiring adverts website" },
+  { label: "Forms", path: "/app/website-forms", icon: ClipboardList, group: "Website", keywords: "google forms application directory intake website" },
+  { label: "Company details", path: "/app/company", icon: Building2, group: "Website", keywords: "phone email hours address social links instagram facebook linkedin tiktok whatsapp" },
   { label: "Content Studio", path: "/app/content-studio", icon: Sparkles, group: "Website", keywords: "ai writing social" },
 
   { label: "Reports", path: "/app/reports", icon: FileText, group: "Reports", keywords: "cqc regulatory packs export" },

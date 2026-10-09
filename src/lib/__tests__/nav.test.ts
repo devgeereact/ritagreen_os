@@ -96,9 +96,19 @@ describe("the office sidebar", () => {
     expect(titles(navFor("employee"))).not.toContain("Finance")
   })
 
-  it("gives an editor the website", () => {
+  it("gives an editor the website, without the owner's company details", () => {
     const website = navFor("editor").find((d) => d.title === "Website")!
-    expect([website.url, ...(website.items ?? []).map((i) => i.url)]).toEqual(["/app/blog", "/app/testimonials"])
+    expect([website.url, ...(website.items ?? []).map((i) => i.url)]).toEqual([
+      "/app/blog",
+      "/app/vacancies",
+      "/app/website-forms",
+      "/app/testimonials",
+    ])
+  })
+
+  it("gives an owner the company details too", () => {
+    const website = navFor("admin").find((d) => d.title === "Website")!
+    expect((website.items ?? []).map((i) => i.url)).toContain("/app/company")
   })
 
   it("links only to pages the search palette also knows", () => {

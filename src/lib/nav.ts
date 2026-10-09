@@ -77,7 +77,12 @@ export const NAV: NavEntry[] = [
     title: "Website",
     url: "/app/blog",
     icon: Globe,
-    items: [{ title: "Testimonials", url: "/app/testimonials" }],
+    items: [
+      { title: "Vacancies", url: "/app/vacancies" },
+      { title: "Forms", url: "/app/website-forms" },
+      { title: "Testimonials", url: "/app/testimonials" },
+      { title: "Company details", url: "/app/company" },
+    ],
   },
   { title: "Reports", url: "/app/reports", icon: FileSpreadsheet },
   {
