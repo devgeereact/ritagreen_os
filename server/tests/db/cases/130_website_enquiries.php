@@ -12,7 +12,7 @@
 
 $count = static fn (string $sql): int => (int) $db->query($sql)->fetch_row()[0];
 
-Rgt::group('website — general, care and training enquiries go to contact.php');
+Rgt::group('website: general, care and training enquiries go to contact.php');
 
 $db->query('DELETE FROM rate_limits');
 $res = $client->post('/contact.php', [
@@ -53,7 +53,7 @@ Rgt::same('with no type line added', $row['message'] ?? null, 'Hello');
 Rgt::status('a care enquiry with no message is still refused',
     $client->post('/contact.php', ['name' => 'X', 'email' => 'x@example.test', 'message' => '', 'type' => 'care']), 400);
 
-Rgt::group('website — request staff goes to bookings.php');
+Rgt::group('website: request staff goes to bookings.php');
 
 $db->query('DELETE FROM rate_limits');
 $before = $count('SELECT COUNT(*) FROM service_requests');
@@ -73,7 +73,7 @@ Rgt::status('a staff request without consent is refused', $client->post('/bookin
     'contact_name' => 'No Consent', 'email' => 'no.consent@example.test', 'division' => 'care', 'detail' => 'Cover',
 ]), 400);
 
-Rgt::group('website — a cleaning quote goes to quotes.php, not the enquiry inbox');
+Rgt::group('website: a cleaning quote goes to quotes.php, not the enquiry inbox');
 
 $db->query('DELETE FROM rate_limits');
 $quote = [
@@ -120,7 +120,7 @@ Rgt::status('oversized notes are refused with a message, not a 500',
     $client->post('/quotes.php?action=request', ['notes' => str_repeat('a', 3001)] + $quote), 400);
 Rgt::status('an oversized organisation is refused', $client->post('/quotes.php?action=request', ['organisation' => str_repeat('o', 161)] + $quote), 400);
 
-Rgt::group('website — the quote request is rate limited and opens nothing else');
+Rgt::group('website: the quote request is rate limited and opens nothing else');
 
 $db->query('DELETE FROM rate_limits');
 $statuses = [];

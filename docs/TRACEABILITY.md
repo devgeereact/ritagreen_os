@@ -149,7 +149,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 |---|---|---|---|---|
 | The office is emailed on an enquiry | `contact_enquiries` | `server/contact.php` | `src/pages/public/Contact.tsx` | none |
 | Each website enquiry reaches the right queue (staff, cleaning quote, care, training, general) | `service_requests`, `contact_enquiries` | `server/bookings.php`, `server/quotes.php?action=request`, `server/contact.php` (`type`) | `src/components/public/forms/`, `src/pages/public/Request.tsx` | `server/tests/db/cases/130_website_enquiries.php` |
-| Old website addresses still land | — | `public/.htaccess` (301) | `src/routes/legacy-redirects.tsx` | `src/lib/__tests__/public-routes.test.ts` |
+| Old website addresses still land | none | `public/.htaccess` (301) | `src/routes/legacy-redirects.tsx` | `src/lib/__tests__/public-routes.test.ts` |
 | Staff can reply from the app | — | `server/inbox.php` | `src/pages/app/Mailbox.tsx` | none |
 | Workers are reachable by SMS or WhatsApp | `sms_log` | `send_sms()` in `server/lib.php` | `src/pages/app/Comms.tsx` | none |
 | Staff see in-app notifications | `notifications` | `server/notifications.php` | `src/components/notification-dropdown.tsx` | none |
