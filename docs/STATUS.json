@@ -1022,6 +1022,31 @@
           "name": "Owner feature switches",
           "status": "done",
           "note": "Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox, ai_assistant. Owner-only and audited; inbox.php, ai.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. server/tests/db/cases/120_feature_switches.php"
+        },
+        {
+          "name": "Public website rebuilt on the 2026 design (S6)",
+          "status": "done",
+          "note": "Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids, floating cards or scroll animation. Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show. Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders"
+        },
+        {
+          "name": "Website enquiries reach the right queue",
+          "status": "done",
+          "note": "Request staff to bookings.php; cleaning quote to the new public quotes.php?action=request (a Cleaning request in the Bookings queue, not a priced quote); care, training and general to contact.php with a type. server/tests/db/cases/130_website_enquiries.php, and each form submitted in a browser against a local API"
+        },
+        {
+          "name": "Old website addresses redirect",
+          "status": "done",
+          "note": "/services, the twelve /services/:slug pages, /sectors, /accreditations, /resources, /resources/:slug, /apply and /quote redirect in the app and with 301 rules in public/.htaccess, kept in step by src/lib/__tests__/public-routes.test.ts. The .htaccess block reaches production only when copied to the server by hand"
+        },
+        {
+          "name": "Sitemap generated at build time",
+          "status": "partial",
+          "note": "dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts; the hand-kept public/sitemap.xml is gone. Static pages only: published posts and S7 vacancies live in the database, which the build cannot reach, so they need a server-side sitemap"
+        },
+        {
+          "name": "Structured data on public pages",
+          "status": "done",
+          "note": "EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings, no JobPosting until S7"
         }
       ]
     }

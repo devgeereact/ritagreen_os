@@ -108,12 +108,12 @@ export function CookieConsent() {
       role="region"
       aria-label="How this site uses browser storage"
       tabIndex={-1}
-      className="fixed inset-x-0 bottom-0 z-50 animate-fade-up px-4 pb-4 focus:outline-none"
+      className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 focus:outline-none"
     >
       <div className="surface mx-auto flex max-w-3xl flex-col items-start gap-4 p-5 shadow-lift sm:flex-row sm:items-center">
         <Cookie className="hidden size-6 shrink-0 text-primary sm:block" aria-hidden="true" />
         <p className="text-sm text-muted-foreground">
-          This site stores a few things in your browser to keep it working — your
+          This site stores a few things in your browser to keep it working: your
           sign-in, your theme, and this notice. There is no analytics, no advertising and
           no third-party tracking, so there is nothing here to opt out of. See our{" "}
           <Link
@@ -134,7 +134,7 @@ export function CookieConsent() {
         <button
           type="button"
           onClick={dismiss}
-          className="flex shrink-0 items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <X className="size-4" aria-hidden="true" />
           Got it

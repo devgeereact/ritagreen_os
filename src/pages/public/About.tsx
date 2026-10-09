@@ -1,15 +1,44 @@
 import { Link } from "react-router-dom"
-import { ArrowRight, BadgeCheck } from "lucide-react"
-import { PageHeader, Section, SectionAlt, CtaBand } from "@/components/public/section"
-import { SectionHeading, CounterBand, FeatureSplit } from "@/components/public/marketing"
-import { COMPANY, PILLARS, ASSURANCE, STATS } from "@/lib/company"
+import { ArrowRight } from "lucide-react"
+import { CheckList, CtaBand, PageHeader, Section, SectionTitle, ServiceTag } from "@/components/public/section"
+import { useCompanyDetails } from "@/lib/company"
+import { SITE_IMAGES } from "@/lib/site-images"
 import { useSeo } from "@/hooks/use-seo"
 
+// /about: who we are, how we check and train staff, and the standards we hold
+// ourselves to. /sectors and /accreditations redirect here; their content is
+// folded in as "Who we work with" and "Standards", keeping only what can be
+// shown to be true (2026 plan, file 01). Insurance figures, accreditation
+// schemes and regulator alignment statements are not repeated until confirmed.
+
+const WHO = [
+  { service: "care", to: "/healthcare", body: "Care homes, nursing homes, hospitals, day centres and supported living services." },
+  { service: "cleaning", to: "/cleaning", body: "Landlords and letting agents, schools, construction sites, offices and care settings." },
+  { service: "security", to: "/security", body: "Companies, construction and void sites, events and residential blocks." },
+  { service: "academy", to: "/training", body: "Care providers and their teams, and people starting a career in care." },
+] as const
+
+const CHECKS = [
+  "Right to work in the UK, checked and recorded for everyone",
+  "Enhanced DBS at the level each role requires",
+  "References from previous employers",
+  "Role-specific evidence: the Care Certificate and mandatory training for care, NMC registration for nurses, an SIA licence of the right type for security, COSHH awareness for cleaning",
+  "Expiry dates tracked, so a check that lapses is caught before the next booking",
+]
+
+const STANDARDS = [
+  "Compliance is worked out from the evidence on file. Nobody can mark a worker as compliant by hand.",
+  "Our system refuses to book someone whose mandatory checks are missing or out of date, and records why.",
+  "Every worker is approved by a named person in the office before their first shift.",
+  "Personal information is handled under UK GDPR and the Data Protection Act 2018. You can ask what we hold about you at any time.",
+]
+
 export default function About() {
+  const company = useCompanyDetails()
   useSeo({
-    title: "About RitaGreen — one trusted name, four divisions",
+    title: "About us",
     description:
-      "RitaGreen Services is a London company that looks after people through every part of their day — care, training, cleaning and security under one name, one standard and one promise.",
+      "RitaGreen Services is a London company supplying healthcare staff, cleaning, security and training, with every worker's checks tracked before they are booked.",
     path: "/about",
   })
 
@@ -17,103 +46,81 @@ export default function About() {
     <>
       <PageHeader
         eyebrow="About RitaGreen"
-        title="Looking after people through every part of their day"
-        intro={`${COMPANY.legalName} grew into four businesses that share one purpose: bringing trained, checked and trusted staff to the people, buildings and events that need them — to one standard, under one name.`}
+        title="One office for healthcare staff, cleaning, security and training"
+        intro={
+          <p>
+            {company.legalName} supplies checked, trained people to care providers, property managers, sites and
+            events across London. Healthcare staffing is most of what we do, and the same office runs cleaning,
+            security and training.
+          </p>
+        }
       />
 
-      {/* Story split */}
-      <Section>
-        <FeatureSplit
-          eyebrow="Our story"
-          title="One company that does all four"
-          body={`We started in care, and we still run care every day. Over time we saw the same need across our clients — not just carers, but the training that makes good carers, the cleaning that keeps care settings safe, and the security that protects the places people live and work. So we built one company that does all four.`}
-          points={[
-            "Care homes, the NHS & supported living",
-            "Landlords & managing agents",
-            "Offices & commercial premises",
-            "Events & venues across London",
-          ]}
-          cta={{ to: "/sectors", label: "Sectors we serve" }}
-          sticker={{ value: "1 name", label: "Four divisions" }}
-          image={{ src: "/images/divisions/company.jpg", alt: "The RitaGreen team in a planning meeting" }}
-        />
-        <div className="mt-12 grid gap-5 md:grid-cols-2">
-          <div className="surface border-l-2 border-primary bg-soft-mesh p-6">
-            <h2 className="eyebrow">Our promise</h2>
-            <p className="mt-3 text-sm leading-relaxed text-foreground">{COMPANY.promise}</p>
+      <Section tone="surface" labelledBy="who-title">
+        <div className="grid items-start gap-10 md:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <SectionTitle id="who-title" title="Who we work with" />
+            <ul className="mt-6 grid gap-5">
+              {WHO.map((w) => (
+                <li key={w.to} className="border-t border-border pt-4">
+                  <Link to={w.to} className="inline-flex items-center gap-2 underline-offset-4 hover:underline">
+                    <ServiceTag service={w.service} className="text-lg" />
+                    <ArrowRight aria-hidden="true" className="size-4 text-primary" />
+                  </Link>
+                  <p className="mt-1 text-muted-foreground">{w.body}</p>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="surface border-l-2 border-primary p-6">
-            <h2 className="eyebrow">Our vision</h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              A London where a care home, a landlord or an event organiser can call one trusted name
-              for staff, training, cleaning or security, and know every worker is qualified, checked
-              and ready.
+          {/* Placeholder photograph: see src/lib/site-images.ts. Not RitaGreen staff. */}
+          <img
+            src={SITE_IMAGES.company.src}
+            alt={SITE_IMAGES.company.alt}
+            loading="lazy"
+            width={1200}
+            height={900}
+            className="aspect-[4/3] w-full rounded-lg border border-border object-cover"
+          />
+        </div>
+      </Section>
+
+      <Section labelledBy="checks-title">
+        <div className="grid gap-10 md:grid-cols-2">
+          <div>
+            <SectionTitle
+              id="checks-title"
+              title="How we check and train staff"
+              intro="Before anyone works a shift for us, our office system holds a current record of:"
+            />
+            <CheckList items={CHECKS} className="mt-6" />
+          </div>
+          <div>
+            <h2 id="training-title" className="text-[1.625rem] leading-tight md:text-[2.125rem]">
+              Our own training team
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              We run Care Certificate, mandatory and refresher training, for our own staff and for care providers.
+              Attendance and certificates are recorded, renewal dates are tracked, and anyone can check a certificate
+              we issued online.
+            </p>
+            <p className="mt-4">
+              <Link to="/training" className="font-semibold text-primary underline underline-offset-4">
+                About our training
+              </Link>
             </p>
           </div>
         </div>
       </Section>
 
-      {/* Brand pillars */}
-      <SectionAlt>
-        <SectionHeading eyebrow="What we stand on" title="Our four pillars" />
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {PILLARS.map((p, i) => (
-            <div key={p.key} className="surface p-7">
-              <span className="grid size-10 place-items-center rounded-xl bg-primary/10 font-mono text-sm font-bold text-primary">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <h3 className="mt-4 font-semibold text-foreground">{p.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{p.body}</p>
-            </div>
-          ))}
-        </div>
-      </SectionAlt>
-
-      {/* Counter band */}
-      <CounterBand stats={STATS} />
-
-      {/* Standards & assurance */}
-      <SectionAlt>
-        <SectionHeading
-          title="Standards & assurance"
-          intro="The brand promise is only as strong as the systems behind it. We keep these current and audit-ready at all times."
-        />
-        <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {ASSURANCE.map((a) => (
-            <div key={a.title} className="surface flex gap-4 p-6">
-              <BadgeCheck className="mt-0.5 size-5 shrink-0 text-primary" />
-              <div>
-                <h3 className="font-semibold text-foreground">{a.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{a.body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-8">
-          <Link
-            to="/accreditations"
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            More on our accreditations & compliance <ArrowRight className="size-3.5" />
-          </Link>
-        </div>
-      </SectionAlt>
-
-      {/* The one idea */}
-      <Section>
-        <div className="surface border-l-2 border-primary bg-soft-mesh p-8 shadow-elevate md:p-12">
-          <p className="eyebrow">The one thing to remember</p>
-          <p className="mt-4 max-w-3xl font-serif text-xl font-medium leading-relaxed text-foreground md:text-2xl">
-            {COMPANY.shortName} isn't four small businesses competing on price. It's one trusted
-            relationship, sold once and used four ways.
-          </p>
-        </div>
+      <Section tone="surface" labelledBy="standards-title">
+        <SectionTitle id="standards-title" title="Standards" intro="The rules our own system holds us to:" />
+        <CheckList items={STANDARDS} className="mt-6 max-w-[70ch]" />
+        <p className="mt-6 text-muted-foreground">
+          {company.legalName} is registered in England and Wales, company number {company.companyNo}.
+        </p>
       </Section>
 
-      <CtaBand
-        title="Work with RitaGreen"
-        body="Whether you need staff, training, cleaning or security, start with one conversation."
-      />
+      <CtaBand title="Work with RitaGreen" body="Tell us what you need, or call the office to talk it through." />
     </>
   )
 }
