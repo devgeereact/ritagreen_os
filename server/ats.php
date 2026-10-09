@@ -17,7 +17,7 @@ require __DIR__ . '/lib.php';
 $action = $_GET['action'] ?? '';
 
 // The fallback checklist, used only when a service has no active items in
-// onboarding_template_items (migration 036). The per-service lists are what
+// onboarding_template_items (migration 037). The per-service lists are what
 // normally seeds a checklist; this keeps onboarding working if somebody retires
 // every item for a service.
 const ONBOARDING_CHECKLIST = [
@@ -462,7 +462,7 @@ if ($action === 'onboard' && method() === 'POST') {
             "Onboarding started — worker #$workerId created", (int) $user['id']);
 
         // Seed the onboarding checklist if none exists yet, from the list kept for
-        // this service (migration 036). Tasks already added by hand are left as
+        // this service (migration 037). Tasks already added by hand are left as
         // they are: an existing checklist is somebody's work in progress.
         $existing = $conn->query('SELECT COUNT(*) FROM onboarding_tasks WHERE applicant_id = ' . $id)->fetch_row()[0];
         if ((int) $existing === 0) {

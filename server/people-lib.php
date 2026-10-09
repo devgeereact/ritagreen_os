@@ -60,7 +60,7 @@ function rg_save_emergency_contacts(mysqli $conn, int $personId, array $data, in
  * progress through a course (docs/Plans 2026/01, "Out of scope").
  *
  * Written to enrolments with the person's id and no programme. The name is read
- * from people, never copied here (migration 036 made learner_name nullable for
+ * from people, never copied here (migration 037 made learner_name nullable for
  * exactly this).
  *
  * @return int the new record's id
