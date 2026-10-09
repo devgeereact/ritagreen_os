@@ -56,6 +56,8 @@ export const DESTINATIONS: Destination[] = [
   { label: "Today", path: "/app", icon: LayoutDashboard, group: "Workforce", keywords: "command centre dashboard home overview action" },
   { label: "Recruitment", path: "/app/ats", icon: ClipboardList, group: "Workforce", keywords: "ats applicants candidates hiring onboarding" },
   { label: "People", path: "/app/workers", icon: Users, group: "Workforce", keywords: "workers staff carers guards cleaners workforce profiles" },
+  // One person's page. /app/people itself redirects to the People list above.
+  { label: "Person profile", path: "/app/people", icon: Users, group: "Workforce", keywords: "person profile record checks emergency contacts" },
   { label: "Training", path: "/app/academy", icon: GraduationCap, group: "Workforce", keywords: "academy courses learners certificates programmes" },
   { label: "Compliance", path: "/app/compliance", icon: ShieldCheck, group: "Workforce", keywords: "dbs sia expiry right to work eligibility checks" },
 
