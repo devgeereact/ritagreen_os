@@ -3,25 +3,54 @@
 ## Outcome
 
 Implement the approved lean CMS launch plan (`docs/LEAN-CMS-LAUNCH-PLAN.md`, approved
-14 September 2026) against this repository, phase by phase, verifying each before the next.
+14 September 2026) **and its 2026 extension** (`docs/Plans 2026/`, approved by the owner on
+9 October 2026), section by section, verifying each before the next.
 
 The launch unit is one complete journey: application → recruitment review → evidence
 verification → onboarding → authorised approval → active worker → eligible assignment →
-ongoing compliance and expiry follow-up.
+ongoing compliance and expiry follow-up. The 2026 extension adds the rota, the staff portal,
+the green design, the rebuilt website, CMS-managed vacancies and forms, spreadsheet import and
+social profile copy.
 
 Superseded: the "verification and correctness pass" contract this file previously carried. Its
 work is done and its evidence is in `docs/CHANGELOG.md` and `docs/PRIVACY_READINESS_REPORT.md`.
 Nothing it established is discarded — the defects it fixed stay fixed, and its rule that a claim
 needs a command behind it is carried forward here.
 
+## Section board (the progress tracker)
+
+Every agent on every machine reads this table before starting and updates it when a section
+changes state. Claim a section by setting 🚧 with your branch and machine, commit and push that
+change on your section branch **before** writing code, so others can see the claim. Detail for
+each section is in `docs/Plans 2026/08-DELIVERY-AND-CONSOLIDATION.md`.
+
+Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · ⏳ waiting · ⛔ blocked
+
+| ID | Section | State | Branch / PR | Notes |
+|---|---|---|---|---|
+| S0 | Plan pack, tracker, test toolbox | 🚧 | `plans/2026-mvp` | Docs only |
+| S1 | Brand and shell (green tokens, fonts, eight-destination nav, feature switches) | ⏳ | `mvp/s01-brand-shell` | |
+| S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ⏳ | `mvp/s02-people-compliance` | Launch plan Phase 3 UI |
+| S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ⏳ | `mvp/s03-rota` | Phase 4 |
+| S4 | Staff portal (Home, Rota, Records, Me) | ⏳ | `mvp/s04-staff-portal` | Phase 4 |
+| S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
+| S6 | Website rebuild | ⏳ | `mvp/s06-website` | Can run beside S2 to S4 |
+| S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
+| S8 | Spreadsheet import | ⏳ | `mvp/s08-sheet-import` | |
+| S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | ⏳ | `mvp/s09-retirements` | Removal protocol |
+| S10 | Launch gate and docs consolidation, then remove `docs/Plans 2026/` with owner approval | ⏳ | `mvp/s10-launch-gate` | |
+
 ## Product boundary
 
-One company. Four services: Care, Cleaning, Security, Academy. One person record.
+One company, RitaGreen Services. Four services, shown publicly as Healthcare, Cleaning,
+Security and Training (internal identifiers `care`, `cleaning`, `security`, `academy` stay).
+One person record.
 
 This is a company management system. It is not a learning management system. Lessons, quizzes,
 assessments, course authoring, gradebooks, video hosting, classrooms, SCORM and learner
 progression are out of scope, and the existing AI quiz generator in `AcademyDetail.tsx` is to be
-removed. Training **records** and external certificate evidence are retained.
+removed. Training **records** and external certificate evidence are retained. Care plans and
+medication records are out of scope.
 
 Keep React, Vite, TypeScript, the existing UI components, the flat PHP endpoints and MySQL. No
 framework migration, no multi-tenancy, no microservices, no generic workflow engine, no
@@ -29,17 +58,21 @@ permissions DSL, no new state library.
 
 ## Scope
 
-- Phases 0 to 5 of the approved plan, locally, in order.
+- Phases 0 to 5 of the approved plan and sections S0 to S10, in dependency order.
 - Reuse before building: existing tables, helpers, access controls, queues and components.
 - Removal only through the plan's removal protocol, recorded per path with its verification.
 - Keep `docs/`, `CLAUDE.md` and the STATUS/PROGRESS/TRACEABILITY set accurate as code changes.
-- Commit on `lean-cms/build`.
+- One branch per section, based on `lean-cms/build`, named as in the board. Push the branch and
+  open a pull request into `lean-cms/build`. Merge it only when every check below is green.
 
 ## Outside scope
 
-- Pushing, merging to `main` (which deploys), or uploading PHP to the live host.
+- Pushing to or merging into `main` (which deploys), or uploading PHP to the live host. Merging
+  pull request #8 into `main` is the owner's release decision.
 - Applying migrations to, or reading, the production database.
+- Reading or printing `server/config.php`.
 - Real email, SMS, WhatsApp, payment or AI calls — local runs keep every integration disabled.
+- Creating, renaming or posting on any social or Google account.
 - Phase 6, the external Academy integration: it needs a confirmed provider, and there is none.
 - Deleting historical employment, financial, certificate or audit data as cleanup.
 - Dropping database tables because a feature is retired.
@@ -52,8 +85,8 @@ permissions DSL, no new state library.
 
 ## Evidence
 
-Every phase reports: what changed, which files, which acceptance scenarios were exercised, the
-commands and their results, what remains broken, and what was not tested.
+Every section reports in its pull request: what changed, which files, which acceptance scenarios
+were exercised, the commands and their results, what remains broken, and what was not tested.
 
 - `npm run typecheck`, `npm run lint -- --max-warnings 0`, `npm test`, `npm run test:php`,
   `npm run test:db`, `npm run build`, `python3 scripts/docs_sync.py --check` — all green, all
@@ -63,20 +96,24 @@ commands and their results, what remains broken, and what was not tested.
 - Browser journeys for what a person actually does.
 - `NOT TESTED` stated plainly wherever it applies.
 
+### Machines without PHP or MySQL
+
+Use Docker (see the "Docker toolbox" section of `docs/TESTING.md` once S0 lands).
+
 ## Completion
 
 The core journey works for the owner, for staff and for a worker; the negative cases are refused;
 the documentation matches the code; a release candidate and its evidence are prepared. Production
 deployment is a separate authorisation and is not part of this contract.
 
-## Phase record
+## Phase record (launch plan)
 
 | Phase | State | Evidence |
 |---|---|---|
-| 0 — reproducible local baseline | done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
-| 1 — foundation and one person record | done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
-| 2 — recruitment and communications | done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
-| 3 — verification, onboarding, activation | backend done, UI outstanding | `100_evidence_precedence`, `110_activation`; migrations 034, 035 |
-| 4 — workforce and worker portal | not started | |
-| 5 — owner visibility and launch readiness | not started | |
+| 0 — reproducible local baseline | ✅ done | `docs/TESTING.md`, `npm run test:db`, CI `database` job |
+| 1 — foundation and one person record | ✅ done | `030_service_scope`, `040_worker_conversion`, `050_identity`, `060_payroll_backfill`; migrations 031, 032 |
+| 2 — recruitment and communications | ✅ done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
+| 3 — verification, onboarding, activation | backend done, UI in S2 | `100_evidence_precedence`, `110_activation`; migrations 034, 035 |
+| 4 — workforce and worker portal | S3, S4 | |
+| 5 — owner visibility and launch readiness | S5, S10 | |
 | 6 — external Academy integration | deferred, no provider | |
