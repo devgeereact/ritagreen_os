@@ -101,6 +101,30 @@ final class RgtClient
         return $this->send('DELETE', $path, $body);
     }
 
+    /**
+     * A multipart POST with one file, as a browser form sends it.
+     *
+     * @param array<string,string> $fields
+     */
+    public function upload(string $path, string $filePath, string $mime, array $fields = []): RgtResponse
+    {
+        $headers = ['Accept: application/json'];
+        if ($this->token !== null) $headers[] = 'Authorization: Bearer ' . $this->token;
+        $ch = curl_init($this->base . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_POSTFIELDS => $fields + ['file' => new CURLFile($filePath, $mime, basename($filePath))],
+        ]);
+        $out = curl_exec($ch);
+        if ($out === false) throw new RuntimeException("upload $path failed: " . curl_error($ch));
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $json = json_decode((string) $out, true);
+        return new RgtResponse($status, [], (string) $out, json_last_error() === JSON_ERROR_NONE ? $json : null);
+    }
+
     public function send(string $method, string $path, mixed $body = null, ?string $raw = null): RgtResponse
     {
         $headers = ['Accept: application/json'];

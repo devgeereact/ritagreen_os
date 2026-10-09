@@ -293,6 +293,12 @@ Rgt::group('rota: timesheets from the clock');
 
 $worked = (int) $create($admin, ['worker_id' => $amara, 'site_id' => $oakleaf, 'starts_at' => $day(75) . ' 08:00', 'ends_at' => $day(75) . ' 16:00'])->get('id');
 $admin->post('/scheduling.php?action=publish', ['ids' => [$worked]]);
+// Clocking in opens fifteen minutes before the start (S4), so a shift weeks
+// ahead cannot be clocked in on. Move this one to now, in London wall-clock time.
+Rgt::status('not weeks early', $amaraApp->post('/field.php', ['shift_id' => $worked, 'kind' => 'clock_in']), 409);
+$nowLondon = new DateTimeImmutable('now', new DateTimeZone('Europe/London'));
+$db->query("UPDATE shifts SET starts_at = '" . $nowLondon->format('Y-m-d H:i:s') . "', ends_at = '"
+    . $nowLondon->modify('+8 hours')->format('Y-m-d H:i:s') . "' WHERE id = $worked");
 Rgt::status('she clocks in', $amaraApp->post('/field.php', ['shift_id' => $worked, 'kind' => 'clock_in']), 201);
 // Eight hours pass.
 $db->query("UPDATE shift_events SET created_at = DATE_SUB(created_at, INTERVAL 8 HOUR) WHERE shift_id = $worked AND kind = 'clock_in'");
