@@ -34,7 +34,7 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | 🚧 | `mvp/s03-rota` | Phase 4 |
 | S4 | Staff portal (Home, Rota, Records, Me) | ⏳ | `mvp/s04-staff-portal` | Phase 4 |
 | S5 | Today and Reports | ⏳ | `mvp/s05-today-reports` | Phase 5 |
-| S6 | Website rebuild | 🚧 | `mvp/s06-website` | Can run beside S2 to S4. Agent on ubuntu-dev |
+| S6 | Website rebuild | 🚧 | `mvp/s06-website`, PR #12 | In review. Agent on ubuntu-dev |
 | S7 | Careers, forms directory, CMS company details and socials | ⏳ | `mvp/s07-careers-cms` | |
 | S8 | Spreadsheet import | ⏳ | `mvp/s08-sheet-import` | |
 | S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | ⏳ | `mvp/s09-retirements` | Removal protocol |
