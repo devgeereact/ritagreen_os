@@ -193,6 +193,17 @@ behind an authorisation check; prepared statements everywhere; rate limiting; a 
 `default-src 'self'` with no third-party origin; an audit log with before and after values;
 four-eyes approval before an employment record can be deleted; every export logged.
 
+What the staff portal keeps on the phone (S4): the app shell (the precached JS, CSS,
+fonts and icons) and the token and notice flags listed in `docs/COOKIES.md`. Nothing a
+worker reads in the portal is cached: not their shifts, documents and checks, training,
+timesheets, gross pay, address, emergency contacts, availability or leave. The
+service-worker rule that kept `me.php` and `notifications.php` for 12 hours is removed
+(`vite.config.ts`), and `/m` deletes the old `worker-reads` cache when it opens. Offline,
+each tab shows "You are offline" instead of a stale copy. A gross pay statement or a
+certificate the worker chooses to download is a file they keep, by their own action. A
+worker's address and emergency contacts are edited by the worker through `me.php` and
+audited with the field names only, never the values.
+
 Open items:
 
 | Item | Evidence | Severity |

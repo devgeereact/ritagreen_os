@@ -269,7 +269,9 @@ Every call site:
 | `booking` | 8 | 600 s | `bookings.php:13` |
 | `quote` | 5 | 600 s | `quotes.php` (`action=request`, public) |
 | `ats` | 8 | 600 s | `ats.php:25` |
-| `offer` | 20 | 600 s | `offer.php:40` (POST only) |
+| `offer` | 20 | 600 s | `offer.php` (POST only) |
+| `me.report` | 10 | 600 s | `me.php?action=report`, per login |
+| `me.upload` | 20 | 3600 s | `me.php?action=upload`, per login |
 
 Nothing else is rate-limited. In particular the public `GET /offer.php`,
 `GET /certificates.php`, `payments.php?action=public_checkout`, the blog and
@@ -408,7 +410,7 @@ computed identically everywhere.
 | `invoices.php` | Invoicing | Office roles throughout, reads included |
 | `jobs.php` | Work orders | Staff to read; status allows `employee`, create `super_admin`/`admin`/`manager` |
 | `margin.php` | Pay-vs-charge reconciliation | `super_admin`/`admin`/`manager` |
-| `me.php` | Worker self-service (mobile PWA) | Auth **and** a linked `worker_id` |
+| `me.php` | Staff portal at /m (Home, Rota, Records, Me) | Auth **and** a linked `worker_id` |
 | `notifications.php` | Notification bell | Auth, any role |
 | `offer.php` | Shift offer accept/decline from an SMS link | **Public, token in the URL is the secret** |
 | `onboarding-templates.php` | The onboarding checklist for each service | `super_admin`/`admin`/`manager` throughout, reads included; a scoped account sees and edits its own service only. See §54d |
@@ -664,7 +666,7 @@ Field operations: the office live board and the worker's clock-in/panic trail.
 | POST | — | Staff for any shift; a worker **only for a shift assigned to them**; `panic_ack` office-only | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403. A shift cannot be clocked in twice, clocked out without being clocked in, or acknowledged with no open alert — each is a 409. Nothing validated the sequence, so two `clock_in` rows or a `clock_out` with no `clock_in` both corrupted the derived field status |
 
 `kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `panic_ack`, `note`,
-`task`, `signoff`. A `clock_out` flips a `scheduled` shift to `completed`. A
+`task`, `signoff`. A worker's `clock_in` is refused (409) more than 15 minutes before the shift starts, in London time. A `clock_out` flips a `scheduled` shift to `completed`. A
 `panic` raises a broadcast notification and, when mail is enabled, emails
 `MAIL_TO` with a `[PANIC]` subject.
 
@@ -931,11 +933,40 @@ row rather than the request body (`portal.php:80`).
 
 ## 29. `me.php`
 
-Worker self-service, powering the mobile PWA. Requires an authenticated user
-whose `worker_id` is set; otherwise 403 (`me.php:11`).
+The staff portal at `/m` (section S4). Requires an authenticated user whose
+`worker_id` is set; a client login, an office login and an unlinked account all
+get 403 from every action. Ownership is the login: no action takes a worker or
+person id from the request, and every id it does take (shift, offer, timesheet,
+file, availability period) is looked up together with the caller's worker id,
+so somebody else's reads as 404. Reads live in `portal-lib.php`; shared writes
+reuse `rg_offer_respond()` (`compliance-lib.php`), `rg_save_emergency_contacts()`
+(`people-lib.php`) and `rg_store_upload()` (`files-lib.php`). Proven in
+`server/tests/db/cases/180_staff_portal.php`.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
+| GET | (none) | none | `{worker, shifts, open_shifts, offers, eligible, blockers, training_due, unread}`. Shifts are published only, with the site's address, access notes and contact, `clock_in_opens_at` and `can_clock_in`. Each open shift in the worker's service carries `eligible` and `reason` from `rg_assignment_check()` screened without persisting. `blockers` is `rg_portal_blockers()` over `rg_deployment_check()`: what stops them being booked, in words with what to do |
+| POST | `accept` | `shift_id` | `{ok, warnings}`; pick up an open shift. `rg_claim_check()` first, then the atomic claim. 409 with the reason when refused |
+| POST | `offer_accept`, `offer_decline` | `id` (offer) | `{ok, result, message, warnings}`. The offer must be addressed to the caller (404 otherwise). Same function as `offer.php`: claim check, atomic claim, other offers expired, office told. Refusal is 409 with the reason |
+| POST | `report` | `{note, shift_id?}` | 201. A note of up to 400 characters to the office (broadcast notification "Problem reported"); on one of the caller's own shifts it is also a `note` on the shift's field trail. Rate-limited 10 in 10 minutes per login |
+| GET | `records` | none | `{checks, training}`. Checks are the worker's own service rules with the same chip the office profile shows (`rg_requirement_chip()`), whether a copy is waiting, the last rejection reason and `can_upload`. Training is enrolments plus legacy certifications, with a certificate file id where there is one |
+| POST | `upload` | multipart `file`, `requirement_key` | 201 `{file_id, verification_id, status: "received"}`. PDF, JPEG, PNG or WebP up to 10 MB, filed against the **person** (never the worker row, never as a contract), and the check moves to `received` for the office queue. Never verifies anything. Refused (422) for `right_to_work`, `references`, `contract` and checks outside the worker's service; 409 while a copy is already waiting. Rate-limited 20 an hour |
+| GET | `download` | `id` | The file, streamed. Only a file the caller uploaded or the certificate on one of their own training records; anything else, including documents the office filed about them, is 404 |
+| GET | `payslip` | `from`, `to` | `{worker, period, lines, totals}`, the same shape as `payroll.php?action=payslip`, for the caller's own record only (`worker_id` in the query string is ignored). The portal prints it with the GROSS PAY statement |
+| GET | `timesheets` | none | Own timesheets, newest first, with site name and the office's query note |
+| POST | `submit_timesheet` | `id`, `{break_minutes?}` | Submit a draft or answer a query; the row must be the caller's (404 otherwise) |
+| GET / POST | `availability`, `availability_remove` | `{starts_at, ends_at, note?}`, `id` | Own unavailable periods; a warning to the office, never a block |
+| GET | `profile` | none | `{person, worker, login_email}`: identity and contact details read from `people` |
+| POST | `profile` | `{phone, address_line1, address_line2, city, postcode}` | Validated by `rg_validate_contact_details()`; written to `people`. Email and name are the office's to change. A person keyed by phone is re-keyed (409 if the number belongs to another record). `workers.phone` is kept in step because rota texts read it. Audited with field names only |
+| POST | `emergency` | the six `emergency_contact*` fields | `rg_save_emergency_contacts()` on the caller's own person, audited `via: portal` |
+
+Leave goes to `leave.php`, whose worker branches pin the person to the login.
+Clock-in, clock-out, check-in and panic go through `field.php`; a worker's
+`clock_in` is refused (409, saying when it opens) earlier than 15 minutes before
+the shift starts in London time (`rg_clock_in_open()`). Clocking out makes the
+draft timesheet (`rg_timesheet_from_clock()`).
+
+---|---|---|---|
 | GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only. Scoped by the token — `worker_id` in the query string is ignored, verified. Shown in the worker app as "My hours this month"; it returned this all along and nothing called it |
 | POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. Runs `rg_claim_check()` first — the deployment gate and the clash check — so a worker with a lapsed credential, or one already booked over that window, is refused with the reason. Division was the only test. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
 | GET | — | — | `{worker, compliance, shifts, open_shifts}`; published shifts only (never a draft), with the site's address, access notes and contact |
@@ -1621,7 +1652,7 @@ stays stable and comparable.
 | `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff **and** the `compliance` zone to read; office to write. See §54a |
 | `verifications.php` | The generalised verification lifecycle for every other credential | Staff **and** the `compliance` zone to read; office to write |
 | `employment-contracts.php` | Employment contract evidence: draft, agreed version, sent, accepted, signed copy, review, supersede | Staff **and** the `compliance` zone to read; office to write; the person's service scope. See §54d |
-| `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own; staff see all |
+| `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own (status always `requested`; `paid_pence`, `in_lieu` and `carried_over` ignored on a worker request since S4); staff see all |
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
 | `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
 | `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
@@ -1816,7 +1847,7 @@ Statuses still change through `bookings.php?action=status` and
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `timesheets` | — | `{timesheets}`, the worker's own 60 most recent, with `status`, `source` and the office's `decision_note` |
+| GET | `timesheets` | none | `{timesheets}`, the worker's own 60 most recent, with `status`, `source` and the office's `decision_note` |
 | POST | `submit_timesheet` | `id`; body `{break_minutes?}` | `{ok, status: "pending"}`. Only the worker's own entry, and only from `draft` or `queried` (409 otherwise). Audited with before and after |
 | GET | `availability` | — | `{unavailable}`: the worker's own marked periods still to come |
 | POST | `availability` | body `{starts_at, ends_at, note?}` | `{ok, id}` 201; up to three months at a time |

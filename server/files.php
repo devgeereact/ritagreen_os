@@ -11,6 +11,7 @@
 // people's records in the same place, and being allowed to open it is not
 // permission to open everything in it.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/files-lib.php';
 
 // Pull readable text out of an OOXML file (docx/xlsx) by reading one XML entry
 // from the zip and stripping tags. Paragraph/cell boundaries become newlines.
@@ -66,19 +67,8 @@ $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin', 'manager', 'editor');
 $action = $_GET['action'] ?? '';
 
-const UPLOAD_DIR = __DIR__ . '/uploads';
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_MIME = [
-    'application/pdf' => 'pdf',
-    'image/jpeg' => 'jpg',
-    'image/png' => 'png',
-    'image/webp' => 'webp',
-    'text/plain' => 'txt',
-    'text/csv' => 'csv',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
-    'application/msword' => 'doc',
-];
+// UPLOAD_DIR, MAX_BYTES and ALLOWED_MIME live in files-lib.php, shared with the
+// worker portal's own uploads (me.php).
 
 if ($action === 'download' && method() === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
@@ -89,15 +79,7 @@ if ($action === 'download' && method() === 'GET') {
     $f = $stmt->get_result()->fetch_assoc();
     if (!$f) fail('File not found.', 404);
     if (!rg_file_readable($f, $user)) fail('You do not have access to this.', 403);
-    $path = UPLOAD_DIR . '/' . $f['stored_name'];
-    if (!is_file($path)) fail('File missing on disk.', 404);
-
-    // Override the JSON content-type set by lib.php and stream the file.
-    header('Content-Type: ' . $f['mime']);
-    header('Content-Disposition: attachment; filename="' . rawurlencode($f['original_name']) . '"');
-    header('Content-Length: ' . filesize($path));
-    readfile($path);
-    exit;
+    rg_stream_file($f);
 }
 
 // Extract plain text from a stored document so the browser can summarise it via
@@ -186,18 +168,7 @@ if ($action === 'delete' && method() === 'POST') {
 // Upload (multipart/form-data).
 if (method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager', 'editor');
-    if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-        fail('No file was uploaded, or the upload failed.');
-    }
-    $file = $_FILES['file'];
-    if ($file['size'] > MAX_BYTES) fail('Files must be 10 MB or smaller.');
-
-    // Detect MIME from contents, not the client-supplied type.
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($file['tmp_name']);
-    if (!isset(ALLOWED_MIME[$mime])) fail('That file type is not allowed.');
-    $ext = ALLOWED_MIME[$mime];
-
+    if (!isset($_FILES['file'])) fail('No file was uploaded, or the upload failed.');
     $category = trim((string) ($_POST['category'] ?? 'other'));
     if (!in_array($category, ['contract', 'certificate', 'policy', 'rams', 'id', 'other'], true)) $category = 'other';
     $clientId = isset($_POST['client_id']) && $_POST['client_id'] !== '' ? (int) $_POST['client_id'] : null;
@@ -225,14 +196,11 @@ if (method() === 'POST') {
         require_person_scope($conn, $user, $personId);
     }
 
-    if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-    $stored = bin2hex(random_bytes(16)) . '.' . $ext;
-    if (!move_uploaded_file($file['tmp_name'], UPLOAD_DIR . '/' . $stored)) {
-        fail('Could not save the file.', 500);
-    }
-
-    $original = mb_substr((string) $file['name'], 0, 255);
-    $size = (int) $file['size'];
+    $up = rg_store_upload($_FILES['file']);
+    $stored = $up['stored'];
+    $original = $up['original'];
+    $mime = $up['mime'];
+    $size = $up['size'];
     $uid = (int) $user['id'];
     $stmt = $conn->prepare(
         'INSERT INTO files (stored_name, original_name, mime, size_bytes, category, client_id, worker_id, person_id, uploaded_by)

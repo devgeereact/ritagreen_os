@@ -629,6 +629,100 @@ function rg_claim_check(mysqli $conn, int $workerId, int $shiftId): array
 }
 
 /**
+ * A worker's answer to a shift offer, from a text link or from the portal.
+ *
+ * One function for both, because they are the same decision: offer.php used to
+ * hold this inline, and the portal (S4) needed exactly the same steps -- the
+ * claim check before the claim, the atomic claim, the other offers expired, the
+ * office told. Two copies would have been two chances for one path to skip the
+ * deployment gate, which is how every earlier gap on these paths started.
+ *
+ * $offer needs offer_id, offer_status, expires_at, worker_id, worker (name),
+ * shift_id and title. The caller has already proved the offer is this worker's:
+ * the token in the link, or the logged-in worker's id in the portal.
+ *
+ * @return array{result:string,message:string,code:int,warnings:list<array{code:string,reason:string}>}
+ */
+function rg_offer_respond(mysqli $conn, array $offer, string $act, ?int $actorUserId = null): array
+{
+    $offerId = (int) $offer['offer_id'];
+    $shiftId = (int) $offer['shift_id'];
+    $workerId = (int) $offer['worker_id'];
+    $out = static fn(string $result, string $message, int $code = 200, array $warnings = []): array =>
+        ['result' => $result, 'message' => $message, 'code' => $code, 'warnings' => $warnings];
+
+    // The offer stops working when the shift it is for starts. Without this a
+    // text from three months ago still resolved, which is a bearer token with no
+    // lifetime.
+    if ($offer['expires_at'] !== null && strtotime((string) $offer['expires_at']) <= time()) {
+        return $out('closed', 'This offer has expired.', 410);
+    }
+    if ($offer['offer_status'] !== 'sent') {
+        return $out('closed', 'This offer has already been responded to.');
+    }
+
+    if ($act === 'decline') {
+        $stmt = $conn->prepare('UPDATE shift_offers SET status = "declined", responded_at = NOW() WHERE id = ? AND status = "sent"');
+        $stmt->bind_param('i', $offerId);
+        $stmt->execute();
+        audit($conn, $actorUserId, 'shift.offer_declined', $offer['worker'] . ' declined the offer.', 'shift', $shiftId);
+        return $out('declined', "Thanks, we'll offer it to someone else.");
+    }
+
+    if ($act !== 'accept') fail('Unknown action.');
+
+    // The deployment gate, before the claim. A broadcast goes to workers who
+    // were eligible when it was sent, and the offer stays live afterwards, so a
+    // worker whose DBS lapsed in between, or who has since taken an overlapping
+    // shift, is refused here exactly as the office screen would refuse them.
+    $claim = rg_claim_check($conn, $workerId, $shiftId);
+    if (!$claim['ok']) {
+        $stmt = $conn->prepare('UPDATE shift_offers SET status = "expired", responded_at = NOW() WHERE id = ?');
+        $stmt->bind_param('i', $offerId);
+        $stmt->execute();
+        audit($conn, $actorUserId, 'shift.blocked', "offer accept, worker #$workerId: " . $claim['reason']);
+        notify(
+            $conn, null, 'An offer could not be accepted',
+            $offer['worker'] . ' tried to accept "' . $offer['title'] . '": ' . $claim['reason'],
+            'shift', '/app/scheduling'
+        );
+        // Addressed to the worker reading it on their phone, so it says what to
+        // do rather than only what is wrong.
+        return $out('blocked', rtrim($claim['reason'], '.') . '. Please contact the office.', 409);
+    }
+
+    // Atomic claim: only succeeds if the shift is still open.
+    $stmt = $conn->prepare(
+        'UPDATE shifts SET worker_id = ?, status = "scheduled"
+          WHERE id = ? AND status = "open" AND is_draft = 0 AND deleted_at IS NULL'
+    );
+    $stmt->bind_param('ii', $workerId, $shiftId);
+    $stmt->execute();
+    if ($conn->affected_rows !== 1) {
+        // Someone else got there first. A 200 with result "filled", as the text
+        // link has always answered: the request was fine, the shift is gone.
+        $stmt = $conn->prepare('UPDATE shift_offers SET status = "expired", responded_at = NOW() WHERE id = ?');
+        $stmt->bind_param('i', $offerId);
+        $stmt->execute();
+        return $out('filled', 'Sorry, this shift was just filled by someone else.');
+    }
+
+    $stmt = $conn->prepare('UPDATE shift_offers SET status = "accepted", responded_at = NOW() WHERE id = ?');
+    $stmt->bind_param('i', $offerId);
+    $stmt->execute();
+    // Expire the other outstanding offers for this shift.
+    $stmt = $conn->prepare('UPDATE shift_offers SET status = "expired" WHERE shift_id = ? AND status = "sent"');
+    $stmt->bind_param('i', $shiftId);
+    $stmt->execute();
+    // Warnings (a short rest gap, a period they marked unavailable) do not stop a
+    // worker choosing a shift; the office is told.
+    $warn = $claim['warnings'] ? ' Note: ' . implode(' ', array_column($claim['warnings'], 'reason')) : '';
+    notify($conn, null, 'Open shift filled', $offer['worker'] . ' accepted "' . $offer['title'] . '".' . $warn, 'shift', '/app/scheduling');
+    audit($conn, $actorUserId, 'shift.accepted', $offer['worker'] . ' accepted the offer.' . $warn, 'shift', $shiftId);
+    return $out('accepted', "You're booked in. Thank you!", 200, $claim['warnings']);
+}
+
+/**
  * Recalculate one worker's derived status, now.
  *
  * rg_derive_worker_status() was called from exactly one place: the nightly

@@ -293,6 +293,12 @@ Rgt::group('rota: timesheets from the clock');
 
 $worked = (int) $create($admin, ['worker_id' => $amara, 'site_id' => $oakleaf, 'starts_at' => $day(75) . ' 08:00', 'ends_at' => $day(75) . ' 16:00'])->get('id');
 $admin->post('/scheduling.php?action=publish', ['ids' => [$worked]]);
+// Clocking in opens fifteen minutes before the start (S4), so a shift weeks
+// ahead cannot be clocked in on. Move this one to now, in London wall-clock time.
+Rgt::status('not weeks early', $amaraApp->post('/field.php', ['shift_id' => $worked, 'kind' => 'clock_in']), 409);
+$nowLondon = new DateTimeImmutable('now', new DateTimeZone('Europe/London'));
+$db->query("UPDATE shifts SET starts_at = '" . $nowLondon->format('Y-m-d H:i:s') . "', ends_at = '"
+    . $nowLondon->modify('+8 hours')->format('Y-m-d H:i:s') . "' WHERE id = $worked");
 Rgt::status('she clocks in', $amaraApp->post('/field.php', ['shift_id' => $worked, 'kind' => 'clock_in']), 201);
 // Eight hours pass.
 $db->query("UPDATE shift_events SET created_at = DATE_SUB(created_at, INTERVAL 8 HOUR) WHERE shift_id = $worked AND kind = 'clock_in'");
@@ -322,8 +328,11 @@ Rgt::same('and sees the reason', $mine['decision_note'] ?? null, 'Did you take a
 Rgt::status('she answers by submitting again', $amaraApp->post("/me.php?action=submit_timesheet&id=$tsId", ['break_minutes' => 45]), 200);
 
 Rgt::status('a correction needs a reason', $admin->post("/timesheets.php?action=correct&id=$tsId", ['end_time' => '15:30']), 400);
+// The clock times are now minus eight hours, so after about 22:45 London time a
+// lone end of 15:30 left less than the 45-minute break and the correction was
+// refused. The start is set too, so the case does not depend on the hour it runs.
 Rgt::status('the office corrects it', $admin->post("/timesheets.php?action=correct&id=$tsId",
-    ['end_time' => '15:30', 'reason' => 'Left early, agreed with the home']), 200);
+    ['start_time' => '07:30', 'end_time' => '15:30', 'reason' => 'Left early, agreed with the home']), 200);
 $detail = $admin->get("/timesheets.php?id=$tsId");
 $corr = array_values(array_filter($detail->get('history', []), static fn($h) => $h['action'] === 'timesheet.correct'))[0] ?? [];
 Rgt::same('history keeps the value before', $corr['after']['end_time'] ?? null, '15:30');

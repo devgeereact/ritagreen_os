@@ -96,6 +96,10 @@ const SheetImport = lazy(() => import("@/pages/app/SheetImport"))
 const Reports = lazy(() => import("@/pages/app/Reports"))
 const ClientPortal = lazy(() => import("@/pages/portal/ClientPortal"))
 const WorkerApp = lazy(() => import("@/pages/worker/WorkerApp"))
+const PortalHome = lazy(() => import("@/pages/worker/PortalHome"))
+const PortalRota = lazy(() => import("@/pages/worker/PortalRota"))
+const PortalRecords = lazy(() => import("@/pages/worker/PortalRecords"))
+const PortalMe = lazy(() => import("@/pages/worker/PortalMe"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
@@ -187,7 +191,17 @@ export const router = createBrowserRouter([
     path: "/m",
     element: <RequireAuth />,
     errorElement: <ErrorPage />,
-    children: [{ index: true, element: page(<WorkerApp />) }],
+    children: [
+      {
+        element: page(<WorkerApp />),
+        children: [
+          { index: true, element: page(<PortalHome />) },
+          { path: "rota", element: page(<PortalRota />) },
+          { path: "records", element: page(<PortalRecords />) },
+          { path: "me", element: page(<PortalMe />) },
+        ],
+      },
+    ],
   },
 
   // 📊 INTERNAL CMS (behind login)

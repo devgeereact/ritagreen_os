@@ -1549,6 +1549,52 @@ check('a correction never touches approved hours', rg_timesheet_can('correct', '
 check('approve stays permissive', rg_timesheet_can('approve', 'rejected'), true);
 
 // ---------------------------------------------------------------------------
+group('staff portal: clocking in, uploads, blockers, contact details');
+
+// 08:00 BST on 1 July 2026 is 07:00 UTC.
+$start = '2026-07-01 08:00:00';
+check('clock-in opens fifteen minutes before, in London time', rg_clock_in_opens_at($start), '2026-07-01 07:45:00');
+check('closed at 07:44 London', rg_clock_in_open($start, strtotime('2026-07-01 06:44:00 UTC')), false);
+check('open at 07:45 London', rg_clock_in_open($start, strtotime('2026-07-01 06:45:00 UTC')), true);
+check('still open after the start: a late arrival is recorded', rg_clock_in_open($start, strtotime('2026-07-01 09:00:00 UTC')), true);
+check('winter is GMT', rg_clock_in_open('2026-12-01 08:00:00', strtotime('2026-12-01 07:45:00 UTC')), true);
+check('and one minute earlier is closed', rg_clock_in_open('2026-12-01 08:00:00', strtotime('2026-12-01 07:44:00 UTC')), false);
+
+check('a DBS certificate is filed as a certificate', rg_portal_upload_category('dbs'), 'certificate');
+check('identity is filed as id', rg_portal_upload_category('identity'), 'id');
+check('right to work stays with its own check', rg_portal_upload_category('right_to_work'), null);
+check('references come from referees', rg_portal_upload_category('references'), null);
+check('a worker can never file a contract', rg_portal_upload_category('contract'), null);
+check('a key that is not a key is refused', rg_portal_upload_category('../etc'), null);
+
+check('nothing blocks an eligible worker', rg_portal_blockers(['eligible' => true]), []);
+$b = rg_portal_blockers(['eligible' => false, 'blocked_by' => 'employment', 'reason' => 'This worker is suspended.']);
+check('employment blocks are said to the worker', $b[0]['title'], 'Your account is suspended.');
+check('with somebody to contact', $b[0]['todo'], 'Please contact the office.');
+$gate = ['eligible' => false, 'blocked_by' => 'evidence', 'reason' => 'x', 'blocking' => [
+    ['key' => 'dbs', 'label' => 'Enhanced DBS', 'state' => 'expired'],
+    ['key' => 'sia_licence', 'label' => 'SIA licence', 'state' => 'missing'],
+    ['key' => 'references', 'label' => 'References', 'state' => 'missing'],
+]];
+$b = rg_portal_blockers($gate, ['sia_licence' => 'received']);
+check('an expired check says so', $b[0]['title'], 'Enhanced DBS has expired');
+check('and asks for a new copy', str_contains($b[0]['todo'], 'Upload a current copy'), true);
+check('one already sent says the office is checking it', str_contains($b[1]['todo'], 'office is checking'), true);
+check('one the worker cannot send says to contact the office', $b[2]['todo'], 'Please contact the office about this.');
+$b = rg_portal_blockers(['eligible' => false, 'blocked_by' => 'evidence', 'blocking' => [
+    ['key' => 'dbs', 'label' => 'DBS check', 'state' => 'unverified']]]);
+check('unconfirmed with nothing sent asks for a copy, not patience', str_contains($b[0]['todo'], 'Upload a current copy'), true);
+
+$c = rg_validate_contact_details(['phone' => '07700 900123', 'postcode' => 'se13 6aa', 'city' => 'London']);
+check('a good contact form passes', $c['ok'], true);
+check('the postcode is written as Royal Mail writes it', $c['values']['postcode'], 'SE13 6AA');
+check('a blank line clears a field', $c['values']['address_line2'], null);
+check('the phone cannot be cleared', rg_validate_contact_details(['phone' => ''])['ok'], false);
+check('a number nobody can ring is refused', rg_validate_contact_details(['phone' => '123'])['ok'], false);
+check('a postcode that is not one is refused', rg_validate_contact_details(['phone' => '07700 900123', 'postcode' => 'nowhere'])['ok'], false);
+check('email is not a field a worker changes here', array_key_exists('email', rg_validate_contact_details(['phone' => '07700 900123', 'email' => 'x@y.z'])['values']), false);
+
+// ---------------------------------------------------------------------------
 group('spreadsheet import: CSV parsing');
 
 $csv = "\xEF\xBB\xBFTimestamp,Full name*,Email address,Tell us about your experience\r\n"
