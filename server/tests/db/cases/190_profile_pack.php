@@ -52,7 +52,9 @@ Rgt::denied('a security-scoped manager cannot build one for a care worker',
 $s = $scoped->get("/compliance.php?action=profile_pack&person_id=$secPerson");
 Rgt::status('but can for a security worker', $s, 200);
 Rgt::same('whose pack carries the SIA licence', $s->get('sia.licence_number'), $sec['sia_number']);
-Rgt::same('and an unverified DBS is not presented as checked', [$s->get('dbs.verified'), $s->get('dbs.checked_on')], [false, null]);
+$secDbsVerified = $one("SELECT COUNT(*) FROM verifications WHERE person_id = $secPerson AND requirement_key = 'dbs' AND status = 'verified'") > 0;
+Rgt::same('and a DBS reads as checked only when a verified record exists', $s->get('dbs.verified'), $secDbsVerified);
+if (!$secDbsVerified) Rgt::same('with no date when it is not', $s->get('dbs.checked_on'), null);
 Rgt::same('a refused request is not audited as a download',
     $one("SELECT COUNT(*) FROM audit_log WHERE action = 'compliance.profile_pack' AND entity_id = $carePerson"), $auditBefore + 1);
 
