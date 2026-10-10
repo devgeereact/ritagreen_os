@@ -783,18 +783,19 @@
       "milestone": 9,
       "items": [
         {
-          "name": "Command centre dashboard",
+          "name": "Today page (S5, F19)",
           "status": "done",
-          "note": "filterable by division"
+          "note": "src/pages/app/Today.tsx at /app replaces the Command Centre: \"Today, <weekday date>\", tiles for unfilled shifts, checks to review, evidence expiring in 30 days and approvals waiting (left out when the account may not see them), today's shifts with state chips linking to the rota (office), and Needs action from action-centre.php with named people linking to their profiles. No charts, no money. Checked in a browser at 1280 and 375 as admin and as a security-scoped manager"
         },
         {
           "name": "Analytics and margin reconciliation",
-          "status": "done"
+          "status": "done",
+          "note": "Analytics and Insights routes redirect to /app/reports since S5; the files stay until S9 removes them. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)"
         },
         {
           "name": "Regulatory packs",
           "status": "done",
-          "note": "cqc_pack, sia_acs, coshh, skills_for_care"
+          "note": "cqc_pack, sia_acs, coshh, skills_for_care. S5: now take the compliance zone and the service scope"
         },
         {
           "name": "CSV and PDF export",
@@ -803,22 +804,32 @@
         {
           "name": "Action Centre",
           "status": "done",
-          "note": "server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed"
+          "note": "server/action-centre.php. Derived, grouped by urgency. S5: every group obeys the guard of the endpoint it links to (rg_action_centre_access() in pure.php) and a scoped account counts its own service only, by service column or by person (rg_person_in_scope); email and intake counts are for unscoped office accounts only. db case 200_today"
         },
         {
           "name": "Staff workload view",
           "status": "done",
-          "note": "?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible"
+          "note": "Reports, Staff workload (reports.php?report=workload): candidates recruited for, open and overdue onboarding tasks per owner, and tasks with no owner, in the account's scope. system-health.php?action=workload remains"
         },
         {
           "name": "Export logging with user and purpose",
           "status": "done",
-          "note": "export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened"
+          "note": "export_log. S5 report exports are built on the server (reports.php?action=export) from declared columns only and logged in the same request, with purpose, row count, scope and whether the rows name people; regulator packs log through governance.php?action=log_export"
         },
         {
           "name": "Fix the open-shifts dashboard tile",
           "status": "done",
           "note": "Fixed. Now counts shifts with status='open', respecting the division filter"
+        },
+        {
+          "name": "Reports, one page (S5, F20)",
+          "status": "done",
+          "note": "reports.php run/export/list: recruitment pipeline by stage and service, active and blocked workers with the reason (compliance zone), evidence expiring in 30/60/90 days (compliance zone), unfilled shifts by week and service, approved hours by week (payroll zone), staff workload. Totals over the whole filtered dataset; the service filter narrows a scope and never widens it. db case 210_reports"
+        },
+        {
+          "name": "Worker profile pack PDF for clients (S5, F21)",
+          "status": "done",
+          "note": "compliance.php?action=profile_pack plus buildProfilePackPdf() in src/lib/pdf.ts, from the person profile: initials (no photo held), name, roles, services, training with dates, verified DBS date and recorded level (rg_dbs_level), right to work yes/no and date, SIA for security. No address, DOB, NI, contact details or right-to-work document numbers. Compliance zone and person scope; every download audited. db case 220_profile_pack"
         }
       ]
     },
@@ -872,7 +883,7 @@
         {
           "name": "System health dashboard",
           "status": "done",
-          "note": "server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups"
+          "note": "server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 043: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 230_system_health"
         },
         {
           "name": "Reconcile part-paid Direct Debit collections",

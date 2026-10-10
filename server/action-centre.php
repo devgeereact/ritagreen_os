@@ -1,8 +1,7 @@
 <?php
-// The Action Centre.
+// The Action Centre: what needs doing now. The Today page is built on it.
 //
-//   GET /action-centre.php            everything needing attention, grouped
-//   GET /action-centre.php?mine=1     only what is assigned to, or about, me
+//   GET /action-centre.php   -> { tiles, items, counts, total, all_clear, scope, generated_at }
 //
 // Answers one question: what needs attention today? The office should not have
 // to visit fifteen screens to find out, and an owner should not have to know
@@ -11,12 +10,39 @@
 // Everything here is DERIVED. There is no "action" table to fall out of step
 // with reality -- each item is a live query against the records that already
 // exist, so an item cannot linger after the thing it describes is fixed.
+//
+// Every count obeys the same boundaries as the screen it links to (launch plan
+// Phase 5: "Do not expose the existing Action Centre until its aggregate queries
+// obey those boundaries"). It did not: every count was over the whole company
+// for every member of staff, so a manager confined to security was told how many
+// care credentials had expired and who in care could not be deployed, and an
+// editor with no compliance zone read the same. Two rules now apply throughout:
+//
+//   - which groups an account sees is rg_action_centre_access() in pure.php,
+//     mirroring the guard on the endpoint each group links to;
+//   - a scoped account's counts are filtered by service in the query (records
+//     with a service column) or by rg_person_in_scope() (records about a person),
+//     and a record with no service is out of scope, as everywhere else.
+//
+// Counts are over the whole filtered dataset. Names are only ever listed for
+// person-based items, at most five, as links to the profile.
 require __DIR__ . '/lib.php';
 require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 require_staff($user);
 if (method() !== 'GET') fail('Method not allowed.', 405);
+
+$scope = service_scope($user);
+$can = rg_action_centre_access(
+    (string) $user['role'],
+    $scope,
+    [
+        'compliance' => can_view_zone($conn, $user, 'compliance'),
+        'payroll' => can_view_zone($conn, $user, 'payroll'),
+    ],
+    ['finance' => feature_enabled($conn, 'finance')]
+);
 
 // Urgency, not category. The office needs to know what to do first, and a list
 // sorted by which module a problem belongs to answers a question nobody asked.
@@ -25,156 +51,315 @@ const TODAY  = 'today';    // work waiting on a person
 const SOON   = 'soon';     // will become urgent if ignored
 
 $items = [];
-$add = static function (string $urgency, string $kind, string $title, string $detail, ?string $link = null, ?int $count = null) use (&$items): void {
+/**
+ * @param list<array{id:int,name:string}> $people
+ */
+$add = static function (
+    string $urgency, string $kind, string $title, string $detail, ?string $link, int $count,
+    string $action = 'Open', array $people = []
+) use (&$items): void {
     $items[] = [
-        'urgency' => $urgency, 'kind' => $kind, 'title' => $title,
-        'detail' => $detail, 'link' => $link, 'count' => $count,
+        'urgency' => $urgency, 'kind' => $kind, 'title' => $title, 'detail' => $detail,
+        'link' => $link, 'count' => $count, 'action' => $action, 'people' => $people,
     ];
 };
 
-$scalar = static function (mysqli $conn, string $sql): int {
-    $res = $conn->query($sql);
-    return $res ? (int) $res->fetch_row()[0] : 0;
+/**
+ * A count, with the service filter appended for a scoped account.
+ *
+ * $serviceColumn names the column that holds the record's service. For an
+ * unscoped account nothing is added; for a scoped one `AND col = ?` is, so a
+ * record whose service is NULL is excluded, matching rg_in_service_scope().
+ */
+$count = static function (string $sql, ?string $serviceColumn = null) use ($conn, $scope): int {
+    $types = '';
+    $args = [];
+    if ($scope !== null && $serviceColumn !== null) {
+        $sql .= " AND $serviceColumn = ?";
+        $types = 's';
+        $args[] = $scope;
+    }
+    $stmt = $conn->prepare($sql);
+    if ($types !== '') $stmt->bind_param($types, ...$args);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_row();
+    return $row ? (int) $row[0] : 0;
 };
 
-// ---- Cannot work -----------------------------------------------------------
-// The most urgent thing the system knows: somebody the office believes is active
-// is not actually deployable.
-$blocked = $conn->query(
-    'SELECT p.full_name, ps.service, ps.eligibility_reason
-     FROM person_services ps
-     JOIN people p ON p.id = ps.person_id
-     WHERE ps.eligibility_status = "not_eligible" AND ps.active = 1
-     ORDER BY p.full_name LIMIT 25'
-);
-$blockedList = [];
-while ($row = $blocked->fetch_assoc()) $blockedList[] = $row;
-if ($blockedList) {
-    $add(URGENT, 'eligibility',
-        count($blockedList) . ' ' . (count($blockedList) === 1 ? 'person cannot' : 'people cannot') . ' be deployed',
-        implode('; ', array_map(
-            static fn(array $r): string => $r['full_name'] . ' (' . $r['service'] . '): ' . $r['eligibility_reason'],
-            array_slice($blockedList, 0, 5)
-        )),
-        '/app/compliance', count($blockedList));
+/**
+ * The distinct people a query returns, narrowed to this account's scope.
+ *
+ * For records about a person rather than a service (right-to-work checks,
+ * verifications, leave): in scope when any service the person holds is the
+ * account's, the same rule verifications.php and leave.php apply to their lists.
+ *
+ * The query returns one row per record (person_id, full_name); the result is
+ * the in-scope people, and in $records the number of in-scope records, which is
+ * the figure to show when one person can have several.
+ *
+ * @return list<array{id:int,name:string}>
+ */
+$people = static function (string $sql, ?int &$records = null) use ($conn, $scope): array {
+    $res = $conn->query($sql);
+    $rows = [];
+    $perPerson = [];
+    while ($r = $res->fetch_assoc()) {
+        $id = (int) $r['person_id'];
+        $rows[$id] = (string) $r['full_name'];
+        $perPerson[$id] = ($perPerson[$id] ?? 0) + 1;
+    }
+    if ($scope !== null && $rows !== []) {
+        $services = rg_people_services($conn, array_keys($rows));
+        foreach (array_keys($rows) as $id) {
+            if (!rg_person_in_scope($scope, $services[$id] ?? [])) unset($rows[$id], $perPerson[$id]);
+        }
+    }
+    $records = array_sum($perPerson);
+    $out = [];
+    foreach ($rows as $id => $name) $out[] = ['id' => $id, 'name' => $name];
+    return $out;
+};
+
+$plural = static fn(int $n, string $one, string $many): string => $n . ' ' . ($n === 1 ? $one : $many);
+$first = static fn(array $list): array => array_slice($list, 0, 5);
+/** One person: open their profile at the right tab. Several: the list screen. */
+$linkFor = static fn(array $list, string $tab, string $fallback): string =>
+    count($list) === 1 ? '/app/people/' . $list[0]['id'] . '?tab=' . $tab : $fallback;
+
+$tiles = [
+    'unfilled_shifts' => null,
+    'checks_to_review' => null,
+    'expiring_30' => null,
+    'approvals_waiting' => null,
+];
+
+// ---- Compliance -------------------------------------------------------------
+if ($can['compliance']) {
+    // The most urgent thing the system knows: somebody the office believes is
+    // active is not actually deployable.
+    $stmt = $conn->prepare(
+        'SELECT DISTINCT p.id, p.full_name
+           FROM person_services ps JOIN people p ON p.id = ps.person_id
+          WHERE ps.eligibility_status = "not_eligible" AND ps.active = 1 AND p.deleted_at IS NULL'
+        . ($scope !== null ? ' AND ps.service = ?' : '') . ' ORDER BY p.full_name'
+    );
+    if ($scope !== null) $stmt->bind_param('s', $scope);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $blocked = [];
+    while ($r = $res->fetch_assoc()) $blocked[] = ['id' => (int) $r['id'], 'name' => $r['full_name']];
+    if ($blocked) $add(URGENT, 'eligibility',
+        $plural(count($blocked), 'person cannot', 'people cannot') . ' be deployed',
+        'A required check is missing, expired or rejected. The profile says which.',
+        $linkFor($blocked, 'checks', '/app/reports?report=workforce'), count($blocked), 'See why', $first($blocked));
+
+    $expiredCerts = $count(
+        'SELECT COUNT(*) FROM certifications c JOIN workers w ON w.id = c.worker_id
+          WHERE w.deleted_at IS NULL AND c.expiry IS NOT NULL AND c.expiry < CURDATE()', 'w.division');
+    if ($expiredCerts) $add(URGENT, 'compliance', $plural($expiredCerts, 'expired credential', 'expired credentials'),
+        'Already lapsed. Anyone relying on one cannot be scheduled for work that requires it.',
+        '/app/compliance?tab=credentials', $expiredCerts, 'Review');
+
+    $siaExpired = $count('SELECT COUNT(*) FROM workers w WHERE w.deleted_at IS NULL AND w.sia_expiry IS NOT NULL AND w.sia_expiry < CURDATE()', 'w.division');
+    if ($siaExpired) $add(URGENT, 'compliance', $plural($siaExpired, 'SIA licence has', 'SIA licences have') . ' expired',
+        'Security work cannot be assigned without a valid licence.', '/app/compliance?tab=credentials', $siaExpired, 'Review');
+
+    $dbsExpired = $count('SELECT COUNT(*) FROM workers w WHERE w.deleted_at IS NULL AND w.dbs_expiry IS NOT NULL AND w.dbs_expiry < CURDATE()', 'w.division');
+    if ($dbsExpired) $add(URGENT, 'compliance', $plural($dbsExpired, 'DBS check has', 'DBS checks have') . ' expired',
+        'Care work cannot be assigned without a current check.', '/app/compliance?tab=credentials', $dbsExpired, 'Review');
+
+    // Evidence received and waiting for a reviewer. 'requested' is waiting on the
+    // person, not on the office, so it is not "to verify".
+    $toVerifyCount = 0;
+    $toVerify = $people(
+        'SELECT v.person_id, p.full_name FROM verifications v JOIN people p ON p.id = v.person_id
+          WHERE v.status IN ("received","under_review") AND p.deleted_at IS NULL ORDER BY p.full_name', $toVerifyCount);
+    if ($toVerifyCount) $add(TODAY, 'verification', $plural($toVerifyCount, 'document', 'documents') . ' to verify',
+        'Evidence has arrived and is waiting for a named person to check it.',
+        '/app/compliance?tab=queue', $toVerifyCount, 'Verify', $first($toVerify));
+
+    $rtw = $people(
+        'SELECT r.person_id, p.full_name FROM right_to_work_checks r JOIN people p ON p.id = r.person_id
+          WHERE r.verified_at IS NULL AND r.outcome <> "invalid" AND p.deleted_at IS NULL
+            AND r.id = (SELECT MAX(r2.id) FROM right_to_work_checks r2 WHERE r2.person_id = r.person_id)
+          ORDER BY p.full_name');
+    if ($rtw) $add(TODAY, 'right_to_work', $plural(count($rtw), 'right-to-work check needs', 'right-to-work checks need') . ' verifying',
+        'Recorded but not yet signed off by a named person.',
+        $linkFor($rtw, 'checks', '/app/compliance?tab=rtw'), count($rtw), 'Verify', $first($rtw));
+
+    $tiles['checks_to_review'] = ['count' => $toVerifyCount + count($rtw), 'link' => '/app/compliance?tab=queue'];
+
+    $rtwDue = $people(
+        'SELECT r.person_id, p.full_name FROM right_to_work_checks r JOIN people p ON p.id = r.person_id
+          WHERE r.recheck_due IS NOT NULL AND r.recheck_due <= DATE_ADD(CURDATE(), INTERVAL 60 DAY) AND p.deleted_at IS NULL
+            AND r.id = (SELECT MAX(r2.id) FROM right_to_work_checks r2 WHERE r2.person_id = r.person_id)
+          ORDER BY r.recheck_due');
+    if ($rtwDue) $add(SOON, 'right_to_work', $plural(count($rtwDue), 'right-to-work recheck is', 'right-to-work rechecks are') . ' due within 60 days',
+        'Arrange these before the date, not after it.', $linkFor($rtwDue, 'checks', '/app/compliance?tab=rtw'), count($rtwDue), 'Plan', $first($rtwDue));
+
+    $expiringCerts = $count(
+        'SELECT COUNT(*) FROM certifications c JOIN workers w ON w.id = c.worker_id
+          WHERE w.deleted_at IS NULL AND c.expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)', 'w.division');
+    $expiringDbs = $count(
+        'SELECT COUNT(*) FROM workers w WHERE w.deleted_at IS NULL
+            AND w.dbs_expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)', 'w.division');
+    $expiringSia = $count(
+        'SELECT COUNT(*) FROM workers w WHERE w.deleted_at IS NULL
+            AND w.sia_expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)', 'w.division');
+    $expiring = $expiringCerts + $expiringDbs + $expiringSia;
+    if ($expiring) $add(SOON, 'compliance', $plural($expiring, 'credential expires', 'credentials expire') . ' within 30 days',
+        'Still valid today. Chase now and nobody is stood down later.', '/app/reports?report=expiring', $expiring, 'Chase');
+    $tiles['expiring_30'] = ['count' => $expiring, 'link' => '/app/reports?report=expiring'];
 }
 
-// ---- Expired and expiring credentials --------------------------------------
-$expired = $scalar($conn,
-    'SELECT COUNT(*) FROM certifications c JOIN workers w ON w.id = c.worker_id
-     WHERE w.deleted_at IS NULL AND c.expiry IS NOT NULL AND c.expiry < CURDATE()');
-if ($expired) $add(URGENT, 'compliance', "$expired expired " . ($expired === 1 ? 'credential' : 'credentials'),
-    'Already lapsed. Anyone relying on one cannot be scheduled for work that requires it.', '/app/compliance', $expired);
+// ---- Recruitment -------------------------------------------------------------
+if ($can['recruitment']) {
+    $newApps = $count('SELECT COUNT(*) FROM applicants a WHERE a.deleted_at IS NULL AND a.stage = "applied"', 'a.division');
+    if ($newApps) $add(TODAY, 'recruitment', $plural($newApps, 'new applicant', 'new applicants') . ' to review',
+        'Nobody has looked at these yet.', '/app/ats', $newApps, 'Review');
 
-$expiring = $scalar($conn,
-    'SELECT COUNT(*) FROM certifications c JOIN workers w ON w.id = c.worker_id
-     WHERE w.deleted_at IS NULL AND c.expiry BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)');
-if ($expiring) $add(SOON, 'compliance', "$expiring " . ($expiring === 1 ? 'credential expires' : 'credentials expire') . ' within 30 days',
-    'Still valid today. Chase now and nobody is stood down later.', '/app/compliance', $expiring);
+    $stalled = $count(
+        'SELECT COUNT(*) FROM applicants a
+          WHERE a.deleted_at IS NULL AND a.stage IN ("screened","interview","vetting","offer")
+            AND a.updated_at < DATE_SUB(NOW(), INTERVAL 14 DAY)', 'a.division');
+    if ($stalled) $add(TODAY, 'recruitment', $plural($stalled, 'candidate has', 'candidates have') . ' not moved in two weeks',
+        'Mid-pipeline and going cold. Progress or close them.', '/app/ats', $stalled, 'Open');
+}
 
-$siaExpired = $scalar($conn,
-    'SELECT COUNT(*) FROM workers WHERE deleted_at IS NULL AND sia_expiry IS NOT NULL AND sia_expiry < CURDATE()');
-if ($siaExpired) $add(URGENT, 'compliance', "$siaExpired SIA " . ($siaExpired === 1 ? 'licence has' : 'licences have') . ' expired',
-    'Security work cannot be assigned without a valid licence.', '/app/compliance', $siaExpired);
+// ---- Rota, requests and incidents ---------------------------------------------
+if ($can['rota']) {
+    $openSoon = $count(
+        'SELECT COUNT(*) FROM shifts s
+          WHERE s.deleted_at IS NULL AND s.status = "open" AND s.starts_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)', 's.division');
+    if ($openSoon) $add(URGENT, 'scheduling', $plural($openSoon, 'unfilled shift starts', 'unfilled shifts start') . ' within 3 days',
+        'Nobody is assigned. These are the ones that become a phone call at 6am.', '/app/scheduling', $openSoon, 'Fill');
 
-$dbsExpired = $scalar($conn,
-    'SELECT COUNT(*) FROM workers WHERE deleted_at IS NULL AND dbs_expiry IS NOT NULL AND dbs_expiry < CURDATE()');
-if ($dbsExpired) $add(URGENT, 'compliance', "$dbsExpired DBS " . ($dbsExpired === 1 ? 'check has' : 'checks have') . ' expired',
-    'Care work cannot be assigned without a current check.', '/app/compliance', $dbsExpired);
+    $unfilledWeek = $count(
+        'SELECT COUNT(*) FROM shifts s
+          WHERE s.deleted_at IS NULL AND s.status = "open" AND s.starts_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)', 's.division');
+    $tiles['unfilled_shifts'] = ['count' => $unfilledWeek, 'link' => '/app/scheduling'];
 
-// ---- Right to work ---------------------------------------------------------
-$rtwUnverified = $scalar($conn,
-    'SELECT COUNT(*) FROM right_to_work_checks r
-     WHERE r.verified_at IS NULL AND r.outcome <> "invalid"
-       AND r.id = (SELECT MAX(r2.id) FROM right_to_work_checks r2 WHERE r2.person_id = r.person_id)');
-if ($rtwUnverified) $add(TODAY, 'right_to_work', "$rtwUnverified right-to-work " . ($rtwUnverified === 1 ? 'check needs' : 'checks need') . ' verifying',
-    'Recorded but not yet signed off by a named person.', '/app/compliance', $rtwUnverified);
+    $riddor = $count('SELECT COUNT(*) FROM incidents i WHERE i.deleted_at IS NULL AND i.riddor = 1 AND i.status <> "closed"', 'i.division');
+    if ($riddor) $add(URGENT, 'incidents', $plural($riddor, 'RIDDOR-flagged incident is', 'RIDDOR-flagged incidents are') . ' still open',
+        'These carry a reporting duty.', '/app/incidents', $riddor, 'Open');
 
-$rtwDue = $scalar($conn,
-    'SELECT COUNT(*) FROM right_to_work_checks
-     WHERE recheck_due IS NOT NULL AND recheck_due <= DATE_ADD(CURDATE(), INTERVAL 60 DAY)');
-if ($rtwDue) $add(SOON, 'right_to_work', "$rtwDue right-to-work " . ($rtwDue === 1 ? 'recheck is' : 'rechecks are') . ' due within 60 days',
-    'Arrange these before the date, not after it.', '/app/compliance', $rtwDue);
+    $openIncidents = $count('SELECT COUNT(*) FROM incidents i WHERE i.deleted_at IS NULL AND i.status IN ("open","investigating")', 'i.division');
+    if ($openIncidents) $add(TODAY, 'incidents', $plural($openIncidents, 'open incident', 'open incidents'),
+        'Including anything flagged RIDDOR or safeguarding.', '/app/incidents', $openIncidents, 'Open');
 
-// ---- Recruitment -----------------------------------------------------------
-$newApps = $scalar($conn, 'SELECT COUNT(*) FROM applicants WHERE deleted_at IS NULL AND stage = "applied"');
-if ($newApps) $add(TODAY, 'recruitment', "$newApps " . ($newApps === 1 ? 'application is' : 'applications are') . ' awaiting review',
-    'Nobody has looked at these yet.', '/app/ats', $newApps);
+    $leave = $people(
+        'SELECT DISTINCT l.person_id, p.full_name FROM leave_records l JOIN people p ON p.id = l.person_id
+          WHERE l.status = "requested" AND p.deleted_at IS NULL ORDER BY p.full_name');
+    if ($leave) $add(TODAY, 'leave', $plural(count($leave), 'person is', 'people are') . ' waiting on a leave decision',
+        'Approve or decline from the Employment tab of their profile.',
+        $linkFor($leave, 'employment', '/app/people/' . $leave[0]['id'] . '?tab=employment'), count($leave), 'Decide', $first($leave));
 
-$stalled = $scalar($conn,
-    'SELECT COUNT(*) FROM applicants
-     WHERE deleted_at IS NULL AND stage IN ("screened","interview","vetting","offer")
-       AND updated_at < DATE_SUB(NOW(), INTERVAL 14 DAY)');
-if ($stalled) $add(TODAY, 'recruitment', "$stalled " . ($stalled === 1 ? 'candidate has' : 'candidates have') . ' not moved in two weeks',
-    'Mid-pipeline and going cold. Progress or close them.', '/app/ats', $stalled);
+    $newEnquiries = $count('SELECT COUNT(*) FROM contact_enquiries e WHERE e.status = "new"', 'e.division');
+    if ($newEnquiries) $add(TODAY, 'enquiries', $plural($newEnquiries, 'new enquiry', 'new enquiries'),
+        'Somebody asked and has not heard back.', '/app/enquiries', $newEnquiries, 'Reply');
 
-// ---- Unfilled work ---------------------------------------------------------
-$openSoon = $scalar($conn,
-    'SELECT COUNT(*) FROM shifts
-     WHERE deleted_at IS NULL AND status = "open" AND starts_at BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 3 DAY)');
-if ($openSoon) $add(URGENT, 'scheduling', "$openSoon unfilled " . ($openSoon === 1 ? 'shift starts' : 'shifts start') . ' within 3 days',
-    'Nobody is assigned. These are the ones that become a phone call at 6am.', '/app/scheduling', $openSoon);
+    $newRequests = $count('SELECT COUNT(*) FROM service_requests r WHERE r.status = "new"', 'r.division');
+    if ($newRequests) $add(TODAY, 'requests', $plural($newRequests, 'new request', 'new requests') . ' for work',
+        'A client asked for cover and is waiting for an answer.', '/app/requests', $newRequests, 'Answer');
+}
 
-// ---- Governance and operations --------------------------------------------
-$openIncidents = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE deleted_at IS NULL AND status IN ("open","investigating")');
-if ($openIncidents) $add(TODAY, 'incidents', "$openIncidents open " . ($openIncidents === 1 ? 'incident' : 'incidents'),
-    'Including anything flagged RIDDOR or safeguarding.', '/app/incidents', $openIncidents);
+// ---- Hours ---------------------------------------------------------------------
+if ($can['payroll']) {
+    $pending = $count(
+        'SELECT COUNT(*) FROM timesheets t JOIN workers w ON w.id = t.worker_id
+          WHERE t.deleted_at IS NULL AND t.status = "pending"', 'w.division');
+    if ($pending) $add(TODAY, 'timesheets', $plural($pending, 'timesheet is', 'timesheets are') . ' waiting for approval',
+        'Submitted hours do not reach a pay run until they are approved.', '/app/timesheets', $pending, 'Approve');
 
-$riddor = $scalar($conn, 'SELECT COUNT(*) FROM incidents WHERE deleted_at IS NULL AND riddor = 1 AND status <> "closed"');
-if ($riddor) $add(URGENT, 'incidents', "$riddor RIDDOR-flagged " . ($riddor === 1 ? 'incident is' : 'incidents are') . ' still open',
-    'These carry a reporting duty.', '/app/incidents', $riddor);
+    $queried = $count(
+        'SELECT COUNT(*) FROM timesheets t JOIN workers w ON w.id = t.worker_id
+          WHERE t.deleted_at IS NULL AND t.status = "queried"', 'w.division');
+    if ($queried) $add(SOON, 'timesheets', $plural($queried, 'queried timesheet is', 'queried timesheets are') . ' waiting on the worker',
+        'Sent back with a question. Chase if it is holding up pay.', '/app/timesheets', $queried, 'Open');
+}
 
-$unapproved = $scalar($conn, 'SELECT COUNT(*) FROM timesheets WHERE deleted_at IS NULL AND status = "pending"');
-if ($unapproved) $add(TODAY, 'payroll', "$unapproved " . ($unapproved === 1 ? 'timesheet is' : 'timesheets are') . ' awaiting approval',
-    'Unapproved hours do not reach a pay run.', '/app/timesheets', $unapproved);
+// ---- Approvals -------------------------------------------------------------------
+if ($can['approvals']) {
+    // Ready to approve: onboarding finished and a reviewed contract on file, so
+    // the only thing missing is the named person. Workers still blocked are not
+    // "waiting for approval", they are waiting for something else, and the
+    // profile's next action says what.
+    $stmt = $conn->prepare(
+        'SELECT w.*, p.full_name FROM workers w JOIN people p ON p.id = w.person_id
+          WHERE w.deleted_at IS NULL AND w.approved_at IS NULL AND w.status NOT IN ("left","archived")'
+        . ($scope !== null ? ' AND w.division = ?' : '') . ' ORDER BY p.full_name'
+    );
+    if ($scope !== null) $stmt->bind_param('s', $scope);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $ready = [];
+    while ($w = $res->fetch_assoc()) {
+        if (rg_approval_readiness($conn, $w) === []) $ready[] = ['id' => (int) $w['person_id'], 'name' => $w['full_name']];
+    }
+    if ($ready) $add(TODAY, 'approval', $plural(count($ready), 'worker is', 'workers are') . ' ready for approval',
+        'Onboarding is finished and the contract is reviewed. They cannot work until somebody approves them.',
+        $linkFor($ready, 'employment', '/app/people/' . $ready[0]['id'] . '?tab=employment'), count($ready), 'Approve', $first($ready));
+    $tiles['approvals_waiting'] = ['count' => count($ready), 'link' => $ready
+        ? $linkFor($ready, 'employment', '/app/people/' . $ready[0]['id'] . '?tab=employment') : '/app/workers'];
+}
 
-$overdue = $scalar($conn,
-    'SELECT COUNT(*) FROM invoices WHERE deleted_at IS NULL AND status IN ("sent","overdue") AND due_date IS NOT NULL AND due_date < CURDATE()');
-if ($overdue) $add(TODAY, 'invoicing', "$overdue overdue " . ($overdue === 1 ? 'invoice' : 'invoices'),
-    'Past their due date and unpaid.', '/app/invoicing', $overdue);
+if ($can['governance']) {
+    $deletions = $count('SELECT COUNT(*) FROM deletion_requests d WHERE d.status = "requested"');
+    if ($deletions) $add(TODAY, 'governance', $plural($deletions, 'deletion request needs', 'deletion requests need') . ' a decision',
+        // No screen decides these yet (governance.php has the API only), so the
+        // item says so rather than linking somewhere that cannot act on it.
+        'Somebody asked for a record to be removed and a second person must decide. There is no screen for this yet; it is decided through governance.php.',
+        null, $deletions, 'Decide');
+}
 
-$newEnquiries = $scalar($conn, 'SELECT COUNT(*) FROM contact_enquiries WHERE status = "new"');
-if ($newEnquiries) $add(TODAY, 'enquiries', "$newEnquiries unanswered " . ($newEnquiries === 1 ? 'enquiry' : 'enquiries'),
-    'Somebody asked and has not heard back.', '/app/enquiries', $newEnquiries);
+// ---- Money (only while the finance area is switched on) -----------------------
+if ($can['finance']) {
+    $overdue = $count(
+        'SELECT COUNT(*) FROM invoices i
+          WHERE i.deleted_at IS NULL AND i.status IN ("sent","overdue") AND i.due_date IS NOT NULL AND i.due_date < CURDATE()', 'i.division');
+    if ($overdue) $add(TODAY, 'invoicing', $plural($overdue, 'overdue invoice', 'overdue invoices'),
+        'Past their due date and unpaid.', '/app/invoicing', $overdue, 'Chase');
+}
 
-// ---- The system itself -----------------------------------------------------
+// ---- The system itself ---------------------------------------------------------
 // If email stopped going out, that is not visible anywhere else, and the first
 // symptom is somebody saying they never heard from us.
-$failedMail = $scalar($conn, 'SELECT COUNT(*) FROM email_queue WHERE status = "failed"');
-if ($failedMail) $add(URGENT, 'system', "$failedMail " . ($failedMail === 1 ? 'email has' : 'emails have') . ' failed to send',
-    'Gave up after repeated attempts. Somebody was not told something.', '/app/settings', $failedMail);
+if ($can['system']) {
+    $failedMail = $count('SELECT COUNT(*) FROM email_queue WHERE status = "failed"');
+    if ($failedMail) $add(URGENT, 'system', $plural($failedMail, 'email has', 'emails have') . ' failed to send',
+        'Gave up after repeated attempts. Somebody was not told something.', '/app/settings?tab=health', $failedMail, 'Check');
 
-$stuckMail = $scalar($conn,
-    'SELECT COUNT(*) FROM email_queue WHERE status = "queued" AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)');
-if ($stuckMail) $add(URGENT, 'system', "$stuckMail " . ($stuckMail === 1 ? 'email has' : 'emails have') . ' been queued over 2 hours',
-    'The queue is not being drained. Check the send-queued-mail cron.', '/app/settings', $stuckMail);
+    $stuckMail = $count('SELECT COUNT(*) FROM email_queue WHERE status = "queued" AND created_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)');
+    if ($stuckMail) $add(URGENT, 'system', $plural($stuckMail, 'email has', 'emails have') . ' been queued over 2 hours',
+        'The queue is not being drained. Check the send-queued-mail cron.', '/app/settings?tab=health', $stuckMail, 'Check');
 
-// An integration that has gone quiet looks exactly like a quiet week. This is
-// the difference between noticing in a day and noticing when a candidate rings
-// up asking why nobody replied.
-$silent = $conn->query(
-    'SELECT name, TIMESTAMPDIFF(HOUR, last_success_at, NOW()) AS hours
-     FROM integrations
-     WHERE active = 1 AND secret_hash IS NOT NULL AND expect_within_hours IS NOT NULL
-       AND (last_success_at IS NULL OR TIMESTAMPDIFF(HOUR, last_success_at, NOW()) > expect_within_hours)'
-);
-$silentList = [];
-while ($row = $silent->fetch_assoc()) {
-    $silentList[] = $row['name'] . ($row['hours'] === null ? ' (nothing ever received)' : " ({$row['hours']}h ago)");
+    // An integration that has gone quiet looks exactly like a quiet week.
+    $silent = $conn->query(
+        'SELECT name, TIMESTAMPDIFF(HOUR, last_success_at, NOW()) AS hours
+           FROM integrations
+          WHERE active = 1 AND secret_hash IS NOT NULL AND expect_within_hours IS NOT NULL
+            AND (last_success_at IS NULL OR TIMESTAMPDIFF(HOUR, last_success_at, NOW()) > expect_within_hours)'
+    );
+    $silentList = [];
+    while ($row = $silent->fetch_assoc()) {
+        $silentList[] = $row['name'] . ($row['hours'] === null ? ' (nothing ever received)' : " ({$row['hours']}h ago)");
+    }
+    if ($silentList) $add(URGENT, 'system',
+        $plural(count($silentList), 'form has', 'forms have') . ' gone quiet',
+        'Nothing received within the expected window: ' . implode('; ', $silentList),
+        '/app/settings?tab=health', count($silentList), 'Check');
+
+    $failedIntake = $count('SELECT COUNT(*) FROM integration_submissions WHERE status = "failed"');
+    if ($failedIntake) $add(TODAY, 'system', $plural($failedIntake, 'form submission', 'form submissions') . ' could not be read',
+        'Somebody applied and is not in the pipeline. The answers are kept, so fixing the mapping recovers them.',
+        '/app/settings?tab=health', $failedIntake, 'Fix');
 }
-if ($silentList) $add(URGENT, 'system',
-    count($silentList) . ' ' . (count($silentList) === 1 ? 'integration has' : 'integrations have') . ' gone quiet',
-    'Nothing received within the expected window: ' . implode('; ', $silentList),
-    '/app/settings', count($silentList));
 
-$failedIntake = $scalar($conn, 'SELECT COUNT(*) FROM integration_submissions WHERE status = "failed"');
-if ($failedIntake) $add(TODAY, 'system', "$failedIntake form " . ($failedIntake === 1 ? 'submission' : 'submissions') . ' could not be mapped',
-    'Somebody applied and is not in the pipeline. The raw answers are kept, so fixing the mapping recovers them.',
-    '/app/settings', $failedIntake);
-
-$unlinked = $scalar($conn, 'SELECT COUNT(*) FROM enrolments WHERE person_id IS NULL');
-if ($unlinked) $add(SOON, 'system', "$unlinked training " . ($unlinked === 1 ? 'record is' : 'records are') . ' not linked to a person',
-    'Enrolments carry only a learner name, so these are linked by hand.', '/app/academy', $unlinked);
+if ($can['training']) {
+    $unlinked = $count('SELECT COUNT(*) FROM enrolments WHERE person_id IS NULL');
+    if ($unlinked) $add(SOON, 'training', $plural($unlinked, 'training record is', 'training records are') . ' not linked to a person',
+        'Enrolments carry only a learner name, so these are linked by hand.', '/app/academy', $unlinked, 'Link');
+}
 
 // ---- Order and return ------------------------------------------------------
 $rank = [URGENT => 0, TODAY => 1, SOON => 2];
@@ -184,10 +369,14 @@ $counts = [URGENT => 0, TODAY => 0, SOON => 0];
 foreach ($items as $item) $counts[$item['urgency']]++;
 
 json_out([
+    // A tile is null when this account may not see what it counts, so the page
+    // leaves it out rather than showing a misleading zero.
+    'tiles' => $tiles,
     'items' => $items,
     'counts' => $counts,
     'total' => count($items),
     // A quiet day is a real answer, and worth saying out loud.
     'all_clear' => $items === [],
+    'scope' => $scope,
     'generated_at' => date('Y-m-d H:i'),
 ]);

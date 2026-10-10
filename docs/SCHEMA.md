@@ -2026,3 +2026,15 @@ simultaneous applies), `response_id`, `response_at`, `outcome`
 (field names only), `applied_at`.
 
 Also a `retention_policies` row, `sheet_import_rows`, with no period (see `docs/RETENTION.md`).
+
+## Scheduled job runs: migration 043
+
+Re-runnable (`CREATE TABLE IF NOT EXISTS`). Created by the migration only, not in `schema.sql`.
+Applied locally by the database suite; **not** applied to production. (Numbered 043 so it applies after S8's 042.)
+
+**`cron_runs`**: one row per scheduled job, the latest run only. `job` `VARCHAR(64)` primary key
+(`backup`, `expiry_alerts`, `retention_sweep`, `send_queued_mail`), `last_started_at`,
+`last_finished_at` (written on shutdown whatever happened), `last_success_at` (only when the job
+reached its own success point), `last_detail` `VARCHAR(255)`, `runs` `INT`. Written by
+`rg_cron_started()` and `rg_cron_succeeded()` in `server/lib.php`, which swallow errors so a
+missing table never fails the job. Read by `system-health.php`; no row means "unknown".

@@ -1410,21 +1410,35 @@ seed a `super_admin` whose password was written in a comment in the tracked file
 
 ## 48. `reports.php`
 
-Five read-only export packs, all office roles, all GET. The client renders CSV
-or PDF from the JSON.
+Office roles (`super_admin`, `admin`, `manager`) for every action. Since S5 the page has one
+small set of reports; the older regulator packs stay for existing callers.
 
 | Action | Returns |
 |---|---|
-| `client_kpi` | Per-client revenue, outstanding, job count, last invoice and account manager, worst debt first |
-| `cqc_pack` | Every care worker's right-to-work, DBS status, verified reference count and certificate count |
-| `sia_acs` | Every security officer's licence number, SIA status and verified reference count |
-| `coshh` | Cleaning workforce compliance plus the 200 most recent cleaning incidents |
-| `skills_for_care` | Academy programmes with enrolled and completed counts |
+| `list` | `{reports: [{key, title, description, personal}], scope}`: the reports this account may open |
+| `run&report=KEY[&service=]` | `{report, title, description, columns: [{key,label}], rows, totals, service, personal, generated_at}` |
+| `export&report=KEY[&service=][&purpose=]` | `text/csv` (UTF-8 with BOM), written and logged on the server |
+| `client_kpi` | Per-client revenue, outstanding, job count, last invoice and account manager (Clients page) |
+| `cqc_pack`, `sia_acs`, `coshh` | One service's vetting records. Compliance zone and that service's scope |
+| `skills_for_care` | Academy programmes with enrolled and completed counts. Academy scope |
 
-An unrecognised action returns 400 `Unknown report.` (`reports.php:123`).
+Reports (`KEY`): `pipeline` (applicants by stage and service; open stages plus 90 days of
+outcomes), `workforce` (current workers, whether `rg_deployment_check(..., false)` lets them
+work and why not; **compliance zone**), `expiring` (DBS, SIA, certificates and right-to-work
+rechecks within 30/60/90 days or expired; **compliance zone**), `unfilled` (shifts by week and
+service, this week and the next seven), `hours` (approved hours net of breaks by week and
+service, last eight weeks; **payroll zone**), `workload` (per staff member: candidates recruited
+for, open and overdue onboarding tasks; plus tasks with no owner).
 
-**Header comment discrepancy.** `reports.php:3` documents only `client_kpi`;
-the other four packs are undocumented at the top of the file.
+- A scoped account sees its own service only. `service=` narrows and never widens: another
+  service is 403.
+- Totals are summed over every row returned; nothing is paged.
+- `export` writes only the report's declared columns (`rg_csv()`, which also neutralises
+  spreadsheet formulas) and inserts an `export_log` row first (`report.KEY`, row count,
+  `report=KEY; service=…`, purpose, whether the rows name people) plus an audit entry
+  `report.export`. A refused export writes nothing.
+
+Unknown report: 404 for `run`/`export`, 400 otherwise.
 
 ---
 
@@ -1654,8 +1668,8 @@ stays stable and comparable.
 | `employment-contracts.php` | Employment contract evidence: draft, agreed version, sent, accepted, signed copy, review, supersede | Staff **and** the `compliance` zone to read; office to write; the person's service scope. See §54d |
 | `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own (status always `requested`; `paid_pence`, `in_lieu` and `carried_over` ignored on a worker request since S4); staff see all |
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
-| `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
-| `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
+| `action-centre.php` | What needs attention today, grouped by urgency, with the Today tiles. Each group follows the guard of the screen it links to and a scoped account's service (`rg_action_centre_access()`). See §54f | Staff only |
+| `system-health.php` | Live health checks, scheduled job run times (`cron_runs`), email queue, form intake, and `?action=workload`. See §54f | `super_admin`/`admin`/`manager` with **no service scope** |
 | `forms-intake.php` | Google Forms webhook, integration health, retry. Creates the applicant through `rg_create_applicant()` (people-lib.php), shared with the spreadsheet import | **Webhook: shared secret, no bearer token.** Views are staff only |
 | `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) |
 | `features.php` | Owner feature switches. See §54c | Staff to read; owner to change |
@@ -2124,3 +2138,43 @@ The webhook's duplicate check and its insert are two statements, and `uniq_exter
 the pair safe. Two deliveries of one response — what a retrying Apps Script produces — could both
 find nothing and both insert; the second got a duplicate-key **500**, which Google would then
 retry again. The refusal is now caught and answered as the duplicate it is.
+
+---
+
+## 54f. Today, profile pack and system health (section S5)
+
+**`GET action-centre.php`**: staff. Returns `{tiles, items, counts, total, all_clear, scope,
+generated_at}`.
+
+- `tiles`: `unfilled_shifts` (open shifts in the next 7 days), `checks_to_review` (verifications
+  received or under review plus unverified right-to-work checks), `expiring_30`,
+  `approvals_waiting` (workers with no approval blockers). Each is `{count, link}` or **null**
+  when the account may not see what it counts.
+- `items[]`: `{urgency, kind, title, detail, link, count, action, people: [{id, name}] (at most
+  five, in scope)}`. Groups: compliance (compliance zone), recruitment (office and trainer), rota,
+  incidents, leave, enquiries and requests (office), timesheets pending and queried (office and
+  payroll zone), approvals (office), deletion requests (owner; no screen yet, so `link` is null),
+  overdue invoices (office, finance switch on), email, form intake and silent integrations
+  (office with no service scope), unlinked enrolments (unscoped staff who may open the Academy).
+- A scoped account counts its own service: by the record's service column, or for records about
+  a person by `rg_person_in_scope()`. A record with no service is out of scope.
+
+`dashboard.php` (no longer used by a screen) applies the same: a scoped account's `division` is
+forced to its scope, money only for the office with finance on, expiring checks only with the
+compliance zone.
+
+**`GET compliance.php?action=profile_pack&person_id=N`**: staff with the compliance zone; the
+person in scope; 409 when there is no current worker record. Returns `{person: {id, name, photo:
+null}, roles, services, training: [{course, completed_on, expires_on, status}], dbs: {verified,
+checked_on, level, renewal_due}, right_to_work: {verified, verified_on}, sia (security only) |
+null, generated_by, generated_at}`. DBS counts as checked only from a verified `dbs`
+verification; `level` is `rg_dbs_level()` of its label, null when none was recorded. No address,
+date of birth, NI number, phone, email, certificate number or right-to-work method or reference.
+Audited as `compliance.profile_pack` against the person.
+
+**`GET system-health.php`** adds `jobs[]` (`backup`, `expiry_alerts`, `retention_sweep`,
+`send_queued_mail`: `state` ok, late or unknown from `rg_cron_state()`, `last_started_at`,
+`last_success_at`, `last_detail`, `runs`, `note`), `mail_queue` (`enabled`, counts by status,
+the ten most recent failures with subject, template, attempts, error and time but **no
+recipient**) and `forms[]` (per integration: state, live, last success and failure, failed
+submissions, quiet). Refused to a service-scoped account.

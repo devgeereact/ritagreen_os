@@ -1,6 +1,5 @@
 import {
   LayoutDashboard,
-  BarChart3,
   Building2,
   Users,
   ShieldCheck,
@@ -85,9 +84,8 @@ export const DESTINATIONS: Destination[] = [
   { label: "Company details", path: "/app/company", icon: Building2, group: "Website", keywords: "phone email hours address social links instagram facebook linkedin tiktok whatsapp" },
   { label: "Content Studio", path: "/app/content-studio", icon: Sparkles, group: "Website", keywords: "ai writing social" },
 
-  { label: "Reports", path: "/app/reports", icon: FileText, group: "Reports", keywords: "cqc regulatory packs export" },
-  { label: "Analytics", path: "/app/analytics", icon: BarChart3, group: "Reports", keywords: "charts numbers trends" },
-  { label: "Insights", path: "/app/insights", icon: BarChart3, group: "Reports", keywords: "ai summary" },
+  // Analytics and Insights were folded into Reports in S5; their routes redirect here.
+  { label: "Reports", path: "/app/reports", icon: FileText, group: "Reports", keywords: "cqc regulatory packs export analytics insights pipeline hours expiring unfilled workload csv" },
 
   { label: "Settings", path: "/app/settings", icon: Settings, group: "Settings", keywords: "configuration users roles permissions features switches" },
   { label: "Inbox", path: "/app/inbox", icon: Mail, group: "Settings", keywords: "email mailbox", feature: "inbox" },

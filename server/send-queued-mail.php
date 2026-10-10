@@ -30,6 +30,8 @@ if (!$isCli) {
     }
 }
 
+rg_cron_started($conn, 'send_queued_mail');
+
 // A message that has failed this many times is not going to succeed. Stop
 // retrying and leave it visible as failed rather than churning forever.
 const MAIL_MAX_ATTEMPTS = 5;
@@ -110,6 +112,7 @@ while ($row = $res->fetch_assoc()) {
 }
 
 $summary = "sent $sent, failed $failed, skipped $skipped";
+rg_cron_succeeded($conn, 'send_queued_mail', $summary);
 if ($isCli) {
     echo "Email queue: $summary\n";
 } else {

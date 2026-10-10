@@ -7,6 +7,34 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: Today, Reports, client profile pack and system health, section S5 (2026-10-10, local, not deployed)
+
+- **The Action Centre obeys service scope and zones.** Every count was over the whole company
+  for every member of staff: a manager confined to security was told how many care checks had
+  expired and who in care could not work, and an editor with no compliance zone saw the same.
+  Groups now follow `rg_action_centre_access()` in `pure.php`; scoped counts are filtered by
+  service or by person; email and intake counts are for unscoped office accounts only.
+  `dashboard.php` is fixed the same way. db case `200_today`.
+- **Today** at `/app` replaces the Command Centre: tiles (unfilled shifts, checks to review,
+  evidence expiring in 30 days, approvals waiting), today's shifts with state chips, and Needs
+  action with the people named and a button to the place to act. No charts and no money.
+- **Reports** (`/app/reports`): pipeline, active and blocked workers with reasons, evidence
+  expiring 30/60/90, unfilled shifts by week, approved hours by week (payroll zone), staff
+  workload. Totals over the whole filtered dataset. CSV export is built on the server from
+  declared columns only and recorded in `export_log`. Analytics and Insights redirect here (S9
+  removes the files). Regulator packs now take the compliance zone and service scope. db case
+  `210_reports`.
+- **Download profile for client** on the person profile: a PDF with initials, name, role,
+  services, training with dates, DBS date and recorded level, right to work verified and when,
+  SIA for security, and nothing else. Compliance zone, audited. db case `220_profile_pack`.
+- **System health in Settings**: when each scheduled job last ran (migration 043 `cron_runs`,
+  written by the four cron scripts), shown as unknown until it reports; the email queue and
+  recent failures without recipients; per-form intake health; the restore test as an explicit
+  unknown. db case `230_system_health`.
+- Deploy: apply migration 043; upload `action-centre.php`, `dashboard.php`, `reports.php`,
+  `compliance.php`, `system-health.php`, `lib.php`, `pure.php`, `backup.php`,
+  `expiry-alerts.php`, `retention-sweep.php`, `send-queued-mail.php` before the frontend.
+
 ### Added: the staff portal at /m, section S4 (2026-10-09, local, not deployed)
 
 - **Four tabs, phone first** (`src/pages/worker/`): Home, Rota, Records, Me, with a bottom tab

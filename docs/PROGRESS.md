@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  201 done · 12 partial · 1 to do · 214 tracked
+`#######################.`  203 done · 12 partial · 1 to do · 216 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -29,7 +29,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 | TRAINING — Training records and certificates | 8 | `############` | 8 | 0 | 0 |
 | GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 18 | 3 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
-| REPORTING — Reporting and insight | 9 | `############` | 8 | 0 | 0 |
+| REPORTING — Reporting and insight | 9 | `############` | 10 | 0 | 0 |
 
 ## Detail
 
@@ -278,7 +278,7 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 - [x] Privacy documentation — _docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [x] Retention engine — _server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one_
-- [x] System health dashboard — _server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups_
+- [x] System health dashboard — _server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 043: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 230_system_health_
 - [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
 - [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
 - [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
@@ -301,13 +301,15 @@ Milestone 9 · 9 done, 0 partial, 0 to do
 
 ### REPORTING — Reporting and insight
 
-Milestone 9 · 8 done, 0 partial, 0 to do
+Milestone 9 · 10 done, 0 partial, 0 to do
 
-- [x] Action Centre — _server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed_
-- [x] Analytics and margin reconciliation
+- [x] Action Centre — _server/action-centre.php. Derived, grouped by urgency. S5: every group obeys the guard of the endpoint it links to (rg_action_centre_access() in pure.php) and a scoped account counts its own service only, by service column or by person (rg_person_in_scope); email and intake counts are for unscoped office accounts only. db case 200_today_
+- [x] Analytics and margin reconciliation — _Analytics and Insights routes redirect to /app/reports since S5; the files stay until S9 removes them. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)_
 - [x] CSV and PDF export
-- [x] Command centre dashboard — _filterable by division_
-- [x] Export logging with user and purpose — _export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened_
+- [x] Export logging with user and purpose — _export_log. S5 report exports are built on the server (reports.php?action=export) from declared columns only and logged in the same request, with purpose, row count, scope and whether the rows name people; regulator packs log through governance.php?action=log_export_
 - [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
-- [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care_
-- [x] Staff workload view — _?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible_
+- [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care. S5: now take the compliance zone and the service scope_
+- [x] Reports, one page (S5, F20) — _reports.php run/export/list: recruitment pipeline by stage and service, active and blocked workers with the reason (compliance zone), evidence expiring in 30/60/90 days (compliance zone), unfilled shifts by week and service, approved hours by week (payroll zone), staff workload. Totals over the whole filtered dataset; the service filter narrows a scope and never widens it. db case 210_reports_
+- [x] Staff workload view — _Reports, Staff workload (reports.php?report=workload): candidates recruited for, open and overdue onboarding tasks per owner, and tasks with no owner, in the account's scope. system-health.php?action=workload remains_
+- [x] Today page (S5, F19) — _src/pages/app/Today.tsx at /app replaces the Command Centre: "Today, <weekday date>", tiles for unfilled shifts, checks to review, evidence expiring in 30 days and approvals waiting (left out when the account may not see them), today's shifts with state chips linking to the rota (office), and Needs action from action-centre.php with named people linking to their profiles. No charts, no money. Checked in a browser at 1280 and 375 as admin and as a security-scoped manager_
+- [x] Worker profile pack PDF for clients (S5, F21) — _compliance.php?action=profile_pack plus buildProfilePackPdf() in src/lib/pdf.ts, from the person profile: initials (no photo held), name, roles, services, training with dates, verified DBS date and recorded level (rg_dbs_level), right to work yes/no and date, SIA for security. No address, DOB, NI, contact details or right-to-work document numbers. Compliance zone and person scope; every download audited. db case 220_profile_pack_

@@ -1822,6 +1822,57 @@ check('a scoped account cannot create in another service',
 check('but can in its own', rg_import_plan_row(['scope' => 'care'] + $base)['outcome'], 'new');
 
 // ---------------------------------------------------------------------------
+group('owner visibility: who sees which part of Today');
+
+$all = ['compliance' => true, 'payroll' => true];
+$fin = ['finance' => true];
+check('an admin sees every group',
+    array_values(array_unique(rg_action_centre_access('admin', null, $all, $fin))), [true]);
+$scopedAccess = rg_action_centre_access('manager', 'security', $all, $fin);
+check('a scoped manager sees the rota', $scopedAccess['rota'], true);
+check('but not system counts, which carry no service', $scopedAccess['system'], false);
+check('nor unlinked training records', $scopedAccess['training'], false);
+check('nor deletion decisions', $scopedAccess['governance'], false);
+$editorAccess = rg_action_centre_access('editor', null, ['compliance' => false, 'payroll' => false], $fin);
+check('an editor sees no compliance items', $editorAccess['compliance'], false);
+check('nor recruitment', $editorAccess['recruitment'], false);
+check('nor hours', $editorAccess['payroll'], false);
+check('an editor may see unlinked training records', $editorAccess['training'], true);
+check('finance needs the switch on', rg_action_centre_access('admin', null, $all, ['finance' => false])['finance'], false);
+check('payroll needs the zone', rg_action_centre_access('manager', null, ['payroll' => false], $fin)['payroll'], false);
+check('a trainer sees recruitment', rg_action_centre_access('trainer', null, [], [])['recruitment'], true);
+
+group('owner visibility: DBS level from a label');
+check('enhanced', rg_dbs_level('Enhanced DBS'), 'Enhanced');
+check('enhanced with barred list', rg_dbs_level('enhanced + barred list'), 'Enhanced with barred list');
+check('standard', rg_dbs_level('Standard'), 'Standard');
+check('basic', rg_dbs_level('basic disclosure'), 'Basic');
+check('a status word is not a level', rg_dbs_level('valid'), null);
+check('nothing is not a level', rg_dbs_level(null), null);
+
+group('owner visibility: CSV');
+check('text is quoted', rg_csv_cell('Ama'), '"Ama"');
+check('quotes are doubled', rg_csv_cell('a "b"'), '"a ""b"""');
+check('a formula is neutralised', rg_csv_cell('=HYPERLINK("x")'), '"\'=HYPERLINK(""x"")"');
+check('so is a leading at sign', rg_csv_cell('@SUM(A1)'), '"\'@SUM(A1)"');
+check('a negative number stays a number', rg_csv_cell(-3), '-3');
+check('null is empty', rg_csv_cell(null), '');
+check('only the listed columns are written',
+    rg_csv(['name' => 'Name', 'n' => 'Count'], [['name' => 'A', 'n' => 2, 'secret' => 'x']]),
+    "\"Name\",\"Count\"\r\n\"A\",2\r\n");
+
+group('owner visibility: weeks and scheduled jobs');
+check('a Thursday belongs to its Monday', rg_week_start('2026-10-08'), '2026-10-05');
+check('a Monday is its own week', rg_week_start('2026-10-05 09:00:00'), '2026-10-05');
+check('a Sunday belongs to the Monday before', rg_week_start('2026-10-11'), '2026-10-05');
+check('expiry bands', array_map('rg_expiry_band', [-1, 0, 30, 31, 60, 61, 90, 91, null]),
+    ['expired', '30', '30', '60', '60', '90', '90', null, null]);
+$cronNow = (int) strtotime('2026-10-09 12:00:00 UTC');
+check('never recorded is unknown', rg_cron_state(null, 24, $cronNow), 'unknown');
+check('a daily job that ran this morning is fine', rg_cron_state('2026-10-09 02:00:00', 24, $cronNow), 'ok');
+check('a daily job silent for two days is late', rg_cron_state('2026-10-07 02:00:00', 24, $cronNow), 'late');
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

@@ -1293,3 +1293,47 @@ function notify(mysqli $conn, ?int $userId, string $title, string $body = '', st
     $stmt->bind_param('issss', $userId, $type, $title, $body, $url);
     $stmt->execute();
 }
+
+// ----- Scheduled jobs: when each last ran (migration 043) -----
+//
+// Each cron script calls rg_cron_started() once it has passed its own key check,
+// and rg_cron_succeeded() at the point it has done its job. The finish time is
+// written on shutdown whatever happened, so a run that died part way shows a
+// finish without a success. Settings reads cron_runs through system-health.php.
+//
+// Never allowed to break the job it describes: before migration 043 is applied
+// the table does not exist, and a backup must not fail for want of a heartbeat.
+function rg_cron_started(mysqli $conn, string $job): void
+{
+    try {
+        $stmt = $conn->prepare(
+            'INSERT INTO cron_runs (job, last_started_at, runs) VALUES (?, UTC_TIMESTAMP(), 1)
+             ON DUPLICATE KEY UPDATE last_started_at = UTC_TIMESTAMP(), runs = runs + 1'
+        );
+        $stmt->bind_param('s', $job);
+        $stmt->execute();
+    } catch (Throwable $e) {
+        return;
+    }
+    register_shutdown_function(static function () use ($conn, $job): void {
+        try {
+            $stmt = $conn->prepare('UPDATE cron_runs SET last_finished_at = UTC_TIMESTAMP() WHERE job = ?');
+            $stmt->bind_param('s', $job);
+            $stmt->execute();
+        } catch (Throwable $e) {
+            // The connection may already be gone; the start time still stands.
+        }
+    });
+}
+
+function rg_cron_succeeded(mysqli $conn, string $job, string $detail = ''): void
+{
+    try {
+        $detail = mb_substr($detail, 0, 255);
+        $stmt = $conn->prepare('UPDATE cron_runs SET last_success_at = UTC_TIMESTAMP(), last_detail = ? WHERE job = ?');
+        $stmt->bind_param('ss', $detail, $job);
+        $stmt->execute();
+    } catch (Throwable $e) {
+        // As above: recording the run must never fail the run.
+    }
+}
