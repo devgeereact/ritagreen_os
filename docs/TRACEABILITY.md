@@ -247,6 +247,22 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Service scope on every row; office roles only | `sheet_imports.created_by` | `server/sheet-import.php` | `src/lib/access.ts` | `server/tests/db/cases/190_sheet_import.php`, `src/lib/__tests__/access.test.ts` |
 | A report with counts, a failures download and an import history | `sheet_imports` counts | `?action=failures`, `?action=history` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
 
+## Launch gate and follow-ups (section S10)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| A check valid only from a certificate or worker record says so, and changes no precedence | `rg_load_evidence()` `origin` in `server/compliance-lib.php` | `server/people.php` `evidence_origin` | `src/components/people/checks-tab.tsx`, `verifierLabel()` in `src/lib/people.ts` | `server/tests/db/cases/240_launch_followups.php`, `src/lib/__tests__/people.test.ts` |
+| A certificate labelled with "&" matches its requirement, and nothing looser | `certifications.type` | `rg_label_key()` in `server/pure.php` | none | `server/tests/run.php`, `server/tests/db/cases/240_launch_followups.php` |
+| The owner sets the minimum rest between shifts; the office reads it | `app_settings.rest_gap_min_hours` | `server/scheduling.php` `?action=settings` | `src/components/app/rest-gap-card.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| Deletion requests are decided by somebody other than the requester, on a screen | `deletion_requests` | `server/governance.php` `?action=deletions`, `?action=decide_deletion` | `src/components/app/data-requests-tab.tsx`, Today item in `server/action-centre.php` | `server/tests/db/cases/240_launch_followups.php` |
+| The inbox badge is quiet when no mailbox is set up | none | `server/inbox.php` `?action=unread` | `src/components/app-sidebar.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| Training forms appear on /training only after the visitor's click | `website_forms` purpose training | `server/website-forms.php` `?action=public` | `src/components/public/TrainingForms.tsx`, `src/components/public/GoogleFormEmbed.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| A backup is proved by restoring it, and the date is shown | `cron_runs` job `restore_test` | `server/restore-check.php`, `server/system-health.php` | Settings, System health | `server/tests/run.php`, `server/tests/db/cases/240_launch_followups.php`; rehearsal in `docs/runbooks/backup-and-restore.md` |
+| The core journey and its refusals work in a browser | test database | every endpoint on the path | office app, `/m`, `/careers` | `scripts/launch-journeys.mjs`; results in `docs/TESTING.md` |
+| The rota clock case passes whatever the hour or date | `timesheets` | `server/field.php` | none | `server/tests/db/cases/160_rota.php` |
+| Documents keep working links and the retired colours stay retired | `docs/` | `scripts/docs_sync.py` | none | `scripts/test_docs_sync.py` |
+| Agents cannot edit the live config, hand-edit generated progress or push to main | `.claude/settings.json` | `scripts/agent_guard.py` | none | `scripts/test_agent_guard.py` |
+
 ## Platform
 
 | Requirement | Data | Endpoint | Interface | Test |

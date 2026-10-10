@@ -47,7 +47,7 @@
   # .htaccess by hand (see server/README.md), then confirm /schema.sql is 403.
   RewriteRule ^(migrations|tests)(/|$) - [F,L]
   RewriteRule \.(sql|md)$ - [F,NC,L]
-  RewriteRule ^(migrate|seed|backfill-people|backfill-payroll|create-admin|report-activation)\.php$ - [F,NC,L]
+  RewriteRule ^(migrate|seed|backfill-people|backfill-payroll|create-admin|report-activation|restore-check)\.php$ - [F,NC,L]
 
   # The previous website's addresses (website rebuild, section S6, 2026-10).
   # Permanent redirects, so search engines move their index to the new pages and

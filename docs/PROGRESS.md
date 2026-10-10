@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  204 done · 12 partial · 1 to do · 217 tracked
+`#######################.`  214 done · 10 partial · 1 to do · 225 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,17 +17,17 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 29 | 3 | 0 |
+| PLATFORM — Engineering platform | 0 | `############` | 35 | 2 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
-| COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
+| COMPLIANCE — Compliance engine and verification | 2 | `############` | 26 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
-| OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 25 | 0 | 0 |
+| OPERATIONS — Scheduling, assignments and field operations | 4 | `############` | 26 | 0 | 0 |
 | IAM — Identity, access and permissions | 5 | `############` | 22 | 1 | 0 |
 | EMPLOYMENT — Employment records, contracts and leave | 6 | `###########.` | 11 | 2 | 0 |
 | COMMUNICATIONS — Email, SMS and notifications | 7 | `############` | 12 | 0 | 0 |
 | RECRUITMENT — Recruitment and intake | 8 | `############` | 11 | 0 | 0 |
 | TRAINING — Training records and certificates | 8 | `############` | 8 | 0 | 0 |
-| GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 18 | 3 | 1 |
+| GOVERNANCE — Audit, retention and data protection | 9 | `###########.` | 20 | 2 | 1 |
 | PWA — Progressive web app | 9 | `############` | 9 | 0 | 0 |
 | REPORTING — Reporting and insight | 9 | `############` | 10 | 0 | 0 |
 
@@ -35,20 +35,24 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 29 done, 3 partial, 0 to do
+Milestone 0 · 35 done, 2 partial, 0 to do
 
+- [x] Agent guard hooks (S10) — _.claude/settings.json runs scripts/agent_guard.py: blocks writes to server/config.php, hand edits to docs/PROGRESS.md and pushes to main; tested by scripts/test_agent_guard.py in CI. Codex has no hooks_
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
 - [x] CI quality gates — _typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block_
 - [x] Company details and social links from the CMS (S7, F24) — _Migration 039 company_settings (one row, seeded from src/lib/company.ts) and server/company.php: public read of named fields with a five-minute cache, owner-only (super_admin, admin) edit, audited with before and after. useCompanyDetails() reads it and keeps the bundled facts as the fallback. Instagram, Facebook, LinkedIn, TikTok and a WhatsApp enquiry link, each checked against its own host; X is not offered_
 - [x] Design system: company green, Source Serif 4 headlines — _src/index.css tokens and tailwind.config.ts rebuilt on #33512D with warm neutrals, status colours that are not the brand green, one 8px radius and a green-black dark mode. Source Serif 4 (500, 600) self-hosted for website headlines; Plus Jakarta Sans removed. Navy and mint retired. docs/DESIGN_SYSTEM.md rewritten. Website page designs are S6_
+- [x] Docs consistency guard: links and retired colours (S10) — _scripts/docs_sync.py --check fails on broken relative markdown links and on the retired navy and mint outside history; tested by scripts/test_docs_sync.py in CI_
 - [x] Documentation consistency enforced in CI — _scripts/docs_sync.py --check_
+- [x] Documentation pack — _S10: the 2026 plan pack folded into the permanent docs (PRD, BLUEPRINT, ROADMAP, DESIGN_SYSTEM, ARCHITECTURE, UK_GOVERNANCE, RULES, DECISIONS-2026); docs/Plans 2026/ kept until the owner approves removing it_
 - [x] ESLint baseline clean — _0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks_
 - [x] Eight-destination office navigation — _Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Notifications live in the header bell and the command palette. Content Studio, Analytics and Insights were retired in S9 and their addresses redirect_
 - [x] Exception messages withheld from callers — _Full detail goes to error_log with a reference; the caller gets the reference only, unless GK_DEBUG is on_
 - [x] Failed queries no longer pass silently — _lib.php set MYSQLI_REPORT_OFF and almost no call site checked execute(), so a failed INSERT was ignored and the endpoint reported success -- workers.php returned HTTP 200 with a complete worker object, id 0, for a row never written. Now MYSQLI_REPORT_ERROR|STRICT, set after the connection so config.php keeps its own message_
 - [x] Forms directory and embedded Google Forms (S7, F23) — _Migration 039 website_forms and server/website-forms.php. Only https://docs.google.com/forms/d/e/<id>/viewform is accepted (rg_parse_google_form(), 422 for anything else) and only the id is stored; the website builds the iframe from it (src/lib/google-forms.ts). The frame loads only after the visitor presses Load the application form from Google; Open the form in a new tab and the phone number are always shown. CSP gains frame-src https://docs.google.com only. Previous values are in the audit log and shown as history. Settings, Form intake lists forms not reviewed for 90 days and each one intake health. No sandbox attribute: submission inside a sandbox could not be tested without a real form_
 - [x] Frontend types match the server — _Person, EligibilityVerdict, RequirementState, RightToWorkCheck, AuditEntry, QueuedEmail added to src/lib/types.ts. A narrower duplicate AuditEntry was merged rather than left to drift_
+- [x] Launch journeys in a browser (S10) — _scripts/launch-journeys.mjs: 16 journey steps and 5 refusals, all PASS on a fresh local test database; docs/TESTING.md, 2026 launch journeys_
 - [x] Link-in-bio page /links (S7) — _Request staff, Arrange care, Current roles, Training, Contact, the office phone, then the social profiles and WhatsApp link from the company record. Text only, no third-party requests_
 - [x] Migration production guard is meaningful on cPanel — _Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name_
 - [x] No third-party requests from the public site — _Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin_
@@ -58,16 +62,17 @@ Milestone 0 · 29 done, 3 partial, 0 to do
 - [x] Public website rebuilt on the 2026 design (S6) — _Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids, floating cards or scroll animation. Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show. Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders_
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
+- [x] Release runbook for the 2026 build (S10) — _docs/runbooks/release-2026.md. Not run: production release is the owner's decision_
 - [x] Retirements: AI, weather, Content Studio, Analytics and Insights (S9) — _Deleted through the removal protocol, recorded per path in docs/CHANGELOG.md: server/ai.php, server/weather.php, server/analytics.php, files.php?action=extract, the header AI assistant, the weather widget, the Content Studio, Analytics and Insights pages, the Academy quiz builder and every AI button (Enquiries, Files, Comms, Academy, smoke test). Old addresses redirect; apexcharts and react-apexcharts uninstalled; OpenRouter and OpenWeather keys out of the config templates. No table dropped and no row deleted. server/tests/db/cases/231_retirements.php and a guard in server/tests/run.php that fails if a retired endpoint file comes back_
 - [x] Sitemap: static pages at build time, records live — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php_
 - [x] Spreadsheet import (S8) — _Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/190_sheet_import.php_
 - [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings_
+- [x] Training forms on /training (S10) — _website-forms.php?action=public&purpose=training; click to load, open in a new tab, phone fallback, as on role pages_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
 - [x] Vacancies and role pages from the CMS (S7, F22) — _Migration 039 vacancies and server/vacancies.php: draft, published, closed; the address is fixed once published; checks prefilled per service from plan file 01. Website, Vacancies in the office app (editor and office roles, service scope on every branch, audited). /careers lists published roles with a service filter and an empty state; /careers/:slug shows the role, its checks and one way to apply; a closed or unknown role gets a friendly page with other roles. Public reads return named public fields only. server/tests/db/cases/170_careers_cms.php_
 - [x] Website enquiries reach the right queue — _Request staff to bookings.php; cleaning quote to the new public quotes.php?action=request (a Cleaning request in the Bookings queue, not a priced quote); care, training and general to contact.php with a type. server/tests/db/cases/130_website_enquiries.php, and each form submitted in a browser against a local API_
 - [~] Automated tests — _Two dependency-free suites, both in CI: server/tests/run.php (466 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end_
-- [~] Documentation pack — _Milestone 0, in progress_
 - [~] Google Forms auto-feed set-up (S7, F25) — _docs/runbooks/google-forms-intake.md: copy-paste Apps Script (onFormSubmit, {response_id, answers}, key and X-RitaGreen-Secret from Script Properties, retries, logging), sandbox test steps and what the office sees on failure. forms-intake.php?action=set_secret lets an owner create the shared secret in Settings, shown once and stored as a hash. Partial: the script has not been run inside Google Apps Script from this environment; the payload and secret path are covered by the database tests_
 
 ### FOUNDATION — Foundation and person spine
@@ -96,7 +101,7 @@ Milestone 1 · 18 done, 1 partial, 0 to do
 
 ### COMPLIANCE — Compliance engine and verification
 
-Milestone 2 · 25 done, 2 partial, 0 to do
+Milestone 2 · 26 done, 2 partial, 0 to do
 
 - [x] Calculated eligibility verdict with reason — _rg_assess_person() in compliance-lib.php loads rules and evidence, evaluates, and records the verdict in person_services. Exposed as compliance.php?action=eligibility and eligibility_all. Verified against real data_
 - [x] Company insurance register
@@ -123,6 +128,7 @@ Milestone 2 · 25 done, 2 partial, 0 to do
 - [x] Verification is a workflow — _One shape for every credential, so 'who verified this and when' has the same answer whatever is being checked_
 - [x] Verification queue screen — _Compliance, Verification queue: everything requested, received or under review, oldest first, filtered by service and type of check, scoped to the caller's service. Upload evidence, verify with what was checked, reject with a reason. Exercised in the browser as the scoped security manager_
 - [x] Verifying records what was checked — _A method is required to sign one off. 'Checked the SIA public register' and 'saw a photocopy' are not the same assurance, and only this field can tell them apart later_
+- [x] Where a check's evidence came from is shown (S10) — _rg_load_evidence() tags each entry with its origin; the profile says 'From certificate record, not yet verified' instead of 'Verifier: Nobody yet'. Precedence unchanged. Certificate labels match with & read as and (rg_label_key())_
 - [~] Compliance status read-only in the UI — _The person profile's checks tab shows each requirement as a calculated chip (Valid, Due soon, Expired, Awaiting review, Missing) from rg_requirement_chip(); its actions add evidence or record a decision and never set a status. The Workers list still shows raw DBS/SIA fields_
 - [~] Right to work as a dated, verified check — _The record exists and the engine reads it. Enforcement of verification is staged behind migration 007 until the legacy backlog is cleared -- a one-row UPDATE and a business decision_
 
@@ -139,7 +145,7 @@ Milestone 3 · 6 done, 0 partial, 0 to do
 
 ### OPERATIONS — Scheduling, assignments and field operations
 
-Milestone 4 · 25 done, 0 partial, 0 to do
+Milestone 4 · 26 done, 0 partial, 0 to do
 
 - [x] Blocked deployments are audited — _A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt_
 - [x] Clients, sites and rate cards
@@ -149,6 +155,7 @@ Milestone 4 · 25 done, 0 partial, 0 to do
 - [x] Field events: clock in/out, check-in, panic, signature — _shift_events with lat/lng. Location is personal data about the worker (docs/PRIVACY.md) and was gated by nothing: is_staff() is true for editor, trainer and employee, so a content role could read a named colleague's coordinates to six decimal places. Coordinates now need the 'employment' zone, or the trail being the caller's own. The board also dropped a shift the moment it was clocked out, and ran one query per shift for its events; both fixed. A panic alert still cannot be acknowledged and, separately, notifies nobody -- notifications.php forces every broadcast to read. A panic alert also reached nobody: it is a broadcast, and notifications had no per-user read state, so it arrived marked read and the bell never lit (migration 025). It can be acknowledged now (migration 026) instead of latching for the day, the clock sequence is validated, and check_in -- accepted by the API and advertised in the palette since the beginning -- can finally be sent from the worker app._
 - [x] Four-eyes approval on high-risk actions — _Enforced on deletion. The requester is blocked from deciding their own request, so a single determined person cannot walk it through_
 - [x] Leave, unavailability and rest checked on every assignment path — _rg_assignment_check() in compliance-lib.php: employment and evidence (with the site), clash and approved leave block; marked unavailability and a rest gap below app_settings.rest_gap_min_hours (default 11) are warnings the office must acknowledge, audited. Used by office create, assign, edit, matching, broadcast, offers by name, offer.php and me.php. Rest is measured in Europe/London real time; tested across 29 March and 25 October 2026 in server/tests/run.php, and every path in server/tests/db/cases/160_rota.php_
+- [x] Minimum rest between shifts set in Settings (S10) — _Rota rules card in Settings, Features: owners change rest_gap_min_hours (0 to 24), the office reads it. 240_launch_followups_
 - [x] Office rota screen — _/app/scheduling is now Rota: week picker, Today, service and site filters, Add shift, Copy last week, Publish drafts; a week grid by site or by worker on desktop and a day list on phones. Each shift shows time, role, worker or Open, service and state, with conflicts written on it. The shift panel edits, assigns with the eligibility result and reasons, takes warnings acknowledgement, offers, cancels with a reason and shows history. FullCalendar removed. Checked in a browser at 1280 and 375_
 - [x] Requests: cover requests and enquiries with an owner — _server/requests.php lists both with type, owner and status; /app/requests sets the owner, closes them, and creates one or more draft shifts at a site from a cover request (bookings.php?action=confirm). /app/enquiries and /app/bookings still work_
 - [x] Rota drafts, publish and change notices — _Migration 038 adds shifts.is_draft (existing rows count as published), published_at/by and cancel_reason/at/by. Every new shift is a draft; workers, offers, the client portal and the field board never see one. Publish a week (audited), edit, reassign and cancel with a reason; after publishing the worker is told what changed in the app and by email (rg_notify_worker in server/rota-lib.php). Copy last week makes drafts and skips duplicates; templates generate drafts. History is the audit log for the shift. server/tests/db/cases/160_rota.php_
@@ -261,7 +268,7 @@ Milestone 8 · 8 done, 0 partial, 0 to do
 
 ### GOVERNANCE — Audit, retention and data protection
 
-Milestone 9 · 18 done, 3 partial, 1 to do
+Milestone 9 · 20 done, 2 partial, 1 to do
 
 - [x] A record's own history is retrievable — _audit.php?entity_type=worker&entity_id=12. Reading the log with a filter is itself audited, but the routine full listing is not, so the log does not fill with entries about reading the log_
 - [x] Approved deletion removes the document itself — _A hard delete used to remove the files row and leave the bytes on disk under a random name: gone from the system, still on the server, no longer findable. governance.php now unlinks it and audits it. Archive keeps the bytes, which is what makes it recoverable. Verified end to end against a local database_
@@ -271,6 +278,7 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 - [x] Data-subject request pathway — _/data-request and server/data-request.php. Public form, reference, acknowledgement, staff queue with a status trail. Collects no identity documents and self-serves nothing -- whether a deletion can be honoured depends on employment and safeguarding duties a form cannot weigh. No statutory deadline is written into the code_
 - [x] Database backup with rotation — _above the document root, 14-day prune_
 - [x] Deletion approval workflow — _server/governance.php. Staff request with a reason of at least 10 characters; somebody else approves. Four eyes enforced: the approver may not be the requester. Archive is the default disposition_
+- [x] Deletion requests decided in Settings (S10) — _Settings, Data requests lists governance.php deletion requests; approve or decline with the four-eyes rule shown in advance (is_mine) and the cascade confirmation. Today links to it. 240_launch_followups_
 - [x] Deletion requires approval — _Verified: an admin cannot approve their own request_
 - [x] Export data — _Logged with user, scope, purpose, record count and IP_
 - [x] GDPR export and erasure — _Export resolves through the people spine in both directions -- people.email is routinely empty when the row came from an application -- and returns 27 collections instead of 5, names what it leaves out, and is written to export_log. Erasure anonymises public-form data and routes everything else to the four-eyes deletion workflow instead of erasing immediately_
@@ -278,11 +286,11 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 - [x] Integration failure surfaced — _Silent integrations and unmappable submissions both reach the Action Centre_
 - [x] Privacy documentation — _docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
+- [x] Restore testing — _S10: server/restore-check.php compares a restored database table by table and the restored uploads document by document; --record writes the restore_test heartbeat that system health reads (ok within 90 days). Rehearsed locally on 2026-10-10: docs/runbooks/backup-and-restore.md_
 - [x] Retention engine — _server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one_
 - [x] System health dashboard — _server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 043: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 230_system_health_
 - [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
-- [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
-- [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
+- [~] Backups are restore-tested — _Rehearsed and recorded on the local test database (S10). A rehearsal on the live host is step 1 of docs/runbooks/release-2026.md and has not been done_
 - [~] Sensitive zones enforced — _can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet. The person profile (server/people.php) returns each section behind its zone -- compliance for checks, training and contracts, payroll for pay history, health for leave reasons, employment for emergency contacts -- as {restricted: true} rather than data_
 - [ ] Workflow rule engine
 

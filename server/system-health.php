@@ -153,10 +153,26 @@ if (!is_dir($backupDir)) {
         $ageHours === null ? 'No backups found' : count($files) . " backups, newest {$ageHours}h old");
 }
 
-// A backup nobody has restored is a hope, not a backup. There is no way to infer
-// this, so it is reported as unknown rather than assumed to be fine.
-$add('restore_test', 'Backup restore test', 'warn',
-    'Not automated. A backup that has never been restored is an assumption — see docs/RULES.md rule 15.');
+// A backup nobody has restored is a hope, not a backup. It cannot be inferred,
+// so it is recorded: server/restore-check.php --record writes the "restore_test"
+// heartbeat after a restored copy matched table for table and document for
+// document (docs/runbooks/backup-and-restore.md). Never recorded is a warning,
+// not "fine"; older than the 90-day period is a warning that says so.
+$restoreRun = null;
+try {
+    $stmt = $conn->prepare('SELECT last_success_at, last_detail FROM cron_runs WHERE job = "restore_test"');
+    $stmt->execute();
+    $restoreRun = $stmt->get_result()->fetch_assoc() ?: null;
+} catch (Throwable $e) {
+    $restoreRun = null;   // migration 043 not applied: reported as never recorded
+}
+$restoreAt = $restoreRun['last_success_at'] ?? null;
+$restoreState = rg_cron_state($restoreAt, RG_RESTORE_TEST_EVERY_HOURS);
+$add('restore_test', 'Backup restore test', $restoreState === 'ok' ? 'ok' : 'warn',
+    $restoreAt === null
+        ? 'No restore test recorded. Rehearse one and record it: docs/runbooks/backup-and-restore.md.'
+        : 'Last passed ' . substr((string) $restoreAt, 0, 10) . ($restoreState === 'ok' ? '' : ', more than 90 days ago')
+            . ($restoreRun['last_detail'] ? ' (' . $restoreRun['last_detail'] . ')' : ''));
 
 // ---- Scheduled jobs (migration 043) ---------------------------------------
 // When each job last reported. A job with no row has never reported since the

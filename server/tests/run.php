@@ -1875,6 +1875,21 @@ check('never recorded is unknown', rg_cron_state(null, 24, $cronNow), 'unknown')
 check('a daily job that ran this morning is fine', rg_cron_state('2026-10-09 02:00:00', 24, $cronNow), 'ok');
 check('a daily job silent for two days is late', rg_cron_state('2026-10-07 02:00:00', 24, $cronNow), 'late');
 
+group('credential labels');
+check('ampersand reads as and', rg_label_key('Moving & Handling'), rg_label_key('Moving and handling'));
+check('case and spacing do not matter', rg_label_key('  Moving   AND handling '), 'moving and handling');
+check('an ampersand with no spaces', rg_label_key('Health&Safety'), 'health and safety');
+check('a different credential stays different', rg_label_key('Manual handling') === rg_label_key('Moving and handling'), false);
+check('null is empty', rg_label_key(null), '');
+
+group('restore rehearsal');
+check('identical counts pass', rg_restore_differences(['a' => 1, 'b' => 0], ['b' => 0, 'a' => 1]), []);
+check('a short table is named', rg_restore_differences(['people' => 10], ['people' => 9]), ['people: 10 rows, restored copy has 9']);
+check('a missing table is named', rg_restore_differences(['files' => 2], []), ['files: missing from the restored copy']);
+check('an extra table is named', rg_restore_differences([], ['stray' => 1]), ['stray: only in the restored copy']);
+check('a restore test 30 days ago is current', rg_cron_state('2026-09-09 12:00:00', RG_RESTORE_TEST_EVERY_HOURS, $cronNow), 'ok');
+check('one 200 days ago is overdue', rg_cron_state('2026-03-23 12:00:00', RG_RESTORE_TEST_EVERY_HOURS, $cronNow), 'late');
+
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";

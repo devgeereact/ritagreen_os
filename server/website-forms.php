@@ -2,10 +2,14 @@
 // The forms directory: the Google Forms the website may embed or link to
 // (2026 plan, file 06, section S7).
 //
-// Website area only (super_admin | admin | manager | editor, internal staff;
+// Website area (super_admin | admin | manager | editor, internal staff;
 // a service-scoped account sees and changes only its own service's forms).
-// There is no public read here: the website reaches a form only through the
-// vacancy it is linked to (vacancies.php?slug=...), and only by its id.
+// A recruitment form reaches the website only through the vacancy it is linked
+// to (vacancies.php?slug=...). Training forms have no vacancy, so they have the
+// one public read below: active training forms, title and validated id only.
+//
+//   GET  /website-forms.php?action=public&purpose=training  (no auth)
+//        -> { forms: [{ title, service, form: { id, display } }] }
 //
 //   GET  /website-forms.php                         -> { forms, integrations }
 //   GET  /website-forms.php?action=history&id=N     -> { history }  previous values
@@ -18,6 +22,33 @@
 // pasted HTML. Changing the address keeps the row, so every role page that links
 // to it keeps working; the previous id is in the audit log.
 require __DIR__ . '/lib.php';
+
+// ---------- Public read: training forms (S10) ----------
+// Deliberately above the login check. Only purpose "training", only active and
+// not archived, and only the fields the page needs. The id is checked again on
+// the way out, as vacancies.php does, because the website builds an iframe from
+// it: nothing but a valid Google Form id may ever leave here.
+if (method() === 'GET' && ($_GET['action'] ?? '') === 'public') {
+    if (($_GET['purpose'] ?? '') !== 'training') fail('Not found.', 404);
+    header('Cache-Control: public, max-age=300');
+    $res = $conn->query(
+        'SELECT title, service, google_form_id, display
+           FROM website_forms
+          WHERE purpose = "training" AND active = 1 AND deleted_at IS NULL
+          ORDER BY title, id
+          LIMIT 50'
+    );
+    $forms = [];
+    while ($row = $res->fetch_assoc()) {
+        if (!rg_valid_google_form_id($row['google_form_id'])) continue;
+        $forms[] = [
+            'title' => $row['title'],
+            'service' => $row['service'],
+            'form' => ['id' => $row['google_form_id'], 'display' => $row['display']],
+        ];
+    }
+    json_out(['forms' => $forms]);
+}
 
 $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin', 'manager', 'editor');

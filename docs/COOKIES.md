@@ -12,7 +12,9 @@ origin. Google Fonts was the only one and is now self-hosted under `public/fonts
 
 **One exception, and only on request (S7, 2026-10-09).** A role page (`/careers/:slug`) whose
 vacancy links a Google Form shows a notice and a button, "Load the application form from
-Google". Until it is pressed the page makes no request to Google. Pressing it adds an iframe
+Google". The training page (`/training`) does the same for each active training form in the
+forms directory (S10), with the button "Load the form from Google". Until it is pressed the page
+makes no request to Google. Pressing it adds an iframe
 from `docs.google.com`, after which Google Forms runs in that frame and Google may set or read
 its own cookies under its own policy; this site cannot see or control them and stores nothing
 of its own when it happens. The "Open the form in a new tab" link and the office phone number

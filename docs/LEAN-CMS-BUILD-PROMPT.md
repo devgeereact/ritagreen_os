@@ -1,5 +1,12 @@
 # Build prompt: RitaGreen lean CMS
 
+> **Status: complete and superseded, 10 October 2026.** The build this prompt briefed was carried out in sections S0 to
+> S10. The decisions that extended
+> and replaced it are in [`docs/DECISIONS-2026.md`](DECISIONS-2026.md); item-level progress is
+> [`docs/PROGRESS.md`](PROGRESS.md); the browser evidence for the launch journey is
+> [`docs/TESTING.md`](TESTING.md), "2026 launch journeys". What remains is
+> [`docs/ROADMAP.md`](ROADMAP.md). Kept as history; do not work from it.
+
 Use this prompt after approving `docs/LEAN-CMS-LAUNCH-PLAN.md`. It is an implementation brief, not authorisation to deploy, remove production records or send messages.
 
 ---

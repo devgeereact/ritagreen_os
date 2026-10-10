@@ -1,6 +1,6 @@
 # RitaGreenOS — server API
 
-PHP endpoints for RitaGreenOS. React never touches MySQL; it calls these over
+PHP endpoints for RitaGreenOS. React never touches the database; it calls these over
 HTTP and gets JSON back. Each file begins with `require __DIR__ . '/lib.php';`,
 which loads `config.php` (the `$conn` mysqli connection) and sets up CORS, JSON
 helpers and token auth.
@@ -19,14 +19,15 @@ helpers and token auth.
   the document root by hand once (and again when they change). They live next to
   `index.html` at the site root.
 - **`config.php` is server-only and gitignored.** Copy `config.sample.php` to
-  `config.php` on the server and fill in the real DB password + OpenRouter key.
+  `config.php` on the server and fill in the real database password and the
+  integration keys you use.
 
 ### Files in the document root that must not be served
 
 Because `server/` is uploaded beside `index.html`, `schema.sql`, `migrations/`,
 `tests/`, this `README.md` and the CLI-only tools (`migrate.php`, `seed.php`,
 `backfill-people.php`, `backfill-payroll.php`, `create-admin.php`,
-`report-activation.php`) can end up in the document root. `public/.htaccess` refuses
+`report-activation.php`, `restore-check.php`) can end up in the document root. `public/.htaccess` refuses
 them with three `RewriteRule ... [F]` lines next to the `^uploads/` rule. Those
 lines were added to the tracked copy on 2026-10-08 and **must be added to the live
 `.htaccess` by hand**. Afterwards, confirm that `/schema.sql`, `/README.md` and
@@ -63,10 +64,20 @@ endpoints still respond.
 - In the app (development builds only), sign in and open **/app/smoke-test** to
   exercise GET and POST from the UI.
 
+## Backups, restore test and release
+
+`backup.php` writes the daily dump. After a backup has been restored into a separate
+database, `restore-check.php` (CLI only) compares it, and the restored uploads, with the source,
+and with `--record` records a passing restore test for Settings, System health. The procedure is
+[`docs/runbooks/backup-and-restore.md`](../docs/runbooks/backup-and-restore.md). Releasing the
+2026 build, including which files to upload and delete, is
+[`docs/runbooks/release-2026.md`](../docs/runbooks/release-2026.md).
+
 ## Cron endpoints
 
 `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` and `retention-sweep.php`
-run from the CLI with no key. Over HTTP they need `ALERTS_KEY`, preferably in an `X-Cron-Key` header,
+run from the CLI with no key. `retention-sweep.php` runs weekly and only reports unless
+given `--go`; the schedule for each job is in the release runbook, section 6. Over HTTP they need `ALERTS_KEY`, preferably in an `X-Cron-Key` header,
 which keeps it out of the access log:
 
 ```sh
@@ -75,11 +86,11 @@ wget -qO- --header="X-Cron-Key: <ALERTS_KEY>" "https://ritagreenservices.com/sen
 
 The older `?key=<ALERTS_KEY>` form still works so existing crontabs keep running.
 When both are sent, the header wins. Move each crontab to the header form when
-convenient. See `docs/API.md` §53 and §54.
+convenient. See `docs/API.md`, the `expiry-alerts.php` and `backup.php` sections.
 
 ## Endpoints
 
-Eight of the 54, as a starting point. **`docs/API.md` is the reference** — it
+A few, as a starting point. **`docs/API.md` is the reference**: it
 covers every file, every action and the exact auth posture of each, and it is
 kept in step with the code. This table is a signpost, not a source of truth.
 

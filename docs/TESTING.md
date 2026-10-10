@@ -203,7 +203,9 @@ Stated plainly, because a green run is not a claim beyond what was run:
   offline caching and account switching.
 - Real SMTP, real IMAP, a real Google Form, Stripe, GoCardless or Twilio.
 - Production configuration, the deployed PHP tier, or the live database.
-- Restore from backup, and the application running against a restored database.
+- Restore from backup, and the application running against a restored database. Rehearsed by
+  hand in S10 with `server/restore-check.php`: see `docs/runbooks/backup-and-restore.md`.
+- The launch journeys in a browser, which are run by hand: see "2026 launch journeys" below.
 - Dependency vulnerability status and penetration testing.
 
 ---
@@ -230,3 +232,59 @@ rgphp php -S 127.0.0.1:8122 -t server # npm run dev:api (with a local server/con
 
 `docker start rg-mariadb` after a reboot. `pcntl` is in the image because the
 database suite stops its PHP server with `SIGTERM`.
+
+---
+
+## 2026 launch journeys
+
+The launch gate (launch plan Phase 5, section S10): the core journey and its refusals, exercised
+in a real browser against the local build. Run by `scripts/launch-journeys.mjs` (headless
+Chromium through `playwright-core`), against the disposable database the suite leaves behind
+with `npm run test:db -- --keep`, synthetic data only, every integration off. Screenshots are
+saved as `.playwright-mcp/s10-*.png` (gitignored).
+
+How it was run on 10 October 2026: database `ritagreen_os_test_s10`; API
+`php -S 127.0.0.1:8240 -t server` with `RG_CONFIG=server/tests/db/config.php`; the built app
+(`npm run build`) served on 5160 with `*.php` proxied to the API (Vite's dev server hit the
+file-watcher limit on that machine); `node scripts/launch-journeys.mjs <out dir>`. Every step
+below passed in one run on a freshly built database.
+
+"UI" means a person's clicks and typing in the browser; the result is then confirmed against
+the database or the API. "API" means the request was made directly, which is how a refusal is
+proved: a screen that hides a button proves nothing about the server.
+
+| # | Journey | How | Result | Evidence |
+|---|---|---|---|---|
+| J01 | Public apply through the native form on `/careers`, at phone width | UI | PASS | Applicant created at stage `applied`; `s10-01-apply-sent-375.png` |
+| J02 | Recruiter opens the candidate and moves them to screened | UI | PASS | `s10-02-ats-screened.png` |
+| J03 | Start onboarding: worker created, healthcare template checklist, all six items ticked | UI | PASS | Worker with payroll number; `s10-03-onboarding-checklist.png` |
+| J04 | Right to work recorded and signed off on the profile | UI | PASS | Requirement met, verifier named; `s10-04-rtw-recorded.png` |
+| J05 | DBS certificate uploaded and verified with an expiry | UI | PASS | Requirement met, origin `verification`; `s10-05-dbs-verified.png` |
+| J06 | Contract drafted, marked sent, signed copy attached, reviewed | UI | PASS | `s10-06-contract-reviewed.png` |
+| J07 | Approved to work from the profile overview | UI | PASS | "Approved for work on ... by Olu Admin"; `s10-07-approved.png` |
+| J08 | Owner creates the worker's portal login in Settings, Users | UI | PASS | The login signs in; `s10-08b-worker-login-created.png` |
+| J08c | Office sets the pay rate and availability (days, nights, weekends) | UI | PASS | `s10-08c-worker-availability.png` |
+| J09 | Office adds a draft shift; the worker cannot see it | UI, then API for the worker's view | PASS | `s10-09-shift-draft.png` |
+| J10 | Office publishes the rota | UI | PASS | `s10-10-published.png` |
+| J11 | Office offers the open shift to the new worker | UI | PASS | One offer row; `s10-11-offered.png` |
+| J12 | Worker signs in on a phone and accepts the offer in the portal | UI | PASS | Shift assigned; `s10-12a-portal-offer-375.png`, `s10-12b-portal-accepted-375.png` |
+| J13 | Worker clocks in and out in the portal | UI; the eight hours between are simulated by moving the clock-in back in the database | PASS | Draft timesheet of 480 minutes from the clock; `s10-13b-clocked-out-375.png` |
+| J14 | Worker submits the timesheet with a 30-minute break | UI | PASS | Status `pending`; `s10-14-timesheet-submitted-375.png` |
+| J15 | Office approves the timesheet | UI | PASS | Status `approved`; `s10-15-timesheet-approved.png` |
+| N1 | An unapproved worker cannot be booked | API refusal; UI shows the reason | PASS | 409, blocking `employment`; `s10-N1-unapproved-profile.png` |
+| N2 | A worker on approved leave cannot be booked | UI request and approval; API booking refusal | PASS | 409, "On approved leave"; `s10-N2a-leave-requested-375.png`, `s10-N2b-leave-approved.png` |
+| N3 | A manager scoped to security is refused a care worker | API and UI | PASS | Profile, shift and timesheet all 403; `s10-N3-scoped-manager-refused.png` |
+| N4 | A worker cannot read another worker's data | API and UI | PASS | Profile 403, document 403, another worker's timesheet 404, `/app` sends the worker to `/m`; `s10-N4-worker-refused-375.png` |
+| N5 | Draft shifts are invisible to workers | API and UI | PASS | Not listed, claim by id 409; `s10-N5-draft-invisible-375.png` |
+
+Also checked in the browser in S10, at 1280 and 375 pixels with no horizontal scroll and no
+console errors: Settings, Data requests (a manager's request approved by the owner, the file
+archived, the request completed); Settings, Features with the rota rules card (owner can edit,
+manager reads only); the profile labelling checks valid only from a certificate, worker record,
+reference or contract file; `/training` with a training form behind its load button; Today.
+
+NOT TESTED in these journeys: a real Google Form submission, real email or SMS for the offer,
+geolocation on a real phone (the headless browser refused it, so clock events carry no
+position), the service worker and offline use (blocked for the run), screen readers and
+keyboard-only use, and any browser other than Chromium.
+

@@ -4,6 +4,7 @@ import { CheckList, Container, PageHeader, Section, SectionTitle, Steps } from "
 import { siteButton } from "@/components/public/site-button"
 import { Faqs } from "@/components/public/Faqs"
 import { EnquiryForm } from "@/components/public/forms/EnquiryForm"
+import { TrainingForms } from "@/components/public/TrainingForms"
 import { SERVICE_PAGES } from "@/lib/service-pages"
 import { useCompanyDetails } from "@/lib/company"
 import { serviceLd } from "@/lib/structured-data"
@@ -121,6 +122,8 @@ export default function ServicePage({ pageKey }: { pageKey: keyof typeof SERVICE
           </div>
         </Section>
       )}
+
+      {page.service === "academy" && <TrainingForms company={company} />}
 
       <Section labelledBy="faq-title">
         <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr]">

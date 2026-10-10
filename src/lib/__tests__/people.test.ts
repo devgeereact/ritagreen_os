@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { actionLabel, hoursLabel, initials, isRestricted, personPath, wallClock } from "@/lib/people"
+import { actionLabel, hoursLabel, initials, isRestricted, personPath, verifierLabel, wallClock } from "@/lib/people"
 
 describe("isRestricted", () => {
   it("recognises a section the account may not see", () => {
@@ -39,5 +39,18 @@ describe("small labels", () => {
   })
   it("turns an audit key into words", () => {
     expect(actionLabel("person.emergency_contacts")).toBe("Person emergency contacts")
+  })
+})
+
+describe("verifierLabel", () => {
+  it("names the reviewer when there is one", () => {
+    expect(verifierLabel("Ade Admin", "verification")).toBe("Ade Admin")
+    expect(verifierLabel("Ade Admin", "certificate")).toBe("Ade Admin")
+  })
+  it("says a certificate row has not been verified", () => {
+    expect(verifierLabel(null, "certificate")).toBe("From certificate record, not yet verified")
+  })
+  it("says nobody when nothing is on file", () => {
+    expect(verifierLabel(null, null)).toBe("Nobody yet")
   })
 })

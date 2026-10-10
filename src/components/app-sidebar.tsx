@@ -47,12 +47,18 @@ function useInboxUnread(mayOpenInbox: boolean): number {
   useEffect(() => {
     if (!mayOpenInbox) return
     let alive = true
+    // A mailbox that is not set up answers { configured: false }; there is then
+    // nothing to poll for, so the timer stops rather than asking every minute.
     const load = () =>
-      api<{ unread: number }>("inbox.php?action=unread")
-        .then((r) => alive && setCount(r.unread))
+      api<{ unread: number; configured?: boolean }>("inbox.php?action=unread")
+        .then((r) => {
+          if (!alive) return
+          setCount(r.unread)
+          if (r.configured === false) clearInterval(id)
+        })
         .catch(() => {})
-    load()
     const id = setInterval(load, 60_000)
+    load()
     return () => {
       alive = false
       clearInterval(id)

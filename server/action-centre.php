@@ -306,10 +306,10 @@ if ($can['approvals']) {
 if ($can['governance']) {
     $deletions = $count('SELECT COUNT(*) FROM deletion_requests d WHERE d.status = "requested"');
     if ($deletions) $add(TODAY, 'governance', $plural($deletions, 'deletion request needs', 'deletion requests need') . ' a decision',
-        // No screen decides these yet (governance.php has the API only), so the
-        // item says so rather than linking somewhere that cannot act on it.
-        'Somebody asked for a record to be removed and a second person must decide. There is no screen for this yet; it is decided through governance.php.',
-        null, $deletions, 'Decide');
+        // Decided in Settings, Data requests (S10). The person who asked cannot
+        // decide their own request; the screen and the endpoint both say so.
+        'Somebody asked for a record to be removed and a second person must decide.',
+        '/app/settings?tab=requests', $deletions, 'Decide');
 }
 
 // ---- Money (only while the finance area is switched on) -----------------------

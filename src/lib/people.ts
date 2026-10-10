@@ -6,7 +6,7 @@
 // meaning alone: every chip has a word and an icon as well (docs/Plans 2026/04).
 
 import { DIVISION_LABELS } from "@/lib/format"
-import type { ContractStatus, RequirementChip, Restricted, ServiceStatus, VerificationStatus } from "@/lib/types"
+import type { ContractStatus, EvidenceOrigin, RequirementChip, Restricted, ServiceStatus, VerificationStatus } from "@/lib/types"
 
 /** A service's name as the office reads it. The labels live in one place, src/lib/format.ts. */
 export function serviceName(service: string): string {
@@ -73,6 +73,28 @@ export const VERIFICATION_LABEL: Record<VerificationStatus, string> = {
   verified: "Verified",
   rejected: "Rejected",
   expired: "Expired",
+}
+
+/**
+ * What to show as the verifier of a requirement.
+ *
+ * A named reviewer when there is one. Otherwise, when the evidence that counts
+ * came from somewhere other than a verification, say where, so a check that is
+ * valid only because of a certificate row reads as exactly that and not as
+ * "Valid, verifier: nobody yet". The label describes the evidence; it changes
+ * nothing about how it is weighed.
+ */
+export function verifierLabel(verifiedBy: string | null, origin: EvidenceOrigin | null): string {
+  if (verifiedBy) return verifiedBy
+  switch (origin) {
+    case "certificate": return "From certificate record, not yet verified"
+    case "worker_record": return "From the worker record, not yet verified"
+    case "right_to_work_check": return "Check recorded, not yet signed off"
+    case "legacy_flag": return "From the old right-to-work tick, not yet checked"
+    case "references": return "From references marked verified"
+    case "contract_file": return "From a contract file on record"
+    default: return "Nobody yet"
+  }
 }
 
 export const CONTRACT_LABEL: Record<ContractStatus, string> = {

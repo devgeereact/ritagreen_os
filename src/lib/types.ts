@@ -873,10 +873,22 @@ export type RequirementChip = "valid" | "due_soon" | "expired" | "awaiting_revie
 
 export type VerificationStatus = "requested" | "received" | "under_review" | "verified" | "rejected" | "expired"
 
+/** server/compliance-lib.php rg_load_evidence(), the `origin` of each entry. */
+export type EvidenceOrigin =
+  | "verification"
+  | "certificate"
+  | "worker_record"
+  | "right_to_work_check"
+  | "legacy_flag"
+  | "references"
+  | "contract_file"
+
 export type ProfileRequirement = AssessedRequirement & {
   chip: RequirementChip
   chip_label: string
   expiry: string | null
+  /** Where the counted evidence came from; null when nothing is on file. */
+  evidence_origin: EvidenceOrigin | null
   verification_id: number | null
   verification_status: VerificationStatus | null
   open_verification_id: number | null
@@ -1309,6 +1321,27 @@ export type AuditEntry = {
   ip: string | null
   created_at: string
   user: string | null
+}
+
+/** server/governance.php?action=deletions */
+export type DeletionRequestStatus = "requested" | "approved" | "rejected" | "completed" | "cancelled"
+
+export type DeletionRequest = {
+  id: number
+  entity_type: string
+  entity_id: number
+  entity_label: string | null
+  reason: string
+  disposition: "archive" | "delete"
+  status: DeletionRequestStatus
+  requested_at: string
+  decided_at: string | null
+  decision_note: string | null
+  completed_at: string | null
+  requested_by: string | null
+  decided_by: string | null
+  /** This account made the request, so it may not decide it (four eyes). */
+  is_mine: boolean
 }
 
 export type EmailQueueStatus = "queued" | "sending" | "sent" | "failed" | "cancelled"

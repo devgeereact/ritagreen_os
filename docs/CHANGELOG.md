@@ -7,6 +7,65 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: launch gate, follow-ups and docs consolidation, section S10 (2026-10-10, local, not deployed)
+
+The last section of the 2026 build. Nothing here has been run against production.
+
+**Follow-ups found by earlier sections**
+
+- A check that is valid only because of a legacy certificate row read as "Valid" with
+  "Verifier: Nobody yet". `rg_load_evidence()` now tags each entry with its `origin`, the
+  profile API returns `evidence_origin`, and the checks tab says "From certificate record, not
+  yet verified" (or the worker record, the old right-to-work tick, references, a contract file).
+  The evaluator does not read the tag; precedence is unchanged, and a rejection still outranks a
+  certificate (`240_launch_followups`).
+- The seed held "Moving & Handling" against the requirement "Moving and handling", so the
+  certificate counted for nothing. The seed uses the requirement's label, and
+  `rg_label_key()` reads "&" as "and" when matching certificate labels: case, spacing and the
+  ampersand, nothing looser.
+- Settings, Features has a "Rota rules" card for the minimum rest between shifts (owners
+  change it, the office reads it). It had an API only.
+- Settings has a "Data requests" tab: deletion requests listed, approved or declined, with the
+  four-eyes rule said before anyone presses anything (`is_mine`) and the cascade confirmation
+  the endpoint asks for. Today's deletion item now links there.
+- `inbox.php?action=unread` answers `{unread: 0, configured: false}` instead of 503 when no
+  mailbox is set up, and the sidebar stops polling.
+- Active training forms in the forms directory appear on `/training` the way a role page shows
+  its form: nothing from Google until the visitor presses the button, a new-tab link and the
+  phone number always there. New public read `website-forms.php?action=public&purpose=training`.
+  The privacy notice and `docs/COOKIES.md` say so.
+- `160_rota` no longer depends on the date either: the clock-out minutes are checked against the
+  London wall clock of the stored instants, so the two clock-change nights pass too.
+
+**Launch gate**
+
+- `server/restore-check.php` (CLI only): compares a restored database with the source table by
+  table and the restored uploads document by document, and with `--record` writes the
+  `restore_test` heartbeat. System health reads it (ok within 90 days) instead of a permanent
+  warning. Rehearsed locally: backup, restore into `ritagreen_os_test_s10_restore`, 88 tables
+  and 1240 rows matched, documents byte-identical, downloads through `files.php` from the
+  restored copy identical; a damaged copy failed as it should. `docs/runbooks/backup-and-restore.md`.
+- Browser journeys from public application to approved timesheet, and five refusals, all PASS
+  on a fresh test database: `scripts/launch-journeys.mjs`, checklist in `docs/TESTING.md`.
+- `docs/runbooks/release-2026.md`: the production steps for merging #8, not performed.
+
+**Consistency**
+
+- `scripts/docs_sync.py --check` fails on broken relative markdown links (docs/, root, .agent/,
+  server/README.md) and on the retired navy and mint outside history. Tests in
+  `scripts/test_docs_sync.py`, run in CI.
+- `.claude/settings.json` PreToolUse hooks (`scripts/agent_guard.py`) block writes to
+  `server/config.php`, hand edits to `docs/PROGRESS.md` and pushes to `main`. Tests in
+  `scripts/test_agent_guard.py`, run in CI. Codex has no hooks; the rules apply by hand.
+- The 2026 plan pack is folded into the permanent docs, with `docs/DECISIONS-2026.md` for the
+  owner's decisions and the build's own. `docs/Plans 2026/` stays until the owner approves its
+  removal.
+
+**Deploy:** upload `compliance-lib.php`, `people.php`, `pure.php`, `seed.php`, `governance.php`,
+`action-centre.php`, `inbox.php`, `website-forms.php`, `system-health.php` and the new
+`restore-check.php`; add `restore-check` to the CLI-tool refusal line in the live `.htaccess`.
+No migration. All of it is in `docs/runbooks/release-2026.md`.
+
 ### Removed: retirements, section S9 (2026-10-10, local, not deployed)
 
 The features the 2026 plan retires (file 02, "Keep, switch off, retire") are deleted through the

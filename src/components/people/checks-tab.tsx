@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
 import { usePostAction } from "@/hooks/use-post-action"
-import { dateOnly, isRestricted, RTW_METHOD_LABEL, RTW_OUTCOME_LABEL, serviceName, VERIFICATION_LABEL } from "@/lib/people"
+import { dateOnly, isRestricted, RTW_METHOD_LABEL, RTW_OUTCOME_LABEL, serviceName, VERIFICATION_LABEL, verifierLabel } from "@/lib/people"
 import type { PersonProfile, ProfileRequirement } from "@/lib/types"
 import { Fact, FileLink, RestrictedBlock, Section, StatusChip, UploadButton } from "@/components/people/shared"
 import { ReasonDialog, VerifyDialog } from "@/components/people/action-dialogs"
@@ -98,7 +98,7 @@ export function ChecksTab({ profile, onChanged, onOpenEmployment }: {
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <Fact label="Expiry">{item.expiry ? dateOnly(item.expiry) : "None recorded"}</Fact>
                   <Fact label="Checked">{item.checked_on ? dateOnly(item.checked_on) : "Not yet"}</Fact>
-                  <Fact label="Verifier">{item.verified_by ?? "Nobody yet"}</Fact>
+                  <Fact label="Verifier">{verifierLabel(item.verified_by, item.evidence_origin)}</Fact>
                   <Fact label="Evidence"><FileLink id={item.evidence_file_id} name={item.evidence_file_name} /></Fact>
                   {item.open_status && (
                     <Fact label="In progress">{VERIFICATION_LABEL[item.open_status]}</Fact>

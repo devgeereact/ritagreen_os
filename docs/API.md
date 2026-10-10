@@ -1213,7 +1213,7 @@ announcement also raises a broadcast notification.
 
 Live IMAP mailbox with SMTP replies. Refused with 403 on every route while the
 `inbox` feature switch is off, before any IMAP connection is attempted. Returns 503 if
-the PHP `imap` extension is absent or `IMAP_HOST` is unset. TLS certificate validation is on unless
+the PHP `imap` extension is absent or `IMAP_HOST` is unset, except for `unread` (below). TLS certificate validation is on unless
 `IMAP_VALIDATE_CERT` is explicitly false (`inbox.php:25`).
 
 **Auth: `super_admin`, `admin`, `manager` for every route.** Reading this mailbox
@@ -1222,7 +1222,7 @@ gated, any authenticated account could do both.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `unread` | — | `{unread}` |
+| GET | `unread` | none | `{unread, configured}`. With no mailbox set up (no `imap` extension or no `IMAP_HOST`) it answers **200** `{unread: 0, configured: false}` rather than 503, so the sidebar badge, which asks every minute, stops asking and shows nothing (S10) |
 | GET | `list` (default) | `limit` (1–100, default 30) | `{messages}`, newest first |
 | GET | `message` | `uid` | `{message}` including the decoded plain-text body, the CRM `contact` lookup, and marks the message `\Seen` |
 | POST | `seen` | `uid` | `{ok: true}` |
@@ -1232,7 +1232,7 @@ gated, any authenticated account could do both.
 `$action` defaults to `list` (`inbox.php:129`), so a bare GET lists messages.
 An unrecognised action returns 404 (`inbox.php:238`).
 
-**Header comment discrepancy.** `inbox.php:3-8` omits `action=unread`.
+The header comment lists every action, `unread` included.
 
 Any authenticated account of any role can read the whole shared mailbox and
 send mail from the company address.
@@ -1308,6 +1308,14 @@ returns **409** with a `cascade` map instead of proceeding. Sending the same dec
 `confirm_cascade: true` carries it out; the request stays open in the meantime, so rejecting it
 and asking for an *archive* — which cascades nothing — remains available. Either way the counts
 go into the audit entry and the response's `cascaded` field.
+
+**Deletion requests have a screen: Settings, Data requests (S10).** `GET
+governance.php?action=deletions[&status=requested]` (staff) answers `{requests, can_decide}`.
+Each request carries `is_mine`, true when the signed-in account made it, so the screen offers no
+decision that `decide_deletion` would refuse under the four-eyes rule; the requester's user id
+itself is not sent. `can_decide` is true for `super_admin` and `admin`, the roles
+`decide_deletion` accepts. Today's "deletion requests need a decision" item links to
+`/app/settings?tab=requests`.
 
 **Erasure does not bypass the approval workflow.** It anonymises `contact_enquiries` and
 `service_requests`, which have no ongoing basis, and surfaces everything filed against the
@@ -1572,6 +1580,18 @@ Writes a gzipped `mysqldump` to `dirname(__DIR__) . '/backups'` — one level
 older than 14 days. Requires `shell_exec` and `mysqldump`; it reports clearly
 rather than failing silently when either is unavailable. Output is plain text.
 
+The dump holds the database only. Documents in `server/uploads/` are covered by the host's own
+backup, not by this script (`docs/runbooks/backup-and-restore.md`).
+
+**`restore-check.php` (CLI only, S10).** `php restore-check.php --restored=NAME
+--uploads=DIR [--ignore=a,b] [--record]` compares the database in `config.php` with a restored
+copy on the same server: every base table's row count (`rg_restore_differences()`), less the
+tables in `--ignore` (default `cron_runs,rate_limits`), and every `files` row's bytes in the
+restored uploads folder by SHA-256 against the original. A row with no file on the source either
+is counted and reported, not failed. Exit 0 on a match, 1 on any difference. With `--record`
+and `--uploads`, a match writes the `restore_test` row in `cron_runs`, which system health reads.
+Refuses HTTP, refuses to compare the database with itself, and is blocked by `.htaccess`.
+
 Note that the database password is passed on the `mysqldump` command line
 (`backup.php:43`), where it is briefly visible in the host's process list. It
 is `escapeshellarg`-quoted, so it is not an injection risk.
@@ -1695,7 +1715,10 @@ service with `status` ∈ applicant, onboarding, active, suspended, inactive, le
 `rg_service_statuses()`), `payroll_no`, `next_action` (`rg_person_next_action()`, with the tab
 to open and, where there is one, the record it is about), `next_shift`, `zones`, `can`,
 `workers` (each with `approval.blockers` from `rg_approval_blockers()`, empty when the server
-would accept an approval), `applications` with their onboarding tasks, `checks`, `training`,
+would accept an approval), `applications` with their onboarding tasks, `checks` (each
+requirement carries `evidence_origin`, where the evidence that counts came from:
+`verification`, `certificate`, `worker_record`, `right_to_work_check`, `legacy_flag`,
+`references` or `contract_file`, or null when nothing counts; S10), `training`,
 `shifts`, `employment` (`contracts`, `pay_rates`, `leave`), `emergency` and `activity`.
 
 Access is applied in layers, and a section the account may not see is returned as
@@ -1869,6 +1892,7 @@ The service in the body is scope-checked as well as the stored one. The owner mu
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
+| GET | `public` | **None** (above the login check) | `purpose=training` (any other purpose is 404) | `{forms: [{title, service, form: {id, display}}]}`: active, not archived training forms whose id passes `rg_valid_google_form_id()`, at most 50, cached five minutes. Shown on `/training` behind a click (S10) |
 | GET | none | `super_admin`/`admin`/`manager`/`editor`, staff | none | `{forms, integrations}`. Each form carries `url` rebuilt from the id, `review_due` (90 days, or never reviewed), `intake_status` (`ok`, `silent`, `paused`, `not_configured`, `not_linked`, the same reading as `forms-intake.php?action=health`) and the titles of the vacancies using it |
 | GET | `history` | Same | `id` | `{history}`: the form's audit entries with before and after values |
 | POST | `create` | Same | body `{title, url, purpose?, service?, display?, active?, owner_id?, integration_id?}` | `{ok, id}` 201 |
@@ -2147,3 +2171,8 @@ Audited as `compliance.profile_pack` against the person.
 the ten most recent failures with subject, template, attempts, error and time but **no
 recipient**) and `forms[]` (per integration: state, live, last success and failure, failed
 submissions, quiet). Refused to a service-scoped account.
+
+The `restore_test` check (S10) reads the `restore_test` row in `cron_runs`, written by
+`restore-check.php --record`: `ok` when the last passing rehearsal is within the 90-day period
+(`RG_RESTORE_TEST_EVERY_HOURS`, judged by `rg_cron_state()`), otherwise `warn`, with the date and
+what was compared, or "No restore test recorded". It used to be a fixed warning.

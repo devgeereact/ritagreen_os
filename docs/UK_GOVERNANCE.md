@@ -42,12 +42,53 @@ here would be trusted. Check the primary source, then set the value in Settings.
 
 ---
 
+## Role checks per service
+
+The checks the business expects for each service (owner, 9 October 2026), against what the
+seeded rules make the deployment gate do. The rules are rows in `compliance_rules`, seeded by
+migration 003 and adjusted by 005, 007 and 018; they are configuration, so a live database may
+differ. Query it rather than trusting this table:
+
+```sql
+SELECT c.service, c.worker_role, r.req_key, c.weight
+  FROM compliance_rules c JOIN compliance_requirements r ON r.id = c.requirement_id
+ ORDER BY c.service, c.weight, r.req_key;
+```
+
+**Mandatory** blocks deployment; **recommended** warns and costs score but does not block.
+
+| Service (internal id) | Checks the business expects | Mandatory in the seeded rules | Recommended in the seeded rules |
+|---|---|---|---|
+| Healthcare (`care`) | Right to work, enhanced DBS (adult and/or child workforce as the role requires), references, Care Certificate or equivalent, mandatory training, NMC PIN for nurses | Right to work, DBS; NMC registration for the `nurse` role only | Identity, references, signed contract, Care Certificate, mandatory training, moving and handling, first aid |
+| Cleaning (`cleaning`) | Right to work, references, COSHH awareness, DBS where the site requires it (schools, care settings) | Right to work | Identity, references, signed contract, COSHH |
+| Security (`security`) | Right to work, SIA licence of the correct type checked against the public register, references, first aid where required | Right to work, SIA licence | Identity, references, signed contract, conflict management, first aid |
+| Training (`academy`) | Trainer qualifications; attendance and certificates for attendees | Right to work | Identity, signed contract, DBS |
+
+Where the gate and the expectation differ:
+
+- **Identity, references and the signed contract are recommended, not mandatory.** Migration
+  003 made them mandatory; 018 lowered them because no worker's evidence for them was on file
+  and every assignment would have been refused. Raising one is a one-row `UPDATE`, after
+  counting who it would block (the query is in the migration's comment).
+- **A signed contract is still required before anyone works**, by another route: approval
+  (`workers.php?action=approve`, migration 034) needs onboarding finished and a signed contract
+  that has been reviewed, and `rg_employment_gate()` refuses an unapproved worker before any
+  evidence is weighed.
+- **Right to work does not expire and is not yet required to be verified** in the catalogue
+  (migrations 005 and 007), until the legacy backlog of checks with no verifier is cleared.
+- **The DBS rule does not distinguish** adult from child workforce, or basic from enhanced.
+- **Not in the catalogue:** trainer qualifications, and DBS for cleaners on sites that need
+  it. A site's required training is added as mandatory for shifts at that site (`site_requirements`,
+  migration 038, read by `rg_load_rules()`).
+- **Onboarding checklists** per service (migration 037, `onboarding_template_items`) ask for the
+  expected checks, including an enhanced DBS for Healthcare and Training and the SIA register
+  check for Security. A checklist item is a task, not evidence, and the gate does not read it.
+
 ## Right to work
 
-**Current state: a boolean.** `workers.right_to_work TINYINT(1)`. No method, date, verifier,
-evidence or expiry. This is the weakest point in the system and Milestone 3 exists to fix it.
-
-**Target.** Right to work becomes a check record, not a flag:
+**Built:** `right_to_work_checks` (migration 006, `server/right-to-work.php`, the Right to work
+screen under Compliance). The legacy `workers.right_to_work` flag is kept as history. The
+record holds:
 
 | Field | Purpose |
 |---|---|
@@ -77,24 +118,23 @@ verification as a **workflow with evidence**, not a field on the worker record.
 Captured: licence number, licence type, status, issue and expiry dates, the role it covers,
 verification date, the named verifying officer, and the evidence.
 
-Already built: `workers.sia_number` and `sia_expiry`; `server/scheduling.php` already refuses
-to match or assign a Security worker whose SIA licence has lapsed; `server/expiry-alerts.php`
-already tracks SIA expiry through the 90/60/30/expired tiers; `server/reports.php?action=sia_acs`
-produces an evidence pack.
-
-Missing: the verification workflow itself. A licence number typed into a field is not evidence
-that anyone checked the register. Milestone 3 adds the check record — who verified, against
-what, on what date, with what outcome.
+Built: `workers.sia_number` and `sia_expiry`; the SIA licence is a mandatory requirement for
+Security, so `rg_deployment_check()` refuses to assign a Security worker without a current one;
+`server/expiry-alerts.php` tracks SIA expiry through the 90/60/30/expired tiers;
+`server/reports.php?action=sia_acs` produces an evidence pack. The check itself (who verified,
+against what, on what date, with what outcome) is a row in `verifications` (migration 017),
+decided in the verification queue.
 
 ## DBS — Care
 
-Captured today: `dbs_status`, `dbs_expiry`, `dbs_update_service`, `recheck_due` on the worker
-record. `server/scheduling.php` blocks Care assignments on a lapsed DBS.
+Captured: `dbs_status`, `dbs_expiry`, `dbs_update_service`, `recheck_due` on the worker
+record. DBS is mandatory for Healthcare in the seeded rules, so the deployment gate blocks a
+Healthcare assignment on a lapsed DBS.
 
 The Update Service flag matters because it changes what rechecking involves. Where a worker is
 registered, the recheck cadence is a **configurable interval**, not a hard-coded one.
 
-Milestone 3 moves DBS into the same generalised verification lifecycle as right to work and SIA.
+DBS evidence goes through the same `verifications` lifecycle as the SIA licence.
 
 ## Employment particulars
 
@@ -106,15 +146,14 @@ required training among them.
 particulars must also exist as structured fields, or the system cannot report on them, cannot
 alert on them, and cannot answer a question about them without a human opening a document.
 
-Milestone 6 adds the structured fields alongside the employment contract lifecycle.
+The employment contract lifecycle is built (`server/employment-contracts.php`). The particulars
+are not yet structured fields; see [`docs/PROGRESS.md`](PROGRESS.md).
 
 ## Holiday and absence records
 
 Holiday taken, holiday carried over, holiday pay and payments in lieu need to be recorded and
-retained. The system currently has nowhere to put any of it.
-
-Milestone 6 adds a leave and absence module. **The retention period is a setting**, defaulted
-by the business against current guidance, not fixed in code.
+retained. They are recorded in `leave_records` through `server/leave.php`. **The retention
+period is a setting**, set by the business against current guidance, not fixed in code.
 
 ## Data protection
 

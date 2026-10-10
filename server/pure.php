@@ -643,6 +643,23 @@ function rg_normalise_email(?string $email): ?string
 }
 
 /**
+ * A credential label reduced to a comparable form, for matching a free-text
+ * certification type to a requirement label.
+ *
+ * Lower-cased, "&" read as "and", runs of spaces collapsed. The seed held
+ * "Moving & Handling" against the requirement "Moving and handling", and the
+ * certificate silently counted for nothing. Nothing looser than this: free text
+ * is a poor join key, and a fuzzy match would credit somebody with a
+ * credential they do not hold.
+ */
+function rg_label_key(?string $label): string
+{
+    $s = strtolower(trim((string) $label));
+    $s = str_replace('&', ' and ', $s);
+    return trim((string) preg_replace('/\s+/', ' ', $s));
+}
+
+/**
  * A phone number reduced to a comparable form, for matching only.
  *
  * Deliberately not E.164: normalise_phone() in lib.php produces a number to
@@ -3164,6 +3181,39 @@ function rg_expiry_band(?int $days): ?string
     if ($days <= 90) return '90';
     return null;
 }
+
+/**
+ * Differences between a database and its restored copy, table by table.
+ *
+ * $source and $restored map table name to row count. Returns one line per
+ * difference: a table missing from the copy, an extra one, or a count that does
+ * not match. An empty list is the only passing answer. Used by
+ * server/restore-check.php; a function of its arguments so it is tested.
+ *
+ * @param array<string,int> $source
+ * @param array<string,int> $restored
+ * @return string[]
+ */
+function rg_restore_differences(array $source, array $restored): array
+{
+    $out = [];
+    ksort($source);
+    foreach ($source as $table => $n) {
+        if (!array_key_exists($table, $restored)) { $out[] = "$table: missing from the restored copy"; continue; }
+        if ((int) $restored[$table] !== (int) $n) $out[] = "$table: $n rows, restored copy has {$restored[$table]}";
+    }
+    foreach (array_diff(array_keys($restored), array_keys($source)) as $extra) {
+        $out[] = "$extra: only in the restored copy";
+    }
+    return $out;
+}
+
+/**
+ * How often a restore must be rehearsed before system health calls it overdue:
+ * every 90 days (docs/runbooks/backup-and-restore.md). rg_cron_state() with this
+ * period says "late" once a run is half a period overdue, as for every job.
+ */
+const RG_RESTORE_TEST_EVERY_HOURS = 24 * 90;
 
 /**
  * Is a scheduled job running on time?

@@ -1,6 +1,7 @@
 # Architecture
 
-**Status:** describes the system as built on 2026-08-31, plus the target identity model.
+**Status:** describes the system as built, revised for the 2026 build (sections S1 to S10). The
+endpoint list is [`docs/API.md`](API.md); the migrations are `ls server/migrations`.
 
 ---
 
@@ -10,10 +11,10 @@
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 54 flat endpoint files, no framework, no router, no Composer
+server/*.php: flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
-MySQL / MariaDB on cPanel shared hosting (host = localhost)
+MariaDB on cPanel shared hosting (host = localhost)
 ```
 
 The React application never touches the database. It calls PHP over HTTP and receives JSON.
@@ -28,17 +29,22 @@ API call is same-origin.
 |---|---|
 | Framework | React 19.2, Vite 7.2, TypeScript 5.9 (strict, `noUnusedLocals`, `noUnusedParameters`) |
 | Routing | `react-router-dom` 7.11, `createBrowserRouter`, single route table in `src/routes/index.tsx` |
-| UI | shadcn/ui (`new-york` style) over Radix primitives, 37 vendored components in `src/components/ui/` |
+| UI | shadcn/ui (`new-york` style) over Radix primitives, vendored in `src/components/ui/` |
 | Styling | Tailwind 3.4 with CSS custom properties, dark mode by class |
 | State | React `useState`, one context (`AuthProvider`), one fetch hook (`useApi`). No Redux, no react-query |
-| Calendar | FullCalendar |
-| Documents | jsPDF (`src/lib/pdf.ts`), SheetJS + file-saver (`src/lib/csv.ts`) |
+| Documents | jsPDF and jspdf-autotable (`src/lib/pdf.ts`), file-saver (`src/lib/csv.ts`) |
 
-**Rendering split.** The 17 public marketing pages are eager-imported so the first paint is
-fast. All 34 CMS pages are `lazy()` behind a Suspense boundary, so a public visitor never
-downloads the internal application bundle. `vite.config.ts` additionally splits React, charts,
-calendar, editor and PDF into their own vendor chunks. (ApexCharts was uninstalled in S9,
-when Analytics and Insights, its last users, were deleted.)
+**Rendering split.** `src/routes/index.tsx` imports `Home` eagerly and every other route with
+`lazy()` behind a Suspense boundary, `AppLayout` included, so a public visitor never downloads
+the office application. In `vite.config.ts` the only manual chunk is `react` (`react`,
+`react-dom`, `react-router-dom`), because it is needed immediately. Everything else, PDF
+included, is split by Rollup as genuine async chunks reached only from lazy pages. Naming more
+manual chunks promotes them into the entry's preload list, which once broke the app offline;
+the reasoning is in the comments in `vite.config.ts`. The workbox `globIgnores` list there
+keeps office-only chunks (the rota page, the PDF engine) and the serif and Latin Extended font
+files out of the worker app's install, and has to be re-checked against `ls dist/assets`
+whenever chunking changes. There is no charting or calendar library: ApexCharts left in S9 and
+FullCalendar in S3.
 
 **Data fetching.** `src/hooks/use-api.ts` is a hand-rolled GET hook carrying a monotonic
 request-id guard so a slow earlier response cannot overwrite a faster later one. There is no
@@ -96,7 +102,9 @@ Anything that is a function of its arguments belongs in `pure.php`, where it can
 
 ## 3a. Tests
 
-Two suites, both dependency-free, both run in CI.
+The suites, what they cover and how to run them are in [`docs/TESTING.md`](TESTING.md). In
+CI, `npm run test:db` runs against a MariaDB 10.11 service (`.github/workflows/ci.yml`), the
+engine the host uses. The two dependency-free suites:
 
 | Suite | Covers | Run |
 |---|---|---|
@@ -107,8 +115,8 @@ No PHPUnit and no Composer: the production host cannot install packages, and a s
 runs on one machine stops being run. `server/tests/run.php` is a few dozen lines of assertion
 helper.
 
-Endpoints and React components are not yet covered. The compliance engine (Milestone 2) must
-be, because its output decides whether a person may work.
+Endpoints are covered by the database-backed HTTP suite (`server/tests/db/`); React components
+are not unit tested.
 
 `smtp_send()` is a minimal SMTP client written directly over `fsockopen` — no PHPMailer, no
 vendor directory. `totp_verify()` is a hand-rolled RFC 6238 implementation. Both exist because
@@ -319,7 +327,7 @@ every unlinked `person_id` to 0 and leave the spine quietly wrong instead of lou
 ## 8. Configuration
 
 All server configuration is PHP constants in `server/config.php`, hand-placed on the server
-and never committed. `server/config.sample.php` is the tracked template, with 39 `define()`
+and never committed. `server/config.sample.php` is the tracked template, with `define()`
 constants covering database, Stripe, GoCardless, Google OAuth, Twilio, SMTP, IMAP, CORS and
 security policy. The OpenRouter and OpenWeather constants left with `ai.php` and `weather.php`
 in S9; a live `config.php` that still defines them is harmless.

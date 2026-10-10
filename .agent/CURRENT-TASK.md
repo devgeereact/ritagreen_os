@@ -3,8 +3,8 @@
 ## Outcome
 
 Implement the approved lean CMS launch plan (`docs/LEAN-CMS-LAUNCH-PLAN.md`, approved
-14 September 2026) **and its 2026 extension** (`docs/Plans 2026/`, approved by the owner on
-9 October 2026), section by section, verifying each before the next.
+14 September 2026) **and its 2026 extension** (approved by the owner on 9 October 2026, recorded
+in [`docs/DECISIONS-2026.md`](../docs/DECISIONS-2026.md)), section by section, verifying each before the next.
 
 The launch unit is one complete journey: application → recruitment review → evidence
 verification → onboarding → authorised approval → active worker → eligible assignment →
@@ -21,8 +21,8 @@ needs a command behind it is carried forward here.
 
 Every agent on every machine reads this table before starting and updates it when a section
 changes state. Claim a section by setting 🚧 with your branch and machine, commit and push that
-change on your section branch **before** writing code, so others can see the claim. Detail for
-each section is in `docs/Plans 2026/08-DELIVERY-AND-CONSOLIDATION.md`.
+change on your section branch **before** writing code, so others can see the claim. What each
+section delivered, and its pull request, is in [`docs/DECISIONS-2026.md`](../docs/DECISIONS-2026.md).
 
 Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · ⏳ waiting · ⛔ blocked
 
