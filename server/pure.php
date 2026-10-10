@@ -2335,6 +2335,8 @@ function rg_validate_contact_details(array $data): array
         }
     }
     return ['ok' => $errors === [], 'errors' => array_values(array_unique($errors)), 'values' => $values];
+}
+
 // ---------------------------------------------------------------------------
 // Spreadsheet import (section S8, docs/Plans 2026/06).
 //
