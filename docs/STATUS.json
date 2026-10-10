@@ -513,13 +513,53 @@
         },
         {
           "name": "Timesheets from clock events, submitted and approved or queried",
-          "status": "partial",
-          "note": "Clocking out makes a draft timesheet (rg_timesheet_from_clock, Europe/London times). The worker submits it with their break through me.php?action=submit_timesheet; the office approves, queries with a reason the worker is told, or corrects with a reason kept as before and after in the audit log. Office screen filters by week, service and status. Partial: the worker's screens for this are the staff portal (S4)"
+          "status": "done",
+          "note": "Clocking out makes a draft timesheet (rg_timesheet_from_clock, Europe/London times). The worker submits it with their break through me.php?action=submit_timesheet; the office approves, queries with a reason the worker is told, or corrects with a reason kept as before and after in the audit log. Office screen filters by week, service and status. The worker confirms the break, submits, reads a query and sends again in the staff portal, Records (S4)"
         },
         {
           "name": "Requests: cover requests and enquiries with an owner",
           "status": "done",
           "note": "server/requests.php lists both with type, owner and status; /app/requests sets the owner, closes them, and creates one or more draft shifts at a site from a cover request (bookings.php?action=confirm). /app/enquiries and /app/bookings still work"
+        },
+        {
+          "name": "Staff portal: Home, Rota, Records, Me",
+          "status": "done",
+          "note": "/m is four tabs (src/pages/worker/). Home: next shift with site, address and a plain map link, site contact and notes, clock in from 15 minutes before (also enforced in field.php), report a problem, panic, blockers from rg_deployment_check() with what to do, training due, messages. Rota: published shifts by day, offers with accept and decline (rg_offer_respond(), shared with offer.php), open shifts with pick-up and the server's reason, an .ics file built on the phone. Records: checks with chips, training certificates, timesheets, gross pay with the GROSS PAY statement. Me: contact details written to people, emergency contacts, unavailability, leave. Checked in a browser at 375 and 1280"
+        },
+        {
+          "name": "Worker sends evidence; it waits for review",
+          "status": "done",
+          "note": "me.php?action=upload files a photo or PDF against the person (never the worker row, never as a contract) and moves the check to received for the office queue. Right to work, references and contract stay with the office. Nothing a worker uploads verifies itself. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "Every portal action proves ownership on the server",
+          "status": "done",
+          "note": "me.php takes the worker from the login only; ids in a request are looked up with it, so another worker's offer, timesheet, file, leave, availability or contact details read as not found. Client and office logins get 403 from every me.php action. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "The portal keeps no personal data offline",
+          "status": "done",
+          "note": "The worker-reads runtime cache of me.php and notifications.php is removed from vite.config.ts and deleted when /m opens. The installed shell loads offline and each tab says You are offline. docs/PRIVACY.md section 9, docs/COOKIES.md. Not tested against a real installed service worker offline"
+        },
+        {
+          "name": "Staff portal: Home, Rota, Records, Me",
+          "status": "done",
+          "note": "/m is four tabs (src/pages/worker/). Home: next shift with site, address and a plain map link, site contact and notes, clock in from 15 minutes before (also enforced in field.php), report a problem, panic, blockers from rg_deployment_check() with what to do, training due, messages. Rota: published shifts by day, offers with accept and decline (rg_offer_respond(), shared with offer.php), open shifts with pick-up and the server's reason, an .ics file built on the phone. Records: checks with chips, training certificates, timesheets, gross pay with the GROSS PAY statement. Me: contact details written to people, emergency contacts, unavailability, leave. Checked in a browser at 375 and 1280"
+        },
+        {
+          "name": "Worker sends evidence; it waits for review",
+          "status": "done",
+          "note": "me.php?action=upload files a photo or PDF against the person (never the worker row, never as a contract) and moves the check to received for the office queue. Right to work, references and contract stay with the office. Nothing a worker uploads verifies itself. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "Every portal action proves ownership on the server",
+          "status": "done",
+          "note": "me.php takes the worker from the login only; ids in a request are looked up with it, so another worker's offer, timesheet, file, leave, availability or contact details read as not found. Client and office logins get 403 from every me.php action. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "The portal keeps no personal data offline",
+          "status": "done",
+          "note": "The worker-reads runtime cache of me.php and notifications.php is removed from vite.config.ts and deleted when /m opens. The installed shell loads offline and each tab says You are offline. docs/PRIVACY.md section 9, docs/COOKIES.md. Not tested against a real installed service worker offline"
         }
       ]
     },
@@ -581,7 +621,7 @@
         {
           "name": "Emergency contacts",
           "status": "done",
-          "note": "Two contacts on people (migration 001 plus the second in 037). Edited on the profile by office roles holding the employment zone, validated by rg_validate_emergency_contacts(), audited by field name without the values. rg_save_emergency_contacts() in server/people-lib.php is the function the worker portal (S4) will call"
+          "note": "Two contacts on people (migration 001 plus the second in 037). Edited on the profile by office roles holding the employment zone, validated by rg_validate_emergency_contacts(), audited by field name without the values. rg_save_emergency_contacts() in server/people-lib.php is the same function the worker calls from the staff portal, Me, through me.php?action=emergency (S4), audited via portal"
         },
         {
           "name": "Activation approval shows its blockers",

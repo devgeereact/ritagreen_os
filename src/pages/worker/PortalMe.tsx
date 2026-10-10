@@ -5,7 +5,7 @@ import { useDocumentTitle } from "@/hooks/use-document-title"
 import { useApi } from "@/hooks/use-api"
 import { useAuth } from "@/providers/auth-provider"
 import { api } from "@/lib/api"
-import { COMPANY } from "@/lib/company"
+import { useCompanyDetails } from "@/lib/company"
 import { DIVISION_LABELS } from "@/lib/format"
 import { dateOnly } from "@/lib/people"
 import { addDays } from "@/lib/rota"
@@ -21,6 +21,8 @@ export default function PortalMe() {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApi<PortalProfile>("me.php?action=profile")
+  // The office's numbers as the owner keeps them in Website, Company details (S7).
+  const company = useCompanyDetails()
 
   return (
     <>
@@ -48,15 +50,15 @@ export default function PortalMe() {
       <PortalSection title="Contact the office" id="contact">
         <PortalCard className="space-y-2">
           <Button asChild variant="outline" className="h-11 w-full justify-start">
-            <a href={COMPANY.phoneHref}><Phone className="mr-2 size-4" aria-hidden /> Call {COMPANY.phone}</a>
+            <a href={company.phone.href}><Phone className="mr-2 size-4" aria-hidden /> Call {company.phone.display}</a>
           </Button>
           <Button asChild variant="outline" className="h-11 w-full justify-start">
-            <a href={COMPANY.emergencyPhoneHref}><Phone className="mr-2 size-4" aria-hidden /> Urgent line {COMPANY.emergencyPhone}</a>
+            <a href={company.urgentPhone.href}><Phone className="mr-2 size-4" aria-hidden /> {company.urgentLabel} {company.urgentPhone.display}</a>
           </Button>
           <Button asChild variant="outline" className="h-11 w-full justify-start">
-            <a href={`mailto:${COMPANY.email}`}><Mail className="mr-2 size-4" aria-hidden /> {COMPANY.email}</a>
+            <a href={`mailto:${company.email}`}><Mail className="mr-2 size-4" aria-hidden /> {company.email}</a>
           </Button>
-          <p className="text-xs text-muted-foreground">{COMPANY.hours}.</p>
+          <p className="text-xs text-muted-foreground">{company.officeHours}</p>
         </PortalCard>
       </PortalSection>
 
