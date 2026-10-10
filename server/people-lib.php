@@ -232,6 +232,15 @@ function rg_save_contact_details(mysqli $conn, int $personId, array $changes, ar
         }
     }
 
+    // The worker row's phone is what text messages read, so it follows the
+    // person record, as the staff portal's own change does (me.php). It is set
+    // from the person, never the other way round.
+    if (array_key_exists('phone', $by)) {
+        $stmt = $conn->prepare('UPDATE workers SET phone = ? WHERE person_id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('si', $by['phone'], $personId);
+        $stmt->execute();
+    }
+
     if ($emergency !== null) rg_save_emergency_contacts($conn, $personId, $emergency, $actorId, $via);
 
     if (array_key_exists('availability', $by) && $workerIds) {

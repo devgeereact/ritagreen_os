@@ -14,6 +14,10 @@ require_once __DIR__ . '/../../../pure.php';
 
 $admin = $client->login('admin@local.invalid');
 $fixture = (string) file_get_contents(__DIR__ . '/../../fixtures/sheet-import-sample.csv');
+// Earlier cases may have changed Amara's number (the staff portal case does),
+// so row 5 of the sample is pointed at whatever her record holds now.
+$amaraPhone = (string) $db->query("SELECT p.phone FROM people p JOIN workers w ON w.person_id = p.id WHERE w.email = 'amara@local.invalid'")->fetch_row()[0];
+$fixture = str_replace(',Amara Chen,,07700900101,', ',Amara Chen,,' . $amaraPhone . ',', $fixture);
 $count = static fn(string $sql): int => (int) $db->query($sql)->fetch_row()[0];
 
 Rgt::group('import: who may use it');
@@ -236,7 +240,7 @@ Rgt::group('import: service scope');
 $scoped = $client->login('scoped@local.invalid');
 Rgt::denied("a scoped manager cannot open another person's import", $scoped->get("/sheet-import.php?id=$importId"));
 $csv = "Full name,Email address,Phone,Postcode,Role,Service\n"
-     . "Amara Chen,,07700900101,ZZ1 1ZZ,,\n"
+     . "Amara Chen,,$amaraPhone,ZZ1 1ZZ,,\n"
      . "Care Person,care.person@example.test,07700900601,,Support worker,Healthcare\n"
      . "Guard Person,guard.person@example.test,07700900602,,Security officer,Security\n";
 $up = $scoped->post('/sheet-import.php?action=upload', ['file_name' => 'scoped.csv', 'csv' => $csv]);

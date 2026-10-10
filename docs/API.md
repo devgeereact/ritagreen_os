@@ -1953,8 +1953,9 @@ What an import can write, and nothing else:
   `person.emergency_contacts`.
 
 Compliance, verification, pay, right-to-work evidence, approval and employment status are not
-reachable. The worker's denormalised `workers.email` and `workers.phone` are not written: the
-person record is the truth.
+reachable. The person record is the truth: `workers.phone` follows a changed phone (it is what
+text messages read, and `me.php?action=profile` does the same), and `workers.email` is not
+written.
 
 Matching (`rg_import_match_decision()`): email, then phone, then name with date of birth.
 Any disagreement is `uncertain` and waits for a person. Duplicates: the same row in the file, a
