@@ -182,8 +182,8 @@ in `src/index.css` and consumed through Tailwind semantic tokens.
 
 | Role | Token | Value |
 |---|---|---|
-| Primary — navy (retired) | `--primary` | `210 82% 27%` / `#0C447C` |
-| Accent — mint (retired) | `--accent` | `160 51% 58%` / `#5DCAA5` |
+| Primary, navy (retired) | `--primary` | `210 82% 27%` / `#0C447C` |
+| Accent, mint (retired) | `--accent` | `160 51% 58%` / `#5DCAA5` |
 | Surface tint | `--secondary` | `209 72% 94%` / `#E6F1FB` |
 | Status | `--destructive` · `--warning` · `--success` | expired · expiring · valid |
 
