@@ -730,6 +730,106 @@ export type DashboardSummary = {
   compliance_alerts: { worker: string; item: string; days: number }[]
 }
 
+// ---- Today, Reports and system health (section S5) -------------------------
+
+/** A count on the Today page and where it leads. Null when the account may not see it. */
+export type TodayTile = { count: number; link: string } | null
+
+export type ActionItem = {
+  urgency: "urgent" | "today" | "soon"
+  kind: string
+  title: string
+  detail: string
+  link: string | null
+  count: number
+  /** The verb on the button, e.g. "Verify". */
+  action: string
+  /** Up to five people the item is about, in this account's scope. */
+  people: { id: number; name: string }[]
+}
+
+/** server/action-centre.php */
+export type ActionCentre = {
+  tiles: {
+    unfilled_shifts: TodayTile
+    checks_to_review: TodayTile
+    expiring_30: TodayTile
+    approvals_waiting: TodayTile
+  }
+  items: ActionItem[]
+  counts: { urgent: number; today: number; soon: number }
+  total: number
+  all_clear: boolean
+  scope: string | null
+  generated_at: string
+}
+
+export type ReportKey = "pipeline" | "workforce" | "expiring" | "unfilled" | "hours" | "workload"
+
+export type ReportListing = { key: ReportKey; title: string; description: string; personal: boolean }
+
+/** server/reports.php?action=run */
+export type ReportResult = {
+  report: ReportKey
+  title: string
+  description: string
+  columns: { key: string; label: string }[]
+  rows: Record<string, string | number | boolean | null>[]
+  totals: Record<string, number>
+  service: string | null
+  personal: boolean
+  generated_at: string
+}
+
+/** server/compliance.php?action=profile_pack: client-safe fields only. */
+export type ProfilePack = {
+  person: { id: number; name: string; photo: string | null }
+  roles: string[]
+  services: string[]
+  training: { course: string; completed_on: string | null; expires_on: string | null; status: string }[]
+  dbs: { verified: boolean; checked_on: string | null; level: string | null; renewal_due: string | null }
+  right_to_work: { verified: boolean; verified_on: string | null }
+  sia: { licence_number: string | null; expiry: string | null; status: string } | null
+  generated_by: string
+  generated_at: string
+}
+
+export type HealthState = "ok" | "warn" | "fail" | "off"
+
+/** server/system-health.php */
+export type SystemHealth = {
+  overall: HealthState
+  checks: { key: string; label: string; state: HealthState; detail: string }[]
+  jobs: {
+    key: string
+    label: string
+    every_hours: number
+    state: "ok" | "late" | "unknown"
+    last_started_at: string | null
+    last_success_at: string | null
+    last_detail: string | null
+    runs: number
+    note: string | null
+  }[]
+  mail_queue: {
+    enabled: boolean
+    counts: Record<"queued" | "sending" | "sent" | "failed" | "cancelled", number>
+    recent_failures: { id: number; subject: string; template_key: string | null; attempts: number; last_error: string | null; created_at: string }[]
+  }
+  forms: {
+    id: number
+    name: string
+    state: "ok" | "fail" | "off"
+    live: boolean
+    last_success_at: string | null
+    last_failure_at: string | null
+    last_failure_reason: string | null
+    failed: number
+    quiet: boolean
+  }[]
+  generated_at: string
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The person spine
 //

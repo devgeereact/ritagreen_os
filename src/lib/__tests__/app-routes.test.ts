@@ -38,7 +38,7 @@ describe("DESTINATIONS", () => {
       "/app", "/app/scheduling", "/app/jobs", "/app/field", "/app/timesheets", "/app/payroll",
       "/app/workers", "/app/compliance", "/app/ats", "/app/academy", "/app/incidents",
       "/app/clients", "/app/enquiries", "/app/bookings", "/app/quotes", "/app/contracts", "/app/invoicing",
-      "/app/analytics", "/app/insights", "/app/reports", "/app/inbox", "/app/notifications", "/app/comms",
+      "/app/reports", "/app/inbox", "/app/notifications", "/app/comms",
       "/app/content-studio", "/app/blog", "/app/testimonials", "/app/files", "/app/settings", "/app/help",
       "/app/profile",
     ]) {

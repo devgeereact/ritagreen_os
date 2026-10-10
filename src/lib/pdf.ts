@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { COMPANY, BILLING } from "@/lib/company"
 import { DIVISION_LABELS } from "@/lib/format"
-import type { Invoice, Quote, CompliancePack, Payslip, PayslipLine } from "@/lib/types"
+import type { Invoice, Quote, CompliancePack, Payslip, PayslipLine, ProfilePack } from "@/lib/types"
 
 const GREEN: [number, number, number] = [46, 125, 50]
 const INK: [number, number, number] = [34, 49, 31]
@@ -149,6 +149,98 @@ function statusColour(status: string): [number, number, number] {
   if (status === "expiring") return AMBER
   if (status === "valid") return GREEN
   return MUTED
+}
+
+function longDate(iso: string | null): string {
+  if (!iso) return "Not recorded"
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })
+}
+
+/**
+ * The worker profile pack a client is given (plan file 02, F21).
+ *
+ * Prints only what server/compliance.php?action=profile_pack returns, which is
+ * chosen on the server: no address, date of birth, NI number, contact details
+ * or right-to-work document numbers. No photograph is held for anybody yet, so
+ * the person is shown by their initials.
+ */
+export function buildProfilePackPdf(pack: ProfilePack): jsPDF {
+  const doc = new jsPDF({ unit: "pt", format: "a4" })
+  const W = doc.internal.pageSize.getWidth()
+  const H = doc.internal.pageSize.getHeight()
+  const M = 40
+
+  doc.setFillColor(...GREEN)
+  doc.rect(0, 0, W, 90, "F")
+  doc.setTextColor(255, 255, 255)
+  doc.setFont("helvetica", "bold").setFontSize(24)
+  doc.text("RitaGreen", M, 48)
+  doc.setFont("helvetica", "normal").setFontSize(9)
+  doc.text("Worker profile for a client", M, 66)
+  doc.setFont("helvetica", "bold").setFontSize(16)
+  doc.text("WORKER PROFILE", W - M, 48, { align: "right" })
+
+  // Initials in a circle, then the name, role and services.
+  const initials = pack.person.name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")
+  doc.setFillColor(232, 240, 232)
+  doc.circle(M + 28, 142, 28, "F")
+  doc.setTextColor(...GREEN).setFont("helvetica", "bold").setFontSize(18)
+  doc.text(initials, M + 28, 148, { align: "center" })
+
+  const x = M + 72
+  doc.setTextColor(...INK).setFont("helvetica", "bold").setFontSize(16)
+  doc.text(pack.person.name, x, 134)
+  doc.setFont("helvetica", "normal").setTextColor(...MUTED).setFontSize(10)
+  doc.text(pack.roles.length ? pack.roles.join(", ") : "Role not recorded", x, 152)
+  doc.text(pack.services.map((s) => DIVISION_LABELS[s] ?? s).join(", "), x, 166)
+
+  // Checks: one line each, plain words.
+  const checks: [string, string][] = [
+    ["Right to work", pack.right_to_work.verified ? `Verified on ${longDate(pack.right_to_work.verified_on)}` : "Not verified"],
+    ["DBS check", pack.dbs.verified
+      ? `Checked on ${longDate(pack.dbs.checked_on)}. Level: ${pack.dbs.level ?? "not recorded"}`
+      : "Not verified"],
+  ]
+  if (pack.sia) {
+    checks.push(["SIA licence", `${pack.sia.licence_number ?? "Number not recorded"}, expires ${longDate(pack.sia.expiry)} (${pack.sia.status})`])
+  }
+  autoTable(doc, {
+    startY: 200,
+    head: [["Check", "Result"]],
+    body: checks,
+    theme: "grid",
+    headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 9.5, textColor: INK },
+    columnStyles: { 0: { cellWidth: 120, fontStyle: "bold" } },
+    margin: { left: M, right: M },
+  })
+
+  // @ts-expect-error autotable augments doc with lastAutoTable
+  const afterChecks: number = (doc.lastAutoTable?.finalY ?? 260) + 18
+  autoTable(doc, {
+    startY: afterChecks,
+    head: [["Training", "Completed", "Valid until"]],
+    body: pack.training.length > 0
+      ? pack.training.map((t) => [t.course, t.completed_on ? longDate(t.completed_on) : "Not recorded", t.expires_on ? longDate(t.expires_on) : "No expiry"])
+      : [["No training recorded", "", ""]],
+    theme: "grid",
+    headStyles: { fillColor: INK, textColor: 255, fontStyle: "bold", fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: INK },
+    margin: { left: M, right: M },
+  })
+
+  doc.setFontSize(8).setTextColor(...MUTED)
+  doc.text(
+    "Shared with a client for the placement named. Contact details, address and document numbers are deliberately left out.",
+    W / 2, H - 36, { align: "center" },
+  )
+  doc.text(`Generated ${pack.generated_at} UTC by ${pack.generated_by} · ${COMPANY.legalName}`, W / 2, H - 24, { align: "center" })
+  return doc
+}
+
+export function profilePackPdf(pack: ProfilePack): void {
+  buildProfilePackPdf(pack).save(`profile-${pack.person.name.replace(/\s+/g, "-").toLowerCase()}.pdf`)
 }
 
 export function compliancePackPdf(pack: CompliancePack): void {

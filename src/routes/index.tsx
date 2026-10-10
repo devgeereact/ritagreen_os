@@ -64,7 +64,7 @@ const Register = lazy(() => import("@/pages/auth/Register"))
 // all landed in the entry chunk. Somebody reading the marketing home page was
 // downloading the internal CMS chrome to render it.
 const AppLayout = lazy(() => import("@/layouts/AppLayout"))
-const Dashboard = lazy(() => import("@/pages/app/Dashboard"))
+const Today = lazy(() => import("@/pages/app/Today"))
 const Clients = lazy(() => import("@/pages/app/Clients"))
 const ClientDetail = lazy(() => import("@/pages/app/ClientDetail"))
 const Enquiries = lazy(() => import("@/pages/app/Enquiries"))
@@ -97,8 +97,6 @@ const WorkerApp = lazy(() => import("@/pages/worker/WorkerApp"))
 const Invoicing = lazy(() => import("@/pages/app/Invoicing"))
 const Academy = lazy(() => import("@/pages/app/Academy"))
 const AcademyDetail = lazy(() => import("@/pages/app/AcademyDetail"))
-const Analytics = lazy(() => import("@/pages/app/Analytics"))
-const Insights = lazy(() => import("@/pages/app/Insights"))
 const Files = lazy(() => import("@/pages/app/Files"))
 const Settings = lazy(() => import("@/pages/app/Settings"))
 const Profile = lazy(() => import("@/pages/app/Profile"))
@@ -197,7 +195,7 @@ export const router = createBrowserRouter([
       {
         element: page(<AppLayout />),
         children: [
-          { index: true, element: page(<Dashboard />) },
+          { index: true, element: page(<Today />) },
           { path: "clients", element: page(<Clients />) },
           { path: "clients/:id", element: page(<ClientDetail />) },
           { path: "requests", element: page(<Requests />) },
@@ -231,8 +229,10 @@ export const router = createBrowserRouter([
           { path: "invoicing", element: page(<Invoicing />) },
           { path: "academy", element: page(<Academy />) },
           { path: "academy/:id", element: page(<AcademyDetail />) },
-          { path: "analytics", element: page(<Analytics />) },
-          { path: "insights", element: page(<Insights />) },
+          // Folded into Reports (S5). The old pages stay on disk until S9 removes
+          // them through the removal protocol; the routes redirect so links land.
+          { path: "analytics", element: <Navigate to="/app/reports" replace /> },
+          { path: "insights", element: <Navigate to="/app/reports" replace /> },
           { path: "files", element: page(<Files />) },
           { path: "comms", element: page(<Comms />) },
           { path: "blog", element: page(<Blog />) },

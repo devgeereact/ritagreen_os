@@ -1,13 +1,15 @@
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
 import { Link, useParams, useSearchParams } from "react-router-dom"
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, FileDown } from "lucide-react"
+import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ErrorBlock, LoadingBlock } from "@/components/app/state-block"
 import { useApi } from "@/hooks/use-api"
 import { initials } from "@/lib/people"
-import type { NextAction, PersonProfile as Profile } from "@/lib/types"
+import type { NextAction, PersonProfile as Profile, ProfilePack } from "@/lib/types"
+import { api, ApiError } from "@/lib/api"
 import { ServiceTag } from "@/components/people/shared"
 import { OverviewTab } from "@/components/people/overview-tab"
 import { ChecksTab } from "@/components/people/checks-tab"
@@ -77,7 +79,12 @@ export default function PersonProfile() {
                 </div>
               </div>
             </div>
-            <NextActionPanel action={data.next_action} canManage={data.can.manage} onGo={setTab} />
+            <div className="flex flex-col gap-2 sm:items-end">
+              <NextActionPanel action={data.next_action} canManage={data.can.manage} onGo={setTab} />
+              {/* The compliance zone is what the server asks for; a restricted checks
+                  section means this account does not hold it. */}
+              {!("restricted" in data.checks) && data.workers.length > 0 && <ProfilePackButton personId={id} />}
+            </div>
           </header>
 
           <Tabs value={tab} onValueChange={setTab}>
@@ -117,5 +124,33 @@ function NextActionPanel({ action, canManage, onGo }: { action: NextAction | nul
         {canManage ? "Go to it" : "View"} <ArrowRight className="ml-1 size-4" aria-hidden />
       </Button>
     </div>
+  )
+}
+
+/**
+ * "Download profile for client" (plan file 02, F21). The fields are chosen by
+ * server/compliance.php?action=profile_pack, which also audits the download;
+ * this only turns the answer into a PDF. jsPDF is loaded when asked for, so the
+ * profile page does not carry it.
+ */
+function ProfilePackButton({ personId }: { personId: number }) {
+  const [busy, setBusy] = useState(false)
+  async function run() {
+    setBusy(true)
+    try {
+      const pack = await api<ProfilePack>(`compliance.php?action=profile_pack&person_id=${personId}`)
+      const { profilePackPdf } = await import("@/lib/pdf")
+      profilePackPdf(pack)
+      toast.success("Profile downloaded. The download has been recorded.")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Could not build the profile.")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={run} disabled={busy}>
+      <FileDown className="mr-1 size-4" aria-hidden /> {busy ? "Building…" : "Download profile for client"}
+    </Button>
   )
 }

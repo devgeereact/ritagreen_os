@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IntakeTab } from "@/components/app/intake-tab"
+import { SystemHealthTab } from "@/components/app/system-health"
+import { useSearchParams } from "react-router-dom"
 import {
   Table,
   TableBody,
@@ -49,6 +51,10 @@ export default function Settings() {
   const { hasRole } = useAuth()
   const isAdmin = hasRole("super_admin", "admin")
   const isOffice = hasRole("super_admin", "admin", "manager")
+  // The open tab is in the address, so Today can link straight to System health.
+  const [params, setParams] = useSearchParams()
+  const tab = params.get("tab") ?? (isAdmin ? "users" : "security")
+  const setTab = (value: string) => setParams((p) => { p.set("tab", value); return p }, { replace: true })
 
   return (
     <div className="space-y-6">
@@ -59,15 +65,18 @@ export default function Settings() {
         </p>
       </div>
 
-      <Tabs defaultValue={isAdmin ? "users" : "security"}>
-        <TabsList>
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <TabsList className="w-max justify-start">
           <TabsTrigger value="security">Security</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">Users & roles</TabsTrigger>}
           {isOffice && <TabsTrigger value="features">Features</TabsTrigger>}
           {isOffice && <TabsTrigger value="intake">Form intake</TabsTrigger>}
+          {isOffice && <TabsTrigger value="health">System health</TabsTrigger>}
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
+        </div>
         <TabsContent value="security" className="mt-4 space-y-6">
           <TwoFactorCard />
           <SessionsCard />
@@ -78,6 +87,10 @@ export default function Settings() {
             owner (super_admin, admin) can change them, and the server enforces it. */}
         {isOffice && <TabsContent value="features" className="mt-4"><FeaturesCard canEdit={isAdmin} /></TabsContent>}
         {isOffice && <TabsContent value="intake" className="mt-4"><IntakeTab /></TabsContent>}
+        {/* Email queue, form intake, scheduled jobs and the restore test. The
+            server refuses a service-scoped manager, whose figures would span
+            every service; the tab then says so. */}
+        {isOffice && <TabsContent value="health" className="mt-4"><SystemHealthTab /></TabsContent>}
         {isAdmin && (
           <>
             <TabsContent value="users" className="mt-4"><UsersTab /></TabsContent>
