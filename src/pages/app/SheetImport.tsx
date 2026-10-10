@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import {
   AlertTriangle,
@@ -80,7 +80,7 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
 }
 
 function normalise(h: string): string {
-  return h.replace(/﻿/g, "").replace(/ /g, " ").replace(/\s+/g, " ").trim().toLowerCase().replace(/[\s*:]+$/, "").trim()
+  return h.replace(/\uFEFF/g, "").replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim().toLowerCase().replace(/[\s*:]+$/, "").trim()
 }
 
 export default function SheetImport() {
@@ -237,14 +237,11 @@ function ImportDetail({ id }: { id: number }) {
   const meta = useApi<{ mappings: ImportMapping[]; forms: { id: number; title: string }[]; fields: { key: string; label: string }[] }>(
     "sheet-import.php?action=mappings",
   )
-  const [view, setView] = useState<SheetImportView | null>(null)
-  const [step, setStep] = useState<Step>("map")
-
-  useEffect(() => {
-    if (!loaded.data) return
-    setView(loaded.data)
-    setStep(loaded.data.import.status === "open" ? "map" : "report")
-  }, [loaded.data])
+  // What the server last returned: the load, or a later map/apply/close answer.
+  const [latest, setView] = useState<SheetImportView | null>(null)
+  const view = latest ?? loaded.data
+  const [chosenStep, setStep] = useState<Step | null>(null)
+  const step: Step = chosenStep ?? (view?.import.status === "open" ? "map" : "report")
 
   if (loaded.loading || meta.loading) return <LoadingBlock rows={6} />
   if (loaded.error) return <ErrorBlock message={loaded.error} onRetry={loaded.reload} />

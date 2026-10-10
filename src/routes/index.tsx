@@ -91,6 +91,8 @@ const Bookings = lazy(() => import("@/pages/app/Bookings"))
 const Incidents = lazy(() => import("@/pages/app/Incidents"))
 const FieldOps = lazy(() => import("@/pages/app/FieldOps"))
 const ATS = lazy(() => import("@/pages/app/ATS"))
+// Recruitment > Import from spreadsheet, section S8.
+const SheetImport = lazy(() => import("@/pages/app/SheetImport"))
 const Reports = lazy(() => import("@/pages/app/Reports"))
 const ClientPortal = lazy(() => import("@/pages/portal/ClientPortal"))
 const WorkerApp = lazy(() => import("@/pages/worker/WorkerApp"))
@@ -206,6 +208,8 @@ export const router = createBrowserRouter([
           { path: "incidents", element: page(<Incidents />) },
           { path: "field", element: page(<FieldOps />) },
           { path: "ats", element: page(<ATS />) },
+          { path: "ats/import", element: page(<SheetImport />) },
+          { path: "ats/import/:id", element: page(<SheetImport />) },
           { path: "reports", element: page(<Reports />) },
           { path: "inbox", element: page(<Mailbox />) },
           { path: "workers", element: page(<Workers />) },

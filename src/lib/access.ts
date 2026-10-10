@@ -73,6 +73,9 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/people", roles: COMPLIANCE },
   { path: "/app/compliance", roles: COMPLIANCE },
   { path: "/app/ats", roles: OFFICE_PLUS_TRAINER },
+  // Spreadsheet import (S8): office only, as server/sheet-import.php. It changes
+  // staff contact details as well as adding candidates, so not trainers.
+  { path: "/app/ats/import", roles: OFFICE },
   { path: "/app/academy", roles: [...OFFICE, "trainer", "editor"] },
 
   // Quality
