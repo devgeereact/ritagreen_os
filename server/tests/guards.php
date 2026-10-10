@@ -24,7 +24,7 @@ const GUARD_NOT_AN_ENDPOINT = [
     'files-lib.php', 'portal-lib.php',
     'config.php', 'config.sample.php',
     'migrate.php', 'seed.php', 'backfill-people.php', 'retention-sweep.php',
-    'send-queued-mail.php', 'create-admin.php', 'expiry-alerts.php', 'backup.php',
+    'send-queued-mail.php', 'create-admin.php', 'expiry-alerts.php', 'backup.php', 'restore-check.php',
 ];
 
 /**

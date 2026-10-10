@@ -3183,6 +3183,39 @@ function rg_expiry_band(?int $days): ?string
 }
 
 /**
+ * Differences between a database and its restored copy, table by table.
+ *
+ * $source and $restored map table name to row count. Returns one line per
+ * difference: a table missing from the copy, an extra one, or a count that does
+ * not match. An empty list is the only passing answer. Used by
+ * server/restore-check.php; a function of its arguments so it is tested.
+ *
+ * @param array<string,int> $source
+ * @param array<string,int> $restored
+ * @return string[]
+ */
+function rg_restore_differences(array $source, array $restored): array
+{
+    $out = [];
+    ksort($source);
+    foreach ($source as $table => $n) {
+        if (!array_key_exists($table, $restored)) { $out[] = "$table: missing from the restored copy"; continue; }
+        if ((int) $restored[$table] !== (int) $n) $out[] = "$table: $n rows, restored copy has {$restored[$table]}";
+    }
+    foreach (array_diff(array_keys($restored), array_keys($source)) as $extra) {
+        $out[] = "$extra: only in the restored copy";
+    }
+    return $out;
+}
+
+/**
+ * How often a restore must be rehearsed before system health calls it overdue:
+ * every 90 days (docs/runbooks/backup-and-restore.md). rg_cron_state() with this
+ * period says "late" once a run is half a period overdue, as for every job.
+ */
+const RG_RESTORE_TEST_EVERY_HOURS = 24 * 90;
+
+/**
  * Is a scheduled job running on time?
  *
  *   unknown  no run has ever been recorded. Said plainly rather than read as

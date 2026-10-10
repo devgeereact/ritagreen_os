@@ -157,3 +157,25 @@ Rgt::same('with its id and display', $res->get('forms.0.form'), ['id' => '1FAIpQ
 Rgt::ok('and nothing internal', !array_diff(array_keys($res->get('forms.0', [])), ['title', 'service', 'form']));
 Rgt::status('no other purpose is public', $public->get('/website-forms.php?action=public&purpose=recruitment'), 404);
 Rgt::denied('the directory itself still needs a login', $public->get('/website-forms.php'));
+
+// ---------------------------------------------------------------------------
+Rgt::group('S10: system health reads the recorded restore test');
+
+$restoreCheck = static function () use ($admin): array {
+    foreach ($admin->get('/system-health.php')->get('checks', []) as $c) if ($c['key'] === 'restore_test') return $c;
+    return [];
+};
+$db->query("DELETE FROM cron_runs WHERE job = 'restore_test'");
+$c = $restoreCheck();
+Rgt::same('never recorded is a warning, not fine', $c['state'] ?? null, 'warn');
+Rgt::ok('and says how to record one', str_contains((string) ($c['detail'] ?? ''), 'backup-and-restore.md'), json_encode($c));
+$db->query("INSERT INTO cron_runs (job, last_started_at, last_success_at, last_detail, runs)
+            VALUES ('restore_test', UTC_TIMESTAMP(), UTC_TIMESTAMP(), '88 tables, 1240 rows, 5 documents into x', 1)");
+$c = $restoreCheck();
+Rgt::same('a test passed today is ok', $c['state'] ?? null, 'ok');
+Rgt::ok('with its date', str_contains((string) ($c['detail'] ?? ''), gmdate('Y-m-d')), json_encode($c));
+$db->query("UPDATE cron_runs SET last_success_at = DATE_SUB(UTC_TIMESTAMP(), INTERVAL 200 DAY) WHERE job = 'restore_test'");
+$c = $restoreCheck();
+Rgt::same('one 200 days old is a warning again', $c['state'] ?? null, 'warn');
+Rgt::ok('saying it is overdue', str_contains((string) ($c['detail'] ?? ''), 'more than 90 days'), json_encode($c));
+$db->query("DELETE FROM cron_runs WHERE job = 'restore_test'");
