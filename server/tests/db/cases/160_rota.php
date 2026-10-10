@@ -307,7 +307,20 @@ $tsId = (int) $one($db, "SELECT id FROM timesheets WHERE shift_id = $worked");
 Rgt::ok('a timesheet is made from the clock', $tsId > 0);
 Rgt::same('as a draft', $one($db, "SELECT status FROM timesheets WHERE id = $tsId"), 'draft');
 Rgt::same('from the clock', $one($db, "SELECT source FROM timesheets WHERE id = $tsId"), 'clock');
-Rgt::same('eight hours', (int) $one($db, "SELECT minutes FROM timesheets WHERE id = $tsId"), 480);
+require_once dirname(__DIR__, 3) . '/pure.php';   // rg_shift_minutes(), the rule the timesheet uses
+// Eight hours of real time, read on the London wall clock the timesheet uses.
+// That is 480 minutes on every night of the year but two: across a clock change
+// the wall clock shows seven or nine. Worked out from the stored instants rather
+// than written as 480, so the case passes whatever the hour or date it runs
+// (it used to depend on the time of day; see the correction below too).
+$instants = $db->query("SELECT MIN(CASE WHEN kind = 'clock_in' THEN created_at END), MAX(CASE WHEN kind = 'clock_out' THEN created_at END)
+                          FROM shift_events WHERE shift_id = $worked")->fetch_row();
+$london = static fn(string $utc): DateTimeImmutable => (new DateTimeImmutable($utc, new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Europe/London'));
+$wallIn = $london((string) $instants[0]);
+$wallOut = $london((string) $instants[1]);
+$expectedMinutes = rg_shift_minutes($wallIn->format('Y-m-d'), $wallIn->format('H:i'), $wallOut->format('H:i'));
+Rgt::ok('eight hours of real time', abs(strtotime((string) $instants[1]) - strtotime((string) $instants[0]) - 8 * 3600) < 120);
+Rgt::same('priced on the wall clock', (int) $one($db, "SELECT minutes FROM timesheets WHERE id = $tsId"), $expectedMinutes);
 Rgt::same('nothing approved, so nothing paid', (int) $one($db, "SELECT COUNT(*) FROM timesheets WHERE id = $tsId AND status = 'approved'"), 0);
 
 Rgt::ok('she sees it', in_array($tsId, array_column($amaraApp->get('/me.php?action=timesheets')->get('timesheets', []), 'id'), true));
