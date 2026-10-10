@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  191 done · 13 partial · 1 to do · 205 tracked
+`#######################.`  192 done · 13 partial · 1 to do · 206 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 27 | 3 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 28 | 3 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 27 done, 3 partial, 0 to do
+Milestone 0 · 28 done, 3 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -59,6 +59,7 @@ Milestone 0 · 27 done, 3 partial, 0 to do
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
 - [x] Sitemap: static pages at build time, records live — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php_
+- [x] Spreadsheet import (S8) — _Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/180_sheet_import.php_
 - [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_

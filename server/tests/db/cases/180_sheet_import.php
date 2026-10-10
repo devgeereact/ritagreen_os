@@ -16,7 +16,7 @@ $admin = $client->login('admin@local.invalid');
 $fixture = (string) file_get_contents(__DIR__ . '/../../fixtures/sheet-import-sample.csv');
 $count = static fn(string $sql): int => (int) $db->query($sql)->fetch_row()[0];
 
-Rgt::group('import — who may use it');
+Rgt::group('import: who may use it');
 
 foreach (['priya@local.invalid' => 'a client portal login', 'amara.login@local.invalid' => "a worker's own login",
           'trainer@local.invalid' => 'a trainer', 'editor@local.invalid' => 'an editor'] as $email => $who) {
@@ -26,7 +26,7 @@ foreach (['priya@local.invalid' => 'a client portal login', 'amara.login@local.i
 }
 Rgt::denied('nobody signed in cannot upload', $client->post('/sheet-import.php?action=upload', ['file_name' => 'x.csv', 'csv' => $fixture]));
 
-Rgt::group('import — upload');
+Rgt::group('import: upload');
 
 Rgt::status('an XLSX file is refused with how to get a CSV',
     $admin->post('/sheet-import.php?action=upload', ['file_name' => 'responses.xlsx', 'csv' => 'PK']), 422);
@@ -56,7 +56,7 @@ Rgt::same('Timestamp is guessed as the response time', $cols['timestamp'] ?? nul
 Rgt::same('the email column is guessed', $cols['email address'] ?? null, 'email');
 Rgt::same('the emergency phone is not taken for the phone', $cols['emergency contact phone'] ?? null, 'emergency_phone');
 
-Rgt::group('import — map, with forbidden fields refused');
+Rgt::group('import: map, with forbidden fields refused');
 
 $columns = $cols;
 $columns['How did you hear about us?'] = 'status';
@@ -83,7 +83,7 @@ Rgt::status('the saved mapping can be updated', $res, 200);
 Rgt::status('a mapping without a name column is refused',
     $admin->post("/sheet-import.php?action=map&id=$importId", ['columns' => ['Full name' => 'ignore', 'Email address' => 'email']]), 422);
 
-Rgt::group('import — preview, nothing written');
+Rgt::group('import: preview, nothing written');
 
 $rows = [];
 foreach ($res->get('rows', []) as $r) $rows[(int) $r['row']] = $r;
@@ -112,7 +112,7 @@ Rgt::same('choosing the member of staff turns the row into an update', $chosen->
 $bogus = $admin->get("/sheet-import.php?action=row&id=$importId&row={$rows[9]['id']}&choice=1");
 Rgt::same('a person who was not offered cannot be chosen', $bogus->get('row.outcome'), 'uncertain');
 
-Rgt::group('import — apply');
+Rgt::group('import: apply');
 
 $amara = $db->query("SELECT w.id, w.person_id, w.status, w.approved_at, w.pay_rate_pence, w.right_to_work
                        FROM workers w WHERE w.email = 'amara@local.invalid'")->fetch_assoc();
@@ -172,7 +172,7 @@ Rgt::same('every created row is audited with the file and row',
 Rgt::same('and every update', $count("SELECT COUNT(*) FROM audit_log WHERE action = 'import.row_updated' AND detail LIKE 'Support worker (Responses).csv, row %'"), 2);
 Rgt::same('only failed rows keep their cells', $count("SELECT COUNT(*) FROM sheet_import_rows WHERE import_id = $importId AND cells_json IS NOT NULL"), 3);
 
-Rgt::group('import — report and failures download');
+Rgt::group('import: report and failures download');
 
 $fails = $admin->get("/sheet-import.php?action=failures&id=$importId");
 Rgt::status('the failures download', $fails, 200);
@@ -185,7 +185,7 @@ Rgt::ok('the import is in the history', in_array($importId, array_column($histor
 Rgt::status('the import can be closed', $admin->post("/sheet-import.php?action=close&id=$importId", []), 200);
 Rgt::same('which clears every held cell', $count("SELECT COUNT(*) FROM sheet_import_rows WHERE import_id = $importId AND cells_json IS NOT NULL"), 0);
 
-Rgt::group('import — the same file again creates nothing');
+Rgt::group('import: the same file again creates nothing');
 
 $applicantsMid = $count('SELECT COUNT(*) FROM applicants');
 $peopleMid = $count('SELECT COUNT(*) FROM people');
@@ -202,7 +202,7 @@ Rgt::same('applying everything creates nothing', [$res->get('counts.created'), $
 Rgt::same('no new applicant', $count('SELECT COUNT(*) FROM applicants'), $applicantsMid);
 Rgt::same('no new person', $count('SELECT COUNT(*) FROM people'), $peopleMid);
 
-Rgt::group('import — a response the form feed already delivered');
+Rgt::group('import: a response the form feed already delivered');
 
 $secret = 'test-shared-secret-not-a-real-one';
 $db->query("UPDATE integrations SET secret_hash = '" . hash('sha256', $secret) . "', active = 1 WHERE integration_key = 'careers_care'");
@@ -231,7 +231,7 @@ Rgt::ok('and says it came through the form feed', str_contains((string) ($r[0]['
 Rgt::same('a response id the feed recorded is a duplicate', [$r[1]['outcome'] ?? null, $r[1]['reason'] ?? null],
     ['duplicate', 'Already received through the form feed.']);
 
-Rgt::group('import — service scope');
+Rgt::group('import: service scope');
 
 $scoped = $client->login('scoped@local.invalid');
 Rgt::denied("a scoped manager cannot open another person's import", $scoped->get("/sheet-import.php?id=$importId"));
@@ -257,7 +257,7 @@ Rgt::same("Amara's postcode was not changed by the scoped manager",
     $db->query("SELECT postcode FROM people WHERE id = {$amara['person_id']}")->fetch_row()[0], 'LS1 4GH');
 Rgt::same('and no care application was made', $count("SELECT COUNT(*) FROM applicants WHERE email = 'care.person@example.test'"), 0);
 
-Rgt::group('import — two simultaneous applies of one import');
+Rgt::group('import: two simultaneous applies of one import');
 
 $csv = "Full name,Email address,Role,Service\nRace Import,race.import@example.test,Cleaner,Cleaning\n";
 $up = $admin->post('/sheet-import.php?action=upload', ['file_name' => 'race.csv', 'csv' => $csv]);
