@@ -736,8 +736,11 @@ function si_apply_row(mysqli $conn, array $user, array $import, int $rowId, bool
         $changed = null;
 
         if (!$ticked) {
+            // A row that could never have been applied keeps the reason it could
+            // not; one that could have been says it was left out.
             if ($plan['outcome'] === 'problem') $outcome = 'failed';
-            else $reason = 'Not selected.';
+            elseif ($plan['outcome'] === 'uncertain') $reason = 'Needs a decision about who this is.';
+            elseif (in_array($plan['outcome'], ['new', 'update'], true)) $reason = 'Not selected.';
         } elseif ($plan['outcome'] === 'problem') {
             $outcome = 'failed';
         } elseif ($plan['outcome'] === 'uncertain') {

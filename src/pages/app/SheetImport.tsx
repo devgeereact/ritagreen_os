@@ -373,10 +373,15 @@ function MapStep({
           <Select value={purpose} onValueChange={(v) => setPurpose(v as typeof purpose)}>
             <SelectTrigger id="purpose"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="applications">Applications (new applicants; staff details updated)</SelectItem>
-              <SelectItem value="staff_updates">Staff contact details only</SelectItem>
+              <SelectItem value="applications">Applications</SelectItem>
+              <SelectItem value="staff_updates">Staff contact details</SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">
+            {purpose === "applications"
+              ? "New applicants are added; anyone already on staff has their contact details updated."
+              : "Only people already on staff are changed. Nobody new is added."}
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="service">Service when a row does not say</Label>
