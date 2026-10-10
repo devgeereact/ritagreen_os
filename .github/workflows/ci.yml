@@ -191,7 +191,7 @@ jobs:
       # docs/TRACEABILITY.md cites a source file that does not exist, if a relative
       # markdown link in docs/, the root, .agent/ or server/README.md is broken, or
       # if a retired brand colour reappears in src/ or docs/.
-      - name: Test the documentation checks
-        run: python3 scripts/test_docs_sync.py
+      - name: Test the documentation checks and the agent guard hooks
+        run: python3 scripts/test_docs_sync.py && python3 scripts/test_agent_guard.py
       - name: Check documentation consistency
         run: python3 scripts/docs_sync.py --check
