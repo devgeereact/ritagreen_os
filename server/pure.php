@@ -643,6 +643,23 @@ function rg_normalise_email(?string $email): ?string
 }
 
 /**
+ * A credential label reduced to a comparable form, for matching a free-text
+ * certification type to a requirement label.
+ *
+ * Lower-cased, "&" read as "and", runs of spaces collapsed. The seed held
+ * "Moving & Handling" against the requirement "Moving and handling", and the
+ * certificate silently counted for nothing. Nothing looser than this: free text
+ * is a poor join key, and a fuzzy match would credit somebody with a
+ * credential they do not hold.
+ */
+function rg_label_key(?string $label): string
+{
+    $s = strtolower(trim((string) $label));
+    $s = str_replace('&', ' and ', $s);
+    return trim((string) preg_replace('/\s+/', ' ', $s));
+}
+
+/**
  * A phone number reduced to a comparable form, for matching only.
  *
  * Deliberately not E.164: normalise_phone() in lib.php produces a number to

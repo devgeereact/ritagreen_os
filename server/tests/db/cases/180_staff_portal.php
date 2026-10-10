@@ -53,8 +53,8 @@ $first = $home->get('shifts', [])[0] ?? [];
 Rgt::ok('each shift says when clocking in opens', isset($first['clock_in_opens_at']), $home->body);
 Rgt::same('she is clear to work', $home->get('eligible'), true);
 Rgt::same('so nothing is blocking her', $home->get('blockers'), []);
-Rgt::ok('Moving & Handling, due in 55 days, is not yet "due soon"',
-    !in_array('Moving & Handling', array_column($home->get('training_due', []), 'label'), true));
+Rgt::ok('Moving and handling, due in 55 days, is not yet "due soon"',
+    !in_array('Moving and handling', array_column($home->get('training_due', []), 'label'), true));
 
 $cerysHome = null;
 $cerys = (int) $one($db, "SELECT id FROM workers WHERE name = 'Cerys Hughes'");

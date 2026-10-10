@@ -234,7 +234,7 @@ echo "  portal login 1 client, 1 worker\n";
 // ---- Certifications, again spread across the expiry tiers ------------------
 $certs = [
     ['Amara Chen',    'Care Certificate',      'CC-2024-001', $d(200)],
-    ['Amara Chen',    'Moving & Handling',     null,          $d(55)],
+    ['Amara Chen',    'Moving and handling',   null,          $d(55)],
     ['Bola Adeyemi',  'NMC Registration',      'NMC-77123',   $d(90)],
     ['Cerys Hughes',  'First Aid',             null,          $d(-40)],
     ['Dmitri Volkov', 'First Aid',             null,          $d(120)],

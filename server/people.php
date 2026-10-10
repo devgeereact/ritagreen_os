@@ -288,6 +288,10 @@ foreach ($services as $service => $svc) {
             'chip' => $chip['chip'],
             'chip_label' => $chip['label'],
             'expiry' => $evidence[$key]['expiry'] ?? null,
+            // Where the counted evidence came from (rg_load_evidence()), so a check
+            // that is valid only because of a certificate row nobody has verified
+            // is labelled as such rather than reading as "Verifier: nobody yet".
+            'evidence_origin' => $evidence[$key]['origin'] ?? null,
             'verification_id' => $latest['id'] ?? null,
             'verification_status' => $latest['status'] ?? null,
             'open_verification_id' => $open['id'] ?? null,

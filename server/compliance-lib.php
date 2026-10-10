@@ -92,6 +92,12 @@ function rg_load_rules(mysqli $conn, string $service, ?string $workerRole = null
  *
  * Absent from the returned map means "nothing on file", which the evaluator
  * treats as `missing`. That is deliberately distinct from present-but-lapsed.
+ *
+ * Each entry carries `origin`: where the evidence came from (verification,
+ * certificate, worker_record, right_to_work_check, legacy_flag, references,
+ * contract_file). It is a label for the person reading the profile, so a check
+ * that is valid only because of a certificate row nobody has verified says so.
+ * Nothing in the evaluator reads it, and it changes no precedence.
  */
 function rg_load_evidence(mysqli $conn, int $personId): array
 {
@@ -107,10 +113,10 @@ function rg_load_evidence(mysqli $conn, int $personId): array
 
     if ($w) {
         if ($w['dbs_status'] || $w['dbs_expiry']) {
-            $evidence['dbs'] = ['expiry' => $w['dbs_expiry'], 'verified' => $w['dbs_status'] === 'valid'];
+            $evidence['dbs'] = ['expiry' => $w['dbs_expiry'], 'verified' => $w['dbs_status'] === 'valid', 'origin' => 'worker_record'];
         }
         if ($w['sia_number'] || $w['sia_expiry']) {
-            $evidence['sia_licence'] = ['expiry' => $w['sia_expiry'], 'verified' => (bool) $w['sia_number']];
+            $evidence['sia_licence'] = ['expiry' => $w['sia_expiry'], 'verified' => (bool) $w['sia_number'], 'origin' => 'worker_record'];
         }
     }
 
@@ -131,12 +137,13 @@ function rg_load_evidence(mysqli $conn, int $personId): array
             $evidence['right_to_work'] = [
                 'expiry' => $rtw['recheck_due'],
                 'verified' => $rtw['verified_at'] !== null,
+                'origin' => 'right_to_work_check',
             ];
         }
     } elseif ($w && $w['right_to_work']) {
         // No check record yet: fall back to the legacy flag so nothing regresses
         // before migration 006 has run everywhere.
-        $evidence['right_to_work'] = ['expiry' => null, 'verified' => false];
+        $evidence['right_to_work'] = ['expiry' => null, 'verified' => false, 'origin' => 'legacy_flag'];
     }
 
     // A completed verification is stronger evidence than a field somebody typed
@@ -190,10 +197,12 @@ function rg_load_evidence(mysqli $conn, int $personId): array
             'expiry' => $row['expires_on'] ?? ($evidence[$key]['expiry'] ?? null),
             'verified' => true,
             'from_verification' => true,
+            'origin' => 'verification',
         ];
     }
 
-    // Certifications are matched to requirements by label, case-insensitively.
+    // Certifications are matched to requirements by label: case-insensitively,
+    // with "&" read as "and" (rg_label_key()), and nothing looser.
     // Free text is a poor join key; a certification_requirement_id belongs on the
     // table, and is deliberately left for the milestone that rebuilds training.
     $stmt = $conn->prepare(
@@ -208,10 +217,10 @@ function rg_load_evidence(mysqli $conn, int $personId): array
 
     $byLabel = [];
     $lookup = $conn->query('SELECT req_key, label FROM compliance_requirements WHERE active = 1');
-    while ($row = $lookup->fetch_assoc()) $byLabel[strtolower($row['label'])] = $row['req_key'];
+    while ($row = $lookup->fetch_assoc()) $byLabel[rg_label_key($row['label'])] = $row['req_key'];
 
     while ($row = $res->fetch_assoc()) {
-        $key = $byLabel[strtolower(trim($row['type']))] ?? null;
+        $key = $byLabel[rg_label_key($row['type'])] ?? null;
         if ($key === null) continue;
 
         // A reviewed decision outranks a certificate row. This pass runs after
@@ -228,7 +237,7 @@ function rg_load_evidence(mysqli $conn, int $personId): array
         // Where somebody holds the same credential twice, the later expiry wins.
         $existing = $evidence[$key]['expiry'] ?? null;
         if ($existing === null || ($row['expiry'] !== null && $row['expiry'] > $existing)) {
-            $evidence[$key] = ['expiry' => $row['expiry'], 'verified' => $row['status'] === 'valid'];
+            $evidence[$key] = ['expiry' => $row['expiry'], 'verified' => $row['status'] === 'valid', 'origin' => 'certificate'];
         }
     }
 
@@ -243,7 +252,7 @@ function rg_load_evidence(mysqli $conn, int $personId): array
     // Same rule: a reviewer who rejected the references is not overruled by the
     // reference rows themselves still sitting there marked verified.
     if (!isset($decided['references']) && (int) $stmt->get_result()->fetch_row()[0] > 0) {
-        $evidence['references'] = ['expiry' => null, 'verified' => true];
+        $evidence['references'] = ['expiry' => null, 'verified' => true, 'origin' => 'references'];
     }
 
     // A signed contract on file.
@@ -257,7 +266,7 @@ function rg_load_evidence(mysqli $conn, int $personId): array
     // A file in the vault is a document received. If a reviewer has ruled on the
     // contract requirement, that ruling stands over the presence of a file.
     if (!isset($decided['contract']) && (int) $stmt->get_result()->fetch_row()[0] > 0) {
-        $evidence['contract'] = ['expiry' => null, 'verified' => true];
+        $evidence['contract'] = ['expiry' => null, 'verified' => true, 'origin' => 'contract_file'];
     }
 
     return $evidence;

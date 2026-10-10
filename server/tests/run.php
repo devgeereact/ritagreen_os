@@ -1875,6 +1875,13 @@ check('never recorded is unknown', rg_cron_state(null, 24, $cronNow), 'unknown')
 check('a daily job that ran this morning is fine', rg_cron_state('2026-10-09 02:00:00', 24, $cronNow), 'ok');
 check('a daily job silent for two days is late', rg_cron_state('2026-10-07 02:00:00', 24, $cronNow), 'late');
 
+group('credential labels');
+check('ampersand reads as and', rg_label_key('Moving & Handling'), rg_label_key('Moving and handling'));
+check('case and spacing do not matter', rg_label_key('  Moving   AND handling '), 'moving and handling');
+check('an ampersand with no spaces', rg_label_key('Health&Safety'), 'health and safety');
+check('a different credential stays different', rg_label_key('Manual handling') === rg_label_key('Moving and handling'), false);
+check('null is empty', rg_label_key(null), '');
+
 // ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
