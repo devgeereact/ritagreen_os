@@ -115,5 +115,5 @@ deployment is a separate authorisation and is not part of this contract.
 | 2 — recruitment and communications | ✅ done | `070_recruitment`, `080_forms_intake`, `090_communications`; migration 033 |
 | 3 — verification, onboarding, activation | ✅ done | `100_evidence_precedence`, `110_activation`, `140_person_profile`, `150_onboarding_and_approval`; migrations 034, 035, 037; UI PR #11 |
 | 4 — workforce and worker portal | S3, S4 | Office side in PR #13 (migration 038, `160_rota`); worker side in PR #15 (`180_staff_portal`, no migration) |
-| 5 — owner visibility and launch readiness | S5, S10 | Visibility in PR #PRNUM (migration 043, `200_today`, `210_reports`, `220_profile_pack`, `230_system_health`); launch gate in S10 |
+| 5 — owner visibility and launch readiness | S5, S10 | Visibility in PR #17 (migration 043, `200_today`, `210_reports`, `220_profile_pack`, `230_system_health`); launch gate in S10 |
 | 6 — external Academy integration | deferred, no provider | |
