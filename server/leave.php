@@ -181,6 +181,14 @@ if (method() === 'POST' && $action === '') {
     $inLieu = !empty($data['in_lieu']) ? 1 : 0;
     $carried = !empty($data['carried_over']) ? 1 : 0;
     $paid = isset($data['paid_pence']) && $data['paid_pence'] !== '' ? (int) $data['paid_pence'] : null;
+    // Holiday pay, payment in lieu and carry-over are the office's to record. A
+    // worker's request is dates, hours and a reason; it was storing whatever
+    // money figure the request body carried.
+    if (!is_staff($user)) {
+        $paid = null;
+        $inLieu = 0;
+        $carried = 0;
+    }
 
     if (!in_array($kind, LEAVE_KINDS, true)) fail('Unknown leave type.');
     foreach ([$start, $end] as $d) {

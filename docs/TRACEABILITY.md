@@ -96,6 +96,13 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Approved leave blocks every assignment path | `leave_records` | `rg_assignment_check()` in `server/compliance-lib.php` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
 | Unavailability and a short rest gap need acknowledging | `availability_blocks`, `app_settings` | `rg_assignment_check()`, `rg_rest_gap_warnings()` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
 | Cover requests and enquiries have an owner | `service_requests`, `contact_enquiries` | `server/requests.php` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
+| A worker sees their next shift, site details and what blocks them | `shifts`, `sites`, `verifications` | `server/me.php`, `rg_portal_blockers()` | `src/pages/worker/PortalHome.tsx` | `server/tests/run.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker clocks in from 15 minutes before the start | `shift_events` | `rg_clock_in_open()` in `server/pure.php`, `server/field.php` | `src/pages/worker/PortalHome.tsx` | `server/tests/run.php`, `server/tests/db/cases/160_rota.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker answers offers and picks up open shifts through the one check | `shift_offers`, `shifts` | `rg_offer_respond()`, `rg_claim_check()` | `src/pages/worker/PortalRota.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| A worker sends evidence and it waits for review | `files`, `verifications` | `server/me.php?action=upload`, `server/files-lib.php` | `src/pages/worker/PortalRecords.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| A worker submits timesheets and reads their gross pay | `timesheets` | `server/me.php` | `src/pages/worker/PortalRecords.tsx` | `server/tests/db/cases/160_rota.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker keeps their contact details, emergency contacts, availability and leave | `people`, `availability_blocks`, `leave_records` | `server/me.php`, `server/leave.php` | `src/pages/worker/PortalMe.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| Another worker's record cannot be read or changed from the portal | all of the above | `server/me.php`, `server/portal-lib.php` | every portal tab | `server/tests/db/cases/180_staff_portal.php` |
 | Shifts are created from a cover request | `service_requests`, `shifts` | `server/bookings.php?action=confirm` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
 | Work orders are raised and tracked | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
 | A work order can be corrected or archived | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |

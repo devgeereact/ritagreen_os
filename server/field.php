@@ -184,7 +184,7 @@ if (method() === 'POST') {
     $lng = rg_round_coord($lng, $places);
 
     // Resolve the worker on this shift (used to stamp the event).
-    $stmt = $conn->prepare('SELECT worker_id, title, is_draft FROM shifts WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt = $conn->prepare('SELECT worker_id, title, is_draft, starts_at FROM shifts WHERE id = ? AND deleted_at IS NULL LIMIT 1');
     $stmt->bind_param('i', $shiftId);
     $stmt->execute();
     $shift = $stmt->get_result()->fetch_assoc();
@@ -198,6 +198,13 @@ if (method() === 'POST') {
         if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId
             || (int) $shift['is_draft'] === 1) {
             fail('You are not assigned to this shift.', 403);
+        }
+        // Clocking in opens fifteen minutes before the start (plan file 03). The
+        // portal greys the button until then; this is the rule, the button only
+        // reflects it. The office is not held to it: correcting a missed clock is
+        // their job.
+        if ($kind === 'clock_in' && !rg_clock_in_open((string) $shift['starts_at'])) {
+            fail('You can clock in from ' . rg_shift_when(rg_clock_in_opens_at((string) $shift['starts_at'])) . '.', 409);
         }
     }
 

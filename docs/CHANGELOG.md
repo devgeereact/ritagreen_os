@@ -7,6 +7,44 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: the staff portal at /m, section S4 (2026-10-09, local, not deployed)
+
+- **Four tabs, phone first** (`src/pages/worker/`): Home, Rota, Records, Me, with a bottom tab
+  bar, a skip link, 44px tap targets, saved or failed messages after every action, and loading,
+  empty and error states. The installable app is unchanged; the four tabs are lazy chunks inside it.
+- **Home**: the next shift with "Today/Tomorrow", times with "(+1)" for nights, site, address with
+  a plain map search link opened only on tap, site contact and notes; clock in from 15 minutes
+  before start, clock out, check call, report a problem, panic alert; what stops the worker being
+  booked, from the deployment check, with what to do; training due; messages.
+- **Rota**: published shifts by day, offers with Accept and Decline, open shifts with Pick up and
+  the server's reason on refusal, a list of open shifts the worker cannot take and why, and an
+  .ics calendar file built on the phone (Europe/London, stable ids).
+- **Records**: checks with status chips (icon and word) and upload of a new copy, which goes to
+  "received" for the office and never verifies itself; training with certificate download;
+  timesheets (confirm the break, submit, see a query and send again); gross pay by month with the
+  GROSS PAY statement.
+- **Me**: contact details (phone and address, written to `people`), emergency contacts
+  (`rg_save_emergency_contacts()`), unavailable days, leave requests and balance, the office's
+  numbers and email, log out.
+- **Server** (`me.php`, new `portal-lib.php`, `files-lib.php`): `records`, `upload`, `download`,
+  `offer_accept`, `offer_decline`, `report`, `profile` (GET and POST), `emergency`; the home read
+  adds offers, blockers, training due, unread count and per-shift eligibility. Every action takes
+  the worker from the login only. `offer.php`'s answer moved to `rg_offer_respond()` so the text
+  link and the portal share it; `files.php` storage moved to `files-lib.php`.
+- **Fixed**: a worker's own leave request stored any `paid_pence`, `in_lieu` or `carried_over` the
+  body carried; they are ignored for non-staff now. A worker could clock in at any time before a
+  shift; `field.php` now refuses a worker clock-in earlier than 15 minutes before the start.
+- **Offline holds no personal data.** The service-worker rule caching `me.php` and
+  `notifications.php` for 12 hours is removed and `/m` deletes the old `worker-reads` cache. The
+  shell loads offline; each tab says "You are offline". `docs/PRIVACY.md` and `docs/COOKIES.md`.
+- **Tests**: `180_staff_portal` proves a worker cannot read or change another worker's offers,
+  documents, timesheets, gross pay, leave, availability, emergency contacts or contact details,
+  and that client and office logins get nothing from `me.php`. Portal rules in
+  `server/tests/run.php`; calendar, map link and day labels in `src/lib/__tests__/portal.test.ts`.
+  `160_rota` no longer depends on the hour of day it runs.
+- **Deploy**: upload `me.php`, `portal-lib.php`, `files-lib.php`, `files.php`, `offer.php`,
+  `field.php`, `leave.php`, `compliance-lib.php` and `pure.php` before the frontend. No migration.
+
 ### Added: careers, the forms directory, company details and socials, section S7 (2026-10-09, local, not deployed)
 
 - **Vacancies** (migration 039, `server/vacancies.php`, Website, Vacancies). Draft, published,
