@@ -35,9 +35,9 @@ export type NavEntry = Omit<NavDestination, "items"> & { feature?: FeatureName; 
 // shown only while the owner has it switched on. Each destination is one page;
 // the pages that belong to it sit underneath as secondary links.
 //
-// Every page still has its route. Content Studio, Analytics and Insights are no
-// longer in the navigation and are retired in section S9; Notifications live in
-// the header bell. All of them stay reachable from the ⌘K palette until then.
+// Content Studio, Analytics and Insights were retired in section S9: their
+// pages are deleted and their old addresses redirect (Blog, Reports, Reports).
+// Notifications live in the header bell and in the ⌘K palette.
 export const NAV: NavEntry[] = [
   { title: "Today", url: "/app", icon: Gauge },
   { title: "Recruitment", url: "/app/ats", icon: UserPlus },

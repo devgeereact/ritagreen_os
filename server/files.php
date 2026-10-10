@@ -3,7 +3,6 @@
 // GET  /files.php                       -> { files: [...] }  filtered per file
 // POST /files.php  (multipart: file, category, client_id?, worker_id?, person_id?) -> upload
 // GET  /files.php?action=download&id=5  -> stream the file
-// GET  /files.php?action=extract&id=5   -> { text } for the browser to summarise
 // POST /files.php?action=delete&id=5    -> soft delete
 //
 // The whole file is restricted to staff roles, and each individual file is then
@@ -13,55 +12,9 @@
 require __DIR__ . '/lib.php';
 require __DIR__ . '/files-lib.php';
 
-// Pull readable text out of an OOXML file (docx/xlsx) by reading one XML entry
-// from the zip and stripping tags. Paragraph/cell boundaries become newlines.
-function docx_text(string $path, string $entry): string
-{
-    if (!class_exists('ZipArchive')) return '';
-    $zip = new ZipArchive();
-    if ($zip->open($path) !== true) return '';
-    $xml = $zip->getFromName($entry);
-    $zip->close();
-    if ($xml === false) return '';
-    $xml = preg_replace('#</w:p>|</a:p>|</text:p>|</si>#', "\n", $xml);
-    $xml = str_replace(['</w:tr>', '</row>'], "\n", $xml);
-    $txt = strip_tags($xml);
-    return html_entity_decode($txt, ENT_QUOTES | ENT_XML1, 'UTF-8');
-}
-
-// Best-effort PDF text extraction: decode Flate streams where present and pull
-// the literal strings out of text-show operators. Works on most digitally
-// generated PDFs; scanned/image-only PDFs yield nothing.
-function pdf_text(string $path): string
-{
-    $raw = (string) file_get_contents($path);
-    $out = '';
-    if (preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $m)) {
-        foreach ($m[1] as $stream) {
-            $data = @gzuncompress($stream);
-            if ($data === false) $data = $stream; // uncompressed stream
-            if (preg_match_all('/\((?:\\\\.|[^\\\\()])*\)|\[(?:[^\]\\\\]|\\\\.)*\]/s', $data, $tm)) {
-                foreach ($tm[0] as $tok) {
-                    $tok = preg_replace('/^\[|\]$/', '', $tok);
-                    if (preg_match_all('/\((?:\\\\.|[^\\\\()])*\)/s', $tok, $sm)) {
-                        foreach ($sm[0] as $s) {
-                            $s = substr($s, 1, -1);
-                            $s = str_replace(['\\(', '\\)', '\\\\', '\\n', '\\r', '\\t'], ['(', ')', '\\', "\n", "\r", "\t"], $s);
-                            $out .= $s;
-                        }
-                        $out .= ' ';
-                    }
-                }
-                $out .= "\n";
-            }
-        }
-    }
-    return $out;
-}
-
 $user = require_auth($conn);
 // The document centre holds sensitive HR/compliance files (DBS scans, contracts,
-// IDs). Restrict the whole endpoint — including download/extract/list — to staff
+// IDs). Restrict the whole endpoint, including download and list, to staff
 // roles; 'employee'/'client'/'trainer' have no business browsing it. delete and
 // upload below keep their own stricter role checks.
 require_role($user, 'super_admin', 'admin', 'manager', 'editor');
@@ -82,55 +35,8 @@ if ($action === 'download' && method() === 'GET') {
     rg_stream_file($f);
 }
 
-// Extract plain text from a stored document so the browser can summarise it via
-// ai.php. Handles the text-based formats; binary/image types return empty text
-// with a reason. Best-effort for PDF (decodes Flate streams where present).
-if ($action === 'extract' && method() === 'GET') {
-    $id = (int) ($_GET['id'] ?? 0);
-    if ($id <= 0) fail('A file is required.');
-    $stmt = $conn->prepare('SELECT stored_name, original_name, mime, category, person_id, worker_id, client_id FROM files WHERE id = ? AND deleted_at IS NULL');
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $f = $stmt->get_result()->fetch_assoc();
-    if (!$f) fail('File not found.', 404);
-    // Extraction feeds ai.php, which sends the text to a third-party model. The
-    // same rule as download applies, and more sharply.
-    if (!rg_file_readable($f, $user)) fail('You do not have access to this.', 403);
-    $path = UPLOAD_DIR . '/' . $f['stored_name'];
-    if (!is_file($path)) fail('File missing on disk.', 404);
-
-    $mime = $f['mime'];
-    $text = '';
-    $note = null;
-
-    if ($mime === 'text/plain' || $mime === 'text/csv') {
-        $text = (string) file_get_contents($path);
-    } elseif ($mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        $text = docx_text($path, 'word/document.xml');
-    } elseif ($mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-        $text = docx_text($path, 'xl/sharedStrings.xml');
-    } elseif ($mime === 'application/pdf') {
-        $text = pdf_text($path);
-        if (trim($text) === '') $note = 'This PDF appears to be scanned or image-only, so no text could be read.';
-    } else {
-        $note = 'This file type cannot be read as text (images and legacy .doc are not supported).';
-    }
-
-    $text = trim(preg_replace('/[ \t]+/', ' ', preg_replace('/\s*\n\s*/', "\n", $text)) ?? '');
-    $truncated = false;
-    if (mb_strlen($text) > 12000) {
-        $text = mb_substr($text, 0, 12000);
-        $truncated = true;
-    }
-
-    json_out([
-        'name' => $f['original_name'],
-        'mime' => $mime,
-        'text' => $text,
-        'truncated' => $truncated,
-        'note' => $note,
-    ]);
-}
+// action=extract (plain text for AI summarising) was retired with ai.php in S9.
+// An unknown action falls through to the list below, as before.
 
 if (method() === 'GET') {
     $res = $conn->query(

@@ -77,7 +77,6 @@ const TestimonialsAdmin = lazy(() => import("@/pages/app/Testimonials"))
 const VacanciesAdmin = lazy(() => import("@/pages/app/Vacancies"))
 const WebsiteForms = lazy(() => import("@/pages/app/WebsiteForms"))
 const CompanyDetailsAdmin = lazy(() => import("@/pages/app/CompanyDetails"))
-const ContentStudio = lazy(() => import("@/pages/app/ContentStudio"))
 const Workers = lazy(() => import("@/pages/app/Workers"))
 const PersonProfile = lazy(() => import("@/pages/app/PersonProfile"))
 const Compliance = lazy(() => import("@/pages/app/Compliance"))
@@ -247,8 +246,8 @@ export const router = createBrowserRouter([
           { path: "invoicing", element: page(<Invoicing />) },
           { path: "academy", element: page(<Academy />) },
           { path: "academy/:id", element: page(<AcademyDetail />) },
-          // Folded into Reports (S5). The old pages stay on disk until S9 removes
-          // them through the removal protocol; the routes redirect so links land.
+          // Folded into Reports (S5); the pages were deleted in S9. The routes
+          // stay as redirects so old links and bookmarks still land.
           { path: "analytics", element: <Navigate to="/app/reports" replace /> },
           { path: "insights", element: <Navigate to="/app/reports" replace /> },
           { path: "files", element: page(<Files />) },
@@ -259,7 +258,9 @@ export const router = createBrowserRouter([
           { path: "vacancies", element: page(<VacanciesAdmin />) },
           { path: "website-forms", element: page(<WebsiteForms />) },
           { path: "company", element: page(<CompanyDetailsAdmin />) },
-          { path: "content-studio", element: page(<ContentStudio />) },
+          // Content Studio (AI writing) was retired in S9. Posts are written in
+          // Blog, so the old address lands there.
+          { path: "content-studio", element: <Navigate to="/app/blog" replace /> },
           { path: "profile", element: page(<Profile />) },
           { path: "notifications", element: page(<Notifications />) },
           { path: "help", element: page(<Help />) },

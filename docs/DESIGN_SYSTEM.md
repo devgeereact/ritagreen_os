@@ -157,8 +157,7 @@ Shells:
   takes focus). The wordmark is `src/components/brand/Wordmark.tsx`. Website photographs are
   placeholders listed in `src/lib/site-images.ts`, never captioned as RitaGreen staff or clients.
 - `AppLayout`: the office app. Sidebar rail, sticky header with search, theme toggle,
-  notifications and the account menu. The AI assistant appears in the header only while its
-  feature switch is on (it is being retired).
+  notifications and the account menu. (The AI assistant that sat here was retired in S9.)
 - The staff portal at `/m`, phone first.
 
 ### Office navigation: eight destinations
@@ -182,9 +181,9 @@ area:
 A link appears only if the account may open it (`src/lib/access.ts`) and its area is switched
 on. A destination whose own page is closed to the account leads to its first open secondary
 page. Collapsed to the icon rail, the secondary lists hide and each icon still links, with a
-tooltip. Content Studio, Analytics, Insights and Notifications are not in the rail; they stay in
-the ⌘K palette (`src/lib/app-routes.ts`) until section S9 retires the first three, and
-Notifications live in the header bell.
+tooltip. Notifications are not in the rail; they live in the header bell and the ⌘K palette
+(`src/lib/app-routes.ts`). Content Studio, Analytics and Insights were retired in S9; their old
+addresses redirect to Posts and Reports.
 
 ### Page pattern
 

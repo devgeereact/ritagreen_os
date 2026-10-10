@@ -31,14 +31,14 @@ API call is same-origin.
 | UI | shadcn/ui (`new-york` style) over Radix primitives, 37 vendored components in `src/components/ui/` |
 | Styling | Tailwind 3.4 with CSS custom properties, dark mode by class |
 | State | React `useState`, one context (`AuthProvider`), one fetch hook (`useApi`). No Redux, no react-query |
-| Charts | ApexCharts | 
 | Calendar | FullCalendar |
 | Documents | jsPDF (`src/lib/pdf.ts`), SheetJS + file-saver (`src/lib/csv.ts`) |
 
 **Rendering split.** The 17 public marketing pages are eager-imported so the first paint is
 fast. All 34 CMS pages are `lazy()` behind a Suspense boundary, so a public visitor never
 downloads the internal application bundle. `vite.config.ts` additionally splits React, charts,
-calendar, editor and PDF into their own vendor chunks.
+calendar, editor and PDF into their own vendor chunks. (ApexCharts was uninstalled in S9,
+when Analytics and Insights, its last users, were deleted.)
 
 **Data fetching.** `src/hooks/use-api.ts` is a hand-rolled GET hook carrying a monotonic
 request-id guard so a slow earlier response cannot overwrite a faster later one. There is no
@@ -240,7 +240,7 @@ of the same list with one extra member — `contact_enquiries.division` adds `ot
 independently. Sixteen columns in all, seventeen counting the TypeScript union.
 
 Divisions drive real behaviour: `dashboard.php` filters the whole command centre by one;
-`analytics.php` and `margin.php` report by one; `scheduling.php` uses the division to decide
+`margin.php` reports by one (`analytics.php` was retired in S9); `scheduling.php` uses the division to decide
 *which* compliance check is mandatory; `comms.php` targets an announcement at one.
 
 On the public site the names come from `src/lib/services.ts` (Healthcare, Cleaning, Security,
@@ -319,9 +319,10 @@ every unlinked `person_id` to 0 and leave the spine quietly wrong instead of lou
 ## 8. Configuration
 
 All server configuration is PHP constants in `server/config.php`, hand-placed on the server
-and never committed. `server/config.sample.php` is the tracked template, with 43 `define()`
-constants covering database, OpenRouter, Stripe, GoCardless, Google OAuth, Twilio, OpenWeather,
-SMTP, IMAP, CORS and security policy.
+and never committed. `server/config.sample.php` is the tracked template, with 39 `define()`
+constants covering database, Stripe, GoCardless, Google OAuth, Twilio, SMTP, IMAP, CORS and
+security policy. The OpenRouter and OpenWeather constants left with `ai.php` and `weather.php`
+in S9; a live `config.php` that still defines them is harmless.
 
 There is no `.env` and there are no `VITE_*` variables. **Nothing secret or configurable
 reaches the client bundle** — the only `import.meta.env` uses are Vite's own `DEV` and `PROD`
@@ -399,8 +400,7 @@ path maps to the file, which is how the production document root works too.
 
 **Configuration.** `server/config.local.php.example` is the tracked template. Copy it to
 `server/config.php`, which is gitignored. It points at a local database and **disables every
-outbound integration** — mail, SMS, WhatsApp, Stripe, GoCardless, Google SSO, OpenRouter,
-weather. A local run must not be able to email a real worker or charge a real card.
+outbound integration** — mail, SMS, WhatsApp, Stripe, GoCardless, Google SSO. A local run must not be able to email a real worker or charge a real card.
 
 **Fixtures.** `server/seed.php` populates a local database with staff logins for each role, a
 worker login, a client portal login, four clients with sites, ten workers whose compliance is

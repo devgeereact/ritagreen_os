@@ -33,11 +33,6 @@ const COPY: Record<FeatureName, { label: string; does: string; advice: string }>
     does: "The company mailbox inside the office app. Staff can use their own mail program instead.",
     advice: "Recommended off until confirmed in use.",
   },
-  ai_assistant: {
-    label: "AI assistant",
-    does: "The assistant in the header, AI drafting buttons and the weather panel on Today.",
-    advice: "Being retired. Leave off.",
-  },
 }
 
 export function FeaturesCard({ canEdit }: { canEdit: boolean }) {

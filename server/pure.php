@@ -1461,8 +1461,8 @@ function rg_cron_key(array $server, array $query): string
  * The list is fixed in code on purpose. A switch is a promise that some code
  * reads it, so a name the code does not know is refused rather than stored.
  *
- * The defaults preserve what production did before the switches existed, except
- * the AI assistant, which the 2026 plan retires. They also answer for a server
+ * The defaults preserve what production did before the switches existed. They
+ * also answer for a server
  * whose PHP has been uploaded ahead of migration 036, so that upload does not
  * quietly switch payments, SMS or the inbox off.
  *
@@ -1475,8 +1475,10 @@ function rg_feature_defaults(): array
         'online_payments' => true,
         'sms_whatsapp' => true,
         'inbox' => true,
-        'ai_assistant' => false,
     ];
+    // 'ai_assistant' was a fifth switch until S9 retired ai.php and everything
+    // that called it. A database that ran migration 036 still holds its row;
+    // nothing reads it, features.php no longer lists it and refuses to set it.
 }
 
 /**

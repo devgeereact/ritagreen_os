@@ -38,6 +38,27 @@ const GUARD_ANY_AUTHENTICATED = [
     'notifications.php' => 'the caller\'s own notifications',
 ];
 
+/**
+ * Endpoints retired in S9 (see the removal record in docs/CHANGELOG.md). They
+ * were deleted, not hidden: a file of the same name coming back would expose a
+ * third-party call (OpenRouter, OpenWeather) or a revenue view nobody reviews.
+ */
+const GUARD_RETIRED = [
+    'ai.php'        => 'AI assistant, drafting, quiz and file summaries (OpenRouter)',
+    'weather.php'   => 'weather panel (OpenWeather)',
+    'analytics.php' => 'Analytics page, folded into Reports in S5',
+];
+
+/** @return string[] retired endpoint files that exist again */
+function guard_retired_present(): array
+{
+    $back = [];
+    foreach (array_keys(GUARD_RETIRED) as $name) {
+        if (is_file(__DIR__ . '/../' . $name)) $back[] = $name;
+    }
+    return $back;
+}
+
 function guard_check_endpoints(): array
 {
     $problems = [];
@@ -53,8 +74,8 @@ function guard_check_endpoints(): array
         if ($authAt === false) continue;
         $checked++;
 
-        // json_out() is the convention; weather.php echoes a cached body directly,
-        // so a bare echo counts as a read as well.
+        // json_out() is the convention, but an endpoint can echo a body directly
+        // (the retired weather.php did), so a bare echo counts as a read as well.
         $readAt = guard_first_position($src, ['json_out(', 'echo '], $authAt);
         $guardAt = guard_first_position(
             $src,

@@ -704,21 +704,6 @@ export type MarginData = {
   }
 }
 
-export type AnalyticsData = {
-  revenue_by_division: { division: string; pence: number }[]
-  monthly_revenue: { month: string; pence: number }[]
-  jobs_by_status: Record<string, number>
-  quotes: { counts: Record<string, number>; win_rate: number }
-  workforce_by_division: { division: string; count: number }[]
-  compliance_rag: { valid: number; expiring: number; expired: number }
-  totals: {
-    clients: number
-    workers: number
-    paid_revenue_pence: number
-    outstanding_pence: number
-  }
-}
-
 export type DashboardSummary = {
   active_programmes: number
   enrolments: number
@@ -1342,7 +1327,7 @@ export type QueuedEmail = {
 
 // Feature switches (server/features.php, migration 036). The names are fixed in
 // server/pure.php, rg_feature_defaults().
-export type FeatureName = "finance" | "online_payments" | "sms_whatsapp" | "inbox" | "ai_assistant"
+export type FeatureName = "finance" | "online_payments" | "sms_whatsapp" | "inbox"
 
 export type FeatureSwitch = {
   name: FeatureName

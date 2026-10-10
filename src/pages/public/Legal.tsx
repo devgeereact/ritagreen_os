@@ -34,8 +34,8 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
   privacy: {
     title: "Privacy notice",
     intro: `How ${COMPANY.legalName} collects, uses and looks after personal information, under UK GDPR and the Data Protection Act 2018.`,
-    version: "2.1",
-    effective: "9 October 2026",
+    version: "2.2",
+    effective: "10 October 2026",
     sections: [
       {
         h: "Who we are, and how to reach us",
@@ -112,7 +112,6 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
           "Google, where an online application form is used, and for staff who sign in with a Google account",
           "Twilio, if we send you a text or WhatsApp message about a shift",
           "Stripe and GoCardless, if you pay us by card or Direct Debit (card and bank details go to them, never to us)",
-          "An AI service, where a member of staff asks it to summarise a document; this is used by staff, not applied to your record automatically",
         ],
       },
       {
@@ -196,8 +195,8 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
   cookies: {
     title: "Cookie and storage notice",
     intro: "Exactly what this website puts in your browser, and why.",
-    version: "2.1",
-    effective: "9 October 2026",
+    version: "2.2",
+    effective: "10 October 2026",
     sections: [
       {
         h: "The short version",

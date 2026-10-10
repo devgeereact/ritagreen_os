@@ -1869,13 +1869,15 @@ set a switch but not create one. Created by the migration only, not in `schema.s
 
 | Column | Type | Notes |
 |---|---|---|
-| `name` | VARCHAR(40) PK | `finance`, `online_payments`, `sms_whatsapp`, `inbox`, `ai_assistant` |
+| `name` | VARCHAR(40) PK | `finance`, `online_payments`, `sms_whatsapp`, `inbox`; and `ai_assistant`, retired in S9 (row kept, read by nothing) |
 | `enabled` | TINYINT(1) NOT NULL | |
 | `updated_by` | INT NULL | FK → `users(id)` **ON DELETE SET NULL**. NULL for a seeded row nobody has changed |
 | `updated_at` | DATETIME NULL | UTC, set on change |
 
 Seeded with `INSERT IGNORE`, so re-running never undoes the owner's choice: everything on
-except `ai_assistant`, which the 2026 plan retires. That preserves what production did before
+except `ai_assistant`. That switch was retired in S9 with `ai.php`: it left
+`rg_feature_defaults()`, so `features.php` neither lists nor sets it, and its seeded row stays
+as data nobody reads (no data was deleted). That preserves what production did before
 the table existed. A missing row, or a missing table on a server whose PHP is ahead of its
 migrations, reads as the same default. What each switch does when off is in `docs/API.md`
 §54c; `finance` only changes the navigation.

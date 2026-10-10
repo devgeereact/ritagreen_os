@@ -22,7 +22,6 @@ import {
   Star,
   Mail,
   Megaphone,
-  Sparkles,
   FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react"
@@ -77,14 +76,16 @@ export const DESTINATIONS: Destination[] = [
   { label: "Contracts", path: "/app/contracts", icon: FileText, group: "Finance", keywords: "agreements sla client", feature: "finance" },
   { label: "Payroll", path: "/app/payroll", icon: Banknote, group: "Finance", keywords: "pay wages payslips gross premiums holiday accrual", feature: "finance" },
 
-  { label: "Posts", path: "/app/blog", icon: Newspaper, group: "Website", keywords: "blog articles news website" },
+  // Content Studio was retired in S9 and /app/content-studio redirects here, so
+  // its old name still finds the page.
+  { label: "Posts", path: "/app/blog", icon: Newspaper, group: "Website", keywords: "blog articles news website content studio writing" },
   { label: "Testimonials", path: "/app/testimonials", icon: Star, group: "Website", keywords: "reviews quotes website" },
   { label: "Vacancies", path: "/app/vacancies", icon: Briefcase, group: "Website", keywords: "jobs roles careers hiring adverts website" },
   { label: "Forms", path: "/app/website-forms", icon: ClipboardList, group: "Website", keywords: "google forms application directory intake website" },
   { label: "Company details", path: "/app/company", icon: Building2, group: "Website", keywords: "phone email hours address social links instagram facebook linkedin tiktok whatsapp" },
-  { label: "Content Studio", path: "/app/content-studio", icon: Sparkles, group: "Website", keywords: "ai writing social" },
 
-  // Analytics and Insights were folded into Reports in S5; their routes redirect here.
+  // Analytics and Insights were folded into Reports in S5 and deleted in S9;
+  // their routes redirect here.
   { label: "Reports", path: "/app/reports", icon: FileText, group: "Reports", keywords: "cqc regulatory packs export analytics insights pipeline hours expiring unfilled workload csv" },
 
   { label: "Settings", path: "/app/settings", icon: Settings, group: "Settings", keywords: "configuration users roles permissions features switches" },

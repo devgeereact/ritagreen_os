@@ -90,7 +90,8 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/contracts", roles: OFFICE },
   { path: "/app/invoicing", roles: OFFICE },
 
-  // Insight
+  // Insight. /app/analytics and /app/insights are redirects to Reports (pages
+  // deleted in S9); like /app/timetable, each keeps its destination's gate.
   { path: "/app/analytics", roles: OFFICE },
   { path: "/app/insights", roles: OFFICE },
   { path: "/app/reports", roles: OFFICE },
@@ -99,6 +100,7 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/inbox", roles: OFFICE },
   { path: "/app/notifications", roles: STAFF },
   { path: "/app/comms", roles: OFFICE },
+  // Content Studio was retired in S9; the path redirects to Blog, same gate.
   { path: "/app/content-studio", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/blog", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/testimonials", roles: OFFICE_PLUS_EDITOR },

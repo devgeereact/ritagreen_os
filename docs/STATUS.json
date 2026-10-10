@@ -790,7 +790,7 @@
         {
           "name": "Analytics and margin reconciliation",
           "status": "done",
-          "note": "Analytics and Insights routes redirect to /app/reports since S5; the files stay until S9 removes them. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)"
+          "note": "Analytics and Insights were folded into Reports in S5 and their pages and server/analytics.php were deleted in S9; /app/analytics and /app/insights redirect to /app/reports. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)"
         },
         {
           "name": "Regulatory packs",
@@ -1097,12 +1097,17 @@
         {
           "name": "Eight-destination office navigation",
           "status": "done",
-          "note": "Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Content Studio, Analytics, Insights and Notifications left the rail and stay in the command palette until S9"
+          "note": "Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Notifications live in the header bell and the command palette. Content Studio, Analytics and Insights were retired in S9 and their addresses redirect"
         },
         {
           "name": "Owner feature switches",
           "status": "done",
-          "note": "Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox, ai_assistant. Owner-only and audited; inbox.php, ai.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. server/tests/db/cases/120_feature_switches.php"
+          "note": "Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox. Owner-only and audited; inbox.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. The fifth switch, ai_assistant, was retired in S9 with ai.php: no longer listed or settable, its stored row kept. server/tests/db/cases/120_feature_switches.php"
+        },
+        {
+          "name": "Retirements: AI, weather, Content Studio, Analytics and Insights (S9)",
+          "status": "done",
+          "note": "Deleted through the removal protocol, recorded per path in docs/CHANGELOG.md: server/ai.php, server/weather.php, server/analytics.php, files.php?action=extract, the header AI assistant, the weather widget, the Content Studio, Analytics and Insights pages, the Academy quiz builder and every AI button (Enquiries, Files, Comms, Academy, smoke test). Old addresses redirect; apexcharts and react-apexcharts uninstalled; OpenRouter and OpenWeather keys out of the config templates. No table dropped and no row deleted. server/tests/db/cases/231_retirements.php and a guard in server/tests/run.php that fails if a retired endpoint file comes back"
         },
         {
           "name": "Public website rebuilt on the 2026 design (S6)",

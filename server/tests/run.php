@@ -1217,6 +1217,7 @@ foreach ($guardProblems as $problem) {
     check($problem, false, true);
 }
 check('no endpoint reads before it authorises', $guardProblems, []);
+check('no retired endpoint has come back', guard_retired_present(), []);
 
 // ---------------------------------------------------------------------------
 group('rg_cron_key');
@@ -1235,22 +1236,24 @@ check('an array ?key is no key', rg_cron_key([], ['key' => ['x']]), '');
 // ---------------------------------------------------------------------------
 group('feature switches');
 
-// The defaults keep what production did before the switches existed, except the
-// AI assistant, which the plan retires.
+// The defaults keep what production did before the switches existed.
 check('finance defaults on', rg_feature_on('finance', []), true);
 check('online payments default on', rg_feature_on('online_payments', []), true);
 check('SMS and WhatsApp default on', rg_feature_on('sms_whatsapp', []), true);
 check('the inbox defaults on', rg_feature_on('inbox', []), true);
-check('the AI assistant defaults off', rg_feature_on('ai_assistant', []), false);
+// The AI assistant switch was retired with ai.php in S9. Its name is now unknown,
+// so even the row migration 036 left behind cannot turn anything on.
+check('the retired AI assistant switch is off', rg_feature_on('ai_assistant', []), false);
+check('and a stored 1 for it changes nothing', rg_feature_on('ai_assistant', ['ai_assistant' => 1]), false);
 // A stored row wins over the default, either way, whatever type MySQL returned.
 check('a stored 0 turns a default-on switch off', rg_feature_on('inbox', ['inbox' => '0']), false);
-check('a stored 1 turns a default-off switch on', rg_feature_on('ai_assistant', ['ai_assistant' => 1]), true);
+check('a stored 1 keeps a switch on', rg_feature_on('inbox', ['inbox' => 1]), true);
 check('a stored row for another switch does not leak', rg_feature_on('inbox', ['finance' => 0]), true);
 // A name nobody defined is a typo in code, and the safe answer is no.
 check('an unknown switch is off', rg_feature_on('teleport', []), false);
 check('even when a row exists for it', rg_feature_on('teleport', ['teleport' => 1]), false);
 check('the map lists every switch, in order',
-    array_keys(rg_feature_map([])), ['finance', 'online_payments', 'sms_whatsapp', 'inbox', 'ai_assistant']);
+    array_keys(rg_feature_map([])), ['finance', 'online_payments', 'sms_whatsapp', 'inbox']);
 check('the map applies stored values', rg_feature_map(['finance' => 0])['finance'], false);
 check('the map ignores rows for unknown names', array_key_exists('teleport', rg_feature_map(['teleport' => 1])), false);
 

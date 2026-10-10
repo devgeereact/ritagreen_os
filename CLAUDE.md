@@ -105,8 +105,7 @@ and a worker's login shares the worker's person rather than making a second one.
 excludes `*.php`, `config.php` and `.htaccess`. Never add `dangerous-clean-slate` — it would
 delete the entire API from the server.
 
-**`server/config.php` is gitignored and holds every secret.** Database password, OpenRouter
-key, Stripe, GoCardless, Twilio, SMTP and IMAP credentials. `server/config.sample.php` is the
+**`server/config.php` is gitignored and holds every secret.** Database password, Stripe, GoCardless, Twilio, SMTP and IMAP credentials. `server/config.sample.php` is the
 tracked template with `CHANGE_ME` placeholders. Never put a real value in a tracked file, a
 comment, a document or a commit message.
 
@@ -392,7 +391,7 @@ The `server/scheduling.php` compliance guard is the seed of the deployment gate.
 
 ## 6. Current state
 
-181 done, 12 partial, 1 to do of 194 tracked items; see [`docs/PROGRESS.md`](docs/PROGRESS.md),
+204 done, 12 partial, 1 to do of 217 tracked items; see [`docs/PROGRESS.md`](docs/PROGRESS.md),
 generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
 
 Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential

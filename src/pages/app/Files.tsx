@@ -1,16 +1,9 @@
 import { useRef, useState } from "react"
-import { Upload, Download, Trash2, FileText, Sparkles, Loader2 } from "lucide-react"
+import { Upload, Download, Trash2, FileText } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -31,15 +24,6 @@ import { uploadFile, downloadFile, api, ApiError } from "@/lib/api"
 import type { FileDoc } from "@/lib/types"
 import { shortDate } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
-
-// File types ai.php / files.php can read as text for AI summarising.
-const SUMMARISABLE = new Set([
-  "application/pdf",
-  "text/plain",
-  "text/csv",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-])
 
 const CATEGORIES = [
   { value: "contract", label: "Contract" },
@@ -86,38 +70,6 @@ export default function Files() {
       await downloadFile(`files.php?action=download&id=${f.id}`, f.original_name)
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Download failed.")
-    }
-  }
-
-  const [summary, setSummary] = useState<{ open: boolean; name: string; loading: boolean; text: string }>(
-    { open: false, name: "", loading: false, text: "" },
-  )
-
-  async function summarise(f: FileDoc) {
-    setSummary({ open: true, name: f.original_name, loading: true, text: "" })
-    try {
-      const doc = await api<{ text: string; note: string | null; truncated: boolean }>(
-        `files.php?action=extract&id=${f.id}`,
-      )
-      if (!doc.text || doc.text.trim() === "") {
-        setSummary((s) => ({ ...s, loading: false, text: doc.note || "No readable text was found in this file." }))
-        return
-      }
-      const res = await api<{ reply: string }>("ai.php", {
-        method: "POST",
-        body: {
-          system:
-            "You summarise business documents for RitaGreen care, training, cleaning and security staff. " +
-            "Give a tight summary: 2-3 sentences, then key points as bullets. Flag any dates, obligations, " +
-            "names or amounts. UK English. If it's a contract or certificate, note parties and expiry.",
-          prompt: `Summarise this document (${f.original_name}):\n\n${doc.text}`,
-        },
-      })
-      const tail = doc.truncated ? "\n\n_(Long document — summary based on the first part.)_" : ""
-      setSummary((s) => ({ ...s, loading: false, text: res.reply + tail }))
-    } catch (err) {
-      setSummary({ open: false, name: "", loading: false, text: "" })
-      toast.error(err instanceof ApiError ? err.message : "Could not summarise this file.")
     }
   }
 
@@ -192,11 +144,6 @@ export default function Files() {
                   <TableCell className="text-muted-foreground">{shortDate(f.created_at)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      {SUMMARISABLE.has(f.mime) && (
-                        <Button size="icon" variant="ghost" onClick={() => summarise(f)} aria-label="Summarise with AI">
-                          <Sparkles className="size-4 text-primary" />
-                        </Button>
-                      )}
                       <Button size="icon" variant="ghost" onClick={() => download(f)} aria-label="Download">
                         <Download className="size-4" />
                       </Button>
@@ -211,26 +158,6 @@ export default function Files() {
           </Table>
         </Card>
       )}
-
-      <Dialog open={summary.open} onOpenChange={(o) => setSummary((s) => ({ ...s, open: o }))}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="size-4 text-primary" /> AI summary
-            </DialogTitle>
-            <DialogDescription className="truncate">{summary.name}</DialogDescription>
-          </DialogHeader>
-          {summary.loading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Reading and summarising…
-            </div>
-          ) : (
-            <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-              {summary.text}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

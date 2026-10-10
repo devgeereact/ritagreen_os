@@ -21,21 +21,23 @@ $stored = static fn (string $name) => $db->query(
 
 Rgt::group('feature switches: seeded as the plan says');
 
-Rgt::same('the five switches are seeded',
+// Migration 036 seeded five rows. S9 retired the AI assistant switch but deleted
+// no data, so its row is still there; it is simply no longer read.
+Rgt::same('the five seeded rows are all still stored',
     (int) $db->query('SELECT COUNT(*) FROM feature_switches')->fetch_row()[0], 5);
 Rgt::same('finance starts on', (int) $stored('finance')['enabled'], 1);
 Rgt::same('online payments start on', (int) $stored('online_payments')['enabled'], 1);
 Rgt::same('SMS and WhatsApp start on', (int) $stored('sms_whatsapp')['enabled'], 1);
 Rgt::same('the inbox starts on', (int) $stored('inbox')['enabled'], 1);
-Rgt::same('the AI assistant starts off', (int) $stored('ai_assistant')['enabled'], 0);
+Rgt::same('the retired AI assistant row is kept, off', (int) $stored('ai_assistant')['enabled'], 0);
 
 Rgt::group('feature switches: any staff account can read them');
 
 $res = $manager->get('/features.php');
 Rgt::status('a manager reads the switches', $res, 200);
 Rgt::same('and sees finance on', $res->get('features.finance'), true);
-Rgt::same('and the AI assistant off', $res->get('features.ai_assistant'), false);
-Rgt::same('with a row per switch', count((array) $res->get('switches', [])), 5);
+Rgt::same('and the retired AI assistant is not listed', array_key_exists('ai_assistant', (array) $res->get('features', [])), false);
+Rgt::same('with a row per live switch', count((array) $res->get('switches', [])), 4);
 Rgt::status('an editor reads them too', $editor->get('/features.php'), 200);
 
 Rgt::group('feature switches: not for worker, client or anonymous logins');
@@ -49,8 +51,8 @@ Rgt::group('feature switches: only an owner may change one');
 $res = $manager->post('/features.php', ['name' => 'inbox', 'enabled' => false]);
 Rgt::denied('a manager cannot switch the inbox off', $res);
 Rgt::same('and it stays on', (int) $stored('inbox')['enabled'], 1);
-Rgt::denied('nor can an editor', $editor->post('/features.php', ['name' => 'ai_assistant', 'enabled' => true]));
-Rgt::same('and the AI assistant stays off', (int) $stored('ai_assistant')['enabled'], 0);
+Rgt::denied('nor can an editor', $editor->post('/features.php', ['name' => 'finance', 'enabled' => false]));
+Rgt::same('and finance stays on', (int) $stored('finance')['enabled'], 1);
 Rgt::denied("nor a worker's login", $worker->post('/features.php', ['name' => 'finance', 'enabled' => false]));
 
 Rgt::group('feature switches: only real switches, only true or false');
@@ -92,10 +94,9 @@ $res = $admin->get('/inbox.php?action=unread');
 Rgt::status('the inbox refuses even an admin', $res, 403);
 Rgt::ok('and says it is switched off', str_contains($res->error(), 'switched off'), $res->error());
 
-// Seeded off. Nothing here reaches OpenRouter: the switch is checked first.
-$res = $admin->post('/ai.php', ['prompt' => 'Say hello.']);
-Rgt::status('the AI assistant refuses while off', $res, 403);
-Rgt::ok('and says it is switched off', str_contains($res->error(), 'switched off'), $res->error());
+// ai.php was retired in S9, and so was its switch: not even an owner can set it.
+Rgt::status('the retired AI assistant switch cannot be set', $admin->post('/features.php', ['name' => 'ai_assistant', 'enabled' => true]), 422);
+Rgt::same('and its stored row is untouched', (int) $stored('ai_assistant')['enabled'], 0);
 
 $admin->post('/features.php', ['name' => 'online_payments', 'enabled' => false]);
 $invoiceId = (int) ($db->query('SELECT id FROM invoices ORDER BY id LIMIT 1')->fetch_row()[0] ?? 0);
@@ -157,4 +158,4 @@ Rgt::ok('the inbox is no longer refused by the switch', $res->status !== 403, "H
 $admin->post('/features.php', ['name' => 'online_payments', 'enabled' => true]);
 Rgt::same('every switch is back as seeded',
     $admin->get('/features.php')->get('features'),
-    ['finance' => true, 'online_payments' => true, 'sms_whatsapp' => true, 'inbox' => true, 'ai_assistant' => false]);
+    ['finance' => true, 'online_payments' => true, 'sms_whatsapp' => true, 'inbox' => true]);

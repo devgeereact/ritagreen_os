@@ -80,7 +80,6 @@ export default defineConfig({
         // entry preloads: offline, the module graph waits for it forever and the
         // app renders a blank page on every route.
         globIgnores: [
-          "**/react-apexcharts.esm-*.js", // charts — Dashboard, Analytics, Insights
           "**/Scheduling-*.js", // the office rota; nothing a worker opens offline
           "**/pdf-*.js", // jspdf + autotable
           "**/html2canvas*.js", // jspdf dependency

@@ -45,8 +45,8 @@ endpoints still respond.
    `php server/create-admin.php --email you@example.com --name "Your Name"`.
    It prompts for the password rather than taking it as an argument, so it never
    reaches your shell history or the process list.
-3. Copy `config.sample.php` → `config.php` and fill in `DB_PASS`, `OR_API_KEY`
-   and (optionally) a different `OR_MODEL`. Leave `RG_ENV` as `'production'`:
+3. Copy `config.sample.php` → `config.php` and fill in `DB_PASS` and the
+   integration keys you use. Leave `RG_ENV` as `'production'`:
    `migrate.php`, `seed.php` and `backfill-people.php` read it to decide what
    they may do, and `DB_HOST` cannot answer that here — on cPanel the production
    database is `localhost` too.
@@ -60,8 +60,8 @@ endpoints still respond.
   → `{"items":[...]}`; without a token → 401
 - `POST https://ritagreenservices.com/api.php` with the same header and
   `{"name":"hello"}` → the new item
-- In the app, sign in and open **/app/smoke-test** to exercise GET, POST and the
-  `ai.php` proxy from the UI.
+- In the app (development builds only), sign in and open **/app/smoke-test** to
+  exercise GET and POST from the UI.
 
 ## Cron endpoints
 
@@ -91,7 +91,6 @@ internal account, which is decided by the absence of a `worker_id` or
 |---|---|---|
 | `api.php` | items smoke test (GET/POST) | staff |
 | `auth.php` | `?action=login\|me\|logout` | login: none; me/logout: token |
-| `ai.php` | OpenRouter proxy (POST `{prompt}`) | staff |
 | `clients.php` | clients CRM (GET list / GET `?id` / POST) | office roles throughout, reads included |
 | `workers.php` | workforce (GET list / POST) | staff to read, with pay and compliance fields filtered by zone; POST = office roles |
 | `dashboard.php` | command-centre summary (`?division=`) | staff |
