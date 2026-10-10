@@ -7,6 +7,45 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Removed: retirements, section S9 (2026-10-10, local, not deployed)
+
+The features the 2026 plan retires (file 02, "Keep, switch off, retire") are deleted through the
+launch plan's removal protocol. Code is deleted; no table is dropped and no row is deleted.
+Routes, imports, server files, configuration and dependencies went together, and every old
+address that had a sensible replacement still lands somewhere.
+
+**Deploy note.** `server/ai.php`, `server/weather.php` and `server/analytics.php` must be
+**deleted from the live server by hand**: `deploy.yml` never touches PHP, so uploading the new
+frontend alone leaves them reachable. Upload the changed `server/files.php`, `server/lib.php` and
+`server/pure.php` at the same time. A live `config.php` that still defines `OR_*` or
+`OPENWEATHER_*` is harmless; the owner may remove those keys.
+
+#### Removal record
+
+| Path | Reason | Replacement | Callers before removal | Routes and endpoints | Data impact | Verification |
+|---|---|---|---|---|---|---|
+| `src/pages/app/Analytics.tsx` | Duplicate surface (plan 02) | Reports (`/app/reports`) | none since S5 (route already redirected) | `/app/analytics` keeps its redirect to `/app/reports` | none | grep finds no import; old URL redirects in a browser |
+| `src/pages/app/Insights.tsx` | Duplicate surface | Reports | none since S5 | `/app/insights` keeps its redirect to `/app/reports` | none | as above |
+| `server/analytics.php` | Fed only Analytics.tsx | `reports.php` | `Analytics.tsx` | endpoint deleted (404) | none; reads only | db case `231_retirements`; guard in `run.php` |
+| `apexcharts`, `react-apexcharts` (package.json) | Last users were Analytics and Insights | none needed | `Analytics.tsx`, `Insights.tsx` | none | none | `npm run build` passes; `vite.config.ts` glob for its chunk removed |
+| `src/components/app/weather-widget.tsx` | No business purpose | none | no importer (already unmounted) | none | none | grep finds no import |
+| `server/weather.php` | As above; third-party call to OpenWeather | none | `weather-widget.tsx` | endpoint deleted (404) | file cache in the system temp directory only | db case `231_retirements`; guard |
+| `src/pages/app/ContentStudio.tsx` | AI writing; posts are written in Website | Posts (`/app/blog`) | route, ⌘K entry | `/app/content-studio` now redirects to `/app/blog`, same role gate | none (it saved nothing of its own) | redirect checked in a browser; `app-routes.test.ts` finds Posts by "content studio" |
+| `src/components/app/ai-assistant.tsx` | Retired (plan 02) | none | `AppLayout.tsx` header | none | none | header renders without it |
+| `QuizBuilder` and `parseQuiz` in `src/pages/app/AcademyDetail.tsx` | Not a learning platform | none; the training detail page, enrolment and certificate issue stay | the page itself | none | none (quizzes were never stored) | Academy detail opened in a browser |
+| AI draft and AI routing buttons in `src/pages/app/Enquiries.tsx` | Called `ai.php` | "Reply by email" link | the enquiry dialog | none | none | Enquiries opened, dialog checked |
+| AI summary in `src/pages/app/Files.tsx` | Sent document text to OpenRouter | Download | the file table | none | none | Files opened in a browser |
+| `files.php?action=extract`, `docx_text()`, `pdf_text()` | Existed only to feed `ai.php` | none | `Files.tsx` | the action now falls through to the file list | none | db case `231_retirements` |
+| "Draft with AI" in `Comms.tsx` and `Academy.tsx`, AI ping in `SmokeTest.tsx` | Called `ai.php` | write the text by hand | the forms | none | none | typecheck, lint, pages render |
+| `aiDraft()` in `src/lib/api.ts` | No caller left | none | the pages above | none | none | typecheck |
+| `server/ai.php` | Retired (plan 02); third-party call to OpenRouter | none | every item above | endpoint deleted (404) | `rate_limits` rows for it age out as usual | db case `231_retirements`; guard |
+| `ai_assistant` feature switch (`rg_feature_defaults()`, `FeatureName`, Settings card) | Its only reader was `ai.php` | none | `AppLayout.tsx`, `ai.php`, Settings | `features.php` no longer lists it and answers 422 to setting it | **row kept** in `feature_switches`, unread | `run.php` feature switch group; db case `120_feature_switches` |
+| `OR_API_KEY`, `OR_MODEL`, `OR_MODELS`, `OR_REFERER`, `OR_TITLE`, `OPENWEATHER_*` in `config.sample.php`, `config.local.php.example` and the test config; `lib.php` no longer requires `OR_*` | No reader left | none | `ai.php`, `weather.php`, `lib.php` start-up check | none | none; `server/config.php` not touched | PHP and db suites pass without the constants |
+| OpenRouter in the privacy notice and `docs/PRIVACY.md`; OpenWeather in `docs/PRIVACY.md` | No longer a recipient | none | `src/pages/public/Legal.tsx` (notice now v2.2, 10 October 2026) | `/privacy` | none | page text checked |
+
+Left alone, as the plan says: finance, payments, inbox, SMS and WhatsApp, field operations and
+the panic button, `/verify`, Comms announcements and Files.
+
 ### Added: Today, Reports, client profile pack and system health, section S5 (2026-10-10, local, not deployed)
 
 - **The Action Centre obeys service scope and zones.** Every count was over the whole company

@@ -123,8 +123,8 @@ uploaded files under `files.category = 'id'`.
 | Twilio | Worker phone number, full message body | SMS or WhatsApp about a shift | US | Off by default |
 | Stripe | Client organisation name, amount, invoice reference | Card payment | US/IE | Off by default |
 | GoCardless | Amount, invoice metadata; collects bank details itself | Direct Debit | UK | Off by default |
-| OpenRouter | Whatever a staff member sends, including up to 12,000 characters of extracted document text | A staff member asks for a summary | US, and onward to whichever provider hosts the model | Off by default |
-| OpenWeather | A city name. No personal data | Dashboard widget | UK | Off by default |
+| OpenRouter | **Nothing, since S9 (October 2026).** Previously whatever a staff member sent, including up to 12,000 characters of extracted document text | none | none | Removed: `ai.php` and every AI button deleted; the privacy notice (v2.2) no longer lists an AI service |
+| OpenWeather | **Nothing, since S9.** Previously a city name, no personal data | none | none | Removed: `weather.php` deleted |
 | DBS, CQC, SIA, HMRC, insurers | As required | Statutory and regulatory | UK | Manual |
 | Clients | Assigned worker's name, role, division, and whether required clearances are valid | Portal | UK | Live |
 
@@ -163,8 +163,9 @@ A person is therefore refused work by a program. The reason is recorded and visi
 **LEGAL:** whether this engages UK GDPR Article 22, and what "meaningful human intervention"
 must look like if it does. It is disclosed in the privacy notice either way.
 
-**No AI is applied to a person's record automatically.** `ai.php` is a staff-initiated proxy;
-there is no CV screening, scoring or auto-rejection anywhere.
+**No AI is applied to a person's record, automatically or otherwise.** The staff-initiated AI
+proxy (`ai.php`) was retired in S9 with every screen that called it, so no personal data goes to
+an AI service. There is no CV screening, scoring or auto-rejection anywhere.
 
 ---
 

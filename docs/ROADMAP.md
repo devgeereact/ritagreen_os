@@ -149,7 +149,8 @@ evidence reference.
 
 - `roles` passed to `RequireAuth` on every route in `src/routes/index.tsx`
 - `require_role()` added to the endpoints that only call `require_auth()` — including
-  `dashboard.php`, `field.php`, `notifications.php`, `ai.php`, `weather.php`
+  `dashboard.php`, `field.php`, `notifications.php`, `ai.php`, `weather.php` (the last two
+  since retired in S9)
 - Per-service scoping enforced as a query filter, not just a stored preference
 - Sensitive zones — general, employment, compliance, health, disciplinary, payroll, legal —
   each with its own permission rule

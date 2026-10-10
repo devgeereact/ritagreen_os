@@ -143,7 +143,7 @@ This system is not a blank page. The following is built, working, and must not b
 | Client portal | `/portal` · `server/portal.php` |
 | Document storage | `files` · `server/files.php` — randomised stored names, MIME allowlist, 10 MB cap, streamed downloads behind an auth check, uploads directory blocked in `.htaccess`, text extraction from docx/xlsx/PDF |
 | Notifications | `notifications` · notification dropdown |
-| Marketing content CMS | `blog_posts`, `testimonials` · AI Content Studio via OpenRouter proxy (`server/ai.php`) |
+| Marketing content CMS | `blog_posts`, `testimonials` · (AI Content Studio and `server/ai.php` retired in S9) |
 | Database backup | `server/backup.php` — gzipped mysqldump above the document root, 14-day prune |
 
 The blueprint's assumption that these need building is wrong. The work is elsewhere.

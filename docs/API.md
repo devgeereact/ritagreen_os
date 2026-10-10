@@ -72,9 +72,6 @@ bypass that:
 - `backup.php` and `expiry-alerts.php` `echo` plain text for cron logs while
   the JSON content-type header is still set.
 
-`weather.php` also echoes a pre-encoded JSON string rather than calling
-`json_out`, so it can serve from its file cache (`weather.php:34`, `102`).
-
 ### Money and dates
 
 All monetary values are integer pence, in fields suffixed `_pence`. VAT is
@@ -240,7 +237,7 @@ record is not an error, deleting one that never existed is.
 `rate_limit($conn, $bucket, $max, $windowSec, $subject = null)` is a sliding
 window keyed on `(bucket, subject)` backed by the `rate_limits` table. `$subject`
 defaults to the caller's IP; pass one explicitly to throttle something else —
-login also limits per account (hashed), and `ai.php` limits per user id. Roughly
+login also limits per account (hashed). Roughly
 1% of calls opportunistically delete rows older than a day.
 
 The IP comes from `client_ip()`, which returns **`REMOTE_ADDR`**. A forwarded
@@ -378,8 +375,8 @@ computed identically everywhere.
 | File | Purpose | Auth posture |
 |---|---|---|
 | `academy.php` | LMS: programmes, enrolments, certificate issue | Office roles plus `trainer` and `editor` throughout, reads included; writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
-| `ai.php` | OpenRouter chat proxy | Staff, and the `ai_assistant` switch on (403 otherwise) |
-| `analytics.php` | Group BI aggregates | `super_admin`/`admin`/`manager` |
+| `ai.php` | **Retired in S9.** Deleted; 404 | none |
+| `analytics.php` | **Retired in S9.** Deleted; 404. Workforce, compliance and pipeline figures are in `reports.php` | none |
 | `api.php` | Items smoke test | Staff |
 | `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else office roles plus `trainer`, reads included; writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
 | `audit.php` | Audit-log viewer | `super_admin`/`admin` |
@@ -399,7 +396,7 @@ computed identically everywhere.
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
 | `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`)** |
 | `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts; coordinates additionally need the `employment` zone |
-| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download, extract and the listing are filtered per file by `rg_file_readable()` |
+| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download and the listing are filtered per file by `rg_file_readable()`; `action=extract` was retired in S9 and now falls through to the listing |
 | `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
 | `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest office roles throughout, the mandate status read included. `setup`, `complete` and `charge` also need the `online_payments` switch on |
@@ -432,7 +429,7 @@ computed identically everywhere.
 | `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve, reject, query and correct `super_admin`/`admin`/`manager`; service scope |
 | `users.php` | User and role management | `super_admin`/`admin` |
 | `vacancies.php` | Vacancies and role pages (S7) | **Public read of published roles**, named fields only; manage `super_admin`/`admin`/`manager`/`editor`, internal staff, service scope on every branch, audited. See §54f |
-| `weather.php` | OpenWeather proxy with shift advisory | Staff |
+| `weather.php` | **Retired in S9.** Deleted; 404 | none |
 | `website-forms.php` | The forms directory: approved Google Forms (S7) | `super_admin`/`admin`/`manager`/`editor`, internal staff, reads included; service scope; audited. No public read. See §54f |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
 
@@ -500,23 +497,12 @@ unauthenticated, unthrottled write into the production database.
 
 ---
 
-## 10. `ai.php`
+## 10. `ai.php` (retired)
 
-OpenRouter proxy. The API key stays server-side and never reaches the browser.
-
-| Method | Auth | Body | Returns |
-|---|---|---|---|
-| POST | Staff | `{prompt, system?}` | `{reply}` |
-
-Returns 503 if `OR_API_KEY` is unset or `CHANGE_ME`, and 502 on any transport
-or upstream error. The model is `OR_MODEL` from `config.php`; `system` defaults
-to a RitaGreen-specific UK-English assistant prompt (`ai.php:18`). Internal
-staff only (`require_staff`), so a client portal or worker login cannot spend
-tokens through it; any staff account can.
-
-Refused with 403 while the `ai_assistant` feature switch is off, which is how it is
-seeded (migration 036): the assistant is being retired. The check runs before the rate
-limit, so a refused call does not use the account's allowance.
+Retired in section S9 (removal record in `docs/CHANGELOG.md`). The file is deleted, so the
+server answers 404. It was the OpenRouter proxy behind the header assistant, the Content
+Studio, the Academy quiz builder and the AI buttons in Enquiries, Files, Comms and Academy;
+all of those were removed with it. The `ai_assistant` feature switch went too (§54c).
 
 ---
 
@@ -528,11 +514,11 @@ limit, so a refused call does not use the account's allowance.
 
 ---
 
-## 12. `analytics.php`
+## 12. `analytics.php` (retired)
 
-| Method | Auth | Returns |
-|---|---|---|
-| GET | Office roles | Revenue by division, six-month monthly revenue trend, jobs by status, quote counts with win rate, workforce by division, compliance RAG counts, and group totals |
+Retired in section S9. The Analytics and Insights pages it fed were folded into Reports in S5
+and deleted in S9; `/app/analytics` and `/app/insights` redirect to `/app/reports`. The file
+is deleted, so the server answers 404.
 
 ---
 
@@ -1257,14 +1243,13 @@ send mail from the company address.
 
 Document centre. The **whole file** is gated to
 `super_admin`/`admin`/`manager`/`editor` at `files.php:60`, immediately after
-`require_auth` — so list, download and extract are all closed to `employee`,
+`require_auth` — so list and download are both closed to `employee`,
 `trainer` and `client`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | GET | `download` | File-level roles | `id` | The raw file, with its own `Content-Type` and a `Content-Disposition` attachment header |
-| GET | `extract` | File-level roles | `id` | `{name, mime, text, truncated, note}` — plain text pulled out of txt/csv, docx, xlsx or PDF, truncated at 12,000 characters |
-| GET | — | File-level roles | — | `{files}` |
+| GET | — | File-level roles | — | `{files}`. Any other `action`, including the `extract` retired in S9, falls through to this listing |
 | POST | `delete` | Office roles | `id` | `{ok: true}`; soft delete |
 | POST | — | File-level roles | `multipart/form-data`: `file`, `category?`, `client_id?`, `worker_id?` | `{file}` 201 |
 
@@ -1549,24 +1534,10 @@ site and times) is enumerable by anyone who can guess a token, though the
 
 ---
 
-## 52. `weather.php`
+## 52. `weather.php` (retired)
 
-| Method | Auth | Params | Returns |
-|---|---|---|---|
-| GET | Staff | `city?` (default `London,GB`) | `{city, units, temp, feels_like, main, description, icon, humidity, wind_mph, advisory, fetched_at}` |
-
-The OpenWeather key stays server-side. 503 if `OPENWEATHER_API_KEY` is unset or
-`CHANGE_ME`. The `city` parameter is constrained to `^[A-Za-z .,'-]+$` and 60
-characters, and anything else falls back to `London,GB` (`weather.php:24`), so
-the proxy cannot be pointed at another host. Responses are cached for 15
-minutes in a file under the system temp directory, keyed by an MD5 of city and
-units.
-
-`advisory.level` is `ok`, `watch` or `alert`, derived from normalised
-temperature and wind (`weather.php:72-83`).
-
-**Stale config comment.** `config.sample.php:51` describes
-`OPENWEATHER_API_KEY` as read by "a future weather.php"; the endpoint exists.
+Retired in section S9, with the weather widget it fed. The file is deleted, so the server
+answers 404, and `OPENWEATHER_API_KEY` left the config templates.
 
 ---
 
@@ -1690,7 +1661,7 @@ The owner's feature switches (migration 036). The names are fixed in code,
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | Staff (`require_staff`, above every branch) | none | `{features: {finance, online_payments, sms_whatsapp, inbox, ai_assistant}, switches: [{name, enabled, updated_at, updated_by}]}` |
+| GET | Staff (`require_staff`, above every branch) | none | `{features: {finance, online_payments, sms_whatsapp, inbox}, switches: [{name, enabled, updated_at, updated_by}]}` |
 | POST | `super_admin`/`admin` | `{name, enabled: true\|false}` | The same shape, after the change |
 
 An unknown name or a non-boolean `enabled` is a 422. A change is written with
@@ -1703,9 +1674,10 @@ after; setting a switch to the value it already has writes nothing.
 | `online_payments` | on | `payments.php` and `gocardless.php` refuse anything that starts a payment; webhooks stay open |
 | `sms_whatsapp` | on | `send_sms()` and `send_whatsapp()` log the attempt as skipped and send nothing |
 | `inbox` | on | `inbox.php` refuses every route; the Inbox link leaves Settings |
-| `ai_assistant` | **off** | `ai.php` refuses; the header assistant and the weather panel are hidden |
 
-The seeds keep production as it was, except the AI assistant, which the 2026 plan retires.
+The seeds keep production as it was. A fifth switch, `ai_assistant`, was retired in S9 with
+`ai.php`: `features.php` no longer lists it and answers 422 to a request to set it. Its seeded
+row stays in `feature_switches` (no data deleted) and nothing reads it.
 A server whose PHP is uploaded before migration 036 runs reads the same defaults.
 
 ## 54d. The person profile and the compliance screens (S2)
@@ -2050,8 +2022,6 @@ trigger, then the header. When both are sent the header wins (`rg_cron_key()` in
 
 ### Not public, despite appearances
 
-- `weather.php` and `ai.php` call `require_auth` before anything else, so both
-  upstream API keys are behind the token.
 - `files.php` gates the entire file — including `download` — to
   `super_admin`/`admin`/`manager`/`editor`. Uploaded files themselves sit under
   `server/uploads` inside the document root and are protected only by whatever
@@ -2083,7 +2053,6 @@ have been removed from the table below.
 | `workers.php:2-4` | Omits `?action=availability` and `?action=pay` (inline comments only) |
 | `bookings.php:5` | Says the status route sets `quoted`/`declined`; the code also accepts `new` (`bookings.php:87`) |
 | `invoices.php:2` | Says "manual reconciliation — no card processor wired yet"; Stripe (`payments.php`) and GoCardless (`gocardless.php`) both mark invoices paid |
-| `config.sample.php:51` | Calls `OPENWEATHER_API_KEY` "read only by a future `weather.php`"; `weather.php` exists and uses it |
 | `server/README.md` | Its endpoint table lists 8 of the 54 endpoint files. Treat this document as the reference instead |
 
 
