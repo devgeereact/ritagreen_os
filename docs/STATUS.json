@@ -430,6 +430,11 @@
           "name": "Evidence files belong to the person they evidence",
           "status": "done",
           "note": "A verification, right-to-work check, contract or training record that names a document filed against somebody else is refused with 422. files.php uploads can be filed against a person directly"
+        },
+        {
+          "name": "Where a check's evidence came from is shown (S10)",
+          "status": "done",
+          "note": "rg_load_evidence() tags each entry with its origin; the profile says 'From certificate record, not yet verified' instead of 'Verifier: Nobody yet'. Precedence unchanged. Certificate labels match with & read as and (rg_label_key())"
         }
       ]
     },
@@ -560,6 +565,11 @@
           "name": "The portal keeps no personal data offline",
           "status": "done",
           "note": "The worker-reads runtime cache of me.php and notifications.php is removed from vite.config.ts and deleted when /m opens. The installed shell loads offline and each tab says You are offline. docs/PRIVACY.md section 9, docs/COOKIES.md. Not tested against a real installed service worker offline"
+        },
+        {
+          "name": "Minimum rest between shifts set in Settings (S10)",
+          "status": "done",
+          "note": "Rota rules card in Settings, Features: owners change rest_gap_min_hours (0 to 24), the office reads it. 240_launch_followups"
         }
       ]
     },
@@ -863,8 +873,8 @@
         },
         {
           "name": "Restore testing",
-          "status": "partial",
-          "note": "Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent"
+          "status": "done",
+          "note": "S10: server/restore-check.php compares a restored database table by table and the restored uploads document by document; --record writes the restore_test heartbeat that system health reads (ok within 90 days). Rehearsed locally on 2026-10-10: docs/runbooks/backup-and-restore.md"
         },
         {
           "name": "Retention engine",
@@ -918,7 +928,7 @@
         {
           "name": "Backups are restore-tested",
           "status": "partial",
-          "note": "Surfaced by system-health.php as an explicit unknown"
+          "note": "Rehearsed and recorded on the local test database (S10). A rehearsal on the live host is step 1 of docs/runbooks/release-2026.md and has not been done"
         },
         {
           "name": "Unapplied migrations are visible",
@@ -944,6 +954,11 @@
           "name": "Approved deletion removes the document itself",
           "status": "done",
           "note": "A hard delete used to remove the files row and leave the bytes on disk under a random name: gone from the system, still on the server, no longer findable. governance.php now unlinks it and audits it. Archive keeps the bytes, which is what makes it recoverable. Verified end to end against a local database"
+        },
+        {
+          "name": "Deletion requests decided in Settings (S10)",
+          "status": "done",
+          "note": "Settings, Data requests lists governance.php deletion requests; approve or decline with the four-eyes rule shown in advance (is_mine) and the cascade confirmation. Today links to it. 240_launch_followups"
         }
       ]
     },
@@ -1006,8 +1021,8 @@
       "items": [
         {
           "name": "Documentation pack",
-          "status": "partial",
-          "note": "Milestone 0, in progress"
+          "status": "done",
+          "note": "S10: the 2026 plan pack folded into the permanent docs (PRD, BLUEPRINT, ROADMAP, DESIGN_SYSTEM, ARCHITECTURE, UK_GOVERNANCE, RULES, DECISIONS-2026); docs/Plans 2026/ kept until the owner approves removing it"
         },
         {
           "name": "Automated deploy",
@@ -1163,6 +1178,31 @@
           "name": "Spreadsheet import (S8)",
           "status": "done",
           "note": "Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/190_sheet_import.php"
+        },
+        {
+          "name": "Training forms on /training (S10)",
+          "status": "done",
+          "note": "website-forms.php?action=public&purpose=training; click to load, open in a new tab, phone fallback, as on role pages"
+        },
+        {
+          "name": "Launch journeys in a browser (S10)",
+          "status": "done",
+          "note": "scripts/launch-journeys.mjs: 16 journey steps and 5 refusals, all PASS on a fresh local test database; docs/TESTING.md, 2026 launch journeys"
+        },
+        {
+          "name": "Release runbook for the 2026 build (S10)",
+          "status": "done",
+          "note": "docs/runbooks/release-2026.md. Not run: production release is the owner's decision"
+        },
+        {
+          "name": "Docs consistency guard: links and retired colours (S10)",
+          "status": "done",
+          "note": "scripts/docs_sync.py --check fails on broken relative markdown links and on the retired navy and mint outside history; tested by scripts/test_docs_sync.py in CI"
+        },
+        {
+          "name": "Agent guard hooks (S10)",
+          "status": "done",
+          "note": ".claude/settings.json runs scripts/agent_guard.py: blocks writes to server/config.php, hand edits to docs/PROGRESS.md and pushes to main; tested by scripts/test_agent_guard.py in CI. Codex has no hooks"
         }
       ]
     }

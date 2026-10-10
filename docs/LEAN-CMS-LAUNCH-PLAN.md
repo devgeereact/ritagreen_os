@@ -1,5 +1,13 @@
 # Lean CMS launch proposal
 
+> **Status: complete and superseded, 10 October 2026.** Phases 0 to 5 of this plan were built, with the owner's 2026
+> extension, in sections S0 to S10; Phase 6 (the Academy integration) is deferred for want
+> of a provider. The decisions that extended
+> and replaced it are in [`docs/DECISIONS-2026.md`](DECISIONS-2026.md); item-level progress is
+> [`docs/PROGRESS.md`](PROGRESS.md); the browser evidence for the launch journey is
+> [`docs/TESTING.md`](TESTING.md), "2026 launch journeys". What remains is
+> [`docs/ROADMAP.md`](ROADMAP.md). Kept as history; do not work from it.
+
 14 September 2026. Proposal for approval, not an implemented replacement roadmap.
 
 ## Recommendation

@@ -146,3 +146,40 @@ A warning is read after the fact. The assignment is refused, and the specific re
 **25. Non-goals stay non-goals.**
 No payroll processing, no accounting, no LMS, no CRM, no AI hiring decisions, no surveillance.
 See `docs/PRD.md` §6. Scope creep into any of these is how this system becomes unfinishable.
+
+## Public website and forms
+
+Rules 1 and 2 above (compliance is calculated, a person exists once) apply to every intake
+route as well: a form submission or a spreadsheet import creates or links a person through
+`find_or_create_person()` and never makes anyone ready to work.
+
+**26. No file uploads in public Google Forms.**
+Google makes a respondent sign in to a Google account to upload a file, which stops many
+applicants, and it puts identity documents in a Google Drive outside this system's access
+controls and retention. Recruitment forms ask only what is needed to start. Identity documents,
+DBS certificates and qualifications arrive later through the staff portal's Records tab, where
+they go to "received" for the office to verify.
+
+**27. Embed only a validated Google Form id.**
+The CMS accepts only `https://docs.google.com/forms/d/e/<id>/viewform`, and stores the id alone
+(`website_forms.google_form_id`). The id must pass `rg_valid_google_form_id()` in
+`server/pure.php` on the server and `isGoogleFormId()` in `src/lib/google-forms.ts` in the
+browser, and the website builds the iframe address from the id. Pasted HTML, scripts,
+redirectors and other hosts are refused. A stored address is never placed in a page as given.
+
+**28. The public site makes a third-party request only after the visitor's click.**
+Fonts, images and scripts are self-hosted, and the CSP in `public/.htaccess` allows one external
+origin, `https://docs.google.com`, for frames only. A Google Form is not in the page until the
+visitor presses the button that loads it; "open in a new tab" and the phone number are always
+shown beside it. Anything else that would contact a third party when a page loads needs a real
+consent control, an entry in `docs/COOKIES.md` and a line in the privacy notice first.
+
+## Agent guard hooks
+
+`.claude/settings.json` registers a Claude Code `PreToolUse` hook, implemented in
+`scripts/agent_guard.py`, that blocks three things: an edit or write to `server/config.php`, a
+hand edit to `docs/PROGRESS.md` (regenerate it with `python3 scripts/docs_sync.py`), and a Bash
+command that pushes to `main` (`git push` naming `main` or `HEAD:main`, or a bare `git push`
+while on `main`). Codex and other agents have no hooks, so they apply the same three rules by
+hand. The hook is a backstop, not the rule: rules 7 and 17 and rule 21's note on `PROGRESS.md`
+hold whether or not it runs.

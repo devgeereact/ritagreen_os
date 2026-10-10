@@ -1,5 +1,11 @@
 # RITAGREEN_SETUP.md — the transformation brief
 
+> **Superseded; kept as history (note of 10 October 2026).** The multi-tenant plan below was
+> not implemented. Part D described the application as it stood on 2026-09-02; the 2026
+> build has since changed it (new design, eight-destination office app, rota, staff portal,
+> rebuilt website), so for the system as built read [`docs/BLUEPRINT.md`](BLUEPRINT.md),
+> Part 2, and [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
+>
 > **Superseded, 14 September 2026.** The approved product direction is
 > [`LEAN-CMS-LAUNCH-PLAN.md`](LEAN-CMS-LAUNCH-PLAN.md): one company, four services, one person
 > record, on the existing React/Vite, PHP and MySQL architecture. The multi-tenant SaaS
@@ -176,8 +182,8 @@ in `src/index.css` and consumed through Tailwind semantic tokens.
 
 | Role | Token | Value |
 |---|---|---|
-| Primary — navy | `--primary` | `210 82% 27%` / `#0C447C` |
-| Accent — mint | `--accent` | `160 51% 58%` / `#5DCAA5` |
+| Primary — navy (retired) | `--primary` | `210 82% 27%` / `#0C447C` |
+| Accent — mint (retired) | `--accent` | `160 51% 58%` / `#5DCAA5` |
 | Surface tint | `--secondary` | `209 72% 94%` / `#E6F1FB` |
 | Status | `--destructive` · `--warning` · `--success` | expired · expiring · valid |
 

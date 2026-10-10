@@ -3,8 +3,8 @@
 **This is the single source of truth for the RitaGreen visual language.**
 
 It documents what the code implements. It replaces v2, navy and mint, which is **retired**:
-no navy or mint value remains in `src/`, and none should come back. The decisions behind v3 are
-the owner's (decision D05, 9 October 2026) and the 2026 plan's file 04.
+no navy or mint value remains in `src/`, and none should come back. The decision behind v3 is
+the owner's (D05, 9 October 2026), recorded in [`docs/DECISIONS-2026.md`](DECISIONS-2026.md).
 
 ---
 
@@ -172,9 +172,9 @@ area:
 | Recruitment | `/app/ats` | |
 | People | `/app/workers` | Training |
 | Compliance | `/app/compliance` | |
-| Rota | `/app/scheduling` | Timesheets, Clients, Enquiries, Cover requests, Jobs, Field ops, Incidents |
+| Rota | `/app/scheduling` | Timesheets, Requests (cover requests and enquiries together), Clients, Jobs, Field ops, Incidents |
 | Finance (only while switched on) | `/app/invoicing` | Quotes, Contracts, Payroll |
-| Website | `/app/blog` (Posts) | Testimonials |
+| Website | `/app/blog` (Posts) | Vacancies, Forms, Testimonials, Company details |
 | Reports | `/app/reports` | |
 | Settings | `/app/settings` | Inbox (only while switched on), Comms, Files, Help |
 

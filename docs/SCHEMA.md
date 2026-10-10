@@ -1903,7 +1903,7 @@ migration stays re-runnable (MySQL has no `ADD CONSTRAINT IF NOT EXISTS`).
 `UNIQUE (service, label)`. One table keyed by service rather than a template table and an item
 table, because there is exactly one checklist per service. Items are retired with `active = 0`,
 never deleted. Seeded with defaults for each service from the checks in
-`docs/Plans 2026/01-BUSINESS-AND-SCOPE.md`; checks that apply only to some people (an NMC PIN,
+[`docs/UK_GOVERNANCE.md`](UK_GOVERNANCE.md), "Role checks per service"; checks that apply only to some people (an NMC PIN,
 a DBS for a cleaner on some sites, first aid where required) are left for the office to add to
 the one person, because a task that does not apply cannot be finished and would block approval.
 

@@ -18,6 +18,8 @@ links to it. Duplicated facts drift, and the stale copy is the one that gets tru
 | [`docs/COOKIES.md`](docs/COOKIES.md) | Adding browser storage or a third-party request |
 | [`docs/RETENTION.md`](docs/RETENTION.md) | Deleting or expiring anything |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Deciding what to do next |
+| [`docs/DECISIONS-2026.md`](docs/DECISIONS-2026.md) | Revisiting an owner decision from the 2026 build |
+| [`docs/runbooks/`](docs/runbooks/) | Releasing, restoring a backup, or setting up form intake |
 
 ---
 
@@ -37,7 +39,8 @@ One merged Vite application: the public corporate site at the root, the internal
 
 ## 2. Architecture in one paragraph
 
-React 19 SPA (static `dist/`) → 54 flat PHP endpoint files in `server/` → MySQL on cPanel.
+React 19 SPA (static `dist/`) → flat PHP endpoint files in `server/` (listed in
+[`docs/API.md`](docs/API.md)) → MariaDB on cPanel.
 The browser never touches the database; it calls PHP over HTTP with an
 `Authorization: Bearer` token and receives JSON. Every endpoint begins
 `require __DIR__ . '/lib.php'`, which is the shared kernel. There is no framework, no router
@@ -120,7 +123,9 @@ is the enforced boundary.**
 
 **The public site makes no third-party requests, and that is load-bearing.** Fonts are
 self-hosted in `public/fonts` with the faces in `src/fonts.css`; the CSP in `public/.htaccess` is
-`default-src 'self'` with no external origin allow-listed. Because nothing optional is loaded and
+`default-src 'self'`, and its one external origin is `frame-src https://docs.google.com`, for a
+Google Form that loads only when the visitor presses the button for it (`docs/RULES.md` rules 27
+and 28). Because nothing optional is loaded on arrival and
 nothing optional is stored, the site shows a storage *notice* rather than a consent choice. Add a
 third-party script, font, map or pixel and that stops being true: you then owe a real consent
 control that keeps the script inert until the visitor agrees, an entry in `docs/COOKIES.md`, and
@@ -353,7 +358,7 @@ npm run seed -- --confirm         # fixtures, CLI-only and local-host-only
 CI (`.github/workflows/ci.yml`) runs typecheck, lint, `npm test`, build, a build-output
 assertion (`dist/index.html`, `manifest.webmanifest`, `sw.js` present, **zero `*.map` files**),
 `php -l` across every PHP file, `php server/tests/run.php`, `php server/tests/db/run.php` against
-a MySQL service, a check that `server/config.php` is not tracked, and
+a MariaDB 10.11 service, a check that `server/config.php` is not tracked, and
 `python3 scripts/docs_sync.py --check`.
 
 **Deployment is gated on CI, for the exact commit CI tested.** `deploy.yml` triggers on
@@ -387,27 +392,28 @@ injectable clock.
 **Reuse before building.** `next_seq()` for any sequence. `rg_classify()` in `server/pure.php`
 for any expiry date. The `compliance_reminders` dedupe pattern for any
 tiered alert. The `server/files.php` streamed-download-behind-auth pattern for any document.
-The `server/scheduling.php` compliance guard is the seed of the deployment gate.
+`rg_deployment_check()` in `server/compliance-lib.php` is the deployment gate; reuse it.
 
 ## 6. Current state
 
-204 done, 12 partial, 1 to do of 217 tracked items; see [`docs/PROGRESS.md`](docs/PROGRESS.md),
-generated from `docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate.
+Item-level progress is [`docs/PROGRESS.md`](docs/PROGRESS.md), generated from
+`docs/STATUS.json`. Never edit `PROGRESS.md`; edit `STATUS.json` and regenerate. What remains is
+[`docs/ROADMAP.md`](docs/ROADMAP.md); section state for the 2026 build is the board in
+[`.agent/CURRENT-TASK.md`](.agent/CURRENT-TASK.md).
 
-Milestones 1 to 4 — the person spine, the compliance engine, right-to-work and credential
-verification, and the deployment gate — are **built and verified against a local database**.
-Migrations `001`–`030` exist in `server/migrations/` and all thirty are applied locally. The
-deployment record for 2026-09-03 in `docs/CHANGELOG.md` says production was at 18 applied with 0
-pending and that 019 was applied that day, so **`020` through `030` are outstanding there** — but
-that is the record talking, not a check against the live database. Confirm with
-`php server/migrate.php --status` on the server before acting on it.
+Which migrations exist is `ls server/migrations`. Which are applied to a database is
+`php server/migrate.php --status`, run against that database: never infer the production state
+from a document. The 2026 build has not been released; the release steps, including the
+migrations production needs, are [`docs/runbooks/release-2026.md`](docs/runbooks/release-2026.md).
 
 The PHP tier is **not** deployed by the pipeline: `deploy.yml` uploads `dist/` only and excludes
 `*.php`. A change to `server/` reaches production only when somebody uploads it, and shipping the
 frontend ahead of it means the interface changes while the API does not.
 
-What is left is concentrated in EMPLOYMENT and GOVERNANCE. Check `docs/PROGRESS.md` rather than
-assuming from this paragraph.
+**Agent guard hooks.** `.claude/settings.json` runs `scripts/agent_guard.py` before tool calls
+to block edits to `server/config.php`, hand edits to `docs/PROGRESS.md` and pushes to `main`;
+Codex and other agents have no hooks and follow the same rules by hand (`docs/RULES.md`, "Agent
+guard hooks").
 
 ## 7. Frontend traps
 

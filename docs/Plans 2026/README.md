@@ -1,5 +1,7 @@
 # RitaGreen 2026 plan
 
+**Superseded by permanent docs on 10 October 2026; pending owner approval to remove.**
+
 Date: 9 October 2026. Status: **APPROVED by the owner on 9 October 2026 for build.** Supersedes the 8 October draft pack (recoverable from git history).
 
 This pack extends the approved lean CMS launch plan ([`docs/LEAN-CMS-LAUNCH-PLAN.md`](../LEAN-CMS-LAUNCH-PLAN.md), 14 September 2026). That plan still governs the core journey (application, review, verification, onboarding, approval, eligible assignment, expiry follow-up). This pack adds what the owner asked for on 9 October: a rota and staff portal people will actually use, a new look in the company green `#33512d`, a rebuilt public website, recruitment forms linked from the CMS, and clean social profiles.
