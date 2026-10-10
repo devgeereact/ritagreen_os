@@ -1,7 +1,7 @@
 <?php
 // Deletion approval and export logging.
 //
-//   GET  /governance.php?action=deletions[&status=requested]
+//   GET  /governance.php?action=deletions[&status=requested]  -> { requests (each with is_mine), can_decide }
 //   POST /governance.php?action=request_deletion
 //   POST /governance.php?action=decide_deletion&id=N
 //   GET  /governance.php?action=exports
@@ -36,7 +36,7 @@ if (method() === 'GET' && $action === 'deletions') {
     $status = trim((string) ($_GET['status'] ?? ''));
     $sql = 'SELECT d.id, d.entity_type, d.entity_id, d.entity_label, d.reason, d.disposition,
                    d.status, d.requested_at, d.decided_at, d.decision_note, d.completed_at,
-                   r.name AS requested_by, a.name AS decided_by
+                   d.requested_by AS requested_by_id, r.name AS requested_by, a.name AS decided_by
             FROM deletion_requests d
             LEFT JOIN users r ON r.id = d.requested_by
             LEFT JOIN users a ON a.id = d.decided_by';
@@ -55,9 +55,13 @@ if (method() === 'GET' && $action === 'deletions') {
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['entity_id'] = (int) $row['entity_id'];
+        // The four-eyes rule, said in advance: the screen offers no decision on
+        // a request this account made, because decide_deletion would refuse it.
+        $row['is_mine'] = (int) $row['requested_by_id'] === (int) $user['id'];
+        unset($row['requested_by_id']);
         $items[] = $row;
     }
-    json_out(['requests' => $items]);
+    json_out(['requests' => $items, 'can_decide' => in_array($user['role'], ['super_admin', 'admin'], true)]);
 }
 
 if (method() === 'POST' && $action === 'request_deletion') {

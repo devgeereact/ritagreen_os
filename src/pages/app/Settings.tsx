@@ -42,6 +42,8 @@ import type { AdminUser, AuditEntry } from "@/lib/types"
 import { shortDate } from "@/lib/format"
 import { SERVICE_OPTIONS } from "@/lib/services"
 import { FeaturesCard } from "@/components/app/features-card"
+import { RestGapCard } from "@/components/app/rest-gap-card"
+import { DataRequestsTab } from "@/components/app/data-requests-tab"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const ROLES = ["super_admin", "admin", "manager", "trainer", "editor", "employee", "client"]
@@ -74,6 +76,7 @@ export default function Settings() {
           {isOffice && <TabsTrigger value="intake">Form intake</TabsTrigger>}
           {isOffice && <TabsTrigger value="health">System health</TabsTrigger>}
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="requests">Data requests</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
         </div>
@@ -85,7 +88,12 @@ export default function Settings() {
             feeding the system is a recruitment problem before it is an IT one. */}
         {/* Everyone in the office can see which areas are switched on; only an
             owner (super_admin, admin) can change them, and the server enforces it. */}
-        {isOffice && <TabsContent value="features" className="mt-4"><FeaturesCard canEdit={isAdmin} /></TabsContent>}
+        {isOffice && (
+          <TabsContent value="features" className="mt-4 space-y-6">
+            <FeaturesCard canEdit={isAdmin} />
+            <RestGapCard canEdit={isAdmin} />
+          </TabsContent>
+        )}
         {isOffice && <TabsContent value="intake" className="mt-4"><IntakeTab /></TabsContent>}
         {/* Email queue, form intake, scheduled jobs and the restore test. The
             server refuses a service-scoped manager, whose figures would span
@@ -95,6 +103,7 @@ export default function Settings() {
           <>
             <TabsContent value="users" className="mt-4"><UsersTab /></TabsContent>
             <TabsContent value="audit" className="mt-4"><AuditTab /></TabsContent>
+            <TabsContent value="requests" className="mt-4"><DataRequestsTab /></TabsContent>
             <TabsContent value="gdpr" className="mt-4"><GdprTab /></TabsContent>
           </>
         )}
