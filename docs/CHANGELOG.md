@@ -44,6 +44,35 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
   `160_rota` no longer depends on the hour of day it runs.
 - **Deploy**: upload `me.php`, `portal-lib.php`, `files-lib.php`, `files.php`, `offer.php`,
   `field.php`, `leave.php`, `compliance-lib.php` and `pure.php` before the frontend. No migration.
+### Added: spreadsheet import, section S8 (2026-10-10, local, not deployed)
+
+- **Recruitment > Import from spreadsheet** (`/app/ats/import`, office roles only): upload a
+  Google Sheet downloaded as CSV, map its columns, preview every row, decide uncertain matches,
+  tick rows, apply, and read a report with a failures download and an import history.
+- `server/sheet-import.php` and migration **042** (`sheet_import_mappings`, `sheet_imports`,
+  `sheet_import_rows`, a `retention_policies` row with no period). Numbered 042 because S4 and S5
+  may take 040 and 041; renumber at merge if they do not.
+- Pure functions in `server/pure.php` with tests: `rg_csv_parse()` (BOM, CRLF, quoted line breaks,
+  semicolon and tab files, Windows-1252), `rg_import_normalise_header()`,
+  `rg_import_normalise_email()`, `rg_import_normalise_phone()` (restores the leading zero Google
+  Sheets drops), `rg_import_map_row()`, `rg_import_match_decision()`,
+  `rg_import_same_application()`, `rg_import_contact_changes()`, `rg_import_plan_row()`.
+- `server/people-lib.php`: `rg_create_applicant()`, now also used by `forms-intake.php`, and
+  `rg_save_contact_details()`.
+- The uploaded file is never stored. Cells are held per row until apply, then only for failed
+  rows, and cleared when the import is closed (`docs/RETENTION.md`).
+- Apply settles each row in its own transaction with the row locked, recomputing its outcome;
+  the import is claimed `FOR UPDATE` so it applies once; `applied_fingerprint` is UNIQUE, so the
+  same row cannot be applied twice from any file. Re-importing a file creates nothing.
+- Staff changes are limited to phone, email, address, postcode, the first emergency contact and
+  availability. A column mapped to anything else is stored as "ignore".
+- `server/tests/db/cases/190_sheet_import.php` (89 assertions): client, worker, trainer and editor
+  logins refused; forbidden fields ignored; preview writes nothing; uncertain match not applied;
+  "someone new" leaves the matched person alone; duplicates against the form feed (response id,
+  and same person, role and day); idempotent re-import; a scoped manager cannot update or create
+  in another service; four simultaneous applies make one application.
+- Runbook: "Import from a Google Sheet" in `docs/runbooks/google-forms-intake.md`.
+- Recruitment shows a source of `spreadsheet_import` as "spreadsheet import".
 
 ### Added: careers, the forms directory, company details and socials, section S7 (2026-10-09, local, not deployed)
 

@@ -1492,3 +1492,91 @@ export type WebsiteForm = {
   vacancies: string[]
   updated_at: string
 }
+
+// ---- Spreadsheet import (S8, server/sheet-import.php) ----------------------------
+
+export type ImportOutcome = "new" | "update" | "duplicate" | "no_change" | "uncertain" | "problem"
+export type ImportRowResult = "pending" | "created" | "updated" | "skipped" | "failed"
+
+export type ImportCandidate = {
+  id: number
+  name: string
+  email: string | null
+  phone: string | null
+  services: string[]
+  staff: boolean
+}
+
+export type ImportChange = { field: string; label: string; old: string | null; new: string }
+
+/** A row in the preview (open import) or, once applied, what happened to it. */
+export type ImportRow = {
+  id: number
+  row: number
+  outcome: ImportOutcome | ImportRowResult
+  reason: string | null
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  role?: string | null
+  service?: string | null
+  response_at?: string | null
+  match?: { decision: string; basis: string | null; reason: string | null } | null
+  person?: { id: number; name: string | null; staff: boolean } | null
+  candidates?: ImportCandidate[]
+  changes?: ImportChange[]
+  person_id?: number | null
+  applicant_id?: number | null
+  changed_fields?: string[]
+}
+
+export type ImportCounts = { created: number; updated: number; skipped: number; failed: number; pending: number }
+
+export type SheetImport = {
+  id: number
+  file_name: string
+  status: "open" | "applied" | "closed"
+  purpose: "applications" | "staff_updates"
+  default_service: string | null
+  mapping_id: number | null
+  row_count: number
+  created_at: string
+  applied_at: string | null
+  closed_at: string | null
+  counts: ImportCounts
+}
+
+export type SheetImportView = {
+  import: SheetImport
+  headers: string[]
+  /** Normalised heading => field. */
+  columns: Record<string, string>
+  samples: Record<string, string[]>
+  tally: Partial<Record<string, number>>
+  rows: ImportRow[]
+}
+
+export type SheetImportHistory = {
+  id: number
+  file_name: string
+  status: SheetImport["status"]
+  purpose: SheetImport["purpose"]
+  row_count: number
+  created_count: number
+  updated_count: number
+  skipped_count: number
+  failed_count: number
+  created_at: string
+  applied_at: string | null
+  created_by_name: string | null
+}
+
+export type ImportMapping = {
+  id: number
+  name: string
+  website_form_id: number | null
+  form_title: string | null
+  purpose: SheetImport["purpose"]
+  default_service: string | null
+  columns: Record<string, string>
+}

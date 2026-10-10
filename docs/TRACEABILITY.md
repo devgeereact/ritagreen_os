@@ -229,6 +229,20 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Role pages and posts are in a sitemap | `vacancies`, `blog_posts` | `server/sitemap.php` | `public/robots.txt` | `server/tests/db/cases/170_careers_cms.php` |
 | Role pages carry JobPosting structured data | (none) | none | `src/lib/structured-data.ts` | none (checked in a browser) |
 
+## Spreadsheet import (section S8)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| An office user uploads a Google Sheet as CSV; the file is not kept | `sheet_imports`, `sheet_import_rows.cells_json` (migration 042) | `server/sheet-import.php?action=upload`, `rg_csv_parse()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php` (CSV parsing), `server/tests/db/cases/190_sheet_import.php` |
+| Columns are mapped once per form and reused; only listed fields can be mapped | `sheet_import_mappings` | `server/sheet-import.php?action=map`, `RG_IMPORT_FIELDS`, `rg_import_guess_field()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Every row is previewed before anything is written | `sheet_import_rows` | `rg_import_plan_row()`, `server/sheet-import.php` GET | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| People are matched on email, phone, then name and date of birth; uncertain matches wait for a person | `people` | `rg_import_match_decision()`, `?action=row` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Responses the form feed already delivered, and rows already imported, are duplicates | `integration_submissions`, `sheet_import_rows.applied_fingerprint` (UNIQUE) | `rg_import_same_application()`, `server/sheet-import.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Applying writes through the person spine, row by row, audited with file and row | `people`, `applicants`, `audit_log` | `rg_create_applicant()`, `rg_save_contact_details()` in `server/people-lib.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Only contact details change for staff; never compliance, pay or status | `people`, `workers.avail_*` | `rg_import_contact_changes()`, `rg_save_contact_details()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Service scope on every row; office roles only | `sheet_imports.created_by` | `server/sheet-import.php` | `src/lib/access.ts` | `server/tests/db/cases/190_sheet_import.php`, `src/lib/__tests__/access.test.ts` |
+| A report with counts, a failures download and an import history | `sheet_imports` counts | `?action=failures`, `?action=history` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+
 ## Platform
 
 | Requirement | Data | Endpoint | Interface | Test |

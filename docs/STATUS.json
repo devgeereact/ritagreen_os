@@ -1142,6 +1142,11 @@
           "name": "Google Forms auto-feed set-up (S7, F25)",
           "status": "partial",
           "note": "docs/runbooks/google-forms-intake.md: copy-paste Apps Script (onFormSubmit, {response_id, answers}, key and X-RitaGreen-Secret from Script Properties, retries, logging), sandbox test steps and what the office sees on failure. forms-intake.php?action=set_secret lets an owner create the shared secret in Settings, shown once and stored as a hash. Partial: the script has not been run inside Google Apps Script from this environment; the payload and secret path are covered by the database tests"
+        },
+        {
+          "name": "Spreadsheet import (S8)",
+          "status": "done",
+          "note": "Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/190_sheet_import.php"
         }
       ]
     }

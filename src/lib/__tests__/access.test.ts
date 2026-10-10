@@ -80,6 +80,14 @@ describe("rolesFor", () => {
     expect(rolesFor("/app/academy/7")).toContain("trainer")
   })
 
+  // The spreadsheet import changes staff contact details, so it is narrower than
+  // Recruitment itself: a trainer sees candidates but cannot import.
+  it("keeps the spreadsheet import to the office", () => {
+    expect(rolesFor("/app/ats")).toContain("trainer")
+    expect(rolesFor("/app/ats/import")).toEqual(OFFICE)
+    expect(rolesFor("/app/ats/import/12")).toEqual(OFFICE)
+  })
+
   it("does not treat a shared word-prefix as a match", () => {
     // "/app/workers" must not be matched by a rule for "/app/work". Asserted on
     // the rule it resolves to rather than a role list, so tightening who may

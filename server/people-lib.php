@@ -116,3 +116,151 @@ function rg_add_training_record(mysqli $conn, int $personId, array $data, int $a
         null, ['person_id' => $personId, 'provider_id' => $providerId, 'completed_on' => $completed, 'expires_on' => $expiresVal]);
     return $id;
 }
+
+/**
+ * Open an application for a person who is already resolved.
+ *
+ * The one way an application is created by an intake route that is not the
+ * public careers form: the Google Forms feed (forms-intake.php) and the
+ * spreadsheet import (sheet-import.php) both come through here, so a candidate
+ * from either has the same row and the same first history entry.
+ *
+ * The person must already be resolved through find_or_create_person() (or, for
+ * an import, chosen by a person). applicants still carries name, email and phone
+ * beside person_id, as every intake route has always written them; the person
+ * record is the truth.
+ *
+ * @param array{name:string,email:string,phone:?string,role:?string,service:string,source:string,notes:?string} $a
+ * @return int the new applicant's id
+ */
+function rg_create_applicant(mysqli $conn, int $personId, array $a, string $historyReason, ?int $actorId = null): int
+{
+    $stmt = $conn->prepare(
+        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    $phone = $a['phone'] ?? null;
+    $role = $a['role'] ?? null;
+    $notes = $a['notes'] ?? null;
+    $stmt->bind_param('isssssss', $personId, $a['name'], $a['email'], $phone, $role, $a['service'], $a['source'], $notes);
+    $stmt->execute();
+    // Captured before anything else inserts: insert_id tracks the last insert.
+    $applicantId = (int) $conn->insert_id;
+
+    // The first history row, so the candidate's timeline starts where they did.
+    $stmt = $conn->prepare(
+        'INSERT INTO applicant_stage_history (applicant_id, from_stage, to_stage, reason, changed_by)
+         VALUES (?, NULL, "applied", ?, ?)'
+    );
+    $stmt->bind_param('isi', $applicantId, $historyReason, $actorId);
+    $stmt->execute();
+    return $applicantId;
+}
+
+/**
+ * Change the contact details the spreadsheet import may change, and nothing else.
+ *
+ * $changes is what rg_import_contact_changes() in pure.php proposed and a person
+ * approved: email, phone, address, postcode, the first emergency contact and
+ * availability. Compliance, verification, pay and employment status cannot be
+ * reached from here.
+ *
+ * Changing an email or phone changes the person's match key, and the key is
+ * UNIQUE, so an address that already belongs to somebody else is refused by the
+ * database rather than by a lookup that a second request could race past.
+ *
+ * Availability lives on the worker record, so it is written to the worker
+ * records listed in $workerIds only: the caller passes the ones inside the
+ * account's service scope.
+ *
+ * Returns null on success or a reason a person can act on. Never calls fail():
+ * the import applies rows one by one and a bad row must not stop the rest.
+ *
+ * @param list<array{field:string,old:?string,new:string}> $changes
+ * @param list<int> $workerIds
+ */
+function rg_save_contact_details(mysqli $conn, int $personId, array $changes, array $workerIds, int $actorId, string $via): ?string
+{
+    $by = [];
+    foreach ($changes as $c) $by[$c['field']] = $c['new'];
+    if ($by === []) return null;
+
+    $stmt = $conn->prepare(
+        'SELECT email, phone, address_line1, postcode, match_key, ' . implode(', ', RG_EMERGENCY_FIELDS)
+        . ' FROM people WHERE id = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE'
+    );
+    $stmt->bind_param('i', $personId);
+    $stmt->execute();
+    $current = $stmt->get_result()->fetch_assoc();
+    if (!$current) return 'The person is no longer on record.';
+
+    // Emergency contact: the first contact from the sheet, the second kept as it
+    // is, through the same validation the profile and the staff portal use.
+    $emergency = null;
+    foreach (['emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship'] as $f) {
+        if (array_key_exists($f, $by)) {
+            $emergency ??= array_intersect_key($current, array_flip(RG_EMERGENCY_FIELDS));
+            $emergency[$f] = $by[$f];
+        }
+    }
+    if ($emergency !== null) {
+        $check = rg_validate_emergency_contacts($emergency);
+        if (!$check['ok']) return implode(' ', $check['errors']);
+    }
+
+    $set = [];
+    $params = [];
+    foreach (['email', 'phone', 'address_line1', 'postcode'] as $f) {
+        if (!array_key_exists($f, $by)) continue;
+        $set[] = "$f = ?";
+        $params[] = $f === 'email' ? rg_normalise_email($by[$f]) : $by[$f];
+    }
+    if ($set) {
+        $email = array_key_exists('email', $by) ? $by['email'] : $current['email'];
+        $phone = array_key_exists('phone', $by) ? $by['phone'] : $current['phone'];
+        $key = rg_person_match_key(['email' => $email, 'phone' => $phone])['key'];
+        $set[] = 'match_key = ?';
+        $params[] = $key;
+        $params[] = $personId;
+        $stmt = $conn->prepare('UPDATE people SET ' . implode(', ', $set) . ' WHERE id = ?');
+        $stmt->bind_param(str_repeat('s', count($params) - 1) . 'i', ...$params);
+        try {
+            $stmt->execute();
+        } catch (mysqli_sql_exception $e) {
+            if ($e->getCode() === 1062) return 'That email or phone number already belongs to another person.';
+            throw $e;
+        }
+    }
+
+    // The worker row's phone is what text messages read, so it follows the
+    // person record, as the staff portal's own change does (me.php). It is set
+    // from the person, never the other way round.
+    if (array_key_exists('phone', $by)) {
+        $stmt = $conn->prepare('UPDATE workers SET phone = ? WHERE person_id = ? AND deleted_at IS NULL');
+        $stmt->bind_param('si', $by['phone'], $personId);
+        $stmt->execute();
+    }
+
+    if ($emergency !== null) rg_save_emergency_contacts($conn, $personId, $emergency, $actorId, $via);
+
+    if (array_key_exists('availability', $by) && $workerIds) {
+        $avail = rg_import_parse_availability($by['availability']);
+        if ($avail !== null) {
+            $d = (int) $avail['days'];
+            $n = (int) $avail['nights'];
+            $w = (int) $avail['weekends'];
+            $stmt = $conn->prepare('UPDATE workers SET avail_days = ?, avail_nights = ?, avail_weekends = ? WHERE id = ? AND person_id = ?');
+            foreach ($workerIds as $workerId) {
+                $workerId = (int) $workerId;
+                $stmt->bind_param('iiiii', $d, $n, $w, $workerId, $personId);
+                $stmt->execute();
+            }
+        }
+    }
+
+    // Field names, not values: the values are a person's contact details, and
+    // the audit log is kept for a different period and read by different people.
+    audit($conn, $actorId, 'person.contact_details', "person #$personId", 'person', $personId,
+        null, ['changed' => array_keys($by), 'via' => $via]);
+    return null;
+}
