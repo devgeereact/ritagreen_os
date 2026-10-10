@@ -36,3 +36,4 @@ server/uploads/
 # Playwright MCP scratch output (snapshots, console logs)
 .playwright-mcp/
 /backups/
+__pycache__/
