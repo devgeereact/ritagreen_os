@@ -11,7 +11,13 @@ without regenerating PROGRESS.md fails rather than silently drifting.
 
 Also validates that every file referenced by docs/TRACEABILITY.md actually exists,
 which is the cheapest available guard against documentation describing code that is
-not there.
+not there, and (since S10) two consistency guards:
+
+  - every relative markdown link in docs/, the root *.md files, .agent/ and
+    server/README.md points at a file that exists, so a folder can be removed
+    without silently breaking the documents that pointed into it;
+  - the retired brand colours (#0C447C navy, #5DCAA5 mint) appear nowhere in src/
+    or docs/, except in docs/CHANGELOG.md and on a line that says "retired".
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 STATUS = ROOT / "docs" / "STATUS.json"
@@ -185,6 +192,107 @@ def check_traceability() -> list[str]:
     ]
 
 
+# ---------------------------------------------------------------------------
+# Links
+
+LINK = re.compile(r"(?<!!)\[[^\]\n]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+FENCE = re.compile(r"^\s*(```|~~~)")
+INLINE_CODE = re.compile(r"`[^`\n]*`")
+
+
+def markdown_files(root: Path = ROOT) -> list[Path]:
+    """The documents whose links are checked."""
+    files = set((root / "docs").rglob("*.md")) if (root / "docs").exists() else set()
+    files |= set(root.glob("*.md"))
+    if (root / ".agent").exists():
+        files |= set((root / ".agent").rglob("*.md"))
+    if (root / "server" / "README.md").exists():
+        files.add(root / "server" / "README.md")
+    return sorted(files)
+
+
+def link_targets(text: str) -> list[tuple[int, str]]:
+    """(line number, target) for every inline markdown link outside code."""
+    out: list[tuple[int, str]] = []
+    in_fence = False
+    for n, line in enumerate(text.splitlines(), start=1):
+        if FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        for m in LINK.finditer(INLINE_CODE.sub("", line)):
+            out.append((n, m.group(1)))
+    return out
+
+
+def is_external(target: str) -> bool:
+    return bool(re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I)) or target.startswith("//")
+
+
+def check_links(root: Path = ROOT) -> list[str]:
+    """Every relative link resolves to a file or folder in the repository.
+
+    Skipped: external links (http:, mailto: and so on), links to a heading in the
+    same file (#...), and site paths starting with / (routes of the app, not files).
+    """
+    problems: list[str] = []
+    for path in markdown_files(root):
+        text = path.read_text(encoding="utf-8")
+        for line, target in link_targets(text):
+            if is_external(target) or target.startswith("#") or target.startswith("/"):
+                continue
+            file_part = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if not file_part:
+                continue
+            resolved = (path.parent / file_part).resolve()
+            if not resolved.exists():
+                problems.append(
+                    f"{path.relative_to(root)}:{line}: broken link to {target}"
+                )
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# Retired brand colours
+
+RETIRED_COLOURS = re.compile(r"#(?:0C447C|5DCAA5)(?:[0-9a-f]{2})?\b", re.I)  # with or without alpha
+# History, not guidance: the changelog, and the multi-tenant setup plan that was
+# superseded before it was built (kept for the record, marked as such at its top).
+COLOUR_ALLOWED_FILES = {"docs/CHANGELOG.md", "docs/RITAGREEN_SETUP.md"}
+COLOUR_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".json", ".svg", ".md", ".mjs"}
+
+
+def check_retired_colours(root: Path = ROOT) -> list[str]:
+    """The navy and mint of the old brand must not creep back in.
+
+    A line that names them as retired is allowed, so the design system can say what
+    they were; so is the changelog, which is history.
+    """
+    problems: list[str] = []
+    for base in ("src", "docs"):
+        folder = root / base
+        if not folder.exists():
+            continue
+        for path in sorted(folder.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in COLOUR_SUFFIXES:
+                continue
+            rel = path.relative_to(root).as_posix()
+            if rel in COLOUR_ALLOWED_FILES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            for n, line in enumerate(text.splitlines(), start=1):
+                if RETIRED_COLOURS.search(line) and "retired" not in line.lower():
+                    problems.append(
+                        f"{rel}:{n}: retired brand colour {RETIRED_COLOURS.search(line).group(0)}"
+                        " (use the green tokens; say 'retired' on the line if it is history)"
+                    )
+    return problems
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -198,6 +306,8 @@ def main() -> int:
 
     problems = validate(status)
     problems += check_traceability()
+    problems += check_links()
+    problems += check_retired_colours()
     if problems:
         print("Documentation consistency problems:", file=sys.stderr)
         for problem in problems:

@@ -187,7 +187,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Fails if docs/PROGRESS.md is out of step with docs/STATUS.json, or if
-      # docs/TRACEABILITY.md cites a source file that does not exist.
+      # Fails if docs/PROGRESS.md is out of step with docs/STATUS.json, if
+      # docs/TRACEABILITY.md cites a source file that does not exist, if a relative
+      # markdown link in docs/, the root, .agent/ or server/README.md is broken, or
+      # if a retired brand colour reappears in src/ or docs/.
+      - name: Test the documentation checks
+        run: python3 scripts/test_docs_sync.py
       - name: Check documentation consistency
         run: python3 scripts/docs_sync.py --check
