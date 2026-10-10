@@ -52,12 +52,6 @@ define('IMAP_USER', '');
 define('IMAP_PASS', '');
 define('IMAP_VALIDATE_CERT', true);
 
-define('OR_API_KEY', 'CHANGE_ME');
-define('OR_MODEL', 'test/none');
-define('OR_MODELS', ['test/none']);
-define('OR_REFERER', 'http://127.0.0.1');
-define('OR_TITLE', 'RitaGreenOS (tests)');
-
 define('STRIPE_SECRET_KEY', 'CHANGE_ME');
 define('STRIPE_WEBHOOK_SECRET', 'CHANGE_ME');
 define('GC_ACCESS_TOKEN', 'CHANGE_ME');
@@ -68,9 +62,6 @@ define('TWILIO_SID', 'CHANGE_ME');
 define('TWILIO_TOKEN', 'CHANGE_ME');
 define('TWILIO_FROM', '');
 define('TWILIO_WHATSAPP_FROM', '');
-
-define('OPENWEATHER_API_KEY', 'CHANGE_ME');
-define('OPENWEATHER_UNITS', 'metric');
 
 define('GOOGLE_CLIENT_ID', 'CHANGE_ME');
 define('GOOGLE_CLIENT_SECRET', 'CHANGE_ME');

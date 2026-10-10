@@ -125,7 +125,9 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 date_default_timezone_set('UTC');
 $conn->query("SET time_zone = '+00:00'");
 
-foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
+// OR_API_KEY and OR_MODEL were required here until S9 retired ai.php. A live
+// config.php that still defines them is harmless: nothing reads them.
+foreach (['ALLOWED_ORIGINS'] as $_required) {
     if (!defined($_required)) {
         http_response_code(500);
         header('Content-Type: application/json');

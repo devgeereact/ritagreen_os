@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Sparkles, Users } from "lucide-react"
+import { Plus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
-import { api, aiDraft, ApiError } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 import { useAuth } from "@/providers/auth-provider"
 import type { Programme } from "@/lib/types"
 import { DIVISION_LABELS } from "@/lib/format"
@@ -124,27 +124,6 @@ function NewProgrammeDialog({
   const [division, setDivision] = useState("academy")
   const [cpdHours, setCpdHours] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [drafting, setDrafting] = useState(false)
-
-  async function draft() {
-    if (!title.trim()) {
-      toast.error("Add a title first so the AI has something to work from.")
-      return
-    }
-    setDrafting(true)
-    try {
-      const text = await aiDraft(
-        `Write a clear, professional course description (2 short paragraphs) plus 4 bullet learning outcomes for a UK Health & Social Care training course titled "${title.trim()}". UK English, no marketing fluff.`,
-      )
-      setDescription(text)
-      toast.success("Draft ready. Edit as needed.")
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "AI drafting failed.")
-    } finally {
-      setDrafting(false)
-    }
-  }
-
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!title.trim()) {
@@ -178,7 +157,7 @@ function NewProgrammeDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New programme</DialogTitle>
-          <DialogDescription>Create a course. Draft the description with AI if you like.</DialogDescription>
+          <DialogDescription>Record a training course the company runs or recognises.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
@@ -204,12 +183,7 @@ function NewProgrammeDialog({
             </div>
           </div>
           <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="description">Description</Label>
-              <Button type="button" size="sm" variant="outline" onClick={draft} disabled={drafting}>
-                <Sparkles className="mr-1 size-3.5" /> {drafting ? "Drafting…" : "Draft with AI"}
-              </Button>
-            </div>
+            <Label htmlFor="description">Description</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={6} placeholder="What the course covers and who it's for…" />
           </div>
           <DialogFooter>

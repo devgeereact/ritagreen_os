@@ -3,7 +3,7 @@
 //
 // Copy this file to config.php on the server and fill in the real values.
 // config.php is gitignored and must NEVER be committed: it holds the DB
-// password and the OpenRouter key. Only api.php/auth.php/etc require it.
+// password and every integration key. Only api.php/auth.php/etc require it.
 
 // ----- Which database is this? -----
 // Declared, never guessed. seed.php, migrate.php and backfill-people.php decide
@@ -30,15 +30,6 @@ define('DB_NAME', 'ritagreen_os');   // cPanel may prefix as <cpaneluser>_ritagr
 define('DB_USER', 'ritagreen_os');   // usually the same as the DB name
 define('DB_PASS', 'CHANGE_ME');      // the DB user's password — server only
 
-// ----- OpenRouter (server-side AI only; key never reaches the browser) -----
-define('OR_API_KEY', 'CHANGE_ME');                       // sk-or-v1-...
-define('OR_MODEL', 'openai/gpt-oss-120b:free');          // any current openrouter.ai/models id
-
-// Reference only — ai.php uses OR_MODEL above; these are not required.
-define('OR_MODELS', ['openai/gpt-oss-120b:free', 'anthropic/claude-sonnet-4.6']);
-define('OR_REFERER', 'https://ritagreenservices.com');
-define('OR_TITLE', 'RitaGreenOS');
-
 // ----- Stripe (card payments via hosted Checkout; secrets stay server-side) -----
 // Until these are real, payments.php returns 503 and Invoicing keeps using
 // manual mark-paid. Get keys at dashboard.stripe.com → Developers → API keys.
@@ -57,10 +48,6 @@ define('MANDATORY_2FA', false);
 // Secret that guards HTTP triggering of the digest. Use a long random string.
 // Not needed if you only ever run the script via CLI cron.
 define('ALERTS_KEY', 'CHANGE_ME');                       // e.g. 32+ random chars
-
-// ----- OpenWeather (read only by a future weather.php) -----
-define('OPENWEATHER_API_KEY', 'CHANGE_ME');
-define('OPENWEATHER_UNITS', 'metric');
 
 // ----- SMS (Twilio) for shift offers & reminders -----
 // Leave as CHANGE_ME to disable SMS (offers still create in-app + log as skipped).

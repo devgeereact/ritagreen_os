@@ -16,7 +16,6 @@ const ALL_ON: Record<FeatureName, boolean> = {
   online_payments: true,
   sms_whatsapp: true,
   inbox: true,
-  ai_assistant: true,
 }
 
 function navFor(role: Role, switches: Partial<Record<FeatureName, boolean>> = {}) {
@@ -62,7 +61,7 @@ describe("the office sidebar", () => {
     expect(urls(false)).not.toContain("/app/inbox")
   })
 
-  it("no longer lists the pages being retired, or Notifications", () => {
+  it("no longer lists the retired pages, or Notifications", () => {
     const urls = NAV.flatMap((d) => [d.url, ...(d.items ?? []).map((i) => i.url)])
     for (const gone of ["/app/content-studio", "/app/analytics", "/app/insights", "/app/notifications"]) {
       expect(urls).not.toContain(gone)

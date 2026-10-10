@@ -117,8 +117,8 @@
   # Content-Security-Policy.
   #
   # 'unsafe-inline' is present for styles only, and is not removable today:
-  # Tailwind is compiled to a stylesheet but Radix, the FullCalendar build and
-  # ApexCharts all set inline style attributes at runtime, and several components
+  # Tailwind is compiled to a stylesheet but Radix sets inline style attributes
+  # at runtime, and several components
   # here compute a colour into style={{...}}. Scripts carry no such exemption --
   # which is the half that matters, and the half that turns a stored-XSS bug into
   # a non-event. `connect-src 'self'` is enough because every third-party call is

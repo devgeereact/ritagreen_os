@@ -31,7 +31,7 @@ through to invoices, incidents, communications and reporting.
 | Layer | Technology |
 |---|---|
 | Frontend | React 19, Vite 7, TypeScript 5.9, React Router 7 |
-| UI | shadcn/ui over Radix, Tailwind 3, ApexCharts, FullCalendar |
+| UI | shadcn/ui over Radix, Tailwind 3 |
 | API | PHP 8.4, flat file-per-resource, `mysqli` prepared statements, no framework, no Composer |
 | Database | MySQL / MariaDB on cPanel |
 | Auth | Opaque bearer tokens, bcrypt cost 12, TOTP two-factor, Google SSO |

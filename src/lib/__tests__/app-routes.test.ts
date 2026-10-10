@@ -39,7 +39,7 @@ describe("DESTINATIONS", () => {
       "/app/workers", "/app/compliance", "/app/ats", "/app/academy", "/app/incidents",
       "/app/clients", "/app/enquiries", "/app/bookings", "/app/quotes", "/app/contracts", "/app/invoicing",
       "/app/reports", "/app/inbox", "/app/notifications", "/app/comms",
-      "/app/content-studio", "/app/blog", "/app/testimonials", "/app/files", "/app/settings", "/app/help",
+      "/app/blog", "/app/testimonials", "/app/files", "/app/settings", "/app/help",
       "/app/profile",
     ]) {
       expect(paths.has(p), p).toBe(true)
@@ -55,6 +55,7 @@ describe("DESTINATIONS", () => {
     expect(find("academy")).toContain("/app/academy")
     expect(find("bookings")).toContain("/app/bookings")
     expect(find("blog")).toContain("/app/blog")
+    expect(find("content studio")).toContain("/app/blog")
   })
 
   it("ties the money pages to the finance switch and the inbox to its own", () => {

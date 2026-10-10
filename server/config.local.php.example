@@ -40,15 +40,6 @@ define('DB_NAME', 'ritagreen_os_dev');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 
-// ----- AI -----
-// Leave as CHANGE_ME and ai.php returns an error instead of calling out. Put a
-// real key here only if you are actually working on an AI feature.
-define('OR_API_KEY', 'CHANGE_ME');
-define('OR_MODEL', 'openai/gpt-oss-120b:free');
-define('OR_MODELS', ['openai/gpt-oss-120b:free']);
-define('OR_REFERER', 'http://localhost:5122');
-define('OR_TITLE', 'RitaGreenOS (local)');
-
 // ----- Payments: OFF -----
 // payments.php and gocardless.php return 503 while these are CHANGE_ME.
 define('STRIPE_SECRET_KEY', 'CHANGE_ME');
@@ -64,10 +55,6 @@ define('MANDATORY_2FA', false);
 // ----- Cron scripts -----
 // expiry-alerts.php and backup.php still run from the CLI without this.
 define('ALERTS_KEY', 'local-development-only-not-a-secret');
-
-// ----- Weather: OFF -----
-define('OPENWEATHER_API_KEY', 'CHANGE_ME');
-define('OPENWEATHER_UNITS', 'metric');
 
 // ----- SMS and WhatsApp: OFF -----
 // send_sms() logs to sms_log with status 'skipped' and returns false.
