@@ -23,6 +23,7 @@ import {
   Mail,
   Megaphone,
   Sparkles,
+  FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react"
 import type { FeatureName } from "@/lib/types"
@@ -54,6 +55,7 @@ export type Destination = {
 export const DESTINATIONS: Destination[] = [
   { label: "Today", path: "/app", icon: LayoutDashboard, group: "Workforce", keywords: "command centre dashboard home overview action" },
   { label: "Recruitment", path: "/app/ats", icon: ClipboardList, group: "Workforce", keywords: "ats applicants candidates hiring onboarding" },
+  { label: "Import from spreadsheet", path: "/app/ats/import", icon: FileSpreadsheet, group: "Workforce", keywords: "csv google sheets responses bulk upload staff contact details" },
   { label: "People", path: "/app/workers", icon: Users, group: "Workforce", keywords: "workers staff carers guards cleaners workforce profiles" },
   // One person's page. /app/people itself redirects to the People list above.
   { label: "Person profile", path: "/app/people", icon: Users, group: "Workforce", keywords: "person profile record checks emergency contacts" },

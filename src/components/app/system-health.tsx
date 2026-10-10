@@ -57,7 +57,7 @@ export function SystemHealthTab() {
                 <div className="min-w-0">
                   <p className="font-medium">{j.label}</p>
                   <p className="text-sm text-muted-foreground">
-                    Last ran {when(j.last_success_at)}{j.last_detail ? `: ${j.last_detail}` : ""}. Expected every {j.every_hours === 1 ? "hour" : j.every_hours === 24 ? "day" : j.every_hours === 168 ? "week" : `${j.every_hours} hours`}.
+                    {j.last_success_at ? `Last ran ${when(j.last_success_at)}` : "No successful run recorded"}{j.last_detail ? `: ${j.last_detail}` : ""}. Expected every {j.every_hours === 1 ? "hour" : j.every_hours === 24 ? "day" : j.every_hours === 168 ? "week" : `${j.every_hours} hours`}.
                   </p>
                   {j.note && <p className="text-sm text-muted-foreground">{j.note}</p>}
                 </div>

@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { personPath } from "@/lib/people"
-import { CalendarClock, CheckCircle2, UserRound } from "lucide-react"
+import { CalendarClock, CheckCircle2, FileSpreadsheet, UserRound } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -20,6 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
+import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
 import type {
   Applicant, ApplicantInterview, ApplicantStageChange, AssignableStaff, NextStage, OnboardingTask,
@@ -62,15 +63,27 @@ export default function ATS() {
   const [openId, setOpenId] = useState<number | null>(null)
 
   const applicants = data?.applicants ?? []
+  // The import is office only (server/sheet-import.php); trainers see Recruitment too.
+  const { hasRole } = useAuth()
+  const canImport = hasRole("super_admin", "admin", "manager")
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Recruitment &amp; onboarding</h1>
-        <p className="text-sm text-muted-foreground">
-          Applications from the careers page, linked forms and the academy. Open a candidate to
-          move them on, book an interview or start onboarding.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Recruitment &amp; onboarding</h1>
+          <p className="text-sm text-muted-foreground">
+            Applications from the careers page, linked forms, spreadsheet imports and the academy. Open a
+            candidate to move them on, book an interview or start onboarding.
+          </p>
+        </div>
+        {canImport && (
+          <Button variant="outline" asChild>
+            <Link to="/app/ats/import">
+              <FileSpreadsheet className="mr-1 size-4" /> Import from spreadsheet
+            </Link>
+          </Button>
+        )}
       </div>
 
       {loading && <LoadingBlock rows={5} />}
@@ -100,7 +113,7 @@ export default function ATS() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{a.role_applied || "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{DIVISION_LABELS[a.division] ?? a.division}</TableCell>
-                    <TableCell className="capitalize text-muted-foreground">{a.source || "—"}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">{a.source ? a.source.replace(/_/g, " ") : "—"}</TableCell>
                     <TableCell>
                       {/*
                         A badge, not a dropdown. The stage used to be a select listing

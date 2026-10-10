@@ -424,6 +424,7 @@ computed identically everywhere.
 | `requests.php` | Cover requests and enquiries in one list, with an owner | Office roles throughout, reads included; service scope. See §54e |
 | `scheduling.php` | The rota: drafts, publish, edit, assign, cancel, offers, copy week | Office roles throughout, reads included; service scope on the list and every record |
 | `sites.php` | A client's sites and what each requires | Office roles throughout, reads included. See §54e |
+| `sheet-import.php` | Spreadsheet import: CSV upload, column mapping, preview, apply, report (S8) | `super_admin`/`admin`/`manager`, internal staff, reads included; scoped accounts see their own imports and in-scope people only; every write audited with file and row. See §54g |
 | `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
 | `skills.php` | Skills catalogue | Office roles throughout, reads included |
 | `sitemap.php` | Published role pages and posts as a sitemap (S7) | **Public**, XML, cached an hour |
@@ -1669,7 +1670,7 @@ stays stable and comparable.
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
 | `action-centre.php` | What needs attention today, grouped by urgency, with the Today tiles. Each group follows the guard of the screen it links to and a scoped account's service (`rg_action_centre_access()`). See §54f | Staff only |
 | `system-health.php` | Live health checks, scheduled job run times (`cron_runs`), email queue, form intake, and `?action=workload`. See §54f | `super_admin`/`admin`/`manager` with **no service scope** |
-| `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
+| `forms-intake.php` | Google Forms webhook, integration health, retry. Creates the applicant through `rg_create_applicant()` (people-lib.php), shared with the spreadsheet import | **Webhook: shared secret, no bearer token.** Views are staff only |
 | `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) |
 | `features.php` | Owner feature switches. See §54c | Staff to read; owner to change |
 | `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` | Schema, fixtures and the first administrator | **CLI only.** Refuse to run over HTTP at all. `migrate.php`, `seed.php` and `backfill-people.php` additionally read `RG_ENV` from `config.php` to decide what they may do; a config that does not declare it counts as production |
@@ -1926,6 +1927,59 @@ POST, `super_admin`/`admin`. Generates a random shared secret, stores only its S
 hash, and returns `{ok, integration_key, secret}` once. Replaces any previous secret.
 Audited as `intake.secret_set` without the secret. Set-up guide:
 `docs/runbooks/google-forms-intake.md`.
+
+---
+
+## 54g. Spreadsheet import (S8)
+
+### `sheet-import.php`
+
+`super_admin`/`admin`/`manager`, internal staff only, reads included (`require_role` then
+`require_staff`, above every branch). Not trainers, although trainers see Recruitment: an import
+changes staff contact details as well as adding candidates. A client or worker login is refused
+whatever its role. A scoped account sees and opens only the imports it uploaded.
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | `mappings` | none | `{mappings, forms, fields}`: saved mappings (`id, name, website_form_id, form_title, purpose, default_service, columns`), the forms directory for linking, and the field list from `RG_IMPORT_FIELDS` |
+| GET | `history` | none | `{imports}`: newest 100, with `row_count` and the created, updated, skipped and failed counts |
+| GET | none | `id` | `{import, headers, columns, samples, tally, rows}`. While the import is open, `rows` is the preview, worked out now: per row `outcome` (`new`, `update`, `duplicate`, `no_change`, `uncertain`, `problem`), `reason`, the mapped `name, email, phone, role, service, response_at`, `match {decision, basis, reason}`, `person` (in scope only), `candidates` for an uncertain match (in scope only) and `changes` (`field, label, old, new`). Once applied or closed, `rows` is what happened (`created`, `updated`, `skipped`, `failed`, with `person_id`, `applicant_id`, `changed_fields`) |
+| GET | `row` | `id`, `row`, `choice` (`new` or a candidate's person id) | `{row}`: one row's preview with that answer, so the screen can show old and new values before apply. A person id that was not offered is ignored |
+| GET | `failures` | `id` | `text/csv` (UTF-8 with BOM): `Row, Reason`, then the original columns of every failed row. Cells that a spreadsheet would read as a formula are prefixed with `'`. Audited as `import.failures_download` |
+| POST | `upload` | body `{file_name, csv}` | `{ok, id, rows, mapping_id}` 201. CSV only, up to 2 MB, 1,000 rows and 80 columns, header row required, UTF-8 with or without BOM (Windows-1252 accepted), comma, semicolon or tab. An `.xlsx`/`.xls`/`.ods` name is **422** with how to download CSV from Google Sheets. The best-fitting saved mapping is applied, with a guess for any heading it lacks. Rate limited (30 per 10 minutes per account). Audited `import.upload` |
+| POST | `map` | `id`; body `{columns, purpose, default_service?, save?: {name, website_form_id?, mapping_id?}}` | The import view, as GET. `columns` is heading → field; a field not in `RG_IMPORT_FIELDS` (a pay rate, a status) is stored as `ignore`. Needs a name column and an email or phone column; one column per field (**422**). A scoped account may default only to its own service (**403**). `save` creates or updates a reusable mapping, optionally linked to a form; a duplicate name is **409**. Audited `import.map`, `import.mapping_create` / `import.mapping_update` |
+| POST | `apply` | `id`; body `{rows: [{id, choice?}]}` | `{ok, counts}` plus the import view. One apply per import: the import is claimed `FOR UPDATE` first and a second apply is **409**. Every pending row is then settled in its own transaction with the row locked, recomputing its outcome from the database as it is now. Ticked `new` rows create an application; ticked `update` rows change the allowed contact fields; ticked `uncertain` rows with no `choice` are skipped; unticked rows are skipped (`Not selected.`) or, if a problem, failed with the reason. Audited `import.row_created` / `import.row_updated` per row (detail `<file>, row N`) and `import.apply` with the counts |
+| POST | `close` | `id` | `{ok}`. Clears every held cell and marks the import closed. Audited `import.close` |
+
+What an import can write, and nothing else:
+
+- **A new application** for a new or existing person: `find_or_create_person()` (or, when a person
+  chose "someone new" against an email or phone already on record, a new person with no match key),
+  then `rg_create_applicant()` in `people-lib.php`, the same function `forms-intake.php` now uses,
+  with `source = 'spreadsheet_import'` and the file name and row in the notes and the first history
+  entry. Blank address, postcode and first emergency contact on the person are filled; nothing on
+  record is overwritten. No email is queued and nobody is notified per row.
+- **Contact details of somebody already on staff**: phone, email, address, postcode, the first
+  emergency contact and availability (`workers.avail_*`, on in-scope worker records only), through
+  `rg_save_contact_details()` in `people-lib.php`. A change of email or phone recomputes the match
+  key, and a key already held by another person fails the row. Audited as
+  `person.contact_details` (field names only) and, for the emergency contact,
+  `person.emergency_contacts`.
+
+Compliance, verification, pay, right-to-work evidence, approval and employment status are not
+reachable. The person record is the truth: `workers.phone` follows a changed phone (it is what
+text messages read, and `me.php?action=profile` does the same), and `workers.email` is not
+written.
+
+Matching (`rg_import_match_decision()`): email, then phone, then name with date of birth.
+Any disagreement is `uncertain` and waits for a person. Duplicates: the same row in the file, a
+row already applied in any import (`applied_fingerprint`, UNIQUE), a response id already received
+by `forms-intake.php` or already imported, and the same person, role and day as an existing
+application (`rg_import_same_application()`, which reads the application's creation date, the
+form feed's received date and any import's response time).
+
+Scope: a person matched outside a scoped account's service is a problem and nothing about them is
+shown; candidates outside it are not offered; a new application must be in the account's service.
 
 ---
 

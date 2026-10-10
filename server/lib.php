@@ -1294,14 +1294,14 @@ function notify(mysqli $conn, ?int $userId, string $title, string $body = '', st
     $stmt->execute();
 }
 
-// ----- Scheduled jobs: when each last ran (migration 041) -----
+// ----- Scheduled jobs: when each last ran (migration 043) -----
 //
 // Each cron script calls rg_cron_started() once it has passed its own key check,
 // and rg_cron_succeeded() at the point it has done its job. The finish time is
 // written on shutdown whatever happened, so a run that died part way shows a
 // finish without a success. Settings reads cron_runs through system-health.php.
 //
-// Never allowed to break the job it describes: before migration 041 is applied
+// Never allowed to break the job it describes: before migration 043 is applied
 // the table does not exist, and a backup must not fail for want of a heartbeat.
 function rg_cron_started(mysqli $conn, string $job): void
 {

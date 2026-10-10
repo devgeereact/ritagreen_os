@@ -1595,6 +1595,233 @@ check('a postcode that is not one is refused', rg_validate_contact_details(['pho
 check('email is not a field a worker changes here', array_key_exists('email', rg_validate_contact_details(['phone' => '07700 900123', 'email' => 'x@y.z'])['values']), false);
 
 // ---------------------------------------------------------------------------
+group('spreadsheet import: CSV parsing');
+
+$csv = "\xEF\xBB\xBFTimestamp,Full name*,Email address,Tell us about your experience\r\n"
+     . "09/10/2026 14:03:22,Ada Lovell,ADA@Example.test,\"Five years, nights\r\nand days\"\r\n"
+     . "\r\n"
+     . "10/10/2026 09:00:00,\"Tom \"\"TJ\"\" Price\",tj@example.test,\r\n";
+$p = rg_csv_parse($csv);
+check('a Google Forms export parses', $p['ok'], true);
+check('the byte-order mark is not part of the first heading', $p['headers'][0], 'Timestamp');
+check('headings are kept as written', $p['headers'][1], 'Full name*');
+check('a quoted cell keeps its comma and line break', $p['rows'][0]['cells']['Tell us about your experience'], "Five years, nights\r\nand days");
+check('doubled quotes are one quote', $p['rows'][1]['cells']['Full name*'], 'Tom "TJ" Price');
+check('two data rows; the blank line is skipped', count($p['rows']), 2);
+check('the row number is the spreadsheet row', $p['rows'][0]['row'], 2);
+check('a multi-line cell is still one row; the blank row is counted', $p['rows'][1]['row'], 4);
+
+$semi = rg_csv_parse("Name;Email\nAda;ada@example.test\n");
+check('a semicolon file is read by its delimiter', $semi['rows'][0]['cells']['Email'], 'ada@example.test');
+$tab = rg_csv_parse("Name\tEmail\nAda\tada@example.test\n");
+check('so is a tab file', $tab['rows'][0]['cells']['Email'], 'ada@example.test');
+
+$latin = rg_csv_parse("Name,Town\nZo\xEB,Caf\xE9\n");
+check('Windows-1252 text from Excel is read as such', $latin['rows'][0]['cells']['Name'], 'Zoë');
+
+check('an empty file is refused', rg_csv_parse('')['ok'], false);
+check('a header row with nothing under it is refused', rg_csv_parse("Name,Email\n")['error'],
+    'The file has a header row but no responses under it.');
+check('an unclosed quote is refused', rg_csv_parse("Name\n\"Ada\n")['ok'], false);
+check('an XLSX file uploaded by mistake is refused', rg_csv_parse("PK\x03\x04\0\0binary")['ok'], false);
+check('too many rows is refused', rg_csv_parse("Name\n" . str_repeat("x\n", 6), 5)['ok'], false);
+$dupes = rg_csv_parse("Email,Email,\nx,y,z\n");
+check('repeated headings are numbered rather than overwritten', $dupes['headers'], ['Email', 'Email (2)', 'Column 3']);
+
+check('heading normalisation drops the asterisk and spacing',
+    rg_import_normalise_header("  Full   Name * "), 'full name');
+check('and a trailing colon', rg_import_normalise_header('Email:'), 'email');
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: field guesses');
+
+check('Timestamp', rg_import_guess_field('Timestamp'), 'response_timestamp');
+check('email', rg_import_guess_field('Email address*'), 'email');
+check('emergency phone is not taken for phone', rg_import_guess_field('Emergency contact phone number'), 'emergency_phone');
+check('emergency name', rg_import_guess_field('Emergency contact name'), 'emergency_name');
+check('next of kin relationship', rg_import_guess_field('Next of kin relationship'), 'emergency_relationship');
+check('mobile', rg_import_guess_field('Mobile number'), 'phone');
+check('"tell us" is not a telephone', rg_import_guess_field('Tell us about your experience'), 'experience');
+check('role', rg_import_guess_field('Which role are you applying for?'), 'role');
+check('right to work', rg_import_guess_field('Do you have the right to work in the UK?'), 'right_to_work');
+check('how heard', rg_import_guess_field('How did you hear about us?'), 'how_heard');
+check('an unknown heading is ignored', rg_import_guess_field('Favourite colour'), 'ignore');
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: email and phone normalisation');
+
+check('email is lower-cased and trimmed', rg_import_normalise_email('  Ada@Example.TEST ')['value'], 'ada@example.test');
+check('mailto: is removed', rg_import_normalise_email('mailto:ada@example.test')['value'], 'ada@example.test');
+check('a blank email is no email, not an error', rg_import_normalise_email(''), ['value' => null, 'error' => null]);
+check('a broken email is an error', rg_import_normalise_email('ada at example')['error'], 'The email address is not valid.');
+
+check('+44 becomes a UK number', rg_import_normalise_phone('+44 7700 900123')['value'], '07700900123');
+check('0044 too', rg_import_normalise_phone('0044 7700 900123')['value'], '07700900123');
+check('a sheet that dropped the leading zero gets it back', rg_import_normalise_phone('7700900123')['value'], '07700900123');
+check('spaces and brackets are removed', rg_import_normalise_phone('(0113) 496 0000')['value'], '01134960000');
+check('another country keeps its plus', rg_import_normalise_phone('+353 85 123 4567')['value'], '+353851234567');
+check('letters are refused', rg_import_normalise_phone('call me')['error'] !== null, true);
+check('a fragment is refused', rg_import_normalise_phone('123')['error'] !== null, true);
+check('a blank phone is no phone', rg_import_normalise_phone(' ')['value'], null);
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: dates, availability, services, names');
+
+check('dates are day first', rg_import_parse_date('03/04/1990'), '1990-04-03');
+check('ISO dates are read', rg_import_parse_date('1990-04-03'), '1990-04-03');
+check('an impossible date is refused', rg_import_parse_date('31/02/1990'), null);
+check('a Google timestamp', rg_import_parse_timestamp('09/10/2026 14:03:22'), '2026-10-09 14:03:22');
+check('a timestamp without seconds', rg_import_parse_timestamp('09/10/2026 9:05'), '2026-10-09 09:05:00');
+check('availability: nights and weekends',
+    rg_import_parse_availability('Nights, Weekends'), ['days' => false, 'nights' => true, 'weekends' => true]);
+check('availability: flexible means everything',
+    rg_import_parse_availability('Fully flexible'), ['days' => true, 'nights' => true, 'weekends' => true]);
+check('availability: nothing recognisable changes nothing', rg_import_parse_availability('ask me'), null);
+check('Healthcare is care', rg_import_service('Healthcare'), 'care');
+check('Training is academy', rg_import_service('Training'), 'academy');
+check('an unknown service is null', rg_import_service('Catering'), null);
+check('names agree ignoring case and punctuation', rg_import_names_agree('ada  LOVELL', 'Ada Lovell.'), true);
+check('names agree with a middle initial', rg_import_names_agree('Amara N. Okafor', 'Amara Okafor'), true);
+check('different people do not agree', rg_import_names_agree('Ada Lovell', 'Grace Lovell'), false);
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: mapping a row');
+
+$mapping = [
+    'full name' => 'name', 'email address' => 'email', 'phone' => 'phone', 'service' => 'service',
+    'role' => 'role', 'emergency name' => 'emergency_name', 'emergency phone' => 'emergency_phone',
+    'pay rate' => 'pay_rate_pence', 'status' => 'status',
+];
+$m = rg_import_map_row([
+    'Full name*' => ' Ada  Lovell ', 'Email address' => 'ADA@example.test', 'Phone' => '7700900123',
+    'Service' => 'Healthcare', 'Role' => 'Support worker', 'Pay rate' => '9999', 'Status' => 'active',
+], $mapping);
+check('a good row has no problems', $m['problems'], []);
+check('the name is tidied', $m['fields']['name'], 'Ada Lovell');
+check('the email is normalised', $m['fields']['email'], 'ada@example.test');
+check('the phone is normalised', $m['fields']['phone'], '07700900123');
+check('the service is translated', $m['fields']['service'], 'care');
+check('a column mapped to pay is ignored', array_key_exists('pay_rate_pence', $m['fields']), false);
+check('a column mapped to status is ignored', array_key_exists('status', $m['fields']), false);
+
+$noName = rg_import_map_row(['Email address' => 'x@example.test'], $mapping);
+check('a row with no name is a problem', in_array('There is no name.', $noName['problems'], true), true);
+$halfContact = rg_import_map_row(['Full name' => 'Ada', 'Emergency name' => 'Bob'], $mapping);
+check('an emergency contact with no number is a problem',
+    in_array('The emergency contact has a name but no phone number.', $halfContact['problems'], true), true);
+$split = rg_import_map_row(['First' => 'Ada', 'Last' => 'Lovell'], ['first' => 'first_name', 'last' => 'last_name']);
+check('first and last name are joined', $split['fields']['name'], 'Ada Lovell');
+$default = rg_import_map_row(['Full name' => 'Ada'], $mapping, 'security');
+check('the default service applies when the row has none', $default['fields']['service'], 'security');
+$long = rg_import_map_row(['Full name' => str_repeat('a', 161)], $mapping);
+check('a name over 160 characters is a problem', $long['problems'], ['Full name is longer than 160 characters.']);
+$badService = rg_import_map_row(['Full name' => 'Ada', 'Service' => 'Catering'], $mapping);
+check('an unknown service is a problem', count($badService['problems']), 1);
+
+check('the same cells give the same fingerprint',
+    rg_import_fingerprint(['Name' => 'Ada', 'Email' => 'a@x.test']), rg_import_fingerprint(['email ' => 'a@x.test', 'NAME' => ' Ada']));
+check('a new blank column does not change it',
+    rg_import_fingerprint(['Name' => 'Ada']), rg_import_fingerprint(['Name' => 'Ada', 'Extra' => '']));
+check('different content does', rg_import_fingerprint(['Name' => 'Ada']) === rg_import_fingerprint(['Name' => 'Adam']), false);
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: match decision');
+
+$ada = ['id' => 1, 'full_name' => 'Ada Lovell', 'email' => 'ada@example.test', 'phone' => '07700 900123', 'date_of_birth' => '1990-04-03'];
+$tom = ['id' => 2, 'full_name' => 'Tom Price', 'email' => 'tom@example.test', 'phone' => '07700 900456', 'date_of_birth' => null];
+$row = static fn(array $r): array => $r + ['name' => null, 'email' => null, 'phone' => null, 'date_of_birth' => null];
+
+$d = rg_import_match_decision($row(['name' => 'Ada Lovell', 'email' => 'ADA@example.test']), [$ada, $tom]);
+check('email match', [$d['decision'], $d['person_id'], $d['basis']], ['match', 1, 'email']);
+
+$d = rg_import_match_decision($row(['name' => 'Grace Hopper', 'email' => 'ada@example.test']), [$ada]);
+check('an email match with another name is uncertain', [$d['decision'], $d['person_id'], $d['candidates']], ['uncertain', null, [1]]);
+
+$d = rg_import_match_decision($row(['name' => 'Ada Lovell', 'email' => 'ada@example.test', 'phone' => '07700900456']), [$ada, $tom]);
+check('email and phone on two people is uncertain', [$d['decision'], $d['candidates']], ['uncertain', [1, 2]]);
+
+$d = rg_import_match_decision($row(['name' => 'Tom Price', 'phone' => '+447700900456']), [$ada, $tom]);
+check('phone match when there is no email', [$d['decision'], $d['person_id'], $d['basis']], ['match', 2, 'phone']);
+
+$d = rg_import_match_decision($row(['name' => 'Sam Price', 'phone' => '07700900456']), [$tom]);
+check('a shared phone with another name is uncertain', $d['decision'], 'uncertain');
+
+$d = rg_import_match_decision($row(['name' => 'Tom Price', 'email' => 'new@example.test', 'phone' => '07700900456']), [$tom]);
+check('a phone match with a different email on record is uncertain', $d['decision'], 'uncertain');
+
+$d = rg_import_match_decision($row(['name' => 'ada lovell', 'date_of_birth' => '1990-04-03']), [$ada]);
+check('name and date of birth match', [$d['decision'], $d['person_id'], $d['basis']], ['match', 1, 'name_dob']);
+
+$d = rg_import_match_decision($row(['name' => 'Ada Lovell', 'email' => 'other@example.test', 'date_of_birth' => '1990-04-03']), [$ada]);
+check('name and date of birth with a different email is uncertain', $d['decision'], 'uncertain');
+
+$d = rg_import_match_decision($row(['name' => 'Ada Lovell', 'email' => 'brand.new@example.test']), [$ada]);
+check('the same name alone is a possible match, never a merge', [$d['decision'], $d['basis'], $d['candidates']], ['uncertain', 'name', [1]]);
+
+$d = rg_import_match_decision($row(['name' => 'Nobody Known', 'email' => 'n@example.test']), [$ada, $tom]);
+check('no match', [$d['decision'], $d['person_id']], ['none', null]);
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: duplicates and changes');
+
+$apps = [['role' => 'Support Worker', 'dates' => ['2026-10-09'], 'stage' => 'applied', 'source' => 'google_form']];
+check('same person, role and day from the feed is a duplicate',
+    rg_import_same_application('support worker', '2026-10-09 14:03:22', $apps),
+    'This application was already received through the form feed on 2026-10-09.');
+check('a different day is not', rg_import_same_application('Support worker', '2026-10-10 08:00:00', $apps), null);
+check('a different role is not', rg_import_same_application('Cleaner', '2026-10-09 08:00:00', $apps), null);
+check('no timestamp and an open application for the role is a duplicate',
+    rg_import_same_application('Support worker', null, $apps) !== null, true);
+check('no timestamp and a rejected application is not',
+    rg_import_same_application('Support worker', null, [['role' => 'Support worker', 'dates' => [], 'stage' => 'rejected', 'source' => 'careers']]), null);
+
+$current = ['email' => 'ada@example.test', 'phone' => '07700 900123', 'address_line1' => null, 'postcode' => 'LS1 1AA',
+    'emergency_contact_name' => null, 'emergency_contact_phone' => null, 'emergency_contact_relationship' => null,
+    'avail_days' => 1, 'avail_nights' => 0, 'avail_weekends' => 0];
+$changes = rg_import_contact_changes($current, [
+    'email' => 'ada@example.test', 'phone' => '07700900999', 'address' => '1 New Street', 'postcode' => 'ls11aa',
+    'emergency_name' => 'Bob Lovell', 'emergency_phone' => '07700900777', 'emergency_relationship' => null,
+    'availability' => 'Days and nights',
+]);
+check('only changed allowed fields are proposed', array_column($changes, 'field'),
+    ['phone', 'address_line1', 'emergency_contact_name', 'emergency_contact_phone', 'availability']);
+check('the old value is shown beside the new', [$changes[0]['old'], $changes[0]['new']], ['07700 900123', '07700900999']);
+check('availability is described in words', [$changes[4]['old'], $changes[4]['new']], ['Days', 'Days, nights']);
+check('a blank cell never clears anything', rg_import_contact_changes($current, ['phone' => null, 'email' => '']), []);
+check('availability is not proposed for somebody who is not a worker',
+    rg_import_contact_changes(['email' => null], ['availability' => 'nights']), []);
+
+// ---------------------------------------------------------------------------
+group('spreadsheet import: what a row becomes');
+
+$base = ['problems' => [], 'purpose' => 'applications', 'duplicate' => null, 'match' => ['decision' => 'none'],
+    'person' => null, 'service' => 'care', 'scope' => null, 'changes' => [], 'has_email' => true];
+check('a clean new row is a new application', rg_import_plan_row($base)['outcome'], 'new');
+check('problems come first', rg_import_plan_row(['problems' => ['There is no name.'], 'duplicate' => 'x'] + $base),
+    ['outcome' => 'problem', 'reason' => 'There is no name.']);
+check('a duplicate is a duplicate', rg_import_plan_row(['duplicate' => 'Already imported.'] + $base)['outcome'], 'duplicate');
+check('an uncertain match waits for a person',
+    rg_import_plan_row(['match' => ['decision' => 'uncertain', 'reason' => 'r']] + $base), ['outcome' => 'uncertain', 'reason' => 'r']);
+check('a worker with changes is an update',
+    rg_import_plan_row(['person' => ['has_worker' => true, 'in_scope' => true], 'changes' => [['field' => 'phone']]] + $base)['outcome'], 'update');
+check('a worker with nothing new is no change',
+    rg_import_plan_row(['person' => ['has_worker' => true, 'in_scope' => true]] + $base)['outcome'], 'no_change');
+check('a person outside the service is a problem',
+    rg_import_plan_row(['person' => ['has_worker' => true, 'in_scope' => false], 'changes' => [['field' => 'phone']]] + $base)['reason'],
+    'This matches a person outside your service.');
+check('staff updates: nobody matched is a problem',
+    rg_import_plan_row(['purpose' => 'staff_updates'] + $base)['reason'], 'No member of staff matches this row.');
+check('staff updates: an applicant is not staff',
+    rg_import_plan_row(['purpose' => 'staff_updates', 'person' => ['has_worker' => false, 'in_scope' => true]] + $base)['outcome'], 'problem');
+check('a known applicant applying again is a new application',
+    rg_import_plan_row(['person' => ['has_worker' => false, 'in_scope' => true]] + $base)['outcome'], 'new');
+check('a new application needs an email', rg_import_plan_row(['has_email' => false] + $base)['outcome'], 'problem');
+check('and a service', rg_import_plan_row(['service' => null] + $base)['outcome'], 'problem');
+check('a scoped account cannot create in another service',
+    rg_import_plan_row(['scope' => 'security'] + $base)['reason'], 'The service is outside your service.');
+check('but can in its own', rg_import_plan_row(['scope' => 'care'] + $base)['outcome'], 'new');
+
+// ---------------------------------------------------------------------------
 group('owner visibility: who sees which part of Today');
 
 $all = ['compliance' => true, 'payroll' => true];

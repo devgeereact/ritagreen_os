@@ -9,7 +9,7 @@ Regenerate with `python3 scripts/docs_sync.py`. Edit `docs/STATUS.json` instead 
 
 ## Overall
 
-`#######################.`  202 done · 12 partial · 1 to do · 215 tracked
+`#######################.`  203 done · 12 partial · 1 to do · 216 tracked
 
 Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
@@ -17,7 +17,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 | Module | Milestone | Progress | Done | Partial | To do |
 |---|---|---|---|---|---|
-| PLATFORM — Engineering platform | 0 | `###########.` | 27 | 3 | 0 |
+| PLATFORM — Engineering platform | 0 | `###########.` | 28 | 3 | 0 |
 | FOUNDATION — Foundation and person spine | 1 | `############` | 18 | 1 | 0 |
 | COMPLIANCE — Compliance engine and verification | 2 | `############` | 25 | 2 | 0 |
 | DOCUMENTS — Document management | 3 | `############` | 6 | 0 | 0 |
@@ -35,7 +35,7 @@ Partial items count as half. Legend: `[x]` done · `[~]` partial · `[ ]` to do.
 
 ### PLATFORM — Engineering platform
 
-Milestone 0 · 27 done, 3 partial, 0 to do
+Milestone 0 · 28 done, 3 partial, 0 to do
 
 - [x] Automated deploy — _GitHub Actions, FTPS, dist/ only, PHP excluded_
 - [x] Build artefacts out of version control — _tsconfig.tsbuildinfo was tracked despite being gitignored; untracked, and both projects now write build info under node_modules/.tmp_
@@ -59,6 +59,7 @@ Milestone 0 · 27 done, 3 partial, 0 to do
 - [x] Pure logic separated from the kernel — _server/pure.php holds config-free, database-free domain logic so it can be tested directly. classify(), tier_for() and field_status() were duplicated definitions inside endpoint files; they now share one implementation_
 - [x] Reassessment can run without sending mail — _expiry-alerts.php --reassess-only. Folding reassessment into the alerts cron made recalculating and emailing the workforce one action, so running it during a deployment sent real reminders to real people at a time nobody chose_
 - [x] Sitemap: static pages at build time, records live — _dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php_
+- [x] Spreadsheet import (S8) — _Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/190_sheet_import.php_
 - [x] Structured data on public pages — _EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings_
 - [x] Typecheck actually enforces the strict config — _tsconfig.json had no references, so tsc -b built a root config lacking noUnusedLocals and tsconfig.app.json was orphaned. Now referenced, and the script uses --force so a warm cache cannot make the gate a no-op_
 - [x] Unused dependencies removed — _12 packages with zero imports removed, plus the dead editor chunk they were splitting into_
@@ -277,7 +278,7 @@ Milestone 9 · 18 done, 3 partial, 1 to do
 - [x] Privacy documentation — _docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review_
 - [x] Reconcile part-paid Direct Debit collections — _Fixed. Credits the amount actually collected, marks paid only when it covers the total, and is idempotent against webhook redelivery_
 - [x] Retention engine — _server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one_
-- [x] System health dashboard — _server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 041: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 220_system_health_
+- [x] System health dashboard — _server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 043: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 230_system_health_
 - [x] Unapplied migrations are visible — _A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations_
 - [~] Backups are restore-tested — _Surfaced by system-health.php as an explicit unknown_
 - [~] Restore testing — _Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent_
@@ -302,13 +303,13 @@ Milestone 9 · 9 done, 0 partial, 0 to do
 
 Milestone 9 · 10 done, 0 partial, 0 to do
 
-- [x] Action Centre — _server/action-centre.php. Derived, grouped by urgency. S5: every group obeys the guard of the endpoint it links to (rg_action_centre_access() in pure.php) and a scoped account counts its own service only, by service column or by person (rg_person_in_scope); email and intake counts are for unscoped office accounts only. db case 190_today_
+- [x] Action Centre — _server/action-centre.php. Derived, grouped by urgency. S5: every group obeys the guard of the endpoint it links to (rg_action_centre_access() in pure.php) and a scoped account counts its own service only, by service column or by person (rg_person_in_scope); email and intake counts are for unscoped office accounts only. db case 200_today_
 - [x] Analytics and margin reconciliation — _Analytics and Insights routes redirect to /app/reports since S5; the files stay until S9 removes them. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)_
 - [x] CSV and PDF export
 - [x] Export logging with user and purpose — _export_log. S5 report exports are built on the server (reports.php?action=export) from declared columns only and logged in the same request, with purpose, row count, scope and whether the rows name people; regulator packs log through governance.php?action=log_export_
 - [x] Fix the open-shifts dashboard tile — _Fixed. Now counts shifts with status='open', respecting the division filter_
 - [x] Regulatory packs — _cqc_pack, sia_acs, coshh, skills_for_care. S5: now take the compliance zone and the service scope_
-- [x] Reports, one page (S5, F20) — _reports.php run/export/list: recruitment pipeline by stage and service, active and blocked workers with the reason (compliance zone), evidence expiring in 30/60/90 days (compliance zone), unfilled shifts by week and service, approved hours by week (payroll zone), staff workload. Totals over the whole filtered dataset; the service filter narrows a scope and never widens it. db case 200_reports_
+- [x] Reports, one page (S5, F20) — _reports.php run/export/list: recruitment pipeline by stage and service, active and blocked workers with the reason (compliance zone), evidence expiring in 30/60/90 days (compliance zone), unfilled shifts by week and service, approved hours by week (payroll zone), staff workload. Totals over the whole filtered dataset; the service filter narrows a scope and never widens it. db case 210_reports_
 - [x] Staff workload view — _Reports, Staff workload (reports.php?report=workload): candidates recruited for, open and overdue onboarding tasks per owner, and tasks with no owner, in the account's scope. system-health.php?action=workload remains_
 - [x] Today page (S5, F19) — _src/pages/app/Today.tsx at /app replaces the Command Centre: "Today, <weekday date>", tiles for unfilled shifts, checks to review, evidence expiring in 30 days and approvals waiting (left out when the account may not see them), today's shifts with state chips linking to the rota (office), and Needs action from action-centre.php with named people linking to their profiles. No charts, no money. Checked in a browser at 1280 and 375 as admin and as a security-scoped manager_
-- [x] Worker profile pack PDF for clients (S5, F21) — _compliance.php?action=profile_pack plus buildProfilePackPdf() in src/lib/pdf.ts, from the person profile: initials (no photo held), name, roles, services, training with dates, verified DBS date and recorded level (rg_dbs_level), right to work yes/no and date, SIA for security. No address, DOB, NI, contact details or right-to-work document numbers. Compliance zone and person scope; every download audited. db case 210_profile_pack_
+- [x] Worker profile pack PDF for clients (S5, F21) — _compliance.php?action=profile_pack plus buildProfilePackPdf() in src/lib/pdf.ts, from the person profile: initials (no photo held), name, roles, services, training with dates, verified DBS date and recorded level (rg_dbs_level), right to work yes/no and date, SIA for security. No address, DOB, NI, contact details or right-to-work document numbers. Compliance zone and person scope; every download audited. db case 220_profile_pack_

@@ -2337,6 +2337,713 @@ function rg_validate_contact_details(array $data): array
     return ['ok' => $errors === [], 'errors' => array_values(array_unique($errors)), 'values' => $values];
 }
 
+// ---------------------------------------------------------------------------
+// Spreadsheet import (section S8, docs/Plans 2026/06).
+//
+// A Google Sheet of form responses, or a list of staff contact details, comes in
+// as CSV and is turned into applicants and contact updates through the same
+// people spine as every other intake route. Everything that decides what a row
+// becomes lives here, so the endpoint (server/sheet-import.php) only reads and
+// writes.
+
+/** Hard limits for one upload. Bigger sheets are split, which keeps a preview readable. */
+const RG_IMPORT_MAX_BYTES = 2_000_000;
+const RG_IMPORT_MAX_ROWS = 1000;
+const RG_IMPORT_MAX_COLUMNS = 80;
+const RG_IMPORT_MAX_CELL = 5000;
+
+/**
+ * The fields a column may be mapped to, with a label and a length limit.
+ *
+ * This list is the whole of what an import can write. Compliance status,
+ * verification results, pay and employment status are not here and cannot be
+ * mapped: they have their own workflows (docs/Plans 2026/06, "Fields the import
+ * may update"). Anything not in this list is treated as "ignore".
+ */
+const RG_IMPORT_FIELDS = [
+    'name'                   => ['label' => 'Full name', 'max' => 160],
+    'first_name'             => ['label' => 'First name', 'max' => 80],
+    'last_name'              => ['label' => 'Last name', 'max' => 80],
+    'email'                  => ['label' => 'Email', 'max' => 190],
+    'phone'                  => ['label' => 'Phone', 'max' => 40],
+    'postcode'               => ['label' => 'Postcode', 'max' => 16],
+    'address'                => ['label' => 'Address', 'max' => 190],
+    'date_of_birth'          => ['label' => 'Date of birth (matching only)', 'max' => 40],
+    'role'                   => ['label' => 'Role applied for', 'max' => 80],
+    'service'                => ['label' => 'Service', 'max' => 40],
+    'right_to_work'          => ['label' => 'Right to work (yes or no)', 'max' => 120],
+    'experience'             => ['label' => 'Experience', 'max' => 2000],
+    'availability'           => ['label' => 'Availability', 'max' => 500],
+    'how_heard'              => ['label' => 'How they heard about us', 'max' => 500],
+    'emergency_name'         => ['label' => 'Emergency contact name', 'max' => 160],
+    'emergency_phone'        => ['label' => 'Emergency contact phone', 'max' => 40],
+    'emergency_relationship' => ['label' => 'Emergency contact relationship', 'max' => 80],
+    'response_timestamp'     => ['label' => 'Response timestamp', 'max' => 40],
+    'response_id'            => ['label' => 'Response id', 'max' => 190],
+];
+
+/**
+ * The fields an import may change on somebody who is already staff, and nothing
+ * else. Keys are what rg_import_contact_changes() reports.
+ */
+const RG_IMPORT_STAFF_FIELDS = [
+    'email'                          => 'Email',
+    'phone'                          => 'Phone',
+    'address_line1'                  => 'Address',
+    'postcode'                       => 'Postcode',
+    'emergency_contact_name'         => 'Emergency contact name',
+    'emergency_contact_phone'        => 'Emergency contact phone',
+    'emergency_contact_relationship' => 'Emergency contact relationship',
+    'availability'                   => 'Availability',
+];
+
+/**
+ * A column heading reduced to a comparable form.
+ *
+ * Lower case, single spaces, no trailing asterisk or colon (Google marks
+ * required questions with one, and people end headings with the other), no
+ * byte-order mark or non-breaking space. A saved mapping is keyed by this, so a
+ * heading that gains a stray space next month still maps.
+ */
+function rg_import_normalise_header(string $header): string
+{
+    $h = str_replace(["\u{FEFF}", "\u{00A0}"], ['', ' '], $header);
+    $h = strtolower(trim(preg_replace('/\s+/u', ' ', $h) ?? ''));
+    $h = rtrim($h, " *:");
+    return trim($h);
+}
+
+/**
+ * Parse CSV text into a header row and data rows.
+ *
+ * Written out rather than str_getcsv() per line, because a Google Forms answer
+ * can contain a line break ("Tell us about your experience") and splitting on
+ * lines first cuts that answer in two. Handles a UTF-8 byte-order mark, CRLF, LF
+ * or CR line endings, quoted cells with commas, quotes ("") and line breaks, and
+ * a semicolon or tab delimiter when the header row plainly uses one. Text that
+ * is not valid UTF-8 is read as Windows-1252, which is what Excel writes when it
+ * saves "CSV" rather than "CSV UTF-8".
+ *
+ * The first non-blank line is the header row and is required. Blank lines are
+ * skipped but still counted, so `row` is the row number a person sees in the
+ * spreadsheet (the header is row 1).
+ *
+ * @return array{ok:bool,error:?string,headers:list<string>,rows:list<array{row:int,cells:array<string,string>}>}
+ */
+function rg_csv_parse(string $text, int $maxRows = RG_IMPORT_MAX_ROWS, int $maxColumns = RG_IMPORT_MAX_COLUMNS): array
+{
+    $bad = static fn(string $e): array => ['ok' => false, 'error' => $e, 'headers' => [], 'rows' => []];
+
+    if (strlen($text) > RG_IMPORT_MAX_BYTES) return $bad('That file is larger than 2 MB. Split it into smaller files.');
+    if (str_starts_with($text, "\xEF\xBB\xBF")) $text = substr($text, 3);
+    if (str_contains($text, "\0")) return $bad('That looks like a spreadsheet file rather than CSV. Download it as CSV and try again.');
+    if (!mb_check_encoding($text, 'UTF-8')) {
+        $converted = @mb_convert_encoding($text, 'UTF-8', 'Windows-1252');
+        if (!is_string($converted) || !mb_check_encoding($converted, 'UTF-8')) {
+            return $bad('The file is not readable text. Download it from Google Sheets as CSV and try again.');
+        }
+        $text = $converted;
+    }
+    if (trim($text) === '') return $bad('The file is empty.');
+
+    // Delimiter: whichever of comma, semicolon or tab appears most in the first
+    // line outside quotes. Comma wins a tie, because it is what Google writes.
+    $firstLine = strtok(str_replace("\r", "\n", ltrim($text, "\r\n")), "\n") ?: '';
+    $outside = preg_replace('/"[^"]*"/', '', $firstLine) ?? $firstLine;
+    $counts = [',' => substr_count($outside, ','), ';' => substr_count($outside, ';'), "\t" => substr_count($outside, "\t")];
+    $delimiter = ',';
+    foreach ([';', "\t"] as $d) {
+        if ($counts[$d] > $counts[$delimiter]) $delimiter = $d;
+    }
+
+    // Scan into records of [row number, cells].
+    $records = [];
+    $cells = [];
+    $cell = '';
+    $inQuotes = false;
+    $wasQuoted = false;
+    $line = 1;
+    $recordLine = 1;
+    $len = strlen($text);
+    for ($i = 0; $i < $len; $i++) {
+        $c = $text[$i];
+        if ($inQuotes) {
+            if ($c === '"') {
+                if ($i + 1 < $len && $text[$i + 1] === '"') { $cell .= '"'; $i++; }
+                else $inQuotes = false;
+            } else {
+                $cell .= $c;
+            }
+            continue;
+        }
+        if ($c === '"' && trim($cell) === '' && !$wasQuoted) { $cell = ''; $inQuotes = true; $wasQuoted = true; continue; }
+        if ($c === $delimiter) { $cells[] = $cell; $cell = ''; $wasQuoted = false; continue; }
+        if ($c === "\r" || $c === "\n") {
+            if ($c === "\r" && ($text[$i + 1] ?? '') === "\n") $i++;
+            $cells[] = $cell;
+            $records[] = [$recordLine, $cells];
+            $cells = [];
+            $cell = '';
+            $wasQuoted = false;
+            $line++;
+            $recordLine = $line;
+            // Enough to know it is too long; no need to read the rest.
+            if (count($records) > $maxRows + 50) break;
+            continue;
+        }
+        $cell .= $c;
+    }
+    if ($inQuotes) return $bad("A quoted cell starting on row $recordLine is never closed. Check the file was exported as CSV.");
+    if ($cell !== '' || $cells !== []) { $cells[] = $cell; $records[] = [$recordLine, $cells]; }
+
+    // Drop blank records; the first remaining one is the header row.
+    $records = array_values(array_filter($records, static fn($r) => implode('', array_map('trim', $r[1])) !== ''));
+    if ($records === []) return $bad('The file is empty.');
+    [, $headerCells] = array_shift($records);
+    if (count($headerCells) > $maxColumns) return $bad("The file has more than $maxColumns columns.");
+    if ($records === []) return $bad('The file has a header row but no responses under it.');
+    if (count($records) > $maxRows) return $bad("The file has more than $maxRows rows. Split it into smaller files.");
+
+    // Headings: trimmed, blank ones named by position, repeats numbered, so
+    // every column can be addressed and none silently overwrites another.
+    $headers = [];
+    $seen = [];
+    $named = 0;
+    foreach ($headerCells as $i => $h) {
+        $h = trim($h);
+        if ($h === '') $h = 'Column ' . ($i + 1);
+        else $named++;
+        $key = rg_import_normalise_header($h);
+        if (isset($seen[$key])) { $seen[$key]++; $h .= ' (' . $seen[$key] . ')'; }
+        else $seen[$key] = 1;
+        $headers[] = mb_substr($h, 0, 190);
+    }
+    if ($named === 0) return $bad('The first row must be the column headings, as in a Google Forms responses sheet.');
+
+    $rows = [];
+    foreach ($records as [$rowNo, $values]) {
+        $assoc = [];
+        foreach ($headers as $i => $h) {
+            $v = trim((string) ($values[$i] ?? ''));
+            if (mb_strlen($v) > RG_IMPORT_MAX_CELL) $v = mb_substr($v, 0, RG_IMPORT_MAX_CELL);
+            $assoc[$h] = $v;
+        }
+        $rows[] = ['row' => $rowNo, 'cells' => $assoc];
+    }
+
+    return ['ok' => true, 'error' => null, 'headers' => $headers, 'rows' => $rows];
+}
+
+/**
+ * The field a column heading most probably holds, or 'ignore'.
+ *
+ * A suggestion only: the person mapping the columns confirms it, and a saved
+ * mapping outranks it. Checked most specific first, so "Emergency contact phone"
+ * is not taken for "Phone".
+ */
+function rg_import_guess_field(string $header): string
+{
+    $h = rg_import_normalise_header($header);
+    $rules = [
+        'response_id'            => '/response id|submission id|response number/',
+        'response_timestamp'     => '/^timestamp$|submitted at|date submitted|submission date|time stamp/',
+        'emergency_relationship' => '/(emergency|next of kin|nok).*(relationship|relation)/',
+        'emergency_phone'        => '/(emergency|next of kin|nok).*(phone|number|mobile|tel)/',
+        'emergency_name'         => '/(emergency|next of kin|nok)/',
+        'email'                  => '/e-?mail/',
+        'date_of_birth'          => '/date of birth|^dob$|birth ?date/',
+        'first_name'             => '/^first name|^forename|^given name/',
+        'last_name'              => '/^last name|^surname|^family name/',
+        'name'                   => '/full name|^name$|your name|^applicant name/',
+        'phone'                  => '/phone|mobile|contact number|^tel$|^tel\\b/',
+        'postcode'               => '/post ?code|postal code/',
+        'address'                => '/address/',
+        'right_to_work'          => '/right to work|eligible to work|work in the uk/',
+        'role'                   => '/role|position|job|vacancy|applying for/',
+        'service'                => '/service|division|department/',
+        'experience'             => '/experience|background|about you|qualification/',
+        'availability'           => '/availab|when can you work|shifts/',
+        'how_heard'              => '/hear about|heard about|how did you find|referr/',
+    ];
+    foreach ($rules as $field => $pattern) {
+        if (preg_match($pattern, $h)) return $field;
+    }
+    return 'ignore';
+}
+
+/**
+ * An email address as typed into a form, cleaned and checked.
+ *
+ * @return array{value:?string,error:?string} value is lower case; null when blank
+ */
+function rg_import_normalise_email(?string $email): array
+{
+    $e = strtolower(trim((string) $email));
+    if (str_starts_with($e, 'mailto:')) $e = substr($e, 7);
+    $e = trim($e, " <>\t");
+    if ($e === '') return ['value' => null, 'error' => null];
+    if (mb_strlen($e) > 190 || !filter_var($e, FILTER_VALIDATE_EMAIL)) {
+        return ['value' => null, 'error' => 'The email address is not valid.'];
+    }
+    return ['value' => $e, 'error' => null];
+}
+
+/**
+ * A phone number as typed into a form, made consistent for storage.
+ *
+ * UK numbers are written the way people read them, starting 0, and +44 or 0044
+ * is turned into that. Google Sheets stores an unformatted number as a number,
+ * which drops the leading zero, so a ten-digit number starting 7 (a mobile) or
+ * 1 or 2 (a landline) gets it back. Anything else with a plus is kept as an
+ * international number. Between 7 and 15 digits, as rg_valid_phone().
+ *
+ * @return array{value:?string,error:?string}
+ */
+function rg_import_normalise_phone(?string $phone): array
+{
+    $raw = trim((string) $phone);
+    if ($raw === '') return ['value' => null, 'error' => null];
+    if (!preg_match('/^[+0-9 ().\-]+$/', $raw)) return ['value' => null, 'error' => 'The phone number has letters or symbols in it.'];
+    $plus = str_starts_with($raw, '+');
+    $digits = preg_replace('/\D+/', '', $raw) ?? '';
+    if (str_starts_with($digits, '00')) { $digits = substr($digits, 2); $plus = true; }
+    if (($plus || strlen($digits) === 12) && str_starts_with($digits, '44')) {
+        $digits = '0' . substr($digits, 2);
+        $plus = false;
+    } elseif (!$plus && strlen($digits) === 10 && preg_match('/^[127]/', $digits)) {
+        $digits = '0' . $digits;
+    }
+    $n = strlen($digits);
+    if ($n < 7 || $n > 15) return ['value' => null, 'error' => 'The phone number is not a number that can be rung.'];
+    return ['value' => ($plus ? '+' : '') . $digits, 'error' => null];
+}
+
+/**
+ * A date written the British way, or ISO, as Y-m-d. Null when it is not a date.
+ *
+ * 03/04/2026 is the 3rd of April: Google Sheets in a UK locale writes day first,
+ * and guessing month first would put dates wrong for twelve days in every month.
+ */
+function rg_import_parse_date(?string $value): ?string
+{
+    $v = trim((string) $value);
+    if ($v === '') return null;
+    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $v, $m)) {
+        [$y, $mo, $d] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+    } elseif (preg_match('#^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})#', $v, $m)) {
+        [$d, $mo, $y] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+    } else {
+        return null;
+    }
+    if (!checkdate($mo, $d, $y)) return null;
+    return sprintf('%04d-%02d-%02d', $y, $mo, $d);
+}
+
+/** A Google Forms "Timestamp" cell as Y-m-d H:i:s. Day first, as rg_import_parse_date(). */
+function rg_import_parse_timestamp(?string $value): ?string
+{
+    $v = trim((string) $value);
+    $date = rg_import_parse_date($v);
+    if ($date === null) return null;
+    $time = '00:00:00';
+    if (preg_match('/[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/', $v, $m) && (int) $m[1] < 24 && (int) $m[2] < 60) {
+        $time = sprintf('%02d:%02d:%02d', (int) $m[1], (int) $m[2], (int) ($m[3] ?? 0));
+    }
+    return "$date $time";
+}
+
+/**
+ * Which kinds of shift an availability answer covers, or null when it says
+ * nothing recognisable. Null leaves the worker's recorded availability alone.
+ *
+ * @return ?array{days:bool,nights:bool,weekends:bool}
+ */
+function rg_import_parse_availability(?string $value): ?array
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === '') return null;
+    if (preg_match('/\b(any ?time|any shift|all shifts|flexible|all of the above)\b|24\/7/', $v)) {
+        return ['days' => true, 'nights' => true, 'weekends' => true];
+    }
+    $out = [
+        'days' => (bool) preg_match('/\b(days?|daytime|mornings?|afternoons?|weekdays?)\b/', $v),
+        'nights' => (bool) preg_match('/\b(nights?|evenings?|sleep-?ins?)\b/', $v),
+        'weekends' => (bool) preg_match('/\b(weekends?|saturdays?|sundays?)\b/', $v),
+    ];
+    return in_array(true, $out, true) ? $out : null;
+}
+
+/** A service written by a person ("Healthcare", "Training") as its internal key, or null. */
+function rg_import_service(?string $value): ?string
+{
+    $v = strtolower(trim((string) $value));
+    if ($v === '') return null;
+    $map = [
+        'care' => 'care', 'healthcare' => 'care', 'health care' => 'care',
+        'cleaning' => 'cleaning',
+        'security' => 'security',
+        'academy' => 'academy', 'training' => 'academy',
+    ];
+    return $map[$v] ?? null;
+}
+
+/** A name reduced for comparison: lower case, letters, apostrophes, hyphens and single spaces. */
+function rg_import_name_key(?string $name): string
+{
+    $n = mb_strtolower(trim((string) $name));
+    $n = preg_replace("/[^\\p{L}\\s'-]+/u", ' ', $n) ?? $n;
+    return trim(preg_replace('/\s+/u', ' ', $n) ?? $n);
+}
+
+/**
+ * Do two names plausibly belong to the same person?
+ *
+ * Equal once cleaned, or the same first and last word ("Amara N. Okafor" and
+ * "Amara Okafor"). Deliberately strict: a disagreement turns a match into a
+ * question for a person, which is the safe direction to be wrong in.
+ */
+function rg_import_names_agree(?string $a, ?string $b): bool
+{
+    $x = rg_import_name_key($a);
+    $y = rg_import_name_key($b);
+    if ($x === '' || $y === '') return false;
+    if ($x === $y) return true;
+    $xs = explode(' ', $x);
+    $ys = explode(' ', $y);
+    return count($xs) > 1 && count($ys) > 1 && $xs[0] === $ys[0] && end($xs) === end($ys);
+}
+
+/**
+ * One spreadsheet row turned into the fields it maps to, with any problems.
+ *
+ * $mapping is normalised heading => field, as saved. Values are trimmed, length
+ * checked against RG_IMPORT_FIELDS and normalised (email, phone, service, dates).
+ * A field name not in RG_IMPORT_FIELDS is ignored, whatever the mapping says. A
+ * problem is something that stops the row being applied; the reasons are
+ * written for the person reading the preview.
+ *
+ * @param array<string,string> $cells   heading => value, as rg_csv_parse() returns
+ * @param array<string,string> $mapping normalised heading => field
+ * @return array{fields:array<string,?string>,problems:list<string>}
+ */
+function rg_import_map_row(array $cells, array $mapping, ?string $defaultService = null): array
+{
+    $raw = [];
+    foreach ($cells as $heading => $value) {
+        $field = $mapping[rg_import_normalise_header((string) $heading)] ?? 'ignore';
+        if (!isset(RG_IMPORT_FIELDS[$field])) continue;
+        $value = trim((string) $value);
+        if ($value === '') continue;
+        // Two columns mapped to the same field: join them rather than lose one.
+        $raw[$field] = isset($raw[$field]) ? $raw[$field] . ', ' . $value : $value;
+    }
+
+    $problems = [];
+    foreach ($raw as $field => $value) {
+        $max = RG_IMPORT_FIELDS[$field]['max'];
+        if (mb_strlen($value) > $max) {
+            $problems[] = RG_IMPORT_FIELDS[$field]['label'] . " is longer than $max characters.";
+            $raw[$field] = mb_substr($value, 0, $max);
+        }
+    }
+
+    $f = array_fill_keys(array_keys(RG_IMPORT_FIELDS), null);
+    foreach ($raw as $k => $v) $f[$k] = $v;
+
+    if ($f['name'] === null && ($f['first_name'] !== null || $f['last_name'] !== null)) {
+        $f['name'] = trim(($f['first_name'] ?? '') . ' ' . ($f['last_name'] ?? ''));
+    }
+    if ($f['name'] !== null) $f['name'] = preg_replace('/\s+/u', ' ', $f['name']) ?? $f['name'];
+    if ($f['name'] === null || $f['name'] === '') $problems[] = 'There is no name.';
+
+    $email = rg_import_normalise_email($f['email']);
+    if ($email['error']) $problems[] = $email['error'];
+    $f['email'] = $email['value'];
+
+    $phone = rg_import_normalise_phone($f['phone']);
+    if ($phone['error']) $problems[] = $phone['error'];
+    $f['phone'] = $phone['value'];
+
+    if ($f['postcode'] !== null) $f['postcode'] = strtoupper(preg_replace('/\s+/', ' ', $f['postcode']) ?? $f['postcode']);
+
+    if ($f['service'] !== null) {
+        $service = rg_import_service($f['service']);
+        if ($service === null) $problems[] = 'The service "' . $f['service'] . '" is not one of Healthcare, Cleaning, Security or Training.';
+        $f['service'] = $service;
+    } elseif ($defaultService !== null) {
+        $f['service'] = rg_import_service($defaultService);
+    }
+
+    if ($f['date_of_birth'] !== null) {
+        $dob = rg_import_parse_date($f['date_of_birth']);
+        if ($dob === null) $problems[] = 'The date of birth is not a date.';
+        $f['date_of_birth'] = $dob;
+    }
+    if ($f['response_timestamp'] !== null) {
+        $ts = rg_import_parse_timestamp($f['response_timestamp']);
+        if ($ts === null) $problems[] = 'The response timestamp is not a date.';
+        $f['response_timestamp'] = $ts;
+    }
+
+    if ($f['emergency_phone'] !== null) {
+        $ep = rg_import_normalise_phone($f['emergency_phone']);
+        if ($ep['error']) $problems[] = 'The emergency contact phone number is not a number that can be rung.';
+        $f['emergency_phone'] = $ep['value'] ?? $f['emergency_phone'];
+    }
+    if ($f['emergency_name'] !== null && $f['emergency_phone'] === null) $problems[] = 'The emergency contact has a name but no phone number.';
+    if ($f['emergency_name'] === null && $f['emergency_phone'] !== null) $problems[] = 'The emergency contact has a phone number but no name.';
+
+    unset($f['first_name'], $f['last_name']);
+    return ['fields' => $f, 'problems' => array_values(array_unique($problems))];
+}
+
+/**
+ * A fingerprint of a row's content, for recognising the same row again.
+ *
+ * Built from the cells, not the mapping, so the same response imported twice
+ * under two different mappings is still the same response. Headings are
+ * normalised and blank cells dropped, so a column added to the sheet between
+ * two downloads does not make every old row look new.
+ *
+ * @param array<string,string> $cells
+ */
+function rg_import_fingerprint(array $cells): string
+{
+    $norm = [];
+    foreach ($cells as $h => $v) {
+        $v = trim(preg_replace('/\s+/u', ' ', (string) $v) ?? (string) $v);
+        if ($v === '') continue;
+        $norm[rg_import_normalise_header((string) $h)] = $v;
+    }
+    ksort($norm);
+    return hash('sha256', (string) json_encode($norm, JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * Is this row somebody already on record, and how sure is that?
+ *
+ * Email first, then phone, then name with date of birth (docs/Plans 2026/06,
+ * step 4). Nothing merges silently: any disagreement makes the answer
+ * 'uncertain', which the preview turns into a choice for a person to make.
+ *
+ *  - an email match whose name disagrees            -> uncertain
+ *  - an email and a phone that point at two people  -> uncertain
+ *  - a phone match whose name disagrees, or which
+ *    belongs to somebody with a different email      -> uncertain (a household can share a phone)
+ *  - several people on one email, phone or name+DOB  -> uncertain
+ *  - name and date of birth, with no email on either
+ *    side that contradicts it                        -> match
+ *  - the same name and nothing else                  -> uncertain, offered as a possible match
+ *
+ * @param array{name:?string,email:?string,phone:?string,date_of_birth:?string} $row
+ * @param list<array{id:int,full_name:string,email:?string,phone:?string,date_of_birth:?string}> $people
+ *        everybody the database found by any of the routes
+ * @return array{decision:string,person_id:?int,basis:?string,reason:?string,candidates:list<int>}
+ */
+function rg_import_match_decision(array $row, array $people): array
+{
+    $email = rg_normalise_email($row['email'] ?? null);
+    $phoneKey = rg_phone_key($row['phone'] ?? null);
+    $nameKey = rg_import_name_key($row['name'] ?? null);
+    $dob = $row['date_of_birth'] ?? null;
+
+    $byEmail = $byPhone = $byNameDob = $byName = [];
+    foreach ($people as $p) {
+        $id = (int) $p['id'];
+        if ($email !== null && rg_normalise_email($p['email'] ?? null) === $email) $byEmail[$id] = $p;
+        if ($phoneKey !== null && rg_phone_key($p['phone'] ?? null) === $phoneKey) $byPhone[$id] = $p;
+        if ($nameKey !== '' && rg_import_name_key($p['full_name'] ?? '') === $nameKey) {
+            $byName[$id] = $p;
+            if ($dob !== null && ($p['date_of_birth'] ?? null) === $dob) $byNameDob[$id] = $p;
+        }
+    }
+
+    $out = static fn(string $d, ?int $id, ?string $basis, ?string $reason, array $cands): array => [
+        'decision' => $d, 'person_id' => $id, 'basis' => $basis, 'reason' => $reason,
+        'candidates' => array_values(array_unique(array_map('intval', $cands))),
+    ];
+
+    if (count($byEmail) > 1) {
+        return $out('uncertain', null, 'email', 'More than one person has this email address.', array_keys($byEmail));
+    }
+    if (count($byEmail) === 1) {
+        $p = reset($byEmail);
+        $id = (int) $p['id'];
+        $others = array_values(array_diff(array_keys($byPhone), [$id]));
+        if ($others) {
+            return $out('uncertain', null, 'email', 'The email and the phone number belong to two different people.',
+                array_merge([$id], $others));
+        }
+        if (!rg_import_names_agree($row['name'] ?? null, $p['full_name'] ?? null)) {
+            return $out('uncertain', null, 'email', 'The email matches somebody with a different name.', [$id]);
+        }
+        return $out('match', $id, 'email', null, [$id]);
+    }
+
+    if (count($byPhone) > 1) {
+        return $out('uncertain', null, 'phone', 'More than one person has this phone number.', array_keys($byPhone));
+    }
+    if (count($byPhone) === 1) {
+        $p = reset($byPhone);
+        $id = (int) $p['id'];
+        $theirs = rg_normalise_email($p['email'] ?? null);
+        if (!rg_import_names_agree($row['name'] ?? null, $p['full_name'] ?? null)) {
+            return $out('uncertain', null, 'phone', 'The phone number matches somebody with a different name.', [$id]);
+        }
+        if ($email !== null && $theirs !== null && $theirs !== $email) {
+            return $out('uncertain', null, 'phone', 'The phone number matches somebody with a different email.', [$id]);
+        }
+        return $out('match', $id, 'phone', null, [$id]);
+    }
+
+    if (count($byNameDob) > 1) {
+        return $out('uncertain', null, 'name_dob', 'More than one person has this name and date of birth.', array_keys($byNameDob));
+    }
+    if (count($byNameDob) === 1) {
+        $p = reset($byNameDob);
+        $id = (int) $p['id'];
+        $theirs = rg_normalise_email($p['email'] ?? null);
+        if ($email !== null && $theirs !== null && $theirs !== $email) {
+            return $out('uncertain', null, 'name_dob', 'The name and date of birth match somebody with a different email.', [$id]);
+        }
+        return $out('match', $id, 'name_dob', null, [$id]);
+    }
+
+    if ($byName) {
+        return $out('uncertain', null, 'name', 'Somebody with the same name is already on record. Check it is not them.', array_keys($byName));
+    }
+    return $out('none', null, null, null, []);
+}
+
+/**
+ * Is this the same application again: same person, same role, same day?
+ *
+ * Catches a response the form feed already delivered (the Sheet holds no
+ * response id the feed could have recorded) and one imported before from a
+ * different file. With no timestamp in the row, an open application for the
+ * same role counts: applying twice for one job is one application.
+ *
+ * @param list<array{role:?string,dates:list<string>,stage:string,source:?string}> $applications
+ * @return ?string the reason, or null when it is not a duplicate
+ */
+function rg_import_same_application(?string $role, ?string $date, array $applications): ?string
+{
+    $roleKey = rg_import_name_key($role);
+    foreach ($applications as $a) {
+        if (rg_import_name_key($a['role'] ?? null) !== $roleKey) continue;
+        $via = ($a['source'] ?? '') === 'google_form' ? ' through the form feed' : '';
+        if ($date === null) {
+            if (!in_array($a['stage'] ?? '', RG_STAGE_EXITS, true)) {
+                return "This person already has an open application for this role$via.";
+            }
+            continue;
+        }
+        if (in_array(substr($date, 0, 10), $a['dates'] ?? [], true)) {
+            return "This application was already received$via on " . substr($date, 0, 10) . '.';
+        }
+    }
+    return null;
+}
+
+/**
+ * What an import would change for somebody already on staff: only the allowed
+ * fields, only where the sheet has a value, and only where it differs.
+ *
+ * A blank cell never clears anything. The old value is shown beside the new one
+ * in the preview, so nobody approves a change they have not seen.
+ *
+ * @param array<string,mixed> $current people columns, plus avail_days, avail_nights
+ *                                     and avail_weekends when the person is a worker
+ * @param array<string,?string> $fields from rg_import_map_row()
+ * @return list<array{field:string,label:string,old:?string,new:string}>
+ */
+function rg_import_contact_changes(array $current, array $fields): array
+{
+    $proposed = [
+        'email' => $fields['email'] ?? null,
+        'phone' => $fields['phone'] ?? null,
+        'address_line1' => $fields['address'] ?? null,
+        'postcode' => $fields['postcode'] ?? null,
+        'emergency_contact_name' => $fields['emergency_name'] ?? null,
+        'emergency_contact_phone' => $fields['emergency_phone'] ?? null,
+        'emergency_contact_relationship' => $fields['emergency_relationship'] ?? null,
+    ];
+    $changes = [];
+    foreach ($proposed as $field => $new) {
+        if ($new === null || $new === '') continue;
+        $old = isset($current[$field]) && $current[$field] !== '' ? (string) $current[$field] : null;
+        $same = $old !== null && match ($field) {
+            'email' => rg_normalise_email($old) === rg_normalise_email($new),
+            'phone', 'emergency_contact_phone' => rg_phone_key($old) === rg_phone_key($new),
+            'postcode' => strtoupper(str_replace(' ', '', $old)) === strtoupper(str_replace(' ', '', $new)),
+            default => rg_import_name_key($old) === rg_import_name_key($new),
+        };
+        if (!$same) $changes[] = ['field' => $field, 'label' => RG_IMPORT_STAFF_FIELDS[$field], 'old' => $old, 'new' => $new];
+    }
+
+    $avail = rg_import_parse_availability($fields['availability'] ?? null);
+    if ($avail !== null && array_key_exists('avail_days', $current)) {
+        $label = static function (array $a): string {
+            $on = array_keys(array_filter($a));
+            return $on ? ucfirst(implode(', ', $on)) : 'None';
+        };
+        $old = [
+            'days' => (bool) $current['avail_days'],
+            'nights' => (bool) ($current['avail_nights'] ?? false),
+            'weekends' => (bool) ($current['avail_weekends'] ?? false),
+        ];
+        if ($old !== $avail) {
+            $changes[] = ['field' => 'availability', 'label' => 'Availability', 'old' => $label($old), 'new' => $label($avail)];
+        }
+    }
+    return $changes;
+}
+
+/**
+ * What one row will become. The single place the outcome is decided, used by
+ * the preview and again, inside the transaction, by apply.
+ *
+ * Outcomes: new (an application), update (contact details of a member of
+ * staff), duplicate, no_change, uncertain (needs a person's choice), problem.
+ *
+ * @param array{
+ *   problems:list<string>, purpose:string, duplicate:?string, match:array,
+ *   person:?array{has_worker:bool,in_scope:bool}, service:?string, scope:?string,
+ *   changes:list<array>, has_email:bool
+ * } $f
+ * @return array{outcome:string,reason:?string}
+ */
+function rg_import_plan_row(array $f): array
+{
+    if ($f['problems']) return ['outcome' => 'problem', 'reason' => implode(' ', $f['problems'])];
+    if ($f['duplicate'] !== null) return ['outcome' => 'duplicate', 'reason' => $f['duplicate']];
+    if (($f['match']['decision'] ?? 'none') === 'uncertain') {
+        return ['outcome' => 'uncertain', 'reason' => $f['match']['reason'] ?? 'Check who this is.'];
+    }
+
+    $person = $f['person'];
+    $staffOnly = $f['purpose'] === 'staff_updates';
+    if ($person !== null) {
+        if (!$person['in_scope']) return ['outcome' => 'problem', 'reason' => 'This matches a person outside your service.'];
+        if ($person['has_worker']) {
+            return $f['changes']
+                ? ['outcome' => 'update', 'reason' => null]
+                : ['outcome' => 'no_change', 'reason' => 'Their details already match.'];
+        }
+        if ($staffOnly) return ['outcome' => 'problem', 'reason' => 'This matches an applicant, not a member of staff.'];
+    } elseif ($staffOnly) {
+        return ['outcome' => 'problem', 'reason' => 'No member of staff matches this row.'];
+    }
+
+    // A new application, for a new person or for one already on record.
+    if (!$f['has_email']) return ['outcome' => 'problem', 'reason' => 'A new application needs an email address.'];
+    if ($f['service'] === null) return ['outcome' => 'problem', 'reason' => 'No service. Map a service column or choose a default service.'];
+    if (!rg_in_service_scope($f['scope'], $f['service'])) {
+        return ['outcome' => 'problem', 'reason' => 'The service is outside your service.'];
+    }
+    return ['outcome' => 'new', 'reason' => null];
+}
+
 // ---------------------------------------------------------- owner visibility
 
 /**

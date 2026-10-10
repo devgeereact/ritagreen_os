@@ -287,3 +287,35 @@ no Google account. What is tested is the receiving side: the payload shape, the 
 secret, the duplicate protection and the failure recording
 (`server/tests/db/cases/080_forms_intake.php`, `170_careers_cms.php`). Run section 4 before
 relying on it.
+
+## 8. Import from a Google Sheet
+
+For responses that are already in the form's Sheet (from before the script was installed, or
+from a day the script was failing), and for updating existing staff contact details in bulk.
+Office roles only (owner, admin, manager).
+
+1. In Google Sheets, open the responses Sheet and choose **File, Download, Comma-separated
+   values (.csv)**. XLSX files are not read. Excel users: **Save as, CSV UTF-8**.
+2. In the office app open **Recruitment**, then **Import from spreadsheet**, and choose the file.
+   Up to 1,000 rows and 2 MB; the first row must be the column headings.
+3. **Columns:** check where each column goes. The first time, tick "Save these columns for next
+   time", name it and pick the form it belongs to; the next download of the same Sheet maps
+   itself. Choose "Applications" for form responses or "Staff contact details only" for a staff
+   list, and a service for rows that do not say.
+4. **Preview:** every row says what it will do. New applicant and Update rows are ticked. A
+   row the form feed already delivered, or one imported before, reads **Already received**.
+   **Needs a decision** means the email, phone or name points at somebody on record who may not
+   be the same person: pick them, or "Someone new". Nothing is merged without that choice.
+5. **Apply.** Each row is applied on its own. New applicants arrive in Recruitment at Applied
+   with "spreadsheet import" as the source and the file and row in their notes. For staff, only
+   phone, email, address, postcode, the first emergency contact and availability change; checks,
+   pay and status never do. Every change is in the audit log with the file name and row.
+6. **Report:** created, updated, skipped and failed. **Download failed rows** gives the failed
+   rows back as CSV with the reason in the first columns: fix them in the Sheet and import that
+   file. Rows already applied are recognised and skipped, so importing the whole Sheet again is
+   safe.
+7. **Close the import** when you are done. The uploaded file is never kept; closing clears the
+   rows it was holding.
+
+Not tested: a real Google Sheets download. The import is tested with a synthetic sample
+(`server/tests/fixtures/sheet-import-sample.csv`) shaped like a Google Forms responses sheet.

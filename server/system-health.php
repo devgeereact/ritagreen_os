@@ -158,7 +158,7 @@ if (!is_dir($backupDir)) {
 $add('restore_test', 'Backup restore test', 'warn',
     'Not automated. A backup that has never been restored is an assumption — see docs/RULES.md rule 15.');
 
-// ---- Scheduled jobs (migration 041) ---------------------------------------
+// ---- Scheduled jobs (migration 043) ---------------------------------------
 // When each job last reported. A job with no row has never reported since the
 // heartbeat was added; that is "unknown", said plainly, never "ok".
 const HEALTH_JOBS = [
@@ -173,7 +173,7 @@ try {
     $res = $conn->query('SELECT job, last_started_at, last_finished_at, last_success_at, last_detail, runs FROM cron_runs');
     while ($row = $res->fetch_assoc()) $runs[$row['job']] = $row;
 } catch (Throwable $e) {
-    // Migration 041 not applied yet: every job is unknown, and the reason is given.
+    // Migration 043 not applied yet: every job is unknown, and the reason is given.
     $heartbeatReady = false;
 }
 $jobs = [];
@@ -187,7 +187,7 @@ foreach (HEALTH_JOBS as $key => $job) {
         'last_success_at' => $r['last_success_at'] ?? null,
         'last_detail' => $r['last_detail'] ?? null,
         'runs' => isset($r['runs']) ? (int) $r['runs'] : 0,
-        'note' => !$heartbeatReady ? 'Run migration 041 to start recording runs.'
+        'note' => !$heartbeatReady ? 'Run migration 043 to start recording runs.'
             : ($r === null ? 'No run recorded since run times started being kept.'
             : ($r['last_success_at'] === null ? 'Started but never finished successfully.' : null)),
     ];

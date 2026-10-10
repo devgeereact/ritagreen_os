@@ -1993,11 +1993,44 @@ reopening), `closed_at`, `created_by`, `created_at`, `updated_at`, `deleted_at` 
 owner-tunable numbers as name/value pairs of 255 characters: this is one public record with a
 fixed field list, read whole by the website.
 
-## Scheduled job runs: migration 041
+## Spreadsheet import: migration 042
+
+Re-runnable throughout. Created by the migration only, not in `schema.sql`. Applied locally by
+the database suite; **not** applied to production. Numbered 042 because S4 and S5 may take 040
+and 041 in parallel; renumber at merge if either does not.
+
+**`sheet_import_mappings`**: column heading to field, saved per form or source and reused. `id`,
+`name` `VARCHAR(160)` UNIQUE, `website_form_id` FK → `website_forms(id)` **ON DELETE SET NULL**
+(a mapping can belong to a form in the directory), `purpose`
+`ENUM('applications','staff_updates')`, `default_service` ENUM of the four services NULL,
+`columns_json` `TEXT` (`{"normalised heading": "field"}`; fields outside `RG_IMPORT_FIELDS` are
+stored as `ignore`), `created_by`, `updated_by` FK → `users(id)` **ON DELETE SET NULL**,
+`created_at`, `updated_at`, `deleted_at`.
+
+**`sheet_imports`**: one upload. `id`, `file_name` `VARCHAR(190)`, `file_sha256` `CHAR(64)`,
+`mapping_id` FK → `sheet_import_mappings(id)` **ON DELETE SET NULL**, `columns_json` (the mapping
+actually used, copied), `headers_json`, `purpose`, `default_service`, `status`
+`ENUM('open','applied','closed')`, `row_count`, `created_count`, `updated_count`,
+`skipped_count`, `failed_count`, `created_by`, `created_at`, `applied_at`, `applied_by`,
+`closed_at`. The uploaded file is not stored.
+
+**`sheet_import_rows`**: one spreadsheet row. `id`, `import_id` FK → `sheet_imports(id)` **ON
+DELETE CASCADE**, `row_no` (the row number in the sheet; header is 1; UNIQUE with `import_id`),
+`cells_json` `MEDIUMTEXT NULL` (the parsed cells; cleared on apply except for failed rows, and
+cleared entirely on close), `fingerprint` `CHAR(64)` (`rg_import_fingerprint()`),
+`applied_fingerprint` `CHAR(64) NULL` **UNIQUE** (set only when the row created or updated
+something, so the database refuses the same row being applied twice, from any file or two
+simultaneous applies), `response_id`, `response_at`, `outcome`
+`ENUM('pending','created','updated','skipped','failed')`, `reason` `VARCHAR(500)`, `person_id` FK →
+`people(id)`, `applicant_id` FK → `applicants(id)` (both **ON DELETE SET NULL**), `changed_fields`
+(field names only), `applied_at`.
+
+Also a `retention_policies` row, `sheet_import_rows`, with no period (see `docs/RETENTION.md`).
+
+## Scheduled job runs: migration 043
 
 Re-runnable (`CREATE TABLE IF NOT EXISTS`). Created by the migration only, not in `schema.sql`.
-Applied locally by the database suite; **not** applied to production. (No migration 040 exists;
-the number was left for a parallel section.)
+Applied locally by the database suite; **not** applied to production. (Numbered 043 so it applies after S8's 042.)
 
 **`cron_runs`**: one row per scheduled job, the latest run only. `job` `VARCHAR(64)` primary key
 (`backup`, `expiry_alerts`, `retention_sweep`, `send_queued_mail`), `last_started_at`,

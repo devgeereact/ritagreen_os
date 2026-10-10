@@ -58,7 +58,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Onboarding generates tasks | `onboarding_tasks` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | A learner can become a candidate | `applicants.source` | `server/ats.php` | `src/pages/app/Academy.tsx` | none |
 | Google Forms submissions reach the system | `integration_submissions` | `server/forms-intake.php` | planned settings screen | `server/tests/run.php` (mapping) |
-| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php`, `server/system-health.php` | `src/pages/app/Today.tsx`, Settings System health | `server/tests/db/cases/220_system_health.php` |
+| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php`, `server/system-health.php` | `src/pages/app/Today.tsx`, Settings System health | `server/tests/db/cases/230_system_health.php` |
 
 ## Compliance
 
@@ -125,8 +125,8 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
 | No path can assign an ineligible worker | — | `rg_deployment_check()`, `rg_assignment_check()` in `server/compliance-lib.php` | `server/scheduling.php`, `server/me.php`, `server/offer.php` | `server/tests/db/cases/160_rota.php` |
-| The office is shown what needs attention | none | `server/action-centre.php` | `src/pages/app/Today.tsx` | `server/tests/db/cases/190_today.php` |
-| Today's counts obey service scope and zones | none | `rg_action_centre_access()` in `server/pure.php`, `server/action-centre.php`, `server/dashboard.php` | `src/pages/app/Today.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_today.php` |
+| The office is shown what needs attention | none | `server/action-centre.php` | `src/pages/app/Today.tsx` | `server/tests/db/cases/200_today.php` |
+| Today's counts obey service scope and zones | none | `rg_action_centre_access()` in `server/pure.php`, `server/action-centre.php`, `server/dashboard.php` | `src/pages/app/Today.tsx` | `server/tests/run.php`, `server/tests/db/cases/200_today.php` |
 | Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
 | Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` (premium selection) |
@@ -192,12 +192,12 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Incidents are logged and actioned | `incidents`, `incident_actions` | `server/incidents.php` | `src/pages/app/Incidents.tsx` | none |
 | The database is backed up | — | `server/backup.php` | cron | none |
 | Backups are restore-tested | — | `server/system-health.php` reports it as an explicit unknown | — | none |
-| Regulatory packs can be produced | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` (scope refusal) |
-| Reports total the whole filtered dataset, in scope | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` |
-| Exports carry declared columns only and are logged | `export_log` | `rg_csv()` in `server/pure.php`, `server/reports.php?action=export` | `src/pages/app/Reports.tsx` | `server/tests/run.php`, `server/tests/db/cases/200_reports.php` |
-| A client profile pack shows client-safe fields only | none | `server/compliance.php?action=profile_pack`, `rg_dbs_level()` | `src/pages/app/PersonProfile.tsx`, `buildProfilePackPdf()` in `src/lib/pdf.ts` | `server/tests/db/cases/210_profile_pack.php` |
-| Staff workload is visible | none | `server/reports.php?report=workload`, `server/system-health.php?action=workload` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` |
-| The system reports its own health | `cron_runs` (migration 041) | `server/system-health.php`, `rg_cron_started()`/`rg_cron_succeeded()` in `server/lib.php`, `rg_cron_state()` | `src/components/app/system-health.tsx` (Settings) | `server/tests/db/cases/220_system_health.php` |
+| Regulatory packs can be produced | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` (scope refusal) |
+| Reports total the whole filtered dataset, in scope | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` |
+| Exports carry declared columns only and are logged | `export_log` | `rg_csv()` in `server/pure.php`, `server/reports.php?action=export` | `src/pages/app/Reports.tsx` | `server/tests/run.php`, `server/tests/db/cases/210_reports.php` |
+| A client profile pack shows client-safe fields only | none | `server/compliance.php?action=profile_pack`, `rg_dbs_level()` | `src/pages/app/PersonProfile.tsx`, `buildProfilePackPdf()` in `src/lib/pdf.ts` | `server/tests/db/cases/220_profile_pack.php` |
+| Staff workload is visible | none | `server/reports.php?report=workload`, `server/system-health.php?action=workload` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` |
+| The system reports its own health | `cron_runs` (migration 043) | `server/system-health.php`, `rg_cron_started()`/`rg_cron_succeeded()` in `server/lib.php`, `rg_cron_state()` | `src/components/app/system-health.tsx` (Settings) | `server/tests/db/cases/230_system_health.php` |
 | Exports are logged | `export_log` | `server/governance.php` | planned | none |
 
 ## People and compliance (section S2)
@@ -232,6 +232,20 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Company details and socials come from the CMS, with a fallback | `company_settings` (migration 039) | `server/company.php` | `src/lib/company.ts`, `src/pages/app/CompanyDetails.tsx`, `src/pages/public/Links.tsx` | `server/tests/db/cases/170_careers_cms.php`, `src/lib/__tests__/company.test.ts`, `server/tests/run.php` (`rg_social_url_ok`) |
 | Role pages and posts are in a sitemap | `vacancies`, `blog_posts` | `server/sitemap.php` | `public/robots.txt` | `server/tests/db/cases/170_careers_cms.php` |
 | Role pages carry JobPosting structured data | (none) | none | `src/lib/structured-data.ts` | none (checked in a browser) |
+
+## Spreadsheet import (section S8)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| An office user uploads a Google Sheet as CSV; the file is not kept | `sheet_imports`, `sheet_import_rows.cells_json` (migration 042) | `server/sheet-import.php?action=upload`, `rg_csv_parse()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php` (CSV parsing), `server/tests/db/cases/190_sheet_import.php` |
+| Columns are mapped once per form and reused; only listed fields can be mapped | `sheet_import_mappings` | `server/sheet-import.php?action=map`, `RG_IMPORT_FIELDS`, `rg_import_guess_field()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Every row is previewed before anything is written | `sheet_import_rows` | `rg_import_plan_row()`, `server/sheet-import.php` GET | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| People are matched on email, phone, then name and date of birth; uncertain matches wait for a person | `people` | `rg_import_match_decision()`, `?action=row` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Responses the form feed already delivered, and rows already imported, are duplicates | `integration_submissions`, `sheet_import_rows.applied_fingerprint` (UNIQUE) | `rg_import_same_application()`, `server/sheet-import.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Applying writes through the person spine, row by row, audited with file and row | `people`, `applicants`, `audit_log` | `rg_create_applicant()`, `rg_save_contact_details()` in `server/people-lib.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Only contact details change for staff; never compliance, pay or status | `people`, `workers.avail_*` | `rg_import_contact_changes()`, `rg_save_contact_details()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Service scope on every row; office roles only | `sheet_imports.created_by` | `server/sheet-import.php` | `src/lib/access.ts` | `server/tests/db/cases/190_sheet_import.php`, `src/lib/__tests__/access.test.ts` |
+| A report with counts, a failures download and an import history | `sheet_imports` counts | `?action=failures`, `?action=history` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
 
 ## Platform
 

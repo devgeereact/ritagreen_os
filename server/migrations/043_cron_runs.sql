@@ -1,4 +1,4 @@
--- 041: when each scheduled job last ran (section S5, system health in Settings).
+-- 043: when each scheduled job last ran (section S5, system health in Settings).
 --
 -- Nothing recorded it. System health inferred the mail drainer from the newest
 -- email_log row and the backup from the newest file on disk, and had no way to
