@@ -1992,3 +1992,16 @@ reopening), `closed_at`, `created_by`, `created_at`, `updated_at`, `deleted_at` 
 `src/lib/company.ts`. A separate table rather than `app_settings` (migration 038), whose rows are
 owner-tunable numbers as name/value pairs of 255 characters: this is one public record with a
 fixed field list, read whole by the website.
+
+## Scheduled job runs: migration 041
+
+Re-runnable (`CREATE TABLE IF NOT EXISTS`). Created by the migration only, not in `schema.sql`.
+Applied locally by the database suite; **not** applied to production. (No migration 040 exists;
+the number was left for a parallel section.)
+
+**`cron_runs`**: one row per scheduled job, the latest run only. `job` `VARCHAR(64)` primary key
+(`backup`, `expiry_alerts`, `retention_sweep`, `send_queued_mail`), `last_started_at`,
+`last_finished_at` (written on shutdown whatever happened), `last_success_at` (only when the job
+reached its own success point), `last_detail` `VARCHAR(255)`, `runs` `INT`. Written by
+`rg_cron_started()` and `rg_cron_succeeded()` in `server/lib.php`, which swallow errors so a
+missing table never fails the job. Read by `system-health.php`; no row means "unknown".

@@ -40,7 +40,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Navigation hides what the user cannot open | none | none | `src/lib/nav.ts`, `src/components/app-sidebar.tsx`, `src/components/global-search.tsx`, `src/layouts/Footer.tsx` | `src/lib/__tests__/access.test.ts`, `src/lib/__tests__/nav.test.ts` |
 | The office app has eight destinations, Finance only when switched on | none | none | `src/lib/nav.ts`, `src/components/nav-main.tsx`, `src/lib/app-routes.ts` | `src/lib/__tests__/nav.test.ts`, `src/lib/__tests__/app-routes.test.ts` |
 | The owner switches optional areas on and off | `feature_switches` (migration 036) | `server/features.php`, `feature_enabled()` in `server/lib.php` | `src/components/app/features-card.tsx`, `src/hooks/use-features.ts` | `server/tests/run.php`, `server/tests/db/cases/120_feature_switches.php` |
-| A switched-off area is refused by the server | `feature_switches` | `server/inbox.php`, `server/ai.php`, `server/payments.php`, `server/gocardless.php`, `send_sms()` in `server/lib.php` | hidden in `src/layouts/AppLayout.tsx`, `src/pages/app/Dashboard.tsx` | `server/tests/db/cases/120_feature_switches.php` |
+| A switched-off area is refused by the server | `feature_switches` | `server/inbox.php`, `server/ai.php`, `server/payments.php`, `server/gocardless.php`, `send_sms()` in `server/lib.php` | hidden in `src/layouts/AppLayout.tsx`; overdue invoices reach Today only while finance is on (`rg_action_centre_access()`) | `server/tests/db/cases/120_feature_switches.php` |
 | A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | `src/lib/__tests__/access.test.ts` |
 | Per-service scoping is enforced | `users.scope_to_division` | `service_scope()` in `server/lib.php` | `src/lib/access.ts` | none |
@@ -58,7 +58,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Onboarding generates tasks | `onboarding_tasks` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | A learner can become a candidate | `applicants.source` | `server/ats.php` | `src/pages/app/Academy.tsx` | none |
 | Google Forms submissions reach the system | `integration_submissions` | `server/forms-intake.php` | planned settings screen | `server/tests/run.php` (mapping) |
-| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php` | planned | none |
+| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php`, `server/system-health.php` | `src/pages/app/Today.tsx`, Settings System health | `server/tests/db/cases/220_system_health.php` |
 
 ## Compliance
 
@@ -125,7 +125,8 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
 | No path can assign an ineligible worker | — | `rg_deployment_check()`, `rg_assignment_check()` in `server/compliance-lib.php` | `server/scheduling.php`, `server/me.php`, `server/offer.php` | `server/tests/db/cases/160_rota.php` |
-| The office is shown what needs attention | — | `server/action-centre.php` | planned | none |
+| The office is shown what needs attention | none | `server/action-centre.php` | `src/pages/app/Today.tsx` | `server/tests/db/cases/190_today.php` |
+| Today's counts obey service scope and zones | none | `rg_action_centre_access()` in `server/pure.php`, `server/action-centre.php`, `server/dashboard.php` | `src/pages/app/Today.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_today.php` |
 | Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
 | Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` (premium selection) |
@@ -191,9 +192,12 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Incidents are logged and actioned | `incidents`, `incident_actions` | `server/incidents.php` | `src/pages/app/Incidents.tsx` | none |
 | The database is backed up | — | `server/backup.php` | cron | none |
 | Backups are restore-tested | — | `server/system-health.php` reports it as an explicit unknown | — | none |
-| Regulatory packs can be produced | — | `server/reports.php` | `src/pages/app/Reports.tsx` | none |
-| Staff workload is visible | — | `server/system-health.php` | planned | none |
-| The system reports its own health | — | `server/system-health.php` | planned | none |
+| Regulatory packs can be produced | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` (scope refusal) |
+| Reports total the whole filtered dataset, in scope | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` |
+| Exports carry declared columns only and are logged | `export_log` | `rg_csv()` in `server/pure.php`, `server/reports.php?action=export` | `src/pages/app/Reports.tsx` | `server/tests/run.php`, `server/tests/db/cases/200_reports.php` |
+| A client profile pack shows client-safe fields only | none | `server/compliance.php?action=profile_pack`, `rg_dbs_level()` | `src/pages/app/PersonProfile.tsx`, `buildProfilePackPdf()` in `src/lib/pdf.ts` | `server/tests/db/cases/210_profile_pack.php` |
+| Staff workload is visible | none | `server/reports.php?report=workload`, `server/system-health.php?action=workload` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/200_reports.php` |
+| The system reports its own health | `cron_runs` (migration 041) | `server/system-health.php`, `rg_cron_started()`/`rg_cron_succeeded()` in `server/lib.php`, `rg_cron_state()` | `src/components/app/system-health.tsx` (Settings) | `server/tests/db/cases/220_system_health.php` |
 | Exports are logged | `export_log` | `server/governance.php` | planned | none |
 
 ## People and compliance (section S2)

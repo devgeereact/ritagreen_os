@@ -147,7 +147,7 @@ const STAGE_LABEL: Record<string, string> = {
 }
 
 function cell(key: string, value: string | number | boolean | null): string {
-  if (value === null || value === "") return "—"
+  if (value === null || value === "") return ""
   if (typeof value === "boolean") return value ? "Yes" : "No"
   if (key === "service") return serviceLabel(String(value))
   if (key === "stage") return STAGE_LABEL[String(value)] ?? String(value)
