@@ -28,12 +28,17 @@ export function GoogleFormEmbed({
   display,
   roleTitle,
   company,
+  kind = "application",
 }: {
   formId: string
   display: "embedded" | "link"
   roleTitle: string
   company: CompanyDetails
+  /** An application for a role, or a training form on /training (S10). Only the wording differs. */
+  kind?: "application" | "training"
 }) {
+  const noun = kind === "training" ? "form" : "application form"
+  const id = `gform-${formId.slice(0, 12)}`
   const [loaded, setLoaded] = useState(false)
   const src = googleFormEmbedSrc(formId)
   const openUrl = googleFormOpenUrl(formId)
@@ -59,7 +64,7 @@ export function GoogleFormEmbed({
   if (!src || !openUrl) {
     return (
       <div className="grid gap-4">
-        <p>The application form is not available just now.</p>
+        <p>The {noun} is not available just now.</p>
         {phoneLine}
       </div>
     )
@@ -69,12 +74,13 @@ export function GoogleFormEmbed({
     return (
       <div className="grid gap-4">
         <p>
-          Applications for this role are made on a short Google Form. It asks only what we need to start: your
-          contact details, your right to work, your experience and when you can work. No documents.
+          {kind === "training"
+            ? `${roleTitle} is a short Google Form. It asks for no documents.`
+            : "Applications for this role are made on a short Google Form. It asks only what we need to start: your contact details, your right to work, your experience and when you can work. No documents."}
         </p>
         <p>
           <a href={openUrl} target="_blank" rel="noopener noreferrer" className={siteButton()}>
-            Open the application form
+            Open the {noun}
             <span className="sr-only"> (opens Google Forms in a new tab)</span>
           </a>
         </p>
@@ -89,7 +95,7 @@ export function GoogleFormEmbed({
       {loaded ? (
         <iframe
           src={src}
-          title={`Application form for ${roleTitle} (Google Forms)`}
+          title={kind === "training" ? `${roleTitle} (Google Forms)` : `Application form for ${roleTitle} (Google Forms)`}
           className="h-[1500px] w-full rounded-lg border border-border bg-white md:h-[1300px]"
           referrerPolicy="no-referrer"
           loading="lazy"
@@ -98,7 +104,7 @@ export function GoogleFormEmbed({
         </iframe>
       ) : (
         <div className="rounded-lg border border-border bg-background p-5 sm:p-8">
-          <h3 className="text-lg font-semibold">The application form is hosted by Google</h3>
+          <h3 id={id} className="text-lg font-semibold">The {noun} is hosted by Google</h3>
           <p className="mt-2 text-[15px] text-muted-foreground">
             Loading it here connects your browser to Google Forms, which may set its own cookies. Nothing is loaded
             from Google until you choose to. The form asks for no documents.{" "}
@@ -106,8 +112,8 @@ export function GoogleFormEmbed({
               Cookies and storage
             </Link>
           </p>
-          <button type="button" onClick={() => setLoaded(true)} className={`${siteButton()} mt-5`}>
-            Load the application form from Google
+          <button type="button" aria-describedby={id} onClick={() => setLoaded(true)} className={`${siteButton()} mt-5`}>
+            Load the {noun} from Google
           </button>
         </div>
       )}

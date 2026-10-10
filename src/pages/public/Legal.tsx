@@ -55,7 +55,7 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
       },
       {
         h: "If you visit this website",
-        p: "The site loads entirely from our own servers. There is no analytics, no advertising, no tracking pixels, no social media embeds and no third-party fonts or scripts, so browsing the site sends nothing about you to anyone else. The one exception is one you choose: on a job page, pressing \"Load the application form from Google\" shows Google's application form inside the page, and from then on your browser is talking to Google Forms, under Google's privacy policy. Until you press it, nothing is loaded from Google. The site stores a small number of things in your browser to work at all: your sign-in if you have one, your light or dark preference, and the fact you have seen our storage notice. Our web server keeps ordinary request logs, and the site sits behind Cloudflare, which handles the connection. The cookie and storage notice lists every item by name.",
+        p: "The site loads entirely from our own servers. There is no analytics, no advertising, no tracking pixels, no social media embeds and no third-party fonts or scripts, so browsing the site sends nothing about you to anyone else. The one exception is one you choose: on a job page or the training page, pressing \"Load the application form from Google\" (or \"Load the form from Google\") shows Google's form inside the page, and from then on your browser is talking to Google Forms, under Google's privacy policy. Until you press it, nothing is loaded from Google. The site stores a small number of things in your browser to work at all: your sign-in if you have one, your light or dark preference, and the fact you have seen our storage notice. Our web server keeps ordinary request logs, and the site sits behind Cloudflare, which handles the connection. The cookie and storage notice lists every item by name.",
       },
       {
         h: "If you contact us or ask for a quote",
@@ -214,7 +214,7 @@ const CONTENT: Record<LegalKind, LegalDoc> = {
       },
       {
         h: "Application forms from Google",
-        p: "Some job pages take applications through a Google Form. The form is not loaded until you press \"Load the application form from Google\", and you can open it in a new tab or apply by phone instead. Once you load it, Google Forms runs inside the page and Google may set or read its own cookies under its own privacy policy; this site cannot see or control them. Nothing is stored in your browser by this site when you load it.",
+        p: "Some job pages take applications through a Google Form, and the training page may offer training forms the same way. A form is not loaded until you press the button to load it from Google, and you can open it in a new tab or call us instead. Once you load it, Google Forms runs inside the page and Google may set or read its own cookies under its own privacy policy; this site cannot see or control them. Nothing is stored in your browser by this site when you load it.",
       },
       {
         h: "Offline data in the worker app",
