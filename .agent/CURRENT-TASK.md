@@ -33,11 +33,11 @@ Key: ✅ merged into `lean-cms/build`, all checks green · 🚧 in progress · �
 | S2 | People and compliance (person profile, verification, RTW, onboarding, contracts, activation) | ✅ | `mvp/s02-people-compliance`, PR #11 | Migration 037. Also fixed missing service scope on verifications, right-to-work, leave, employment-contracts, compliance. Follow-up: label checks that are Valid only from a legacy certification record (no verifier) |
 | S3 | Rota (draft/publish, edit, cancel, sites, leave and rest checks, timesheets) | ✅ | `mvp/s03-rota`, PR #13 | Migration 038. FullCalendar removed. Service scope added to scheduling/timesheets. Rest-gap setting has API only, no screen |
 | S4 | Staff portal (Home, Rota, Records, Me) | ✅ | `mvp/s04-staff-portal`, PR #15 | Worker clock-in now refused earlier than 15 min before start. Deploy: upload the 9 PHP files in the PR first. Seed label mismatch "Moving & Handling" vs requirement "Moving and handling" |
-| S5 | Today and Reports | 🚧 | `mvp/s05-today-reports` | Phase 5; agent on ubuntu-dev |
+| S5 | Today and Reports | ✅ | `mvp/s05-today-reports`, PR #17 | Migration 043. Action Centre/dashboard now scoped and zoned. Deletion requests (governance.php) still have no screen. Today vs Workforce report can differ until nightly sweep |
 | S6 | Website rebuild | ✅ | `mvp/s06-website`, PR #12 | Deploy: upload quotes.php, contact.php, pure.php before frontend; copy .htaccess 301 block by hand. Hero uses stock care photo until real photography |
 | S7 | Careers, forms directory, CMS company details and socials | ✅ | `mvp/s07-careers-cms`, PR #14 | Migration 039. Deploy: copy CSP `frame-src` line to live .htaccess; owner sets intake secret in Settings; Apps Script per docs/runbooks/google-forms-intake.md. Real Google Form not yet tested |
 | S8 | Spreadsheet import | ✅ | `mvp/s08-sheet-import`, PR #16 | Migration 042 (040/041 intentionally unused). CSV only (Google Sheets: File > Download > CSV). Owner/admin/manager only. Retention period for open imports is an owner decision |
-| S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | ⏳ | `mvp/s09-retirements` | Removal protocol |
+| S9 | Retirements (Content Studio, AI assistant, quiz builder, weather, Analytics/Insights) | 🚧 | `mvp/s09-retirements` | Removal protocol |
 | S10 | Launch gate and docs consolidation, then remove `docs/Plans 2026/` with owner approval | ⏳ | `mvp/s10-launch-gate` | |
 
 ## Product boundary
