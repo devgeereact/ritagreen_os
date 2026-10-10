@@ -2183,6 +2183,160 @@ function rg_timesheet_can(string $action, string $status): bool
     return in_array($status, RG_TIMESHEET_FROM[$action] ?? [], true);
 }
 
+// ---------------------------------------------------------------- staff portal
+
+/** How long before a shift starts a worker may clock in. Plan file 03. */
+const RG_CLOCK_IN_LEAD_MINUTES = 15;
+
+/**
+ * When clocking in opens for a shift, as a wall-clock datetime.
+ *
+ * Shift times are wall-clock in Europe/London (CLAUDE.md, "One clock"), so the
+ * lead time is taken off in that zone: fifteen minutes before 01:30 on the night
+ * the clocks go back is still fifteen real minutes.
+ */
+function rg_clock_in_opens_at(string $startsAt, int $leadMinutes = RG_CLOCK_IN_LEAD_MINUTES): string
+{
+    $start = new DateTimeImmutable($startsAt, new DateTimeZone(RG_ROTA_TZ));
+    return $start->modify("-$leadMinutes minutes")->format('Y-m-d H:i:s');
+}
+
+/**
+ * May a worker clock in on this shift at $now (a Unix time)?
+ *
+ * Only the opening is tested. A late clock-in is still a clock-in: refusing it
+ * would lose the record of when somebody actually arrived.
+ */
+function rg_clock_in_open(string $startsAt, ?int $now = null, int $leadMinutes = RG_CLOCK_IN_LEAD_MINUTES): bool
+{
+    $now ??= time();
+    $start = new DateTimeImmutable($startsAt, new DateTimeZone(RG_ROTA_TZ));
+    return $now >= $start->getTimestamp() - $leadMinutes * 60;
+}
+
+/**
+ * Requirements a worker may send evidence for from the portal, and how the file
+ * is filed.
+ *
+ * Three are left to the office on purpose:
+ *   right_to_work  has its own check record, methods and share codes
+ *                  (right-to-work.php); a photo in a verification queue is not
+ *                  a right-to-work check, and verifying one there would bypass
+ *                  the rules that endpoint holds.
+ *   references     come from referees, not from the worker.
+ *   contract       a file filed as a contract counts as a signed contract in
+ *                  rg_load_evidence(), so a worker must never be able to file one.
+ *
+ * Returns the files.category to use, or null when the portal does not take it.
+ */
+function rg_portal_upload_category(string $requirementKey): ?string
+{
+    if (in_array($requirementKey, ['right_to_work', 'references', 'contract'], true)) return null;
+    if ($requirementKey === 'identity') return 'id';
+    if (!preg_match('/^[a-z0-9_]{2,64}$/', $requirementKey)) return null;
+    return 'certificate';
+}
+
+/**
+ * What stops a worker being booked, in words they can act on.
+ *
+ * Built from the verdict rg_deployment_check() returns, so the portal says
+ * exactly what the deployment gate concluded and nothing it did not. $open is
+ * requirement_key => verification status for checks the office has in hand, so
+ * "the office is checking it" can replace "send a new copy" where that is true.
+ *
+ * @param array $gate the verdict from rg_deployment_check()
+ * @param array<string,string> $open
+ * @return list<array{key:?string,title:string,todo:string}>
+ */
+function rg_portal_blockers(array $gate, array $open = []): array
+{
+    if (!empty($gate['eligible'])) return [];
+
+    if (($gate['blocked_by'] ?? null) === 'employment') {
+        $reason = (string) ($gate['reason'] ?? '');
+        $todo = 'Please contact the office.';
+        if (str_contains($reason, 'onboarding')) {
+            $todo = 'The office will tell you what is left to do. Please contact them if you are unsure.';
+        } elseif (str_contains($reason, 'not been approved')) {
+            $todo = 'The office approves you once your checks are complete. Nothing is needed from you unless they ask.';
+        }
+        // "This worker is suspended." reads oddly to the worker themselves.
+        $title = str_replace(['This worker left on', 'This worker'], ['Your employment ended on', 'Your account'], $reason);
+        return [['key' => null, 'title' => $title, 'todo' => $todo]];
+    }
+
+    $out = [];
+    foreach ($gate['blocking'] ?? [] as $item) {
+        $key = (string) ($item['key'] ?? '');
+        $label = (string) ($item['label'] ?? $key);
+        $state = (string) ($item['state'] ?? 'missing');
+        $title = match ($state) {
+            'expired' => "$label has expired",
+            'undated' => "$label has no expiry date recorded",
+            'unverified' => "$label has not been confirmed",
+            default => "$label is missing",
+        };
+        $openStatus = $open[$key] ?? null;
+        // Only "the office is checking it" when a copy really is with them.
+        // Unverified on its own means a record nobody has confirmed, and the
+        // worker can usually move it on by sending a current copy.
+        if (in_array($openStatus, ['received', 'under_review'], true)) {
+            $todo = 'The office is checking it. Nothing more is needed from you for now.';
+        } elseif (rg_portal_upload_category($key) !== null) {
+            $todo = 'Upload a current copy in Records. The office checks it before it counts.';
+        } else {
+            $todo = 'Please contact the office about this.';
+        }
+        $out[] = ['key' => $key, 'title' => $title, 'todo' => $todo];
+    }
+    if ($out === [] && !empty($gate['reason'])) {
+        $out[] = ['key' => null, 'title' => (string) $gate['reason'], 'todo' => 'Please contact the office.'];
+    }
+    return $out;
+}
+
+/** The contact fields a worker may change themselves, on the people record. */
+const RG_SELF_CONTACT_FIELDS = ['phone', 'address_line1', 'address_line2', 'city', 'postcode'];
+
+/**
+ * Validate the contact details a worker edits in the portal.
+ *
+ * Email is not here: it is how the person signs in and how they are matched to
+ * a returning application, so the office changes it. Empty values clear a field,
+ * except the phone, which the office needs to reach somebody on shift.
+ *
+ * @return array{ok:bool,errors:list<string>,values:array<string,?string>}
+ */
+function rg_validate_contact_details(array $data): array
+{
+    $values = [];
+    foreach (RG_SELF_CONTACT_FIELDS as $field) {
+        $v = trim((string) ($data[$field] ?? ''));
+        $values[$field] = $v !== '' ? $v : null;
+    }
+    $errors = [];
+    if ($values['phone'] === null) {
+        $errors[] = 'Give a phone number the office can reach you on.';
+    } elseif (!rg_valid_phone($values['phone'])) {
+        $errors[] = 'That phone number is not a number that can be rung.';
+    }
+    foreach (['address_line1' => 190, 'address_line2' => 190, 'city' => 80] as $field => $max) {
+        if ($values[$field] !== null && mb_strlen($values[$field]) > $max) $errors[] = 'Please shorten the address.';
+    }
+    if ($values['postcode'] !== null) {
+        $pc = strtoupper(preg_replace('/\s+/', ' ', $values['postcode']) ?? '');
+        if (!preg_match('/^[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}$/', $pc)) {
+            $errors[] = 'That postcode does not look right.';
+        } else {
+            // One space before the last three characters, as Royal Mail writes it.
+            $compact = str_replace(' ', '', $pc);
+            $values['postcode'] = substr($compact, 0, -3) . ' ' . substr($compact, -3);
+        }
+    }
+    return ['ok' => $errors === [], 'errors' => array_values(array_unique($errors)), 'values' => $values];
+}
+
 // ---------------------------------------------------------- owner visibility
 
 /**

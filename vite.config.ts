@@ -103,21 +103,14 @@ export default defineConfig({
         // would mean showing somebody an eligibility answer that is no longer
         // true, which is worse than showing them nothing.
         navigateFallbackDenylist: [/\.php/],
-        runtimeCaching: [
-          {
-            // Read-only worker data, network-first: fresh when online, and the
-            // last known answer when not. Writes are never served from here.
-            // Payslips are excluded: pay data must not outlive the session on the device.
-            urlPattern: /\/(?:me\.php(?![^#]*[?&]action=payslip)|notifications\.php)/,
-            handler: "NetworkFirst",
-            method: "GET",
-            options: {
-              cacheName: "worker-reads",
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 12 },
-            },
-          },
-        ],
+        // No runtime caching of the API at all. The worker app used to keep
+        // me.php and notifications.php for twelve hours (NetworkFirst) so a
+        // worker saw their shifts with no signal. Since S4 the portal holds a
+        // worker's documents, emergency contacts, address, availability, leave
+        // and pay, and none of that should outlive the session on a phone that
+        // may be shared or lost. Offline, the installed shell still loads and
+        // each tab says "You are offline" instead of showing stale personal
+        // data (docs/PRIVACY.md). WorkerApp drops the old "worker-reads" cache.
       },
       devOptions: { enabled: false },
     }),

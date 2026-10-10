@@ -43,15 +43,15 @@ it previously had neither. Evidence: `src/components/ui/sidebar.tsx`.
 | `theme` | Light or dark | Preference | Changing the theme | Browser settings | `light`, `dark` or `system` | No | `/cookies` |
 | `rg-worker-location-notice` | That the worker location notice was seen | Strictly necessary | Acknowledging it in `/m` | Browser settings | A version string | Yes | `/cookies` and the notice itself |
 
-`sessionStorage` and `IndexedDB` are unused by application code. Workbox creates its own
-IndexedDB database for cache expiry metadata — URLs and timestamps, no response bodies.
+`sessionStorage` and `IndexedDB` are unused by application code. Workbox may create its own
+IndexedDB database for precache metadata: URLs and revisions, no response bodies.
 
 ## Service-worker caches
 
 | Cache | Contents | Lifetime | Personal data | Cleared |
 |---|---|---|---|---|
 | `workbox-precache-v2-*` | Built assets: JS, CSS, HTML, SVG, PNG, and the Latin webfont subsets | Until the next deploy | No | Automatically |
-| `worker-reads` | `me.php` and `notifications.php` responses, so the worker app works with no signal | 20 entries, 12 hours | **Yes** — the worker's own profile, right-to-work flag and compliance record with expiry dates | On sign-out (added by this audit), and by expiry |
+| `worker-reads` | **Retired in S4.** Held `me.php` and `notifications.php` responses for 12 hours. No API response is cached now; the staff portal deletes this cache on open and on sign-out, so an older install does not keep it | None from S4 on | Was: the worker's own profile and compliance record | On opening `/m`, on sign-out |
 
 The Latin Extended font subsets are excluded from the precache (`vite.config.ts` `globIgnores`):
 about 430 kB most visits never request, since the browser fetches a subset only when a glyph in
