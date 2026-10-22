@@ -9,7 +9,8 @@ import { siteButton } from "@/components/public/site-button"
 // (docs/Plans 2026/design-preview.html, "Website"): warm paper, white surfaces
 // with a 1px border, deep green blocks for emphasis, serif headings, 8px radius
 // and no shadow on anything that is not a menu or a dialog. No gradients, grids,
-// glows, floating cards or scroll animations (file 04, "What to avoid").
+// glows or scroll animations (file 04, "What to avoid"). The one framed card and
+// the one entrance on the home hero are described in docs/DESIGN_SYSTEM.md.
 
 export function Container({ className, children }: { className?: string; children: ReactNode }) {
   return <div className={cn("mx-auto w-full max-w-6xl px-4 sm:px-6", className)}>{children}</div>
@@ -200,6 +201,19 @@ export function CareersBand({
         </Link>
       </Container>
     </section>
+  )
+}
+
+/**
+ * The marker on development-only demo content (src/lib/demo-content.ts), so a
+ * sample block is never mistaken for a published one. It renders only where
+ * DEMO_CONTENT is true, which is never in a production build.
+ */
+export function DemoLabel({ what }: { what: string }) {
+  return (
+    <p className="mb-4 inline-flex items-center gap-2 rounded-md border border-dashed border-warning bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">
+      Demo content, development only: {what}
+    </p>
   )
 }
 
