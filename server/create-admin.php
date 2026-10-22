@@ -73,8 +73,12 @@ if (strlen($password) < 12) exit("REFUSED: use at least 12 characters.\n");
 
 $hash = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
 $role = 'super_admin';
-$stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)');
-$stmt->bind_param('ssss', $name, $email, $hash, $role);
+// users.person_id is NOT NULL since migration 004, so the account needs a person.
+// It goes through find_or_create_person() like every other identity, which also
+// links the login to an existing person with the same email rather than copying it.
+$personId = find_or_create_person($conn, $name, $email);
+$stmt = $conn->prepare('INSERT INTO users (name, email, password_hash, role, person_id) VALUES (?, ?, ?, ?, ?)');
+$stmt->bind_param('ssssi', $name, $email, $hash, $role, $personId);
 $stmt->execute();
 $id = (int) $conn->insert_id;
 
