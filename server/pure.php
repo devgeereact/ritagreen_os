@@ -1053,12 +1053,25 @@ function rg_valid_google_form_id(?string $id): bool
  */
 function rg_slugify(?string $s, int $max = 80): string
 {
-    $s = strtolower(trim((string) $s));
+    $s = mb_strtolower(trim((string) $s));
     // Fold the accented letters a job title might carry into their plain form,
     // so "Café supervisor" becomes cafe-supervisor rather than caf-supervisor.
-    if (function_exists('iconv') && preg_match('/[^\x00-\x7F]/', $s)) {
-        $folded = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
-        if (is_string($folded) && $folded !== '') $s = strtolower($folded);
+    // A fixed table, not iconv //TRANSLIT: glibc and macOS libiconv disagree
+    // (é becomes "e" on one and "'e" on the other), and a slug must be the same
+    // string on a laptop and on the host.
+    if (preg_match('/[^\x00-\x7F]/', $s)) {
+        $s = strtr($s, [
+            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a', 'ā' => 'a',
+            'ç' => 'c', 'ć' => 'c', 'č' => 'c',
+            'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e', 'ē' => 'e', 'ę' => 'e',
+            'ì' => 'i', 'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ī' => 'i',
+            'ñ' => 'n', 'ń' => 'n',
+            'ò' => 'o', 'ó' => 'o', 'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ø' => 'o', 'ō' => 'o',
+            'ś' => 's', 'š' => 's', 'ß' => 'ss',
+            'ù' => 'u', 'ú' => 'u', 'û' => 'u', 'ü' => 'u', 'ū' => 'u',
+            'ý' => 'y', 'ÿ' => 'y', 'ž' => 'z', 'ź' => 'z', 'ż' => 'z',
+            'æ' => 'ae', 'œ' => 'oe',
+        ]);
     }
     $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
     $s = trim($s, '-');

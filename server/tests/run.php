@@ -893,6 +893,7 @@ group('rg_slugify / rg_valid_slug');
 check('a title becomes an address', rg_slugify('Senior Carer, Night Shifts'), 'senior-carer-night-shifts');
 check('runs of punctuation collapse', rg_slugify('  Cleaner -- (Schools) / Lambeth  '), 'cleaner-schools-lambeth');
 check('accents fold to plain letters', rg_slugify('Café supervisor'), 'cafe-supervisor');
+check('and upper-case accents', rg_slugify('ÉCOLE Manager'), 'ecole-manager');
 check('nothing usable falls back', rg_slugify('!!!'), 'role');
 check('long titles are cut at 80 without a trailing hyphen', strlen(rg_slugify(str_repeat('ab ', 60))) <= 80, true);
 check('and still valid', rg_valid_slug(rg_slugify(str_repeat('ab ', 60))), true);
