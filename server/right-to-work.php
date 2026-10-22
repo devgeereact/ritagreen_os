@@ -15,12 +15,18 @@
 // The legacy workers.right_to_work flag is kept in step so nothing that still
 // reads it regresses, but the check record is the source of truth.
 require __DIR__ . '/lib.php';
+// A recorded or verified check changes what the deployment gate concludes, so
+// the worker's derived status is recalculated here, not left to the nightly run.
+require __DIR__ . '/compliance-lib.php';
 
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
 
 // Compliance data: internal staff only.
 require_staff($user);
+// And staff is not enough: a right-to-work check is vetting evidence, so it
+// takes the compliance zone too. Editor is staff and does not hold it.
+if (!can_view_zone($conn, $user, 'compliance')) fail('You do not have access to this.', 403);
 
 const RTW_METHODS = ['online_share_code', 'manual_document', 'idsp_digital', 'other'];
 const RTW_OUTCOMES = ['pending', 'valid', 'invalid', 'requires_follow_up'];
@@ -44,8 +50,16 @@ if (method() === 'GET' && $action === 'due') {
     $stmt->execute();
     $res = $stmt->get_result();
 
+    $rows = [];
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+    // Names and right-to-work state of people in other services are not this
+    // account's to see when it is confined to one.
+    $scope = service_scope($user);
+    $services = $scope !== null ? rg_people_services($conn, array_column($rows, 'person_id')) : [];
+
     $items = [];
-    while ($row = $res->fetch_assoc()) {
+    foreach ($rows as $row) {
+        if ($scope !== null && !rg_person_in_scope($scope, $services[(int) $row['person_id']] ?? [])) continue;
         $row['id'] = (int) $row['id'];
         $row['person_id'] = (int) $row['person_id'];
         $row['follow_up_required'] = (bool) $row['follow_up_required'];
@@ -64,13 +78,16 @@ if (method() === 'GET' && $action === 'due') {
 if (method() === 'GET') {
     $personId = (int) ($_GET['person_id'] ?? 0);
     if ($personId <= 0) fail('A person is required.');
+    require_person_scope($conn, $user, $personId);
 
     $stmt = $conn->prepare(
         'SELECT r.id, r.method, r.method_note, r.reference, r.checked_on, r.outcome,
                 r.follow_up_required, r.recheck_due, r.evidence_file_id, r.notes,
-                r.created_at, r.verified_at, u.name AS verified_by
+                r.created_at, r.verified_at, u.name AS verified_by,
+                f.original_name AS evidence_file_name
          FROM right_to_work_checks r
          LEFT JOIN users u ON u.id = r.verified_by
+         LEFT JOIN files f ON f.id = r.evidence_file_id AND f.deleted_at IS NULL
          WHERE r.person_id = ? ORDER BY r.checked_on DESC, r.id DESC'
     );
     $stmt->bind_param('i', $personId);
@@ -81,6 +98,7 @@ if (method() === 'GET') {
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['follow_up_required'] = (bool) $row['follow_up_required'];
+        $row['evidence_file_id'] = $row['evidence_file_id'] !== null ? (int) $row['evidence_file_id'] : null;
         $row['verified'] = $row['verified_at'] !== null;
         $checks[] = $row;
     }
@@ -114,6 +132,19 @@ if (method() === 'POST' && $action === '') {
     $stmt->bind_param('i', $personId);
     $stmt->execute();
     if (!$stmt->get_result()->fetch_assoc()) fail('Person not found.', 404);
+    require_person_scope($conn, $user, $personId);
+
+    // The scan or screenshot of the check, filed against this person. A check
+    // pointing at somebody else's document records the wrong human's status.
+    if ($fileId !== null) {
+        $stmt = $conn->prepare(
+            'SELECT f.id FROM files f LEFT JOIN workers w ON w.id = f.worker_id
+              WHERE f.id = ? AND f.deleted_at IS NULL AND (f.person_id = ? OR w.person_id = ?) LIMIT 1'
+        );
+        $stmt->bind_param('iii', $fileId, $personId, $personId);
+        $stmt->execute();
+        if (!$stmt->get_result()->fetch_assoc()) fail('That document is not filed against this person.', 422);
+    }
 
     $recheckVal = $recheckDue !== '' ? $recheckDue : null;
     $refVal = $reference !== '' ? $reference : null;
@@ -130,6 +161,7 @@ if (method() === 'POST' && $action === '') {
     $id = (int) $conn->insert_id;
 
     sync_legacy_rtw_flag($conn, $personId);
+    rg_refresh_person_workers($conn, $personId);
     audit($conn, (int) $user['id'], 'rtw.record', "person #$personId", 'person', $personId,
         null, ['method' => $method, 'outcome' => $outcome, 'checked_on' => $checkedOn, 'recheck_due' => $recheckVal]);
     json_out(['ok' => true, 'id' => $id], 201);
@@ -146,6 +178,7 @@ if (method() === 'POST' && $action === 'verify') {
     $stmt->execute();
     $check = $stmt->get_result()->fetch_assoc();
     if (!$check) fail('Check not found.', 404);
+    require_person_scope($conn, $user, (int) $check['person_id']);
     if ($check['verified_at'] !== null) fail('That check is already verified.', 409);
     // Signing off a check whose outcome is still unresolved would be signing off
     // nothing. Record the outcome first.
@@ -157,6 +190,7 @@ if (method() === 'POST' && $action === 'verify') {
     $stmt->execute();
 
     sync_legacy_rtw_flag($conn, (int) $check['person_id']);
+    rg_refresh_person_workers($conn, (int) $check['person_id']);
     // The question this exists to answer: who signed this off, and when?
     audit($conn, $uid, 'rtw.verify', "check #$id", 'right_to_work_check', $id,
         ['verified' => false], ['verified' => true, 'outcome' => $check['outcome']]);

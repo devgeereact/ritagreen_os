@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Plus, Sparkles, Users } from "lucide-react"
+import { Plus, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,7 +33,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
-import { api, aiDraft, ApiError } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import type { Programme } from "@/lib/types"
 import { DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
@@ -45,6 +46,10 @@ const STATUS_VARIANT: Record<Programme["status"], "default" | "secondary" | "out
 }
 
 export default function Academy() {
+  // Trainers may read and enrol; creating and publishing a programme is office
+  // plus editor on the server, so the action is hidden from everyone else.
+  const { hasRole } = useAuth()
+  const canAuthor = hasRole("super_admin", "admin", "manager", "editor")
   const { data, loading, error, reload } = useApi<{ programmes: Programme[] }>("academy.php")
   const [open, setOpen] = useState(false)
   const programmes = data?.programmes ?? []
@@ -53,12 +58,12 @@ export default function Academy() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Academy</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Training</h1>
           <p className="text-sm text-muted-foreground">
             Courses, learners and certificates. Completed learners get a verifiable certificate.
           </p>
         </div>
-        <NewProgrammeDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        {canAuthor && <NewProgrammeDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
       </div>
 
       {loading && <LoadingBlock rows={5} />}
@@ -67,7 +72,7 @@ export default function Academy() {
         <EmptyBlock
           title="No programmes yet"
           hint="Create your first course. You can draft the description with AI."
-          action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New programme</Button>}
+          action={canAuthor ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> New programme</Button> : undefined}
         />
       )}
 
@@ -119,27 +124,6 @@ function NewProgrammeDialog({
   const [division, setDivision] = useState("academy")
   const [cpdHours, setCpdHours] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [drafting, setDrafting] = useState(false)
-
-  async function draft() {
-    if (!title.trim()) {
-      toast.error("Add a title first so the AI has something to work from.")
-      return
-    }
-    setDrafting(true)
-    try {
-      const text = await aiDraft(
-        `Write a clear, professional course description (2 short paragraphs) plus 4 bullet learning outcomes for a UK Health & Social Care training course titled "${title.trim()}". UK English, no marketing fluff.`,
-      )
-      setDescription(text)
-      toast.success("Draft ready. Edit as needed.")
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "AI drafting failed.")
-    } finally {
-      setDrafting(false)
-    }
-  }
-
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!title.trim()) {
@@ -173,7 +157,7 @@ function NewProgrammeDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New programme</DialogTitle>
-          <DialogDescription>Create a course. Draft the description with AI if you like.</DialogDescription>
+          <DialogDescription>Record a training course the company runs or recognises.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid gap-2">
@@ -186,8 +170,8 @@ function NewProgrammeDialog({
               <Select value={division} onValueChange={setDivision}>
                 <SelectTrigger id="division"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="academy">Academy</SelectItem>
-                  <SelectItem value="care">Care</SelectItem>
+                  <SelectItem value="academy">Training</SelectItem>
+                  <SelectItem value="care">Healthcare</SelectItem>
                   <SelectItem value="cleaning">Cleaning</SelectItem>
                   <SelectItem value="security">Security</SelectItem>
                 </SelectContent>
@@ -199,12 +183,7 @@ function NewProgrammeDialog({
             </div>
           </div>
           <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="description">Description</Label>
-              <Button type="button" size="sm" variant="outline" onClick={draft} disabled={drafting}>
-                <Sparkles className="mr-1 size-3.5" /> {drafting ? "Drafting…" : "Draft with AI"}
-              </Button>
-            </div>
+            <Label htmlFor="description">Description</Label>
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={6} placeholder="What the course covers and who it's for…" />
           </div>
           <DialogFooter>

@@ -6,6 +6,9 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Credits against an invoice: a financial record. Reads were unguarded, so any
+// authenticated account could enumerate credit notes by invoice id.
+require_role($user, 'super_admin', 'admin', 'manager');
 
 if (method() === 'GET') {
     $invoiceId = (int) ($_GET['invoice_id'] ?? 0);

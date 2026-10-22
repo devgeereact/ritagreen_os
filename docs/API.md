@@ -4,12 +4,16 @@ Complete reference for the PHP API in `server/`. Every claim here was checked
 against the source; where a file's own header comment disagrees with its code,
 the code is documented and the discrepancy is flagged.
 
-- **55 HTTP endpoint files.** Verified against the tree at `server/`.
-- Alongside them sit four libraries — `lib.php` (the kernel), `pure.php` (domain logic with no
-  database or config), `pay-lib.php` and `compliance-lib.php` — plus `config.sample.php`.
-- Three command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`
-  and `backfill-people.php`. Each refuses to run outside the CLI. See `docs/ARCHITECTURE.md`
-  §7a and §10.
+- **57 application endpoint files**, counted from the tree at `server/`. Four more are
+  reachable over HTTP but are cron scripts, not part of the application: `backup.php`,
+  `expiry-alerts.php`, `retention-sweep.php` and `send-queued-mail.php` each need
+  `ALERTS_KEY`, in an `X-Cron-Key` header or as `?key=`, and otherwise run from the command line. 61 files answer an HTTP request in
+  total.
+- Alongside them sit five libraries: `lib.php` (the kernel), `pure.php` (domain logic with no
+  database or config), `pay-lib.php`, `compliance-lib.php` and `people-lib.php`, plus `config.sample.php`.
+- Four command-line tools are **not** reachable over HTTP at all: `migrate.php`, `seed.php`,
+  `backfill-people.php` and `create-admin.php`. Each refuses to run outside the CLI. See
+  `docs/ARCHITECTURE.md` §7a and §10.
 
 ---
 
@@ -29,7 +33,10 @@ require __DIR__ . '/lib.php';
 
 `lib.php` loads `config.php` (server-only, gitignored), opens the mysqli
 connection `$conn`, installs the error handlers, emits the CORS headers, and
-defines the shared helpers. Two endpoints (`payroll.php`, `margin.php`) also
+defines the shared helpers. It pins both clocks to UTC
+(`date_default_timezone_set('UTC')` and `SET time_zone = '+00:00'` on the
+connection) so PHP's date arithmetic and MySQL's `NOW()` cannot disagree, which
+they did by an hour throughout British Summer Time. Two endpoints (`payroll.php`, `margin.php`) also
 `require __DIR__ . '/pay-lib.php'`; `me.php` requires it lazily inside its
 payslip branch (`me.php:24`).
 
@@ -64,9 +71,6 @@ bypass that:
   (`payments.php:139`).
 - `backup.php` and `expiry-alerts.php` `echo` plain text for cron logs while
   the JSON content-type header is still set.
-
-`weather.php` also echoes a pre-encoded JSON string rather than calling
-`json_out`, so it can serve from its file cache (`weather.php:34`, `102`).
 
 ### Money and dates
 
@@ -192,10 +196,39 @@ already paid, already booked, duplicate email), `429` (rate limited), `498`
 `500`, `502` (upstream service failure), `503` (feature not configured).
 
 Uncaught exceptions and PHP errors are converted to JSON by the handlers at
-`lib.php:8-19`. Note that the exception handler interpolates the raw exception
-message into the response (`'Server error: ' . $e->getMessage()`,
-`lib.php:13`) irrespective of the `GK_DEBUG` constant, so internal detail can
-reach the caller on an unexpected failure.
+`lib.php:10-38`. The full detail is always written to the error log with a short
+reference; what reaches the caller depends on `GK_DEBUG`. With it on (local
+development) the response carries the exception message and its file and line.
+With it off (the server) the caller gets only `Server error. Quote reference
+<ref> if you report this.` and the matching `ref`.
+
+A mutation against a record that does not exist returns **404**, not
+`{ok: true}`. Twenty-five did not: every `?action=` handler was probed with an
+id of 999999, and the ones that reported success while writing an audit row for
+an id with nothing behind it now do not. They were `quotes.php`,
+`incidents.php` (both `status` and `action_done`), `contracts.php` (`status` and
+`renew`), `bookings.php`, `timesheets.php`, `references.php`, `invoices.php`,
+`ats.php` (`stage`, `task_done`, `add_task`), `shift-templates.php`,
+`academy.php`, `clients.php` (`update` and `rate_card`), `enquiries.php`,
+`leave.php`, `users.php`, `workers.php` (`availability` and `pay`),
+`files.php`, `blog.php` and `testimonials.php`. `jobs.php` always did it
+correctly and is the pattern the rest now follow.
+
+Eight let a parent id that does not exist reach the INSERT, so a foreign-key
+violation surfaced as a **500** with the constraint name in it and a logged
+exception, for what is only a stale id from a page left open:
+`ats.php?action=add_task`, `clients.php?action=rate_card`, and the create paths
+of `invoices.php`, `quotes.php`, `contracts.php`, `jobs.php`,
+`shift-templates.php` and `incidents.php` (which takes a worker as well as a
+client). Each checks its parents first and returns 404. In `quotes.php` and
+`incidents.php` the check also runs *before* `next_seq()`, so a rejected request
+no longer burns a quote or incident number on a record that was never written.
+
+Repeating an action that has already been applied still returns 200: mysqli's
+`affected_rows` is 0 both for a missing row and for a value that was already
+what was written, so existence is confirmed separately (`row_exists()`,
+`lib.php`). Soft deletes follow the same rule — deleting an already-deleted
+record is not an error, deleting one that never existed is.
 
 ---
 
@@ -204,7 +237,7 @@ reach the caller on an unexpected failure.
 `rate_limit($conn, $bucket, $max, $windowSec, $subject = null)` is a sliding
 window keyed on `(bucket, subject)` backed by the `rate_limits` table. `$subject`
 defaults to the caller's IP; pass one explicitly to throttle something else —
-login also limits per account (hashed), and `ai.php` limits per user id. Roughly
+login also limits per account (hashed). Roughly
 1% of calls opportunistically delete rows older than a day.
 
 The IP comes from `client_ip()`, which returns **`REMOTE_ADDR`**. A forwarded
@@ -231,8 +264,11 @@ Every call site:
 | `google` | 20 | 300 s | `auth.php:361` |
 | `contact` | 5 | 600 s | `contact.php:9` |
 | `booking` | 8 | 600 s | `bookings.php:13` |
+| `quote` | 5 | 600 s | `quotes.php` (`action=request`, public) |
 | `ats` | 8 | 600 s | `ats.php:25` |
-| `offer` | 20 | 600 s | `offer.php:40` (POST only) |
+| `offer` | 20 | 600 s | `offer.php` (POST only) |
+| `me.report` | 10 | 600 s | `me.php?action=report`, per login |
+| `me.upload` | 20 | 3600 s | `me.php?action=upload`, per login |
 
 Nothing else is rate-limited. In particular the public `GET /offer.php`,
 `GET /certificates.php`, `payments.php?action=public_checkout`, the blog and
@@ -289,6 +325,18 @@ surface.
 | `send_whatsapp($conn, $to, $body): bool` | 413 | Send one WhatsApp message; body truncated to 1500 chars. |
 | `message_worker($conn, $to, $body): bool` | 448 | WhatsApp if available, otherwise SMS. |
 
+`send_sms()` and `send_whatsapp()` check the `sms_whatsapp` feature switch before Twilio: while
+it is off, the attempt is logged to `sms_log` as `skipped` with meta `sms switched off in
+settings` (or `whatsapp switched off in settings`) and nothing is sent.
+
+### Feature switches
+
+| Function | Purpose |
+|---|---|
+| `feature_rows($conn): array` | Every stored switch as name => enabled, read once per request. Empty when migration 036 has not run, so the defaults apply. |
+| `feature_enabled($conn, $name): bool` | Is a switch on? The rule is `rg_feature_on()` in `pure.php`: a stored row wins, otherwise the default; an unknown name is off. |
+| `require_feature($conn, $name, $what)` | 403 "`$what` is switched off. An owner can turn it on in Settings, Features." when off. |
+
 ### TOTP
 
 | Function | Line | Purpose |
@@ -326,52 +374,63 @@ computed identically everywhere.
 
 | File | Purpose | Auth posture |
 |---|---|---|
-| `academy.php` | LMS: programmes, enrolments, certificate issue | Auth; reads any role, writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
-| `ai.php` | OpenRouter chat proxy | Auth, any role |
-| `analytics.php` | Group BI aggregates | `super_admin`/`admin`/`manager` |
-| `api.php` | Items smoke test | Auth, any role |
-| `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else auth, writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
+| `academy.php` | LMS: programmes, enrolments, certificate issue | Office roles plus `trainer` and `editor` throughout, reads included; writes `super_admin`/`admin`/`manager` plus `trainer` (enrol/complete) or `editor` (create/publish) |
+| `ai.php` | **Retired in S9.** Deleted; 404 | none |
+| `analytics.php` | **Retired in S9.** Deleted; 404. Workforce, compliance and pipeline figures are in `reports.php` | none |
+| `api.php` | Items smoke test | Staff |
+| `ats.php` | Recruitment and onboarding | **POST with no action is public**; everything else office roles plus `trainer`, reads included; writes `super_admin`/`admin`/`manager` (+`trainer` for `from_learner`) |
 | `audit.php` | Audit-log viewer | `super_admin`/`admin` |
 | `auth.php` | Login, 2FA, sessions, reset, registration, Google SSO | **Mixed** — see §8 |
-| `backup.php` | Cron mysqldump | **CLI, or HTTP with `?key=ALERTS_KEY`** |
+| `backup.php` | Cron mysqldump | **CLI, or HTTP with `ALERTS_KEY`** in an `X-Cron-Key` header (or `?key=`) |
 | `blog.php` | Blog posts | **Public reads**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `bookings.php` | Cover requests | **POST with no action is public**; rest auth, writes `super_admin`/`admin`/`manager` |
+| `bookings.php` | Cover requests | **POST with no action is public**; rest office roles throughout, reads included |
 | `certificates.php` | Certificate verification and Open Badges | **Public** |
-| `clients.php` | CRM | Auth; reads any role, writes `super_admin`/`admin`/`manager` |
-| `comms.php` | Announcements | Auth; POST `super_admin`/`admin`/`manager` |
-| `compliance.php` | Credential register and audit packs | Auth; POST `super_admin`/`admin`/`manager` |
-| `contact.php` | Public enquiry form | **Public** |
-| `contracts.php` | Recurring contracts | Auth; writes `super_admin`/`admin`/`manager` |
-| `credit-notes.php` | Credit notes against invoices | Auth; POST `super_admin`/`admin`/`manager` |
-| `dashboard.php` | Command-centre summary | Auth, any role |
+| `clients.php` | CRM | Office roles throughout, reads included |
+| `company.php` | Company details and social links for the website (S7) | **Public read** of named fields, cached five minutes; edit `super_admin`/`admin`, audited. See §54f |
+| `comms.php` | Announcements | Staff to read; POST `super_admin`/`admin`/`manager` |
+| `compliance.php` | Credential register and audit packs | Staff **and** the `compliance` zone throughout, reads included; POST `super_admin`/`admin`/`manager` |
+| `contact.php` | Public enquiry forms: general, care, training (`type`) | **Public** |
+| `contracts.php` | Recurring contracts | Office roles throughout, reads included |
+| `credit-notes.php` | Credit notes against invoices | Office roles throughout, reads included |
+| `dashboard.php` | Command-centre summary | Staff |
 | `enquiries.php` | Enquiry inbox | `super_admin`/`admin`/`manager` |
-| `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `?key=ALERTS_KEY`** |
-| `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts |
-| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager` |
+| `expiry-alerts.php` | Cron compliance reminder digest | **CLI, or HTTP with `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`)** |
+| `field.php` | Field operations, clock-in, panic | Staff for the board; a worker only for their own shifts; coordinates additionally need the `employment` zone |
+| `files.php` | Document centre | `super_admin`/`admin`/`manager`/`editor` for the whole file; delete narrows to `super_admin`/`admin`/`manager`; download and the listing are filtered per file by `rg_file_readable()`; `action=extract` was retired in S9 and now falls through to the listing |
+| `data-request.php` | Data-subject requests: public form, staff queue | **POST public**; GET and status `super_admin`/`admin` |
 | `gdpr.php` | Data-subject export and erasure | `super_admin`/`admin` |
-| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest auth, writes `super_admin`/`admin`/`manager` |
-| `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager` |
-| `incidents.php` | Incidents and safeguarding | Auth; create allows `super_admin`/`admin`/`manager`/`trainer`/`employee`, other writes `super_admin`/`admin`/`manager` |
-| `insurance.php` | Company insurance register | Auth; writes `super_admin`/`admin`/`manager` |
-| `invoices.php` | Invoicing | Auth; writes `super_admin`/`admin`/`manager` |
-| `jobs.php` | Work orders | Auth; status allows `employee`, create `super_admin`/`admin`/`manager` |
+| `gocardless.php` | Direct Debit | **Webhook public (HMAC-verified)**; rest office roles throughout, the mandate status read included. `setup`, `complete` and `charge` also need the `online_payments` switch on |
+| `features.php` | Owner feature switches | Staff to read; `super_admin`/`admin` to change, audited |
+| `inbox.php` | IMAP mailbox | `super_admin`/`admin`/`manager`, and the `inbox` switch on |
+| `incidents.php` | Incidents and safeguarding | `super_admin`/`admin`/`manager` throughout, reads included |
+| `insurance.php` | Company insurance register | Office roles throughout, reads included |
+| `invoices.php` | Invoicing | Office roles throughout, reads included |
+| `jobs.php` | Work orders | Staff to read; status allows `employee`, create `super_admin`/`admin`/`manager` |
 | `margin.php` | Pay-vs-charge reconciliation | `super_admin`/`admin`/`manager` |
-| `me.php` | Worker self-service (mobile PWA) | Auth **and** a linked `worker_id` |
+| `me.php` | Staff portal at /m (Home, Rota, Records, Me) | Auth **and** a linked `worker_id` |
 | `notifications.php` | Notification bell | Auth, any role |
 | `offer.php` | Shift offer accept/decline from an SMS link | **Public, token in the URL is the secret** |
-| `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager` |
-| `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager` |
+| `onboarding-templates.php` | The onboarding checklist for each service | `super_admin`/`admin`/`manager` throughout, reads included; a scoped account sees and edits its own service only. See §54d |
+| `payments.php` | Stripe Checkout | **Webhook and public pay link are public**; rest `super_admin`/`admin`/`manager`. Everything except the webhook needs the `online_payments` switch on |
+| `people.php` | The person profile: one aggregate read, emergency contacts, training records | Staff in `super_admin`/`admin`/`manager`/`trainer`/`employee` (not `editor`), reads included; the person's service scope; a zone per section. See §54d |
+| `payroll.php` | Pay run and payslips | `super_admin`/`admin`/`manager`, and the `payroll` zone |
 | `portal.php` | Client self-service portal | Auth **and** a linked `client_id` |
-| `quotes.php` | Quoting | Auth; writes `super_admin`/`admin`/`manager` |
-| `references.php` | Reference checks | Auth; writes `super_admin`/`admin`/`manager` |
+| `quotes.php` | Quoting | **POST `action=request` is public** (the website's cleaning quote request, S6); everything else office roles, reads included |
+| `references.php` | Reference checks | Office roles throughout, reads included |
 | `reports.php` | Regulatory export packs | `super_admin`/`admin`/`manager` |
-| `scheduling.php` | Shifts, matching, dispatch | Auth; writes `super_admin`/`admin`/`manager` |
-| `shift-templates.php` | Recurring shift templates | Auth; writes `super_admin`/`admin`/`manager` |
-| `skills.php` | Skills catalogue | Auth; writes `super_admin`/`admin`/`manager` |
+| `requests.php` | Cover requests and enquiries in one list, with an owner | Office roles throughout, reads included; service scope. See §54e |
+| `scheduling.php` | The rota: drafts, publish, edit, assign, cancel, offers, copy week | Office roles throughout, reads included; service scope on the list and every record |
+| `sites.php` | A client's sites and what each requires | Office roles throughout, reads included. See §54e |
+| `sheet-import.php` | Spreadsheet import: CSV upload, column mapping, preview, apply, report (S8) | `super_admin`/`admin`/`manager`, internal staff, reads included; scoped accounts see their own imports and in-scope people only; every write audited with file and row. See §54g |
+| `shift-templates.php` | Recurring shift templates | Office roles throughout, reads included |
+| `skills.php` | Skills catalogue | Office roles throughout, reads included |
+| `sitemap.php` | Published role pages and posts as a sitemap (S7) | **Public**, XML, cached an hour |
 | `testimonials.php` | Testimonials | **Public read**; admin `super_admin`/`admin`/`manager`/`editor` |
-| `timesheets.php` | Time tracking | Auth; create allows `employee`, approve `super_admin`/`admin`/`manager` |
+| `timesheets.php` | Time tracking | Staff **and** the `payroll` zone throughout, reads included; create, approve, reject, query and correct `super_admin`/`admin`/`manager`; service scope |
 | `users.php` | User and role management | `super_admin`/`admin` |
-| `weather.php` | OpenWeather proxy with shift advisory | Auth, any role |
+| `vacancies.php` | Vacancies and role pages (S7) | **Public read of published roles**, named fields only; manage `super_admin`/`admin`/`manager`/`editor`, internal staff, service scope on every branch, audited. See §54f |
+| `weather.php` | **Retired in S9.** Deleted; 404 | none |
+| `website-forms.php` | The forms directory: approved Google Forms (S7) | `super_admin`/`admin`/`manager`/`editor`, internal staff, reads included; service scope; audited. No public read. See §54f |
 | `workers.php` | Workforce records | Staff to read (pay fields office-only); writes `super_admin`/`admin`/`manager` |
 
 Throughout the tables below, "office roles" means
@@ -430,27 +489,20 @@ Smoke test proving React → PHP → MySQL. Reached only from the dev-only
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | Auth, any role | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
-| POST | Auth, any role | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars; throttled `smoke` 30/5 min |
+| GET | Staff | — | `{items: [{id, name, created_at}]}`, newest first, capped at 100 |
+| POST | Staff | `{name}` | `{item: {id, name}}` 201; name required, max 255 chars; throttled `smoke` 30/5 min |
 
 Both verbs were fully public until this was closed. The POST was an
 unauthenticated, unthrottled write into the production database.
 
 ---
 
-## 10. `ai.php`
+## 10. `ai.php` (retired)
 
-OpenRouter proxy. The API key stays server-side and never reaches the browser.
-
-| Method | Auth | Body | Returns |
-|---|---|---|---|
-| POST | Auth, any role | `{prompt, system?}` | `{reply}` |
-
-Returns 503 if `OR_API_KEY` is unset or `CHANGE_ME`, and 502 on any transport
-or upstream error. The model is `OR_MODEL` from `config.php`; `system` defaults
-to a RitaGreen-specific UK-English assistant prompt (`ai.php:18`). Any
-authenticated user of any role — including `client` and `employee` — can spend
-tokens through this endpoint.
+Retired in section S9 (removal record in `docs/CHANGELOG.md`). The file is deleted, so the
+server answers 404. It was the OpenRouter proxy behind the header assistant, the Content
+Studio, the Academy quiz builder and the AI buttons in Enquiries, Files, Comms and Academy;
+all of those were removed with it. The `ai_assistant` feature switch went too (§54c).
 
 ---
 
@@ -458,15 +510,15 @@ tokens through this endpoint.
 
 | Method | Auth | Query | Returns |
 |---|---|---|---|
-| GET | Auth, any role | `division` = `all`\|`care`\|`academy`\|`cleaning`\|`security` (invalid falls back to `all`) | Counts for programmes, enrolments, upcoming sessions, certificates and open shifts; outstanding invoice pence; revenue by division; up to 10 DBS/SIA expiries within 30 days |
+| GET | Staff | `division` = `all`\|`care`\|`academy`\|`cleaning`\|`security` (invalid falls back to `all`) | Counts for programmes, enrolments, upcoming sessions, certificates and open shifts; outstanding invoice pence; revenue by division; up to 10 DBS/SIA expiries within 30 days |
 
 ---
 
-## 12. `analytics.php`
+## 12. `analytics.php` (retired)
 
-| Method | Auth | Returns |
-|---|---|---|
-| GET | Office roles | Revenue by division, six-month monthly revenue trend, jobs by status, quote counts with win rate, workforce by division, compliance RAG counts, and group totals |
+Retired in section S9. The Analytics and Insights pages it fed were folded into Reports in S5
+and deleted in S9; `/app/analytics` and `/app/insights` redirect to `/app/reports`. The file
+is deleted, so the server answers 404.
 
 ---
 
@@ -474,8 +526,8 @@ tokens through this endpoint.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{client, sites, rate_cards, financials}` where `financials` is quoted / invoiced / paid / outstanding pence |
-| GET | — | Auth, any role | — | `{clients}` with site count, pipeline stage and account manager |
+| GET | — (with `?id=`) | Office roles | `id` | `{client, sites, rate_cards, financials}` where `financials` is quoted / invoiced / paid / outstanding pence |
+| GET | — | Office roles | — | `{clients}` with site count, pipeline stage and account manager |
 | POST | `update` | Office roles | `id`; body `{stage?, status?, account_manager_id?, sla_response_hours?}` | `{ok: true}`; stage ∈ lead/qualified/proposal/won/lost, status ∈ active/prospect/paused |
 | POST | `rate_card` | Office roles | `id`; body `{division, role?, charge_pence}` | `{ok: true}` 201 |
 | POST | — | Office roles | body `{name, type?, contact_name?, email?, phone?}` | `{client}` 201; type ∈ care_home/nhs/landlord/event/private, created as `prospect` |
@@ -492,8 +544,15 @@ above their handlers.
 |---|---|---|---|---|
 | GET | — | **Staff only** (`require_staff`) | — | `{workers}` with compliance and availability fields for every non-deleted worker. `pay_rate_pence`, `pay_type` and `holiday_hours` are returned only to `super_admin`, `admin` and `manager`; they are stripped from the response for every other account |
 | POST | `availability` | Office roles | `id`; body `{avail_days, avail_nights, avail_weekends, travel_radius_mi, home_postcode}` | `{ok: true}` |
-| POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type}` | `{ok: true}`; pay type ∈ paye/umbrella |
+| POST | `pay` | Office roles | `id`; body `{pay_rate_pence, pay_type, effective_from?, note?}` | `{ok: true, effective_from}`; pay type ∈ paye/umbrella. Writes a row to `worker_pay_rates` (migration 022) so payroll can price past work at the rate that was in force then; a second change on the same date replaces the first. `effective_from` defaults to today and may be backdated. `workers.pay_rate_pence` — the current rate, shown on the profile and used to cost a new shift — only moves when the change takes effect today or earlier, so a rise dated next month does not change what today costs |
 | POST | — | Office roles | body `{name, email?, phone?, role?, division?, right_to_work?, pay_rate_pence?, pay_type?}` | `{worker}` 201; role ∈ carer/nurse/cleaner/guard/trainer, created as `onboarding` |
+| POST | `approve` | Office roles, service scope | `id`; body `{note?}` | `{ok, approved: true}`. Refused 409 with the first reason from `rg_approval_blockers()`: onboarding outstanding, suspended, left, or no signed contract that has been reviewed. Moves the application that produced the worker from `onboarding` to `onboarded`, with a stage-history row |
+| POST | `unapprove` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, approved: false}` |
+| POST | `suspend` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, status: "suspended"}`; records `suspended_at`, `suspended_by`, `suspension_reason` (migration 037). Approval is kept |
+| POST | `reinstate` | Office roles, service scope | `id`; body `{reason}` (required) | `{ok, status}`: `active` when the worker was approved, otherwise `onboarding` |
+
+The GET list carries `person_id`, so a row can open the person profile. Every write above
+recalculates the worker's derived status immediately and is audited with its reason.
 
 Until this was gated, any authenticated user — a `client`-role portal login
 included — could read the full workforce list with pay rates and DBS/SIA detail
@@ -508,7 +567,7 @@ bare POST; `availability` and `pay` appear only in inline comments.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | `worker_id?` | `{skills}`, plus `{assigned: [skill_id]}` when `worker_id` is given |
+| GET | — | Office roles | `worker_id?` | `{skills}`, plus `{assigned: [skill_id]}` when `worker_id` is given |
 | POST | `set` | Office roles | `worker_id`; body `{skill_ids: []}` | `{ok: true}`; replaces the worker's whole skill set |
 | POST | — | Office roles | body `{name, category?}` | `{ok: true}` 201; category ∈ care/academy/cleaning/security/general, anything else coerced to `general` |
 
@@ -519,19 +578,55 @@ catalogue rather than an error.
 
 ## 16. `scheduling.php`
 
-Shift creation, smart matching and dispatch. Compliance and clash guards live
-in `worker_compliant()` (`scheduling.php:31`) and `has_clash()`
-(`scheduling.php:51`); both consult `certifications` as well as the DBS/SIA
-columns on the worker row, so a valid check recorded in Compliance counts at
-scheduling time.
+Shift creation, lifecycle, smart matching and dispatch. Compliance and clash
+guards live in `worker_compliant()` and `has_clash()`; both consult
+`certifications` as well as the DBS/SIA columns on the worker row, so a valid
+check recorded in Compliance counts at scheduling time.
+
+**One gate, everywhere.** `rg_deployment_check()` in `compliance-lib.php` calls
+itself "the single gate every assignment path must call", and three paths did
+not call it. Matching and broadcast used a legacy `worker_compliant()` — the
+hard-coded DBS-for-care / SIA-for-security pair — while assignment consulted the
+configured rule set, so the two gave different answers: with a nurse's NMC
+registration expired (mandatory for care in `compliance_rules`, invisible to the
+legacy check) "Find eligible" listed the worker and assigning them was refused.
+The legacy pair is deleted. `rg_shift_clash()` moved to `compliance-lib.php` for
+the same reason — `scheduling.php` is an endpoint and cannot be required — and
+excludes archived shifts and the shift being reassigned, so a shift never
+clashes with itself and a soft-deleted booking never blocks a slot. The calendar
+read excludes archived shifts too.
+
+**The two self-service paths are gated by `rg_claim_check()`.** A worker
+accepting an SMS offer (`offer.php`) and a worker claiming an open shift in the
+app (`me.php?action=accept`) both went straight to the atomic claim: division
+was the only test. Verified against a local database — a worker already
+scheduled 08:00–16:00 accepted an overlapping 09:00–17:00 shift through `/m` and
+ended up on both, and a carer with a lapsed DBS was booked by replying to the
+text. Both now run the deployment check and the clash check first, audit
+`shift.blocked` with the reason, and in the offer case expire the offer and tell
+the office.
+
+Since migration 038 (section S3) every branch goes through
+`rg_assignment_check()` and every new shift is a draft; see §54e for the check,
+the states and the notifications. A service-scoped manager sees and changes only
+their own service's shifts (the list is filtered; a record outside it is 403).
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `match` | Auth, any role | `division`, `starts_at`, `ends_at`, `skill_id?` | `{workers, bucket}` — eligible, available, clash-free workers ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` (Sat/Sun) or `days` |
-| POST | `open` | Office roles | body `{title, division, client_id?, site_name?, starts_at, ends_at}` | `{id}` 201; creates an unassigned shift with status `open` |
-| POST | `broadcast` | Office roles | `id` | `{offered: n}`; creates a 40-hex-character `shift_offers` token per eligible worker and messages each one a `/offer/<token>` link over WhatsApp or SMS. 409 unless the shift is `open` |
-| GET | — | Auth, any role | `from`, `to` (default: current month) | `{shifts}` for the calendar |
-| POST | — | Office roles | body `{worker_id, title, client_id?, site_name?, starts_at, ends_at}` | `{shift}` 201; 409 on missing right-to-work, a lapsed required check, or an overlapping scheduled shift |
+| GET | — | Office roles | `from`, `to` (default this week), `division?`, `site_id?` | `{shifts, rest_gap_min_hours}`. Each shift: `id, worker_id, worker, division, title, site_id, site_name, client_id, client, starts_at, ends_at, status, is_draft, cancel_reason, live_offers, state, conflicts`. `conflicts` is the assignment check re-run for assigned shifts still to be worked, as `{severity: block|warning, code, reason}`, so a credential that lapsed or leave approved after booking shows on the shift |
+| GET | — (with `id`) | Office roles | `id` | `{shift, history, offers}`. `history` is the audit log for the shift (`entity_type = 'shift'`), newest first |
+| GET | `check` | Office roles | `id`, `worker_id` | `{worker, check: {ok, blocking, warnings, eligibility}}`, without writing anything |
+| GET | `match` | Office roles | `id` **or** `division`, `starts_at`, `ends_at`, `site_id?`; `skill_id?` | `{workers, bucket}`: available workers the check does not block, each with any `warnings`, ordered by fewest upcoming shifts. `bucket` is `nights` (start ≥ 20:00 or < 06:00), `weekends` or `days`, matched against the worker's standing availability pattern |
+| POST | — or `open` | Office roles | body `{title, division, starts_at, ends_at, site_id?, client_id?, site_name?, worker_id?, acknowledge_warnings?}` | `{id, shift}` 201, a **draft**. `site_id` sets the client and site name; a closed site is 409. With `worker_id` (not on `open`) the shift takes the worker's service and the check runs |
+| POST | `update` | Office roles | `id`, body any of `{title, starts_at, ends_at, site_id, division, acknowledge_warnings}` | `{ok, changed, notified, shift}`. A booked shift is re-checked. Audited `shift.edit` with before and after; a published change tells the worker what changed and expires live offers |
+| POST | `assign` | Office roles | `id`, body `{worker_id, acknowledge_warnings?}` | `{ok, status, worker, division, warnings_acknowledged}`; fills or moves. Expires live offers; on a published shift tells the new worker and the one taken off |
+| POST | `unassign` | Office roles | `id` | `{ok, status: "open"}`; on a published shift the worker is told |
+| POST | `cancel` | Office roles | `id`, body `{reason}` | `{ok, status, notified}`. The reason is required and stored (`cancel_reason`, `cancelled_at`, `cancelled_by`); offers expire; the worker on a published shift is told why |
+| POST | `publish` | Office roles | body `{from, to, division?, site_id?}` or `{ids}` | `{published, workers_notified}`; one notice per worker. Audited per shift and as `rota.publish` |
+| POST | `copy_week` | Office roles | body `{week_start, division?, site_id?}` | `{created, skipped, unassigned}`: last week's shifts as drafts seven days on, skipping any already there. The worker is copied only when the check passes with no warnings; otherwise the copy is open and `unassigned` says why |
+| POST | `broadcast` | Office roles | `id` | `{offered}`. Published open shifts only (409 for a draft). Offers every available worker the check passes without warnings: in the app, by email and by text through `message_worker()`. Rate-limited, 12 per 10 minutes. Offers expire when the shift starts and are unique per worker per shift |
+| POST | `offer` | Office roles | `id`, body `{worker_ids, acknowledge_warnings?}` | `{offered, refused}`. Up to 50 named workers; blocked ones are listed in `refused`; warnings need acknowledging (409 with `warned`) |
+| GET / POST | `settings` | Read: office roles; change: `super_admin`, `admin` | body `{rest_gap_min_hours}` (0 to 24) | `{rest_gap_min_hours}`. Stored in `app_settings`, audited |
 
 ---
 
@@ -539,9 +634,9 @@ scheduling time.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{templates}` |
+| GET | — | Office roles | — | `{templates}` |
 | POST | `toggle` | Office roles | `id` | `{ok: true}`; flips `active` |
-| POST | `generate` | Office roles | `weeks` (clamped to 1–12, default 4) | `{created: n}`; creates open shifts from every active template, skipping duplicates by division + title + start time |
+| POST | `generate` | Office roles | `weeks` (clamped to 1–12, default 4) | `{created: n}`; creates open **draft** shifts from every active template (migration 038), linked to the site record when the template's site name matches one of its client's sites. A slot is skipped when that template already made a shift at that time, whatever its status: it read `status = "open"`, so a generated shift that had been assigned or cancelled was made again |
 | POST | — | Office roles | body `{title, division, client_id?, site_name?, weekday, start_time, end_time}` | `{ok: true}` 201; weekday is ISO 1–7, times `HH:MM` |
 
 ---
@@ -552,14 +647,25 @@ Field operations: the office live board and the worker's clock-in/panic trail.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag |
-| GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events}` — the shift timeline |
-| POST | — | Staff for any shift; a worker **only for a shift assigned to them** | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403 |
+| GET | `live` | **Staff only** (`require_staff`) | — | `{shifts}` for today with a derived `field_status` of `unfilled`, `completed`, `on_site`, `overrunning`, `no_show` (30 min past start, not clocked in), `late` or `scheduled`, plus a `panic` flag. Includes completed shifts — the filter listed only `scheduled` and `open`, so a shift vanished from the day the moment it was clocked out. One grouped query for every shift's events, not one per shift |
+| GET | — (with `?shift_id=`) | Staff, **or** the worker assigned to that shift | `shift_id` | `{events, location_withheld}` — the shift timeline. **`lat`/`lng` are nulled unless the caller holds the `employment` zone, or it is their own trail.** `docs/PRIVACY.md` records the location as personal data about the worker; nothing asked anything about it, so a content editor could open the board, click any shift and read a named colleague's coordinates to six decimal places |
+| POST | — | Staff for any shift; a worker **only for a shift assigned to them**; `panic_ack` office-only | body `{shift_id, kind, note?, lat?, lng?, signer?}` | `{ok: true}` 201, else 403. A shift cannot be clocked in twice, clocked out without being clocked in, or acknowledged with no open alert — each is a 409. Nothing validated the sequence, so two `clock_in` rows or a `clock_out` with no `clock_in` both corrupted the derived field status |
 
-`kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `note`, `task`,
-`signoff`. A `clock_out` flips a `scheduled` shift to `completed`
-(`field.php:103`). A `panic` raises a broadcast notification and, when mail is
-enabled, emails `MAIL_TO` with a `[PANIC]` subject.
+`kind` ∈ `clock_in`, `clock_out`, `check_in`, `panic`, `panic_ack`, `note`,
+`task`, `signoff`. A worker's `clock_in` is refused (409) more than 15 minutes before the shift starts, in London time. A `clock_out` flips a `scheduled` shift to `completed`. A
+`panic` raises a broadcast notification and, when mail is enabled, emails
+`MAIL_TO` with a `[PANIC]` subject.
+
+**`panic_ack`** (migration 026) closes an alert. The board's panic flag was
+`in_array('panic', $kinds)` — a latch with nothing that could clear it, so one
+alert kept the banner up for the rest of the day. `rg_panic_open()` now reads the
+sequence, because a shift can be raised, acknowledged and raised again.
+Acknowledging is the office responding, so it is the one kind a worker cannot
+post.
+
+**`check_in`** — a lone worker saying they are still fine mid-shift — has been
+accepted here and advertised in the ⌘K palette all along, and nothing anywhere
+could send one. The worker app offers it while on site.
 
 Scoping is by shift ownership rather than role, because a worker's login is an
 ordinary account with `users.worker_id` set and may hold any role. A worker
@@ -573,24 +679,102 @@ present, otherwise the shift's assigned worker.
 
 ## 19. `timesheets.php`
 
+Hours are what pay is calculated from, so every branch sits behind
+`can_view_zone($conn, $user, 'payroll')` as well as `require_staff()`. Staff
+alone was not a narrowing: an editor, a trainer or an employee could read every
+worker's hours for every day on record.
+
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{timesheets, totals: {pending_minutes, approved_minutes}}`, 300 most recent |
-| POST | `approve` | Office roles | `id` | `{ok: true}` |
-| POST | — | Office roles + `employee` | body `{worker_id, work_date, start_time, end_time}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, end after start, maximum 16 hours |
+| GET | — (with `id`) | Payroll zone | `id` | `{timesheet, history}`; the history is the audit log for the entry, each row with `before`, `after` and `reason` |
+| POST | `query` | Office roles | `id`, body `{note}` | `{ok, status: "queried"}` from `draft` or `pending` (409 otherwise). The note is required; the worker is told in the app and by email and answers by submitting again |
+| POST | `correct` | Office roles | `id`, body `{work_date?, start_time?, end_time?, break_minutes?, reason}` | `{ok, changed}`. Not on an approved entry (409: reject it first). Minutes are recalculated; the audit row keeps before, after and the reason |
+| GET | — | Payroll zone | `from?`, `to?`, `worker_id?`, `status?`, `division?` | `{timesheets, totals: {draft_minutes, pending_minutes, approved_minutes, rejected_minutes, queried_minutes}, truncated}`, 500 rows per read. Each row carries `source` (`clock` or `office`) and `submitted_at`. A service-scoped manager sees their own service only. Totals are **payable** minutes (`minutes - break_minutes`), which is what the approval decision and the pay run act on. Dates are `YYYY-MM-DD`; `status` is `draft`, `pending`, `approved`, `rejected` or `queried`. **Totals are aggregated by the database over the whole filter, not over the returned page** — they were summed in PHP over the fetched rows, so past the page size "awaiting approval" quietly meant "awaiting approval, in the rows you can see". `truncated` is true when the list is cut off, so the page can say so |
+| POST | `approve` | Office roles | `id` | `{ok: true}`; records `approved_by` and `decided_at` |
+| POST | `reject` | Office roles | `id`, body `{note}` | `{ok: true}`; the reason is required and stored in `decision_note`. Rejected hours are excluded from pay without deleting the claim |
+| POST | — | Office roles | body `{worker_id, work_date, start_time, end_time, break_minutes?, shift_id?}` | `{ok: true}` 201; date `YYYY-MM-DD`, times `HH:MM`, maximum 16 hours. `break_minutes` is unpaid time and must be shorter than the shift. `shift_id` links the hours to the rota entry — optional, because hours are recorded for call-outs that never had a shift, but when given it must be that worker's shift and that shift must not already have a timesheet, so the same shift cannot be claimed and paid twice |
 
-Minutes are computed server-side from the times; the client cannot supply them.
+Minutes are computed server-side by `rg_shift_minutes()` in `pure.php`; the
+client cannot supply them. `minutes` is the clock span including any break;
+pay is on `minutes - break_minutes`. Nothing recorded a break at all before, so
+gross hours were paid door to door — a twelve-hour shift with an unpaid half
+hour was paid twelve hours. `work_date` is the date the shift **starts**: an end
+time at or before the start means the shift crosses midnight, so a waking night
+recorded as `22:00`–`06:00` is eight hours, not an error. Equal times are
+refused, because nothing distinguishes a mistake from a full 24-hour span. The
+calculation is explicitly UTC, matching the rest of the system, so a night
+spanning a British Summer Time change is not adjusted for it.
 
 ---
 
 ## 20. `payroll.php`
 
-Both routes require office roles and a valid `from`/`to` pair with
-`from <= to`. Only `approved` timesheets are included.
+Both routes require office roles, the `payroll` zone
+(`can_view_zone($conn, $user, 'payroll')`) and a valid `from`/`to` pair with
+`from <= to`. The zone check mirrors `workers.php`, which already hides a single
+worker's `pay_rate_pence` behind it -- the endpoint returning every worker's
+gross has to ask the same question.
+
+Only `approved` timesheets are included, and `pay_compute()` excludes archived
+timesheets and archived workers: a soft-deleted entry used to be paid anyway.
+
+The money itself is computed by pure functions tested in `server/tests/run.php`:
+`rg_premium_segments()` (pure.php — splits a worked interval into ordered
+premium bands), `pay_entry()` (base, the overtime split, the premium
+application, both roundings) and `pay_holiday()` (rolled-up accrual).
+`pay_compute()` does the querying and calls them.
+
+**Each entry is paid at the rate in force on the day it was worked**, from
+`worker_pay_rates` (migration 022), falling back to `workers.pay_rate_pence`
+where no history row exists. It read the current rate, so giving somebody a rise
+re-priced every period they had ever worked and a closed period could not be
+reproduced. A row whose rate moved mid-period carries `rate_changed: true` and
+reports the latest rate.
+
+**Premiums are paid per worked interval, not per entry.** `rg_premium_segments()`
+classifies every minute by the bands in force at that moment — a minute can be
+both weekend and night — and `pay_entry()` pays the dearest configured band for
+each segment. Previously one premium was chosen for the whole entry from its
+start hour and `work_date`, which meant a 05:00–13:00 shift was paid night for
+all eight hours and a Friday 20:00 → Saturday 04:00 shift was paid night for all
+eight and weekend for none. Each payslip line now carries a `breakdown` of hours
+per band.
+
+**An unpaid break is deducted proportionally across the premium bands**
+(`rg_deduct_break()`), because nothing records *when* the break was taken. For a
+shift sitting in one band — most of them — proportional and exact are the same
+answer.
+
+**Holiday accrual is rolled up and informational.** 12.07% of hours worked,
+valued at the rate those hours were paid at. It is not added to gross, is not
+written back anywhere, and is separate from the holiday balance on a worker's
+leave record: `leave_records` is never read by the pay path, so taking leave
+produces no pay here. There is no double payment, and no payment either — the
+two are different mechanisms and the Payroll page now says so.
+
+**`pay_type` does not branch anything.** An `umbrella` worker is calculated
+exactly as PAYE, premiums and overtime included, and sits inside the same gross
+total. The Payroll page subtotals them and says so rather than letting the figure
+read as PAYE.
+
+**`floor_pence`** is the configured pay floor in force (`pay_floors`, migration
+024), or null when none is set — which is the default. A row paid under it
+carries `below_floor: true`. It is a floor, not the National Minimum Wage: NMW
+has age bands and an apprentice rate and `workers` holds no date of birth, so it
+flags rather than blocks.
+
+**Overtime counts the whole ISO week, not the part of it inside the period.**
+The 40-hour threshold is weekly, so `pay_compute()` scans from the Monday of the
+week containing `from` to the Sunday of the week containing `to`
+(`pay_week_scan_start()` / `pay_week_scan_end()`), fills the weekly accumulator
+from every entry it finds, and pays only the entries inside `from..to`. Before
+this, a week straddling a month end was counted from zero twice: eight hours on
+Monday 31 August plus forty across the rest of that week is forty-eight, and the
+September run saw forty and paid no overtime at all.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `payslip` | `worker_id`, `from`, `to` | `{worker, period, lines, totals}` |
+| GET | `payslip` | `worker_id`, `from`, `to` | `{worker, period, lines, totals}`. The PDF it feeds is titled **GROSS PAY**, not PAYSLIP: there is no PAYE, NI, pension or net figure in the system and no tax code or NI number in the schema to compute them from, so calling it a payslip would invite reliance on it as the itemised pay statement an employer owes |
 | GET | — | `from`, `to` | `{period, rows, totals, rules}` — the full pay run |
 
 Both write an `audit_log` entry (`payroll.php:41`, `69`).
@@ -614,8 +798,8 @@ and overtime are included.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{invoices, totals, aged}`; `aged.buckets` are current / 1–30 / 31–60 / 61–90 / 90+ days, `aged.items` is the chase list sorted worst-first |
-| POST | `pay` | Office roles | `id` | `{ok: true}`; marks the invoice paid |
+| GET | — | Office roles | — | `{invoices, totals, aged}`; `aged.buckets` are current / 1–30 / 31–60 / 61–90 / 90+ days, `aged.items` is the chase list sorted worst-first |
+| POST | `pay` | Office roles | `id` | `{ok: true}`; marks the invoice paid and sets `amount_paid_pence` to the total, as the Stripe and GoCardless confirmations do. **404** if there is no such invoice, **409** if a credit note has voided it, and `{ok: true}` without a second write if it is already paid |
 | POST | — | Office roles | body `{division, client_id?, net_pence}` | `{invoice}` 201 |
 
 Payment terms are 30 days (`invoices.php:11`). Invoice numbers are
@@ -634,7 +818,7 @@ mark invoices paid.
 
 | Method | Auth | Params | Returns |
 |---|---|---|---|
-| GET | Auth, any role | `invoice_id` | `{credit_notes}` |
+| GET | Office roles | `invoice_id` | `{credit_notes}` |
 | POST | Office roles | body `{invoice_id, amount_pence, reason?}` | `{ok: true, number}` 201 |
 
 The credit is capped at the invoice's remaining balance; crediting the full
@@ -647,12 +831,29 @@ remainder sets the invoice to `void` (`credit-notes.php:67`). Numbers are
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{quotes, totals: {open_pence, won_pence}}` |
+| GET | — | Office roles | — | `{quotes, totals: {open_pence, won_pence}}` |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ draft/sent/declined, and the update refuses to touch a quote already `accepted` |
 | POST | `accept` | Office roles | `id` | `{ok: true, invoice_number}` 201; creates a mirroring invoice and links it back. 409 if already accepted |
 | POST | — | Office roles | body `{title, division, net_pence, client_id?}` | `{quote}` 201 |
+| POST | `request` | **Public**, rate-limited (`quote`, 5 per 10 min) | body `{contact_name, email, phone?, organisation?, area?, site_type, size?, frequency, start_date?, notes?, consent, marketing_consent?}` | `{ok: true}` 201 |
 
 Numbers are `QUO-<year>-####`.
+
+**`action=request` (S6).** The website's cleaning quote form. It sits above
+`require_auth()`, so it is the only public branch in this file. It does not
+create a row in `quotes`: a quote is a priced document the office writes. It
+files a `service_requests` row with division `cleaning`, `site_name` set to the
+organisation (or the area), and a `detail` that opens `Cleaning quote request`
+followed by one labelled line per answer, so it appears in the office Bookings
+queue, whose status runs new to quoted. `site_type` must be a key of
+`rg_cleaning_site_types()` and `frequency` a key of `rg_cleaning_frequencies()`
+(`server/pure.php`); anything else is a 400. Caps: name 160, email 190, phone 40,
+organisation 160, area 120, size 200, notes 3000; `start_date` must be a real
+`YYYY-MM-DD`, kept in the detail and never invented into `preferred_start`.
+`consent` is required and written to `consent_log` (`kind = 'quote'`, source
+`cleaning-quote`); `marketing_consent` is recorded only as a yes. Links to an
+existing client by email, notifies the office and queues one office email.
+Tested in `server/tests/db/cases/130_website_enquiries.php`.
 
 ---
 
@@ -660,7 +861,7 @@ Numbers are `QUO-<year>-####`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{contracts, totals: {annual_active_pence}}` with `days_to_renewal` |
+| GET | — | Office roles | — | `{contracts, totals: {annual_active_pence}}` with `days_to_renewal` |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ active/expired/cancelled |
 | POST | `renew` | Office roles | `id`; body `{months}` | `{ok: true}`; months outside 1–60 is coerced to 12; extends from `GREATEST(end_date, CURDATE())` |
 | POST | — | Office roles | body `{title, division, rate_pence, frequency, start_date, end_date, client_id?, scope?, sla_hours?}` | `{contract}` 201 |
@@ -674,9 +875,12 @@ Frequency ∈ weekly/fortnightly/monthly/quarterly; annualisation multiplies by
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{jobs}`, emergency first then high then standard |
+| GET | — | Staff | `client_id?`, `status?` | `{jobs, truncated}`, emergency first then high then standard, 500 per read. Includes `notes`, which were collected on creation and previously never returned. `client_id` filters server-side — ClientDetail and Insights both fetched the whole list and filtered in the browser, which quietly computed against a truncated set |
 | POST | `status` | Office roles + `employee` | `id`; body `{status}` | `{ok: true}`; status ∈ booked/assigned/in_progress/done/cancelled |
-| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201; type ∈ care_visit/clean/guard_shift/course/other |
+| POST | `update` | Office roles | `id`; same body as create | `{job}`; corrects a work order in place. There was no edit at all, so a typo could only be fixed by cancelling and re-raising, which loses what was actually asked for |
+| POST | `assign` | Office roles | `id`; body `{worker_id}` (null to clear) | `{job}`; runs `rg_deployment_check()` first, so the job board cannot name somebody the rota would refuse. Moves `booked` → `assigned` and back; a job already `in_progress` or later keeps its status. `jobs.status` has had `assigned` in its enum since the table was created with no assignee column anywhere (migration 030) |
+| POST | `archive` | Office roles | `id` | `{ok: true}`; sets `deleted_at`. The column has existed since migration 013 and every query respected it — nothing ever set it |
+| POST | — | Office roles | body `{title, division?, type?, priority?, client_id?, scheduled_for?, notes?}` | `{job}` 201, read back from the row so `client` and `created_at` are real. Type ∈ care_visit/clean/guard_shift/course/other. `title` capped at 190 to match the column; an unreadable `scheduled_for` is a 400 rather than being stored as `1970-01-01 00:00:00`. Create and update share one validator so they cannot drift |
 
 ---
 
@@ -687,9 +891,9 @@ The client-facing front door to cover.
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | — | **Public**, rate-limited | body `{contact_name, email, phone?, division, site_name?, detail, preferred_start?, preferred_end?, consent}` | `{ok: true}` 201; links to an existing client by email, writes a `consent_log` row, raises a broadcast notification and emails the office |
-| GET | — | Auth, any role | — | `{requests}`, 300 most recent |
+| GET | — | Office roles | — | `{requests}`, 300 most recent |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}` |
-| POST | `confirm` | Office roles | `id` | `{ok: true, shift_id}`; turns the request into an open shift and emails the requester. 409 if a shift already exists |
+| POST | `confirm` | Office roles, the request's service scope | `id`, body `{site_id?, title?, slots?: [{starts_at, ends_at}]}` | `{ok, shift_id, shift_ids}` 201; one or more open **draft** shifts at the site (default: one, from the preferred times), the request marked `confirmed`, and a confirmation queued to the requester. 409 if it already has shifts. Shown as "Create shifts" on Rota, Requests (§54e) |
 
 **Header comment discrepancy.** `bookings.php:5` says the status route sets
 `quoted/declined`; the code also accepts `new` (`bookings.php:87`).
@@ -715,17 +919,48 @@ row rather than the request body (`portal.php:80`).
 
 ## 29. `me.php`
 
-Worker self-service, powering the mobile PWA. Requires an authenticated user
-whose `worker_id` is set; otherwise 403 (`me.php:11`).
+The staff portal at `/m` (section S4). Requires an authenticated user whose
+`worker_id` is set; a client login, an office login and an unlinked account all
+get 403 from every action. Ownership is the login: no action takes a worker or
+person id from the request, and every id it does take (shift, offer, timesheet,
+file, availability period) is looked up together with the caller's worker id,
+so somebody else's reads as 404. Reads live in `portal-lib.php`; shared writes
+reuse `rg_offer_respond()` (`compliance-lib.php`), `rg_save_emergency_contacts()`
+(`people-lib.php`) and `rg_store_upload()` (`files-lib.php`). Proven in
+`server/tests/db/cases/180_staff_portal.php`.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only |
-| POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
-| GET | — | — | `{worker, compliance, shifts, open_shifts}` |
+| GET | (none) | none | `{worker, shifts, open_shifts, offers, eligible, blockers, training_due, unread}`. Shifts are published only, with the site's address, access notes and contact, `clock_in_opens_at` and `can_clock_in`. Each open shift in the worker's service carries `eligible` and `reason` from `rg_assignment_check()` screened without persisting. `blockers` is `rg_portal_blockers()` over `rg_deployment_check()`: what stops them being booked, in words with what to do |
+| POST | `accept` | `shift_id` | `{ok, warnings}`; pick up an open shift. `rg_claim_check()` first, then the atomic claim. 409 with the reason when refused |
+| POST | `offer_accept`, `offer_decline` | `id` (offer) | `{ok, result, message, warnings}`. The offer must be addressed to the caller (404 otherwise). Same function as `offer.php`: claim check, atomic claim, other offers expired, office told. Refusal is 409 with the reason |
+| POST | `report` | `{note, shift_id?}` | 201. A note of up to 400 characters to the office (broadcast notification "Problem reported"); on one of the caller's own shifts it is also a `note` on the shift's field trail. Rate-limited 10 in 10 minutes per login |
+| GET | `records` | none | `{checks, training}`. Checks are the worker's own service rules with the same chip the office profile shows (`rg_requirement_chip()`), whether a copy is waiting, the last rejection reason and `can_upload`. Training is enrolments plus legacy certifications, with a certificate file id where there is one |
+| POST | `upload` | multipart `file`, `requirement_key` | 201 `{file_id, verification_id, status: "received"}`. PDF, JPEG, PNG or WebP up to 10 MB, filed against the **person** (never the worker row, never as a contract), and the check moves to `received` for the office queue. Never verifies anything. Refused (422) for `right_to_work`, `references`, `contract` and checks outside the worker's service; 409 while a copy is already waiting. Rate-limited 20 an hour |
+| GET | `download` | `id` | The file, streamed. Only a file the caller uploaded or the certificate on one of their own training records; anything else, including documents the office filed about them, is 404 |
+| GET | `payslip` | `from`, `to` | `{worker, period, lines, totals}`, the same shape as `payroll.php?action=payslip`, for the caller's own record only (`worker_id` in the query string is ignored). The portal prints it with the GROSS PAY statement |
+| GET | `timesheets` | none | Own timesheets, newest first, with site name and the office's query note |
+| POST | `submit_timesheet` | `id`, `{break_minutes?}` | Submit a draft or answer a query; the row must be the caller's (404 otherwise) |
+| GET / POST | `availability`, `availability_remove` | `{starts_at, ends_at, note?}`, `id` | Own unavailable periods; a warning to the office, never a block |
+| GET | `profile` | none | `{person, worker, login_email}`: identity and contact details read from `people` |
+| POST | `profile` | `{phone, address_line1, address_line2, city, postcode}` | Validated by `rg_validate_contact_details()`; written to `people`. Email and name are the office's to change. A person keyed by phone is re-keyed (409 if the number belongs to another record). `workers.phone` is kept in step because rota texts read it. Audited with field names only |
+| POST | `emergency` | the six `emergency_contact*` fields | `rg_save_emergency_contacts()` on the caller's own person, audited `via: portal` |
+
+Leave goes to `leave.php`, whose worker branches pin the person to the login.
+Clock-in, clock-out, check-in and panic go through `field.php`; a worker's
+`clock_in` is refused (409, saying when it opens) earlier than 15 minutes before
+the shift starts in London time (`rg_clock_in_open()`). Clocking out makes the
+draft timesheet (`rg_timesheet_from_clock()`).
+
+---|---|---|---|
+| GET | `payslip` | `from`, `to` | `{period, lines, totals}` for the caller's own worker record only. Scoped by the token — `worker_id` in the query string is ignored, verified. Shown in the worker app as "My hours this month"; it returned this all along and nothing called it |
+| POST | `accept` | `shift_id` | `{ok: true}`; atomic claim of an open shift. Runs `rg_claim_check()` first — the deployment gate and the clash check — so a worker with a lapsed credential, or one already booked over that window, is refused with the reason. Division was the only test. 409 if it is no longer open or was just taken, 403 if it belongs to another division |
+| GET | — | — | `{worker, compliance, shifts, open_shifts}`; published shifts only (never a draft), with the site's address, access notes and contact |
+| | `timesheets`, `submit_timesheet`, `availability`, `availability_remove` | | See §54e |
 
 Clock-in, clock-out, check-in and panic are not here; they go through
-`field.php`, which reads `worker_id` off the token.
+`field.php`, which reads `worker_id` off the token. Clocking out now also makes
+the draft timesheet for the shift (`rg_timesheet_from_clock()`).
 
 ---
 
@@ -733,8 +968,8 @@ Clock-in, clock-out, check-in and panic are not here; they go through
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | `pack` | Auth, any role | `worker_id` | `{worker, credentials, references, documents, generated_by, generated_at}` — the audit bundle a CQC or SIA ACS inspector asks for |
-| GET | — | Auth, any role | — | `{summary, items}` across every worker, soonest expiry first |
+| GET | `pack` | Staff + `compliance` zone | `worker_id` | `{worker, credentials, references, documents, generated_by, generated_at}` — the audit bundle a CQC or SIA ACS inspector asks for |
+| GET | — | Staff + `compliance` zone | — | `{summary, items}` across every worker, soonest expiry first |
 | POST | — | Office roles | body `{worker_id, type, number?, expiry?}` | `{ok: true}` 201 |
 
 `classify()` (`compliance.php:10`) buckets an expiry as `expired` (past),
@@ -746,8 +981,9 @@ The audit pack is readable by any authenticated role, including `client` and
 `employee`, and returns a worker's email, phone, DBS and SIA detail and
 document list.
 
-**Header comment discrepancy.** `compliance.php:2-4` omits `?action=pack`; it
-is documented only in the inline comment at `compliance.php:19-22`.
+**`?action=pack` is staff-only and takes the `compliance` zone.** It sits above the file's
+first `require_role`, so until the privacy audit any authenticated account — a client portal
+login included — could read a named worker's whole vetting record by changing `worker_id`.
 
 ---
 
@@ -755,7 +991,7 @@ is documented only in the inline comment at `compliance.php:19-22`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | `worker_id` | `{references}` |
+| GET | — | Office roles | `worker_id` | `{references}` |
 | POST | `status` | Office roles | `id`; body `{status, gap_note?}` | `{ok: true}`; status ∈ requested/received/verified/gap_explained |
 | POST | — | Office roles | body `{worker_id, referee_name, referee_org?, relationship?, email?, phone?}` | `{ok: true}` 201 |
 
@@ -765,7 +1001,7 @@ is documented only in the inline comment at `compliance.php:19-22`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — | Auth, any role | — | `{policies, summary: {el_minimum_met, el_minimum_pence}}` |
+| GET | — | Office roles | — | `{policies, summary: {el_minimum_met, el_minimum_pence}}` |
 | POST | `delete` | Office roles | `id` | `{ok: true}`; soft delete |
 | POST | — | Office roles | body `{type, insurer, policy_no?, cover_pence?, start_date?, expiry?, notes?}` | `{ok: true}` 201 |
 
@@ -779,8 +1015,8 @@ at least £5,000,000 of cover (`insurance.php:23`).
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{incident, actions}` |
-| GET | — | Auth, any role | — | `{incidents, summary}`, critical first, capped at 400 |
+| GET | — (with `?id=`) | Office roles | `id` | `{incident, actions}` |
+| GET | — | Office roles | — | `{incidents, summary}`, critical first, capped at 400 |
 | POST | `status` | Office roles | `id`; body `{status}` | `{ok: true}`; status ∈ open/investigating/actioned/closed |
 | POST | `add_action` | Office roles | `id`; body `{note}` | `{ok: true}` 201 |
 | POST | `action_done` | Office roles | `action_id`; body `{done}` | `{ok: true}` |
@@ -798,8 +1034,8 @@ broadcast notification and email `MAIL_TO`. References are
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
-| GET | — (with `?id=`) | Auth, any role | `id` | `{programme, enrolments}` |
-| GET | — | Auth, any role | — | `{programmes}` with learner counts |
+| GET | — (with `?id=`) | Office roles plus `trainer`/`editor` | `id` | `{programme, enrolments}` |
+| GET | — | Office roles plus `trainer`/`editor` | — | `{programmes}` with learner counts |
 | POST | `enrol` | Office roles + `trainer` | body `{programme_id, learner_name}` | `{ok: true}` 201 |
 | POST | `complete` | Office roles + `trainer` | `enrolment_id` | `{ok: true, public_id}` 201; issues a certificate `RG-<year>-#####`. Idempotent — an enrolment that already holds a certificate returns the existing id with 200 (`academy.php:90`) |
 | POST | `publish` | Office roles + `editor` | `id`; body `{status}` | `{ok: true}`; status ∈ draft/published/archived |
@@ -861,15 +1097,27 @@ Same shape as `blog.php`, including the self-migrating
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| POST | **Public**, rate-limited | `{name, email, phone?, division?, message}` | `{ok: true}` 201 |
+| POST | **Public**, rate-limited | `{name, email, phone?, division?, message, type?, marketing_consent?, source?}` | `{ok: true}` 201 |
 
 Name, phone and the subject line are stripped of CR/LF before interpolation
-into mail headers (`contact.php:12-16`). Name ≤ 160 chars, message ≤ 5000. An
-unrecognised division is stored as `other`. When mail is enabled it sends two
+into mail headers (`contact.php:12-16`). Name ≤ 160 chars, email ≤ 190, phone ≤ 40,
+message ≤ 5000, matching the `contact_enquiries` columns; each over-length field
+returns 400 with an `error` message. The public Contact and Quote forms carry the
+same caps as `maxLength`. An unrecognised division is stored as `other`. When mail is enabled it sends two
 messages: an office alert with the sender as `Reply-To`, and an autoresponder
 to the sender with the office as `Reply-To`. A message beginning
 `CAREERS APPLICATION` switches both to careers wording (`contact.php:40`).
 Mail failures are non-fatal — the enquiry is already saved.
+
+`type` (S6) says which website form sent it: `general` (the default, and what
+an unknown value becomes), `care` or `training`. There is no column for it. A
+care enquiry is stored with division `care` and a training enquiry with
+`academy`, whatever `division` said, and the stored message opens with
+`Enquiry type: Care enquiry` or `Enquiry type: Training enquiry` and a blank
+line, so the office Enquiries screen shows the type on the record. The 5000
+character cap applies to the message as sent. The office email subject names
+the type. Request staff goes to `bookings.php` and a cleaning quote to
+`quotes.php?action=request`; neither comes here.
 
 Any other method returns 405 (`contact.php:6`).
 
@@ -894,12 +1142,16 @@ Recruitment and onboarding.
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | — | **Public**, rate-limited | body `{name, email, phone?, role_applied?, division, consent}` | `{ok: true}` 201; creates an applicant with source `careers`, a `consent_log` row, a broadcast notification and an office email |
-| GET | — (with `?id=`) | Auth, any role | `id` | `{applicant, tasks}` |
-| GET | — | Auth, any role | — | `{applicants}`, 500 most recent |
-| POST | `stage` | Office roles | `id`; body `{stage}` | `{ok: true}`; stage ∈ applied/screened/interview/vetting/offer/onboarded/rejected |
-| POST | `add_task` | Office roles | `id`; body `{label}` | `{ok: true}` 201 |
+| GET | — (with `?id=`) | Office roles plus `trainer` | `id` | `{applicant, tasks}` |
+| GET | — | Office roles plus `trainer` | — | `{applicants}`, 500 most recent |
+| POST | `stage` | Office roles, **scoped to the applicant's service** | `id`; body `{stage, reason?}` | `{ok: true, stage}`. Transitions are enforced by `rg_stage_transition()` in `server/pure.php`: forward one stage at a time; backward to any earlier stage **with a reason**; out to `rejected`/`withdrawn` from anywhere **with a reason**; back in from either **with a reason**. `onboarding` and `onboarded` cannot be set here at all — they are set by `onboard` and by activation. 409 with the rule that refused it |
+| POST | `recruiter` | Office roles, scoped | `id`; body `{recruiter_id\|null}` | `{ok: true, recruiter_id}`. 422 unless the account is internal staff by `is_staff()` |
+| POST | `task_assign` | Office roles, scoped **through the task's applicant** | `task_id`; body `{owner_id\|null, due_on\|null}` | `{ok: true}`. 422 for a non-staff owner, 400 for a date that is not `YYYY-MM-DD` |
+| POST | `interview` | Office roles, scoped | `id`; body `{scheduled_at, interviewer_id?, location?, notes?}` | `{ok: true, id}` 201. `scheduled_at` is wall-clock `YYYY-MM-DD HH:MM`, like `shifts.starts_at` |
+| POST | `interview_outcome` | Office roles, scoped | `interview_id`; body `{outcome, notes?}` | `{ok: true, outcome}`; outcome ∈ scheduled/passed/failed/no_show/cancelled. Records who decided and when. **Does not move the candidate's stage** — an interview outcome is evidence, not a decision about the pipeline |
+| POST | `add_task` | Office roles, scoped | `id`; body `{label, owner_id?, due_on?}` | `{ok: true, id}` 201 |
 | POST | `task_done` | Office roles | `task_id`; body `{done}` | `{ok: true}` |
-| POST | `onboard` | Office roles | `id` | `{ok: true, worker_id}` 201; creates a worker, marks the applicant `onboarded`, and seeds the five-item checklist at `ats.php:15`. 409 if already onboarded |
+| POST | `onboard` | Office roles, **scoped to the applicant's service** | `id` | `{ok: true, worker_id, person_id, payroll_no}` 201; **one transaction**, with the applicant row held `FOR UPDATE`: allocates a payroll number, creates a pending worker, links the person to the service, sets the stage to `onboarding` (migration 031 — *started*, not finished) and seeds the five-item checklist at `ats.php:15`. 409 if already converted, including for a simultaneous second request |
 | POST | `from_learner` | Office roles + `trainer` | body `{name, email?, division?}` | `{ok: true, id}` 201; Academy-to-ATS handoff, entering at stage `screened`. An invalid email is replaced with `<name>@learner.invalid` (`ats.php:180`) |
 
 The staff GET exposes every applicant's name, email and phone to any
@@ -923,9 +1175,18 @@ Password ≥ 8 characters. Only a `super_admin` may create a `super_admin`
 
 ## 42. `notifications.php`
 
-The bell. A user sees their own notifications plus broadcasts (`user_id IS
-NULL`), but the unread count tracks only their own targeted rows — broadcasts
-are always reported as read (`notifications.php:42`).
+The bell. A user sees their own notifications plus, for staff accounts only,
+broadcasts (`user_id IS NULL`).
+
+**A broadcast is read by receipt** (`notification_reads`, migration 025). One
+broadcast row is read by many people and the table has a single `read_at`, so
+there was nowhere to record that one person had seen it: every broadcast was
+forced to `read: true` and the unread count ignored them entirely. A panic alert
+raised from the worker app is a broadcast — it therefore arrived already marked
+read and the bell never lit, and with `MAIL_ENABLED` false by default the email
+path is latent too, so the alert existed only as a row in a table. The migration
+seeds a receipt for every existing broadcast and every existing user, so only
+new ones count.
 
 | Method | Action | Auth | Body | Returns |
 |---|---|---|---|---|
@@ -940,7 +1201,7 @@ are always reported as read (`notifications.php:42`).
 
 | Method | Auth | Body | Returns |
 |---|---|---|---|
-| GET | Auth, any role | — | `{announcements}` — group-wide plus the caller's own division, 100 most recent |
+| GET | Staff | — | `{announcements}` — group-wide plus the caller's own division, 100 most recent |
 | POST | Office roles | `{audience?, title, body}` | `{announcement}` 201 |
 
 Audience ∈ all/care/academy/cleaning/security; body ≤ 5000 chars. Creating an
@@ -950,8 +1211,9 @@ announcement also raises a broadcast notification.
 
 ## 44. `inbox.php`
 
-Live IMAP mailbox with SMTP replies. Returns 503 if the PHP `imap` extension
-is absent or `IMAP_HOST` is unset. TLS certificate validation is on unless
+Live IMAP mailbox with SMTP replies. Refused with 403 on every route while the
+`inbox` feature switch is off, before any IMAP connection is attempted. Returns 503 if
+the PHP `imap` extension is absent or `IMAP_HOST` is unset, except for `unread` (below). TLS certificate validation is on unless
 `IMAP_VALIDATE_CERT` is explicitly false (`inbox.php:25`).
 
 **Auth: `super_admin`, `admin`, `manager` for every route.** Reading this mailbox
@@ -960,7 +1222,7 @@ gated, any authenticated account could do both.
 
 | Method | Action | Params | Returns |
 |---|---|---|---|
-| GET | `unread` | — | `{unread}` |
+| GET | `unread` | none | `{unread, configured}`. With no mailbox set up (no `imap` extension or no `IMAP_HOST`) it answers **200** `{unread: 0, configured: false}` rather than 503, so the sidebar badge, which asks every minute, stops asking and shows nothing (S10) |
 | GET | `list` (default) | `limit` (1–100, default 30) | `{messages}`, newest first |
 | GET | `message` | `uid` | `{message}` including the decoded plain-text body, the CRM `contact` lookup, and marks the message `\Seen` |
 | POST | `seen` | `uid` | `{ok: true}` |
@@ -970,7 +1232,7 @@ gated, any authenticated account could do both.
 `$action` defaults to `list` (`inbox.php:129`), so a bare GET lists messages.
 An unrecognised action returns 404 (`inbox.php:238`).
 
-**Header comment discrepancy.** `inbox.php:3-8` omits `action=unread`.
+The header comment lists every action, `unread` included.
 
 Any authenticated account of any role can read the whole shared mailbox and
 send mail from the company address.
@@ -981,14 +1243,13 @@ send mail from the company address.
 
 Document centre. The **whole file** is gated to
 `super_admin`/`admin`/`manager`/`editor` at `files.php:60`, immediately after
-`require_auth` — so list, download and extract are all closed to `employee`,
+`require_auth` — so list and download are both closed to `employee`,
 `trainer` and `client`.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | GET | `download` | File-level roles | `id` | The raw file, with its own `Content-Type` and a `Content-Disposition` attachment header |
-| GET | `extract` | File-level roles | `id` | `{name, mime, text, truncated, note}` — plain text pulled out of txt/csv, docx, xlsx or PDF, truncated at 12,000 characters |
-| GET | — | File-level roles | — | `{files}` |
+| GET | — | File-level roles | — | `{files}`. Any other `action`, including the `extract` retired in S9, falls through to this listing |
 | POST | `delete` | Office roles | `id` | `{ok: true}`; soft delete |
 | POST | — | File-level roles | `multipart/form-data`: `file`, `category?`, `client_id?`, `worker_id?` | `{file}` 201 |
 
@@ -1004,9 +1265,11 @@ is **inside the document root**. Downloads are proxied through this endpoint,
 but nothing in the PHP prevents a direct request to
 `/uploads/<stored_name>`; that has to be blocked by `.htaccess` on the server.
 
-**Header comment discrepancy.** `files.php:2-6` omits `?action=extract`, and
-describes download as merely "auth required" without noting the file-wide role
-gate.
+**Per-file authorisation.** The file-wide role gate is not the whole check: `rg_file_readable()`
+(`server/pure.php`, tested in `server/tests/run.php`) decides each file, so a content role can
+open a policy or a RAMS document but not an identity scan, a contract or anything filed against
+a person, worker or client. It applies to `download`, `extract` and the listing — a filename is
+disclosure on its own.
 
 ---
 
@@ -1014,18 +1277,119 @@ gate.
 
 | Method | Action | Auth | Body | Returns |
 |---|---|---|---|---|
-| POST | `export` | `super_admin`/`admin` | `{email}` | Everything held for that address: enquiries, service requests, consent log, client records, worker records |
-| POST | `erase` | `super_admin`/`admin` | `{email}` | `{ok: true, erased: {...}, needs_manual_review: {clients, workers}}` |
+| POST | `export` | `super_admin`/`admin` | `{email}` | 27 collections, plus `resolved` and `not_included` |
+| POST | `erase` | `super_admin`/`admin` | `{email}` | `{ok, erased, marketing_suppression_kept, needs_approval, note}` |
 
-Erasure anonymises `contact_enquiries` and `service_requests` and deletes
-`consent_log` rows. Client and worker records are **not** erased — employment
-and contract records have an independent legal basis — but any match is
-surfaced under `needs_manual_review` for a manual decision.
+**Export resolves identity through the `people` spine in both directions.** It looks up
+`people` by email, then adds the `person_id` of any `workers`, `applicants` or `users` row
+matching that address, then pulls every record filed against those person and worker ids. That
+matters because `people.email` is routinely empty — a person created from an application only
+ever carried the address on the applicant row — and resolving by email alone returned an export
+with no right-to-work check, no absence and no contract in it.
+
+It covers identity, checks and credentials, employment, training, documents (metadata only),
+contact, consent, messages and notifications, and it lists what it deliberately omits under
+`not_included`: the audit log, file contents, server logs and backups. Every export writes a row
+to `export_log` and an `audit_log` entry.
+
+**An approved hard deletion of a file now removes the file.** `governance.php` reads
+`stored_name` before the row goes, then unlinks it from `server/uploads/` and audits it. A row
+deleted with the bytes left on disk under a random name is the worst of both: gone from the
+system, still on the server, and no longer findable. An *archive* keeps the bytes deliberately —
+that is what makes it recoverable.
+
+**An approved hard deletion says what went with it, and is refused until somebody agrees.**
+Several foreign keys onto `workers` and `people` are `ON DELETE CASCADE`, so approving one
+deletion also removes shifts, timesheets, certifications, references, skills and shift offers —
+some of which the business is obliged to keep after the employment ends. The schema's cascade is
+unchanged; what changed is that it can no longer be triggered blind. `decide_deletion` counts the
+cascading children from the live foreign keys before deleting anything and, when there are any,
+returns **409** with a `cascade` map instead of proceeding. Sending the same decision again with
+`confirm_cascade: true` carries it out; the request stays open in the meantime, so rejecting it
+and asking for an *archive* — which cascades nothing — remains available. Either way the counts
+go into the audit entry and the response's `cascaded` field.
+
+**Deletion requests have a screen: Settings, Data requests (S10).** `GET
+governance.php?action=deletions[&status=requested]` (staff) answers `{requests, can_decide}`.
+Each request carries `is_mine`, true when the signed-in account made it, so the screen offers no
+decision that `decide_deletion` would refuse under the four-eyes rule; the requester's user id
+itself is not sent. `can_decide` is true for `super_admin` and `admin`, the roles
+`decide_deletion` accepts. Today's "deletion requests need a decision" item links to
+`/app/settings?tab=requests`.
+
+**Erasure does not bypass the approval workflow.** It anonymises `contact_enquiries` and
+`service_requests`, which have no ongoing basis, and surfaces everything filed against the
+person under `needs_approval` for `governance.php?action=request_deletion`, which requires a
+reason and a second person. It previously erased immediately with neither.
+
+Consent rows are anonymised rather than deleted, **except a marketing opt-out**, which keeps its
+address: a suppression record that names nobody suppresses nobody, and deleting it is how
+somebody gets signed up again by the next import.
 
 Note that the file reads the body and validates the email at `gdpr.php:13-15`,
 **before** dispatching on the action. There is therefore no GET path at all,
 and any request without a valid email in a JSON body fails 400 regardless of
 action.
+
+---
+
+## 46a. `data-request.php`
+
+| Method | Action | Auth | Body | Returns |
+|---|---|---|---|---|
+| POST | — | **public**, rate limited 5 per 10 min | `{name, email, kind, relationship?, detail?}` | `{ok: true, ref}` |
+| GET | — | `super_admin`/`admin` | — | `{requests}` — the queue, ordered by status then age |
+| POST | `status&id=N` | `super_admin`/`admin` | `{status, note?}` | `{ok: true}` |
+
+`kind` is one of `access`, `correction`, `deletion`, `objection`, `restriction`, `portability`,
+`withdraw_consent`, `other`; anything else becomes `other`. The reference is `DSR-NNNN` from
+`next_seq()`. Creating a request queues an office alert and an acknowledgement to the requester,
+notifies staff, and audits. Closing one as `completed` or `refused` requires a note of at least
+ten characters — a closed request with no reason is not a record.
+
+It collects no identity documents, and it self-serves nothing: it opens a case for a person to
+handle. No statutory deadline is written into the code, deliberately.
+
+---
+
+## 46b. `unsubscribe.php`
+
+| Method | Auth | Query | Returns |
+|---|---|---|---|
+| GET | **public** | `?e=<email>&t=<token>` | An HTML confirmation page |
+| POST | **public**, rate limited 20 per 10 min | same | An HTML page, and a `granted = 0` row in `consent_log` |
+
+The token is `rg_unsubscribe_token()`, an HMAC over the lower-cased address under `APP_SECRET`.
+No table of tokens, nothing to expire, and it cannot be guessed for another address. GET only
+renders the page; the opt-out happens on POST, because mail scanners and link previewers fetch
+every URL in a message.
+
+Returns HTML, not JSON — it is the one endpoint a person reads directly in a browser. Every
+failure reads the same and nothing confirms whether an address is on the list. With `APP_SECRET`
+unset it returns 503 and `unsubscribe_link()` returns null, so marketing is not sent at all
+rather than sent with a broken unsubscribe.
+
+---
+
+## 46c. `retention-sweep.php`
+
+| Invocation | Auth | Behaviour |
+|---|---|---|
+| `php server/retention-sweep.php` | CLI | Reports. Changes nothing |
+| `php server/retention-sweep.php --go` | CLI | Acts |
+| `GET` with `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) | **HTTP with the cron key**, rate limited | Reports only. `--go` is CLI-only |
+
+The consumer `retention_policies` never had. It acts only where `retain_months` is set, and all
+fourteen are NULL. `review` raises a task, `archive` sets `deleted_at`, `delete` opens a request
+in the four-eyes workflow. It never hard-deletes. See `docs/RETENTION.md`.
+
+---
+
+## 46d. `create-admin.php`
+
+CLI only. `php server/create-admin.php --email you@example.com --name "Your Name"`, prompting
+for the password so it never reaches shell history or the process list. `schema.sql` used to
+seed a `super_admin` whose password was written in a comment in the tracked file.
 
 ---
 
@@ -1039,27 +1403,45 @@ action.
 
 ## 48. `reports.php`
 
-Five read-only export packs, all office roles, all GET. The client renders CSV
-or PDF from the JSON.
+Office roles (`super_admin`, `admin`, `manager`) for every action. Since S5 the page has one
+small set of reports; the older regulator packs stay for existing callers.
 
 | Action | Returns |
 |---|---|
-| `client_kpi` | Per-client revenue, outstanding, job count, last invoice and account manager, worst debt first |
-| `cqc_pack` | Every care worker's right-to-work, DBS status, verified reference count and certificate count |
-| `sia_acs` | Every security officer's licence number, SIA status and verified reference count |
-| `coshh` | Cleaning workforce compliance plus the 200 most recent cleaning incidents |
-| `skills_for_care` | Academy programmes with enrolled and completed counts |
+| `list` | `{reports: [{key, title, description, personal}], scope}`: the reports this account may open |
+| `run&report=KEY[&service=]` | `{report, title, description, columns: [{key,label}], rows, totals, service, personal, generated_at}` |
+| `export&report=KEY[&service=][&purpose=]` | `text/csv` (UTF-8 with BOM), written and logged on the server |
+| `client_kpi` | Per-client revenue, outstanding, job count, last invoice and account manager (Clients page) |
+| `cqc_pack`, `sia_acs`, `coshh` | One service's vetting records. Compliance zone and that service's scope |
+| `skills_for_care` | Academy programmes with enrolled and completed counts. Academy scope |
 
-An unrecognised action returns 400 `Unknown report.` (`reports.php:123`).
+Reports (`KEY`): `pipeline` (applicants by stage and service; open stages plus 90 days of
+outcomes), `workforce` (current workers, whether `rg_deployment_check(..., false)` lets them
+work and why not; **compliance zone**), `expiring` (DBS, SIA, certificates and right-to-work
+rechecks within 30/60/90 days or expired; **compliance zone**), `unfilled` (shifts by week and
+service, this week and the next seven), `hours` (approved hours net of breaks by week and
+service, last eight weeks; **payroll zone**), `workload` (per staff member: candidates recruited
+for, open and overdue onboarding tasks; plus tasks with no owner).
 
-**Header comment discrepancy.** `reports.php:3` documents only `client_kpi`;
-the other four packs are undocumented at the top of the file.
+- A scoped account sees its own service only. `service=` narrows and never widens: another
+  service is 403.
+- Totals are summed over every row returned; nothing is paged.
+- `export` writes only the report's declared columns (`rg_csv()`, which also neutralises
+  spreadsheet formulas) and inserts an `export_log` row first (`report.KEY`, row count,
+  `report=KEY; service=…`, purpose, whether the rows name people) plus an audit entry
+  `report.export`. A refused export writes nothing.
+
+Unknown report: 404 for `run`/`export`, 400 otherwise.
 
 ---
 
 ## 49. `payments.php`
 
 Stripe Checkout, hosted. No card data touches this server.
+
+While the `online_payments` feature switch is off, `public_checkout`, `paylink` and
+`checkout` are refused with 403. The `webhook` stays open: a client who opened a checkout
+before the switch went off can still pay, and the invoice must record it.
 
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
@@ -1095,10 +1477,14 @@ the file.
 Direct Debit via the Billing Requests flow. Raw HTTPS, no SDK. Sandbox unless
 `GC_ENVIRONMENT` is `live` (`gocardless.php:19`).
 
+While the `online_payments` feature switch is off, `setup`, `complete` and `charge` are
+refused with 403. `status` (reading a mandate that already exists) and the `webhook`
+(settling payments already in flight) are not.
+
 | Method | Action | Auth | Params | Returns |
 |---|---|---|---|---|
 | POST | `webhook` | **None — HMAC verified** | Raw body; `Webhook-Signature` header | `{ok: true}` |
-| GET | `status` | Auth, any role | `client_id` | `{mandate}` or `{mandate: null}` |
+| GET | `status` | Office roles | `client_id` | `{mandate}` or `{mandate: null}` |
 | POST | `setup` | Office roles | body `{client_id}` | `{url}` — the hosted mandate authorisation page |
 | POST | `complete` | Office roles | body `{mandate}` (the local mandate row id) | `{status}` — `active` or `pending` |
 | POST | `charge` | Office roles | body `{invoice_id}` | `{ok: true, status}` |
@@ -1156,24 +1542,10 @@ site and times) is enumerable by anyone who can guess a token, though the
 
 ---
 
-## 52. `weather.php`
+## 52. `weather.php` (retired)
 
-| Method | Auth | Params | Returns |
-|---|---|---|---|
-| GET | Auth, any role | `city?` (default `London,GB`) | `{city, units, temp, feels_like, main, description, icon, humidity, wind_mph, advisory, fetched_at}` |
-
-The OpenWeather key stays server-side. 503 if `OPENWEATHER_API_KEY` is unset or
-`CHANGE_ME`. The `city` parameter is constrained to `^[A-Za-z .,'-]+$` and 60
-characters, and anything else falls back to `London,GB` (`weather.php:24`), so
-the proxy cannot be pointed at another host. Responses are cached for 15
-minutes in a file under the system temp directory, keyed by an MD5 of city and
-units.
-
-`advisory.level` is `ok`, `watch` or `alert`, derived from normalised
-temperature and wind (`weather.php:72-83`).
-
-**Stale config comment.** `config.sample.php:51` describes
-`OPENWEATHER_API_KEY` as read by "a future weather.php"; the endpoint exists.
+Retired in section S9, with the weather widget it fed. The file is deleted, so the server
+answers 404, and `OPENWEATHER_API_KEY` left the config templates.
 
 ---
 
@@ -1183,8 +1555,8 @@ Compliance renewal reminder engine, designed to run once a day.
 
 | Trigger | Auth |
 |---|---|
-| CLI: `php expiry-alerts.php` | None needed — `PHP_SAPI === 'cli'` bypasses the key check (`expiry-alerts.php:20`) |
-| HTTP: `GET /expiry-alerts.php?key=…` | **`?key` must `hash_equals` `ALERTS_KEY`**, else 403. An unset or `CHANGE_ME` key refuses every HTTP request |
+| CLI: `php expiry-alerts.php` | None needed — `PHP_SAPI === 'cli'` bypasses the key check (`expiry-alerts.php:23`) |
+| HTTP: `GET /expiry-alerts.php` with header `X-Cron-Key: …` (preferred), or `?key=…` | **The key must `hash_equals` `ALERTS_KEY`**, else 403. An unset or `CHANGE_ME` key refuses every HTTP request. `rg_cron_key()` in `pure.php` reads the header first and falls back to `?key`, so existing crontabs keep working; the header keeps the key out of the access log |
 
 It scans DBS and SIA expiries on the worker row, `certifications` rows with an
 expiry, and company `insurance` policies, buckets each into a 90 / 60 / 30-day
@@ -1201,12 +1573,24 @@ expired tiers only. Output is plain text for the cron log.
 | Trigger | Auth |
 |---|---|
 | CLI: `php backup.php` | None needed |
-| HTTP: `GET /backup.php?key=…` | **`?key` must `hash_equals` `ALERTS_KEY`**, else 403 |
+| HTTP: `GET /backup.php` with header `X-Cron-Key: …` (preferred), or `?key=…` | **The key must `hash_equals` `ALERTS_KEY`**, else 403. Same `rg_cron_key()` rule as §53 |
 
 Writes a gzipped `mysqldump` to `dirname(__DIR__) . '/backups'` — one level
 **above** the document root, so it is never web-accessible — and prunes dumps
 older than 14 days. Requires `shell_exec` and `mysqldump`; it reports clearly
 rather than failing silently when either is unavailable. Output is plain text.
+
+The dump holds the database only. Documents in `server/uploads/` are covered by the host's own
+backup, not by this script (`docs/runbooks/backup-and-restore.md`).
+
+**`restore-check.php` (CLI only, S10).** `php restore-check.php --restored=NAME
+--uploads=DIR [--ignore=a,b] [--record]` compares the database in `config.php` with a restored
+copy on the same server: every base table's row count (`rg_restore_differences()`), less the
+tables in `--ignore` (default `cron_runs,rate_limits`), and every `files` row's bytes in the
+restored uploads folder by SHA-256 against the original. A row with no file on the source either
+is counted and reported, not failed. Exit 0 on a match, 1 on any difference. With `--record`
+and `--uploads`, a match writes the `restore_test` row in `cron_runs`, which system health reads.
+Refuses HTTP, refuses to compare the database with itself, and is blocked by `.htaccess`.
 
 Note that the database password is passed on the `mysqldump` command line
 (`backup.php:43`), where it is briefly visible in the host's process list. It
@@ -1241,6 +1625,11 @@ would be signing off nothing — and a check already verified cannot be verified
 A future-dated check is refused. `workers.right_to_work` is kept in step with the latest check
 so anything still reading the old flag does not disagree with the record.
 
+Every branch applies the person's service scope (`require_person_scope()`), and the `due` list
+drops people outside it. An `evidence_file_id` must be a document filed against the same
+person, directly or through their worker record, or the check is refused with 422. Recording
+and verifying a check recalculate the person's workers' derived status at once.
+
 ## 15a. `compliance.php` — eligibility
 
 Added in Milestone 2, alongside the existing summary and pack actions.
@@ -1265,15 +1654,17 @@ stays stable and comparable.
 
 | Endpoint | Purpose | Auth |
 |---|---|---|
-| `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff to read; office to write. See §54a |
-| `verifications.php` | The generalised verification lifecycle for every other credential | Staff to read; office to write |
-| `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own; staff see all |
+| `right-to-work.php` | Right-to-work checks: record, list, what is due, verify | Staff **and** the `compliance` zone to read; office to write. See §54a |
+| `verifications.php` | The generalised verification lifecycle for every other credential | Staff **and** the `compliance` zone to read; office to write |
+| `employment-contracts.php` | Employment contract evidence: draft, agreed version, sent, accepted, signed copy, review, supersede | Staff **and** the `compliance` zone to read; office to write; the person's service scope. See §54d |
+| `leave.php` | Leave and absence, with a holiday balance in hours | A worker sees and requests only their own (status always `requested`; `paid_pence`, `in_lieu` and `carried_over` ignored on a worker request since S4); staff see all |
 | `governance.php` | Deletion approval, export log, retention policies, the zone matrix | Staff; approvals and zones are admin or super-admin |
-| `action-centre.php` | What needs attention today, grouped by urgency | Staff only |
-| `system-health.php` | Live health checks, and `?action=workload` | `super_admin`/`admin`/`manager` |
-| `forms-intake.php` | Google Forms webhook, integration health, retry | **Webhook: shared secret, no bearer token.** Views are staff only |
-| `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `?key=ALERTS_KEY` |
-| `migrate.php`, `seed.php`, `backfill-people.php` | Schema and fixtures | **CLI only.** Refuse to run over HTTP at all |
+| `action-centre.php` | What needs attention today, grouped by urgency, with the Today tiles. Each group follows the guard of the screen it links to and a scoped account's service (`rg_action_centre_access()`). See §54f | Staff only |
+| `system-health.php` | Live health checks, scheduled job run times (`cron_runs`), email queue, form intake, and `?action=workload`. See §54f | `super_admin`/`admin`/`manager` with **no service scope** |
+| `forms-intake.php` | Google Forms webhook, integration health, retry. Creates the applicant through `rg_create_applicant()` (people-lib.php), shared with the spreadsheet import | **Webhook: shared secret, no bearer token.** Views are staff only |
+| `send-queued-mail.php` | Drains `email_queue`. The only place SMTP is spoken | **Cron.** HTTP needs `ALERTS_KEY` in an `X-Cron-Key` header (or `?key=`) |
+| `features.php` | Owner feature switches. See §54c | Staff to read; owner to change |
+| `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` | Schema, fixtures and the first administrator | **CLI only.** Refuse to run over HTTP at all. `migrate.php`, `seed.php` and `backfill-people.php` additionally read `RG_ENV` from `config.php` to decide what they may do; a config that does not declare it counts as production |
 
 Two auth mechanisms here are neither a bearer token nor a role, and are worth stating plainly:
 
@@ -1281,7 +1672,312 @@ Two auth mechanisms here are neither a bearer token nor a role, and are worth st
   header, compared using `hash_equals`, because Google Apps Script has no login. It is rate
   limited, and an integration with no secret configured refuses every submission.
 - **`send-queued-mail.php`** follows `expiry-alerts.php` and `backup.php`: CLI, or HTTP with
-  `?key=` matching `ALERTS_KEY`.
+  `ALERTS_KEY` in an `X-Cron-Key` header, or `?key=` for existing crontabs.
+
+## 54c. `features.php`
+
+The owner's feature switches (migration 036). The names are fixed in code,
+`rg_feature_defaults()` in `pure.php`; this endpoint sets a switch, it cannot create one.
+
+| Method | Auth | Body | Returns |
+|---|---|---|---|
+| GET | Staff (`require_staff`, above every branch) | none | `{features: {finance, online_payments, sms_whatsapp, inbox}, switches: [{name, enabled, updated_at, updated_by}]}` |
+| POST | `super_admin`/`admin` | `{name, enabled: true\|false}` | The same shape, after the change |
+
+An unknown name or a non-boolean `enabled` is a 422. A change is written with
+`updated_by` and `updated_at`, and audited as `feature.switch` with the state before and
+after; setting a switch to the value it already has writes nothing.
+
+| Switch | Seed | When off |
+|---|---|---|
+| `finance` | on | Invoicing, quotes, client contracts and payroll leave the office navigation and the command palette. **Interface only**: the endpoints keep their role and zone checks and are not refused |
+| `online_payments` | on | `payments.php` and `gocardless.php` refuse anything that starts a payment; webhooks stay open |
+| `sms_whatsapp` | on | `send_sms()` and `send_whatsapp()` log the attempt as skipped and send nothing |
+| `inbox` | on | `inbox.php` refuses every route; the Inbox link leaves Settings |
+
+The seeds keep production as it was. A fifth switch, `ai_assistant`, was retired in S9 with
+`ai.php`: `features.php` no longer lists it and answers 422 to a request to set it. Its seeded
+row stays in `feature_switches` (no data deleted) and nothing reads it.
+A server whose PHP is uploaded before migration 036 runs reads the same defaults.
+
+## 54d. The person profile and the compliance screens (S2)
+
+### `people.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | (none) | Staff in `super_admin`/`admin`/`manager`/`trainer`/`employee`; the person in scope | `id` (a `people.id`) | The aggregate below |
+| POST | `emergency` | Office roles **and** `can_edit_zone('employment')`; the person in scope | `id`; body with the six `emergency_contact*` fields | `{ok, emergency}`. 422 when `rg_validate_emergency_contacts()` refuses: a name without a number, a number without a name, or a number that cannot be rung |
+| POST | `training` | Office roles **and** the `compliance` zone; the person in scope | `id`; body `{course, completed_on, expires_on?, provider_id?, evidence_file_id?}` | `{ok, id}` 201. Written to `enrolments` with `person_id` and no programme; the name is not copied |
+
+The GET answers, in one read: `person` (identity from `people`), `services` (one entry per
+service with `status` ∈ applicant, onboarding, active, suspended, inactive, left, from
+`rg_service_statuses()`), `payroll_no`, `next_action` (`rg_person_next_action()`, with the tab
+to open and, where there is one, the record it is about), `next_shift`, `zones`, `can`,
+`workers` (each with `approval.blockers` from `rg_approval_blockers()`, empty when the server
+would accept an approval), `applications` with their onboarding tasks, `checks` (each
+requirement carries `evidence_origin`, where the evidence that counts came from:
+`verification`, `certificate`, `worker_record`, `right_to_work_check`, `legacy_flag`,
+`references` or `contract_file`, or null when nothing counts; S10), `training`,
+`shifts`, `employment` (`contracts`, `pay_rates`, `leave`), `emergency` and `activity`.
+
+Access is applied in layers, and a section the account may not see is returned as
+`{"restricted": true}` rather than as data:
+
+| Section | Needs |
+|---|---|
+| `checks`, `training`, `employment.contracts` | the `compliance` zone |
+| `checks.references` | office roles (a referee's details), otherwise `null` |
+| `employment.pay_rates`, and the pay figure on a contract | the `payroll` zone |
+| leave `reason` and `return_to_work_note` | the `health` zone; otherwise `null` with `health_redacted` |
+| `emergency` | the `employment` zone |
+| `activity` | office roles; `worker.pay` entries also need the `payroll` zone. Action, detail, reason, time and actor only: no IP, no before and after values |
+
+A scoped account sees only the worker records, applications, shifts, contracts and documents
+belonging to its own service, even on a person who also works elsewhere. Requirements are
+assessed with `persist = false`: opening a profile is not a decision about the person, so
+nothing is written to `person_services`.
+
+### `onboarding-templates.php`
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | (none) | (none) | `{services: {care, cleaning, security, academy}}`, each a list of `{id, label, sort_order, active}`; a scoped account gets its own service only |
+| POST | (none) | body `{service, label}` | `{ok, id}` 201; 409 for a duplicate in the same list |
+| POST | `update` | `id`; body `{label?, sort_order?, active?}` | `{ok}`. Items are retired with `active: false`, never deleted |
+
+`ats.php?action=onboard` seeds a new worker's checklist from the active items for their
+service, falling back to the old fixed list only when a service has none.
+
+### Changes to existing endpoints
+
+- **`verifications.php`**: every branch applies the person's service scope. `queue` takes
+  `service` and `requirement` filters, drops people outside the caller's scope, and returns
+  each person's `services` and the allowed `next` transitions. The bare POST and
+  `received` accept an `evidence_file_id`, which must be filed against the same person (422
+  otherwise). The lifecycle map is `RG_VERIFY_TRANSITIONS` in `pure.php`.
+- **`employment-contracts.php`**: the person read uses `require_person_scope()` (it used to
+  check only the first worker record, and nothing for an applicant). Drafting accepts
+  `document_file_id`, the agreed version; `?action=document&id=N {document_file_id}` attaches
+  it to a draft and is refused once the contract has been sent. The lifecycle map is
+  `RG_CONTRACT_TRANSITIONS` in `pure.php`.
+- **`leave.php`**: staff reads and writes for another person, `decide` and `return` apply the
+  person's scope; `pending` and `calendar` drop people outside it.
+- **`files.php`**: upload accepts `person_id`, and a `worker_id` upload is also filed against
+  that worker's person. Either is refused outside the caller's scope. The upload is audited
+  with its entity.
+- **`compliance.php`**: the credential list is filtered by service scope and carries
+  `person_id`; `pack`, `eligibility`, `eligibility_all` and adding a certification apply the
+  scope to the worker.
+
+## 54e. The rota (S3)
+
+Migration 038. The office plans a week as drafts, publishes it, and every change
+after publishing tells the worker what changed. Who may be put on a shift is
+decided in one place.
+
+### The assignment check
+
+`rg_assignment_check($conn, $workerId, $shift, $persist)` in `compliance-lib.php`
+is called by every path that puts a worker on a shift: office create, assign and
+edit (`scheduling.php`), matching and broadcast, offers to named workers, offer
+acceptance by link (`offer.php`, through `rg_claim_check()`) and claiming in the
+app (`me.php?action=accept`, the same). It returns `{ok, reason, blocking,
+warnings, gate}`:
+
+| Code | Kind | Meaning |
+|---|---|---|
+| `employment` | blocks | Archived, left, suspended, inactive, onboarding outstanding, not approved (`rg_employment_gate()`) |
+| `evidence` | blocks | A mandatory requirement is missing, expired or rejected, counting the **site's own requirements** (`site_requirements`, loaded by `rg_load_rules(..., $siteId)` as mandatory rules) |
+| `clash` | blocks | Already booked on an overlapping shift (`rg_shift_clash()`) |
+| `leave` | blocks | Approved or taken leave on any date the shift touches (`rg_leave_conflict()`); the kind of leave is not said, because sickness is health data |
+| `unavailable` | warning | The worker marked the period unavailable (`availability_blocks`) |
+| `rest` | warning | Less than `app_settings.rest_gap_min_hours` (default 11) between this shift and another, measured in real time in Europe/London (`rg_rest_gap_warnings()`), so a night across 29 March is an hour shorter than it reads and one across 25 October an hour longer |
+
+The office paths refuse with **409** and `{error, check}` on a blocking reason,
+audited `shift.blocked`; and with **409** and `{error, needs_acknowledgement:
+true, check}` on a warning until the request carries `acknowledge_warnings:
+true`, which is audited `shift.warnings_acknowledged` with the reasons. A worker
+choosing a shift (`me.php`, `offer.php`) is not held by a warning; the office's
+notification says what it was. Broadcast skips anybody with a warning, because it
+cannot acknowledge on anyone's behalf. The site verdict is returned, never stored:
+`person_services` keeps the service verdict only.
+
+### Shift state
+
+`shifts.status` is unchanged (`open`, `scheduled`, `completed`, `cancelled`).
+`shifts.is_draft` (default 0, so every shift that existed counts as published)
+says whether workers can see it. `rg_shift_state()` derives one word for the
+screen: `draft`, `open`, `offered` (open with a live offer), `assigned`,
+`completed`, `cancelled`.
+
+**Drafts are invisible to workers.** `me.php` (own shifts and open shifts),
+`offer.php` (an offer on a draft reads as not found), `field.php` (a worker
+cannot read or post events on a draft), the client portal and the field board
+all filter `is_draft = 0`; broadcast and offers refuse a draft with 409.
+
+### Notifications
+
+`rg_notify_worker()` in `server/rota-lib.php`: an in-app notification to every
+live login linked to the worker, and an email through the queue to the address on
+the person record. Sent on publish (one notice per worker listing their new
+shifts), assign, unassign or move, an edit that changes time, site or role, a
+cancellation (with the reason), an offer, and a timesheet query or rejection.
+Nothing is sent for drafts. Text messages for rota changes are not sent yet (plan
+file 03: "later"); offers keep the existing text through `message_worker()`,
+which honours the `sms_whatsapp` switch.
+
+### `sites.php`
+
+Office roles throughout, reads included (access notes can be door codes).
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | — | `client_id?` | `{sites, requirements}`. Each site carries `requirements` (`{id, req_key, label}`); `requirements` is the active catalogue for the picker. Without `client_id`, every site with its client's name |
+| POST | — | body `{client_id, name, address?, postcode?, access_notes?, contact_name?, contact_phone?, requirement_ids?, active?}` | `{id}` 201. 409 for a second live site with the same name under one client; 400 for a phone nobody could ring; 404 for an unknown requirement |
+| POST | `update` | `id`; any subset of the body above | `{ok}`. `requirement_ids` replaces the set. Audited with before and after; access notes and the contact phone are named, not copied |
+
+A closed site (`active: false`) takes no new shifts (409 from `scheduling.php`).
+
+### `requests.php`
+
+Office roles throughout. Cover requests (`service_requests`) and website
+enquiries (`contact_enquiries`) in one list, scoped to the account's service.
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | — | `type?` (`cover`, `enquiry`), `status?` (`open`, `closed`) | `{requests}`: `type, id, name, email, phone, division, summary, status, open, owner_id, owner, client_id, client, site_name, preferred_start, preferred_end, shift_id, created_at`, newest first |
+| POST | `owner` | `type`, `id`; body `{user_id|null}` | `{ok}`. The owner must be a live office account (`super_admin`, `admin`, `manager`); 422 otherwise. Audited |
+
+Statuses still change through `bookings.php?action=status` and
+`enquiries.php?action=handled`.
+
+### `me.php` additions (for the staff portal, S4)
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | `timesheets` | none | `{timesheets}`, the worker's own 60 most recent, with `status`, `source` and the office's `decision_note` |
+| POST | `submit_timesheet` | `id`; body `{break_minutes?}` | `{ok, status: "pending"}`. Only the worker's own entry, and only from `draft` or `queried` (409 otherwise). Audited with before and after |
+| GET | `availability` | — | `{unavailable}`: the worker's own marked periods still to come |
+| POST | `availability` | body `{starts_at, ends_at, note?}` | `{ok, id}` 201; up to three months at a time |
+| POST | `availability_remove` | `id` | `{ok}`; archives the worker's own period, 404 for anybody else's |
+
+`GET me.php` now also returns each shift's `cancel_reason` and the site's
+address, postcode, access notes and contact.
+
+## 54f. Careers, the forms directory and company details (S7)
+
+Migration 039. The website reads these through endpoints that return an explicit
+list of public fields, never whole rows. Drafts are never public, and published
+changes reach the site within five minutes (`Cache-Control: public, max-age=300`).
+
+### `vacancies.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | none | **Public** | none | `{vacancies}`: published roles, `slug, title, service, location, hours_text, pay_text, summary, published_at` |
+| GET | none | **Public** | `slug` | `{vacancy}`: the fields above plus `requirements, checks, apply, form`. `apply` is `form` (an active linked form), `closed` (a linked form switched off) or `native` (no form: the short ats.php form). `form` is `{id, display}` with the Google Form id only, or null. A closed role answers **410** `{error, closed, title}`; a draft or unknown slug **404** |
+| GET | `all` | `super_admin`/`admin`/`manager`/`editor`, staff | none | `{vacancies, default_checks}`; a scoped account sees its service only |
+| GET | `get` | Same | `id` | `{vacancy}`; 403 outside scope |
+| POST | `create` | Same | body `{title, service, summary, location?, hours_text?, pay_text?, requirements?, checks?, slug?, form_id?, owner_id?}` | `{ok, id, slug}` 201, as a draft. Empty `checks` is filled from `rg_vacancy_default_checks()`; a taken slug gets `-2`, `-3` |
+| POST | `update` | Same | `id`; same body | `{ok, slug}`. The slug may change only while the role has never been published (422 after) |
+| POST | `status` | Same | `id`; body `{status}` | `{ok, status}`. draft to published or closed, published to closed, closed to published; never back to draft (422). `published_at` is the first publication and is kept on reopening |
+| POST | `delete` | Same | `id` | `{ok}`; archive (soft delete) |
+
+The service in the body is scope-checked as well as the stored one. The owner must pass
+`is_assignable_staff()` (now in `lib.php`). Audit actions: `vacancy.create`,
+`vacancy.update` (changed fields, before and after), `vacancy.status`, `vacancy.archive`.
+
+### `website-forms.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | `public` | **None** (above the login check) | `purpose=training` (any other purpose is 404) | `{forms: [{title, service, form: {id, display}}]}`: active, not archived training forms whose id passes `rg_valid_google_form_id()`, at most 50, cached five minutes. Shown on `/training` behind a click (S10) |
+| GET | none | `super_admin`/`admin`/`manager`/`editor`, staff | none | `{forms, integrations}`. Each form carries `url` rebuilt from the id, `review_due` (90 days, or never reviewed), `intake_status` (`ok`, `silent`, `paused`, `not_configured`, `not_linked`, the same reading as `forms-intake.php?action=health`) and the titles of the vacancies using it |
+| GET | `history` | Same | `id` | `{history}`: the form's audit entries with before and after values |
+| POST | `create` | Same | body `{title, url, purpose?, service?, display?, active?, owner_id?, integration_id?}` | `{ok, id}` 201 |
+| POST | `update` | Same | `id`; same body, `url` optional | `{ok}` |
+| POST | `reviewed` | Same | `id` | `{ok}`; sets `last_reviewed_at` to today |
+
+`url` must be `https://docs.google.com/forms/d/e/<id>/viewform`, optionally with
+`?usp=...` (`rg_parse_google_form()`); anything else is **422**, with advice for the
+short link and the editing address. Only the id is stored.
+
+### `company.php`
+
+| Method | Action | Auth | Params | Returns |
+|---|---|---|---|---|
+| GET | none | **Public** | none | `{company}`: `trading_name, legal_name, company_no, phone, urgent_phone, email, office_hours, area, registered_address, instagram_url, facebook_url, linkedin_url, tiktok_url, whatsapp_url` |
+| GET | `edit` | `super_admin`/`admin` | none | `{company, updated_at, updated_by_name}` |
+| POST | `update` | Same | any of the fields above; a field left out keeps its value | `{ok, company}`. Phones must be ringable (`rg_valid_phone()`), the email valid, each social link https on that network's own host (`rg_social_url_ok()`). Audited as `company.update` with only the changed fields |
+
+### `sitemap.php`
+
+Public XML: `/careers/<slug>` for each published vacancy and `/news/<slug>` for each
+published post. The static pages stay in the build-time `dist/sitemap.xml`; `robots.txt`
+names both.
+
+### `forms-intake.php?action=set_secret&id=N`
+
+POST, `super_admin`/`admin`. Generates a random shared secret, stores only its SHA-256
+hash, and returns `{ok, integration_key, secret}` once. Replaces any previous secret.
+Audited as `intake.secret_set` without the secret. Set-up guide:
+`docs/runbooks/google-forms-intake.md`.
+
+---
+
+## 54g. Spreadsheet import (S8)
+
+### `sheet-import.php`
+
+`super_admin`/`admin`/`manager`, internal staff only, reads included (`require_role` then
+`require_staff`, above every branch). Not trainers, although trainers see Recruitment: an import
+changes staff contact details as well as adding candidates. A client or worker login is refused
+whatever its role. A scoped account sees and opens only the imports it uploaded.
+
+| Method | Action | Params | Returns |
+|---|---|---|---|
+| GET | `mappings` | none | `{mappings, forms, fields}`: saved mappings (`id, name, website_form_id, form_title, purpose, default_service, columns`), the forms directory for linking, and the field list from `RG_IMPORT_FIELDS` |
+| GET | `history` | none | `{imports}`: newest 100, with `row_count` and the created, updated, skipped and failed counts |
+| GET | none | `id` | `{import, headers, columns, samples, tally, rows}`. While the import is open, `rows` is the preview, worked out now: per row `outcome` (`new`, `update`, `duplicate`, `no_change`, `uncertain`, `problem`), `reason`, the mapped `name, email, phone, role, service, response_at`, `match {decision, basis, reason}`, `person` (in scope only), `candidates` for an uncertain match (in scope only) and `changes` (`field, label, old, new`). Once applied or closed, `rows` is what happened (`created`, `updated`, `skipped`, `failed`, with `person_id`, `applicant_id`, `changed_fields`) |
+| GET | `row` | `id`, `row`, `choice` (`new` or a candidate's person id) | `{row}`: one row's preview with that answer, so the screen can show old and new values before apply. A person id that was not offered is ignored |
+| GET | `failures` | `id` | `text/csv` (UTF-8 with BOM): `Row, Reason`, then the original columns of every failed row. Cells that a spreadsheet would read as a formula are prefixed with `'`. Audited as `import.failures_download` |
+| POST | `upload` | body `{file_name, csv}` | `{ok, id, rows, mapping_id}` 201. CSV only, up to 2 MB, 1,000 rows and 80 columns, header row required, UTF-8 with or without BOM (Windows-1252 accepted), comma, semicolon or tab. An `.xlsx`/`.xls`/`.ods` name is **422** with how to download CSV from Google Sheets. The best-fitting saved mapping is applied, with a guess for any heading it lacks. Rate limited (30 per 10 minutes per account). Audited `import.upload` |
+| POST | `map` | `id`; body `{columns, purpose, default_service?, save?: {name, website_form_id?, mapping_id?}}` | The import view, as GET. `columns` is heading → field; a field not in `RG_IMPORT_FIELDS` (a pay rate, a status) is stored as `ignore`. Needs a name column and an email or phone column; one column per field (**422**). A scoped account may default only to its own service (**403**). `save` creates or updates a reusable mapping, optionally linked to a form; a duplicate name is **409**. Audited `import.map`, `import.mapping_create` / `import.mapping_update` |
+| POST | `apply` | `id`; body `{rows: [{id, choice?}]}` | `{ok, counts}` plus the import view. One apply per import: the import is claimed `FOR UPDATE` first and a second apply is **409**. Every pending row is then settled in its own transaction with the row locked, recomputing its outcome from the database as it is now. Ticked `new` rows create an application; ticked `update` rows change the allowed contact fields; ticked `uncertain` rows with no `choice` are skipped; unticked rows are skipped (`Not selected.`) or, if a problem, failed with the reason. Audited `import.row_created` / `import.row_updated` per row (detail `<file>, row N`) and `import.apply` with the counts |
+| POST | `close` | `id` | `{ok}`. Clears every held cell and marks the import closed. Audited `import.close` |
+
+What an import can write, and nothing else:
+
+- **A new application** for a new or existing person: `find_or_create_person()` (or, when a person
+  chose "someone new" against an email or phone already on record, a new person with no match key),
+  then `rg_create_applicant()` in `people-lib.php`, the same function `forms-intake.php` now uses,
+  with `source = 'spreadsheet_import'` and the file name and row in the notes and the first history
+  entry. Blank address, postcode and first emergency contact on the person are filled; nothing on
+  record is overwritten. No email is queued and nobody is notified per row.
+- **Contact details of somebody already on staff**: phone, email, address, postcode, the first
+  emergency contact and availability (`workers.avail_*`, on in-scope worker records only), through
+  `rg_save_contact_details()` in `people-lib.php`. A change of email or phone recomputes the match
+  key, and a key already held by another person fails the row. Audited as
+  `person.contact_details` (field names only) and, for the emergency contact,
+  `person.emergency_contacts`.
+
+Compliance, verification, pay, right-to-work evidence, approval and employment status are not
+reachable. The person record is the truth: `workers.phone` follows a changed phone (it is what
+text messages read, and `me.php?action=profile` does the same), and `workers.email` is not
+written.
+
+Matching (`rg_import_match_decision()`): email, then phone, then name with date of birth.
+Any disagreement is `uncertain` and waits for a person. Duplicates: the same row in the file, a
+row already applied in any import (`applied_fingerprint`, UNIQUE), a response id already received
+by `forms-intake.php` or already imported, and the same person, role and day as an existing
+application (`rg_import_same_application()`, which reads the application's creation date, the
+form feed's received date and any import's response time).
+
+Scope: a person matched outside a scoped account's service is a problem and nothing about them is
+shown; candidates outside it are not offered; a new application must be in the account's service.
+
+---
 
 ## 55. Public / unauthenticated surface
 
@@ -1298,8 +1994,12 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/certificates.php?action=badge&id=` | GET | none | Same data as an Open Badges 3.0 assertion |
 | `/blog.php` | GET | none | Published posts; `?slug=` for one |
 | `/testimonials.php` | GET | none | Published testimonials |
+| `/vacancies.php` | GET | none (cached 5 min) | Published roles only, named fields; `?slug=` for one, 410 if closed, 404 for a draft |
+| `/company.php` | GET | none (cached 5 min) | Company details and social links, named fields only |
+| `/sitemap.php` | GET | none (cached 1 h) | Slugs of published roles and posts |
 | `/ats.php` | POST (no `action`) | `ats` 8/10 min | Creates an applicant and a consent record |
 | `/bookings.php` | POST (no `action`) | `booking` 8/10 min | Creates a service request and a consent record |
+| `/quotes.php?action=request` | POST | `quote` 5/10 min | The cleaning quote request: a `service_requests` row (division `cleaning`) and a consent record; never a priced quote |
 | `/auth.php?action=login` | POST | `login` 10/5 min | |
 | `/auth.php?action=forgot` | POST | `forgot` 5/10 min | Deliberately non-enumerating |
 | `/auth.php?action=reset` | POST | `reset` 10/10 min | Token must be 64 hex chars, single-use, 1-hour expiry |
@@ -1315,7 +2015,7 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | Route | Method | Throttle | Secret |
 |---|---|---|---|
 | `/forms-intake.php?key=<integration>` | POST | `intake` 120/5 min | `X-RitaGreen-Secret` header, SHA-256 compared with `hash_equals`. An integration with no secret refuses everything |
-| `/send-queued-mail.php?key=` | GET | none | `hash_equals` against `ALERTS_KEY`; also runs from CLI with no key |
+| `/send-queued-mail.php` | GET | `cron-key` 10/10 min | `X-Cron-Key` header (preferred) or `?key=`, `hash_equals` against `ALERTS_KEY`; also runs from CLI with no key |
 
 ### Open but secured by an unguessable token in the URL
 
@@ -1332,20 +2032,20 @@ Every route below is reachable with **no bearer token**. This is the full list.
 | `/payments.php?action=webhook` | POST | HMAC-SHA256 of `t.payload` against `STRIPE_WEBHOOK_SECRET`, `hash_equals`, plus a 300-second replay window. Amount and currency re-checked against the invoice before marking it paid |
 | `/gocardless.php?action=webhook` | POST | HMAC-SHA256 of the raw body against `GC_WEBHOOK_SECRET`, `hash_equals`. No replay window, but settlement is idempotent and credits only the amount actually collected |
 
-### Open but secured by a shared secret in a query parameter
+### Open but secured by a shared secret in a header or query parameter
 
 | Route | Method | Secret |
 |---|---|---|
-| `/expiry-alerts.php?key=` | GET | `hash_equals` against `ALERTS_KEY`; refuses everything if the key is unset or `CHANGE_ME` |
-| `/backup.php?key=` | GET | Same |
+| `/expiry-alerts.php` | GET | `X-Cron-Key` header (preferred) or `?key=`, `hash_equals` against `ALERTS_KEY`; refuses everything if the key is unset or `CHANGE_ME` |
+| `/backup.php` | GET | Same |
 
 Both also run from the CLI with no key at all. A key passed in the query string
-lands in the server access log, so prefer the CLI trigger where possible.
+lands in the server access log; the `X-Cron-Key` header does not. Prefer the CLI
+trigger, then the header. When both are sent the header wins (`rg_cron_key()` in
+`pure.php`).
 
 ### Not public, despite appearances
 
-- `weather.php` and `ai.php` call `require_auth` before anything else, so both
-  upstream API keys are behind the token.
 - `files.php` gates the entire file — including `download` — to
   `super_admin`/`admin`/`manager`/`editor`. Uploaded files themselves sit under
   `server/uploads` inside the document root and are protected only by whatever
@@ -1362,6 +2062,10 @@ Each of these is a case where the block comment at the top of the file
 understates or misstates what the code does. None of them changes behaviour,
 but each one misleads a reader who trusts the header.
 
+The privacy audit corrected four of these at source rather than documenting them: `gdpr.php`,
+`files.php`, `incidents.php` and `compliance.php` headers now match their code, and their rows
+have been removed from the table below.
+
 | File | Discrepancy |
 |---|---|
 | `auth.php:2-12` | Omits seven routes: `sessions`, `revoke_session`, `unlock`, `register`, `google_config`, `google_start`, `google_callback`. Three of them are public |
@@ -1369,11 +2073,106 @@ but each one misleads a reader who trusts the header.
 | `payments.php:6-7` | Omits `?action=public_checkout` (public) and `?action=paylink` |
 | `reports.php:2-3` | Omits four of five report actions: `cqc_pack`, `sia_acs`, `coshh`, `skills_for_care` |
 | `inbox.php:3-8` | Omits `?action=unread` |
-| `files.php:2-6` | Omits `?action=extract`; describes download as "auth required" without the file-wide role gate at `files.php:60` |
-| `compliance.php:2-4` | Omits `?action=pack` (present only in an inline comment) |
 | `clients.php:2-5` | Omits `?action=update` and `?action=rate_card` (inline comments only) |
 | `workers.php:2-4` | Omits `?action=availability` and `?action=pay` (inline comments only) |
 | `bookings.php:5` | Says the status route sets `quoted`/`declined`; the code also accepts `new` (`bookings.php:87`) |
 | `invoices.php:2` | Says "manual reconciliation — no card processor wired yet"; Stripe (`payments.php`) and GoCardless (`gocardless.php`) both mark invoices paid |
-| `config.sample.php:51` | Calls `OPENWEATHER_API_KEY` "read only by a future `weather.php`"; `weather.php` exists and uses it |
-| `server/README.md` | Its endpoint table lists 8 of the 47 endpoint files. Treat this document as the reference instead |
+| `server/README.md` | Its endpoint table lists 8 of the 54 endpoint files. Treat this document as the reference instead |
+
+
+## `ats.php?id=N` — the candidate detail
+
+Returns `{applicant, tasks, interviews, history, next_stages}`.
+
+`next_stages` is a list of `{stage, needs_reason}`, derived from `rg_stage_transition()` rather
+than listed again. The screen renders the moves it is given, so it cannot offer one the write
+path would refuse, and the two cannot drift apart.
+
+`applicant.recruiter_name` and each task's `owner_name`, each interview's `interviewer_name` and
+each history row's `changed_by_name` are joined in, so the screen does not have to read the
+account list to render a label. `changed_by_name` is null when the public form or an integration
+made the change — an integration has no user behind it and inventing an attribution would be
+worse than admitting there is none.
+
+## `users.php?action=assignable`
+
+`GET`, office roles including `manager`. Returns `{staff: [{id, name, role}]}` — active internal
+accounts only, filtered by the same `is_staff()` test the assignment endpoints apply, so the
+dropdown cannot offer somebody the write would then refuse. Deliberately narrow: the full account
+list is `GET /users.php` and stays admin-only.
+
+## `comms.php?action=queue` — outgoing email
+
+`GET`, office roles. Returns `{messages, counts, mail_enabled, max_attempts}`; `?status=` filters.
+`queue_mail()` has written to `email_queue` since migration 008 and nothing read it back, so a
+message that failed five times, or that was never sent because mail is switched off, left no
+trace anybody would see.
+
+`mail_enabled` is stated rather than inferred from an empty sent list. With mail off every
+message is recorded `cancelled` — *not sent*, which is a different fact from a delivery failure
+and must not be shown as one.
+
+`POST ?action=requeue&id=N` puts a `failed` or `cancelled` message back on the queue and resets
+`attempts` to 0, because the drainer refuses anything at the limit and a retry that cannot be
+attempted is not a retry. A message that is still `queued` or `sending` is refused with 409:
+re-queueing a live message is how one person receives the same email twice. Audited as
+`mail.requeue`.
+
+## `forms-intake.php` — replay safety
+
+`process_submission()` returns `{ok: true, already_mapped: true, applicant_id}` for a submission
+that has already produced a candidate, and maps nothing again. The retry branch re-ran the mapping
+on whatever it was given, so pressing retry on a submission that had already worked produced a
+**second** candidate for the same person, a second notification, and a submission row repointed at
+the newer of the two. The guard is inside the mapping rather than in the branch, so a future
+caller cannot reintroduce it.
+
+The webhook's duplicate check and its insert are two statements, and `uniq_external` is what makes
+the pair safe. Two deliveries of one response — what a retrying Apps Script produces — could both
+find nothing and both insert; the second got a duplicate-key **500**, which Google would then
+retry again. The refusal is now caught and answered as the duplicate it is.
+
+---
+
+## 54f. Today, profile pack and system health (section S5)
+
+**`GET action-centre.php`**: staff. Returns `{tiles, items, counts, total, all_clear, scope,
+generated_at}`.
+
+- `tiles`: `unfilled_shifts` (open shifts in the next 7 days), `checks_to_review` (verifications
+  received or under review plus unverified right-to-work checks), `expiring_30`,
+  `approvals_waiting` (workers with no approval blockers). Each is `{count, link}` or **null**
+  when the account may not see what it counts.
+- `items[]`: `{urgency, kind, title, detail, link, count, action, people: [{id, name}] (at most
+  five, in scope)}`. Groups: compliance (compliance zone), recruitment (office and trainer), rota,
+  incidents, leave, enquiries and requests (office), timesheets pending and queried (office and
+  payroll zone), approvals (office), deletion requests (owner; no screen yet, so `link` is null),
+  overdue invoices (office, finance switch on), email, form intake and silent integrations
+  (office with no service scope), unlinked enrolments (unscoped staff who may open the Academy).
+- A scoped account counts its own service: by the record's service column, or for records about
+  a person by `rg_person_in_scope()`. A record with no service is out of scope.
+
+`dashboard.php` (no longer used by a screen) applies the same: a scoped account's `division` is
+forced to its scope, money only for the office with finance on, expiring checks only with the
+compliance zone.
+
+**`GET compliance.php?action=profile_pack&person_id=N`**: staff with the compliance zone; the
+person in scope; 409 when there is no current worker record. Returns `{person: {id, name, photo:
+null}, roles, services, training: [{course, completed_on, expires_on, status}], dbs: {verified,
+checked_on, level, renewal_due}, right_to_work: {verified, verified_on}, sia (security only) |
+null, generated_by, generated_at}`. DBS counts as checked only from a verified `dbs`
+verification; `level` is `rg_dbs_level()` of its label, null when none was recorded. No address,
+date of birth, NI number, phone, email, certificate number or right-to-work method or reference.
+Audited as `compliance.profile_pack` against the person.
+
+**`GET system-health.php`** adds `jobs[]` (`backup`, `expiry_alerts`, `retention_sweep`,
+`send_queued_mail`: `state` ok, late or unknown from `rg_cron_state()`, `last_started_at`,
+`last_success_at`, `last_detail`, `runs`, `note`), `mail_queue` (`enabled`, counts by status,
+the ten most recent failures with subject, template, attempts, error and time but **no
+recipient**) and `forms[]` (per integration: state, live, last success and failure, failed
+submissions, quiet). Refused to a service-scoped account.
+
+The `restore_test` check (S10) reads the `restore_test` row in `cron_runs`, written by
+`restore-check.php --record`: `ok` when the last passing rehearsal is within the 90-day period
+(`RG_RESTORE_TEST_EVERY_HOURS`, judged by `rg_cron_state()`), otherwise `warn`, with the date and
+what was compared, or "No restore test recorded". It used to be a fixed warning.

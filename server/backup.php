@@ -1,7 +1,8 @@
 <?php
 // Automated database backup — run by cron, daily.
 //   CLI:  php /home/<user>/ritagreenservices.com/backup.php
-//   HTTP: wget -qO- "https://ritagreenservices.com/backup.php?key=YOUR_ALERTS_KEY"
+//   HTTP: wget -qO- --header="X-Cron-Key: YOUR_ALERTS_KEY" "https://ritagreenservices.com/backup.php"
+//         (the older "?key=YOUR_ALERTS_KEY" form still works, but lands in the access log)
 //
 // Writes a gzipped mysqldump to a backups/ folder ABOVE the document root (so
 // it's never web-accessible) and prunes dumps older than 14 days. Reuses
@@ -15,14 +16,17 @@ if (!$isCli) {
     // attacker who simply tries a lot of keys; without a limit the guard was a
     // single shared secret with unlimited attempts against it.
     rate_limit($conn, 'cron-key', 10, 600);
-    $key = $_GET['key'] ?? '';
+    // X-Cron-Key header preferred, ?key= still accepted. See rg_cron_key().
+    $key = rg_cron_key($_SERVER, $_GET);
     $expected = defined('ALERTS_KEY') ? ALERTS_KEY : '';
-    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, (string) $key)) {
+    if ($expected === '' || $expected === 'CHANGE_ME' || !hash_equals($expected, $key)) {
         http_response_code(403);
         echo json_encode(['error' => 'Forbidden']);
         exit;
     }
 }
+
+rg_cron_started($conn, 'backup');
 
 if (!function_exists('shell_exec')) {
     echo "shell_exec is disabled on this host — use cPanel's scheduled backups instead.\n";
@@ -67,4 +71,5 @@ foreach (glob("$dir/ritagreen_os-*.sql.gz") as $old) {
 }
 
 $size = round(filesize($file) / 1024, 1);
-echo "Backup OK: $file ({$size} KB). Pruned $pruned old dump(s).\n";
+rg_cron_succeeded($conn, 'backup', "{$size} KB, pruned $pruned");
+echo "Backup OK:$file ({$size} KB). Pruned $pruned old dump(s).\n";

@@ -2,6 +2,7 @@
 // In-app email inbox, backed by the mailbox over IMAP.
 //
 //   GET  inbox.php?action=list&limit=30        -> recent messages (newest first)
+//   GET  inbox.php?action=unread                -> { unread, configured }  configured false: no mailbox set up (200)
 //   GET  inbox.php?action=message&uid=123       -> full message body (marks \Seen)
 //   POST inbox.php?action=reply                  -> send a reply via SMTP
 //        body: { to, subject, message, in_reply_to?, uid? }
@@ -15,6 +16,19 @@ $user = require_auth($conn);
 // replying sends as the company. Before this check any authenticated account
 // could do both, including a client portal login.
 require_role($user, 'super_admin', 'admin', 'manager');
+// The owner can switch the shared inbox off in Settings (migration 036). Checked
+// before IMAP is touched, so a switched-off inbox never opens a connection.
+require_feature($conn, 'inbox', 'The shared inbox');
+
+// The sidebar badge asks every minute. With the switch on but no mailbox set
+// up, that used to be a 503 in the console every 60 seconds for a badge nobody
+// could see. "Not configured" is a state, not a failure, so the badge read says
+// so plainly and the header shows nothing. Opening the inbox itself still
+// answers 503 with the reason, because there somebody is asking to read mail.
+$imapConfigured = function_exists('imap_open') && defined('IMAP_HOST') && IMAP_HOST !== '';
+if (($_GET['action'] ?? 'list') === 'unread' && method() === 'GET' && !$imapConfigured) {
+    json_out(['unread' => 0, 'configured' => false]);
+}
 
 if (!function_exists('imap_open')) {
     fail('The PHP imap extension is not installed on the server.', 503);
@@ -138,7 +152,7 @@ if ($verb === 'GET' && $action === 'unread') {
     $imap = open_inbox($ref);
     $unseen = imap_search($imap, 'UNSEEN', SE_UID) ?: [];
     imap_close($imap);
-    json_out(['unread' => count($unseen)]);
+    json_out(['unread' => count($unseen), 'configured' => true]);
 }
 
 // ---- List recent messages ----

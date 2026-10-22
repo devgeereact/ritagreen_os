@@ -15,7 +15,29 @@ export const OFFICE: Role[] = ["super_admin", "admin", "manager"]
 export const STAFF: Role[] = [...OFFICE, "trainer", "editor", "employee"]
 
 const OFFICE_PLUS_EDITOR: Role[] = [...OFFICE, "editor"]
+
+/** The owner's roles: require_role($user, 'super_admin', 'admin') on the server. */
+const OWNER: Role[] = ["super_admin", "admin"]
 const OFFICE_PLUS_TRAINER: Role[] = [...OFFICE, "trainer"]
+
+/**
+ * Roles holding the 'compliance' zone in server/migrations/015.
+ *
+ * Editor is the one internal role without it: it is a content role, and vetting
+ * records are not content. Mirrors can_view_zone($conn, $user, 'compliance').
+ */
+const COMPLIANCE: Role[] = [...OFFICE, "trainer", "employee"]
+
+/**
+ * Roles holding the 'payroll' zone in server/migrations/015.
+ *
+ * Only the office. Hours are what pay is calculated from, so the screens that
+ * show them are payroll screens: server/timesheets.php and server/payroll.php
+ * both call can_view_zone($conn, $user, 'payroll'), and this mirrors that. It
+ * read as STAFF here while the server let any internal account read every
+ * worker's hours, so the two agreed with each other and both were wrong.
+ */
+const PAYROLL: Role[] = [...OFFICE]
 
 /**
  * Is this an internal staff account, as opposed to a worker or client login?
@@ -37,30 +59,39 @@ export function isStaff(user: Pick<User, "role" | "client_id" | "worker_id">): b
 const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   // Operations
   { path: "/app/scheduling", roles: OFFICE },
-  { path: "/app/timetable", roles: STAFF },
+  // /app/timetable is a redirect to /app/timesheets; the rule stays so the
+  // redirect itself is behind the same gate as its destination.
+  { path: "/app/timetable", roles: PAYROLL },
   { path: "/app/jobs", roles: STAFF },
   { path: "/app/field", roles: STAFF },
-  { path: "/app/timesheets", roles: STAFF },
-  { path: "/app/payroll", roles: OFFICE },
+  { path: "/app/timesheets", roles: PAYROLL },
+  { path: "/app/payroll", roles: PAYROLL },
 
   // People
-  { path: "/app/workers", roles: STAFF },
-  { path: "/app/compliance", roles: STAFF },
+  { path: "/app/workers", roles: COMPLIANCE },
+  // The person profile. Same roles as server/people.php: no editor.
+  { path: "/app/people", roles: COMPLIANCE },
+  { path: "/app/compliance", roles: COMPLIANCE },
   { path: "/app/ats", roles: OFFICE_PLUS_TRAINER },
+  // Spreadsheet import (S8): office only, as server/sheet-import.php. It changes
+  // staff contact details as well as adding candidates, so not trainers.
+  { path: "/app/ats/import", roles: OFFICE },
   { path: "/app/academy", roles: [...OFFICE, "trainer", "editor"] },
 
   // Quality
-  { path: "/app/incidents", roles: STAFF },
+  { path: "/app/incidents", roles: OFFICE },
 
   // Clients and sales
   { path: "/app/clients", roles: OFFICE },
+  { path: "/app/requests", roles: OFFICE },
   { path: "/app/enquiries", roles: OFFICE },
   { path: "/app/bookings", roles: OFFICE },
   { path: "/app/quotes", roles: OFFICE },
   { path: "/app/contracts", roles: OFFICE },
   { path: "/app/invoicing", roles: OFFICE },
 
-  // Insight
+  // Insight. /app/analytics and /app/insights are redirects to Reports (pages
+  // deleted in S9); like /app/timetable, each keeps its destination's gate.
   { path: "/app/analytics", roles: OFFICE },
   { path: "/app/insights", roles: OFFICE },
   { path: "/app/reports", roles: OFFICE },
@@ -69,9 +100,16 @@ const ROUTE_ROLES: { path: string; roles: Role[] }[] = [
   { path: "/app/inbox", roles: OFFICE },
   { path: "/app/notifications", roles: STAFF },
   { path: "/app/comms", roles: OFFICE },
+  // Content Studio was retired in S9; the path redirects to Blog, same gate.
   { path: "/app/content-studio", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/blog", roles: OFFICE_PLUS_EDITOR },
   { path: "/app/testimonials", roles: OFFICE_PLUS_EDITOR },
+  // Website area (S7). Vacancies and the forms directory: the same roles as
+  // server/vacancies.php and server/website-forms.php. Company details: owner
+  // only, as server/company.php.
+  { path: "/app/vacancies", roles: OFFICE_PLUS_EDITOR },
+  { path: "/app/website-forms", roles: OFFICE_PLUS_EDITOR },
+  { path: "/app/company", roles: OWNER },
   { path: "/app/files", roles: OFFICE_PLUS_EDITOR },
 
   // Admin and personal
@@ -104,6 +142,19 @@ export function isClientAccount(user: Pick<User, "role" | "client_id">): boolean
 /** Is this login attached to a worker record, i.e. a worker app account? */
 export function isWorkerAccount(user: Pick<User, "worker_id">): boolean {
   return Boolean(user.worker_id)
+}
+
+/**
+ * Where a user lands after login, or on hitting the app, by account type.
+ *
+ * Here rather than in auth-provider.tsx: a module that exports both components
+ * and plain functions loses fast refresh, and this is the same question as
+ * isClientAccount()/isWorkerAccount() above — it belongs beside them.
+ */
+export function homeFor(user: Pick<User, "role" | "client_id" | "worker_id">): string {
+  if (isClientAccount(user)) return "/portal"
+  if (isWorkerAccount(user)) return "/m"
+  return "/app"
 }
 
 /** May this user open this path? Unknown paths are allowed; the server still decides. */

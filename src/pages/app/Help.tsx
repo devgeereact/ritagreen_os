@@ -62,7 +62,7 @@ export default function Help() {
       </Card>
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <LifeBuoy className="size-3" /> {COMPANY.legalName} · Company no. {COMPANY.companyNo}
+        <LifeBuoy className="size-3" /> {COMPANY.legalName} · Company No. {COMPANY.companyNo}
       </p>
     </div>
   )

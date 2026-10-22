@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Megaphone, Sparkles, Send } from "lucide-react"
+import { Megaphone, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,15 +16,16 @@ import {
 } from "@/components/ui/select"
 import { useAuth } from "@/providers/auth-provider"
 import { useApi } from "@/hooks/use-api"
-import { api, aiDraft, ApiError } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 import type { Announcement } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { MailQueue } from "@/components/app/mail-queue"
 
 const AUDIENCES = [
   { value: "all", label: "Whole group" },
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]
@@ -38,8 +39,14 @@ export default function Comms() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Communication</h1>
-        <p className="text-sm text-muted-foreground">Broadcasts to the whole group or one division.</p>
+        <p className="text-sm text-muted-foreground">
+          Broadcasts to the whole group or one division, and what the system has tried to email.
+        </p>
       </div>
+
+      {/* Office roles only: the queue is correspondence with named people, and
+          comms.php refuses it to anybody else. */}
+      {canPost && <MailQueue />}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {canPost && (
@@ -85,27 +92,6 @@ function Compose({ onPosted }: { onPosted: () => void }) {
   const [title, setTitle] = useState("")
   const [bodyText, setBodyText] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [drafting, setDrafting] = useState(false)
-
-  async function draft() {
-    if (!title.trim()) {
-      toast.error("Add a subject so the AI has a topic.")
-      return
-    }
-    setDrafting(true)
-    try {
-      const text = await aiDraft(
-        `Write a short, clear internal staff announcement (UK English, friendly but professional, no fluff) ` +
-          `for RitaGreen about: "${title.trim()}". 2-4 sentences.`,
-      )
-      setBodyText(text)
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "AI drafting failed.")
-    } finally {
-      setDrafting(false)
-    }
-  }
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim() || !bodyText.trim()) {
@@ -149,12 +135,7 @@ function Compose({ onPosted }: { onPosted: () => void }) {
             <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
           <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="body">Message</Label>
-              <Button type="button" size="sm" variant="outline" onClick={draft} disabled={drafting}>
-                <Sparkles className="mr-1 size-3.5" /> {drafting ? "Drafting…" : "Draft with AI"}
-              </Button>
-            </div>
+            <Label htmlFor="body">Message</Label>
             <Textarea id="body" value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={6} required />
           </div>
           <Button type="submit" disabled={submitting}>

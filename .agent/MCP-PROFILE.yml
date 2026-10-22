@@ -1,13 +1,13 @@
 mcp_profile:
   project: "ritagreen_os"
-  stage: "local-adoption"
+  stage: "build complete, pending production release (docs/runbooks/release-2026.md)"
 
   permitted_reads:
-    - "local files and Git metadata inside this worktree"
+    - "local files and Git metadata inside this repository or its worktrees"
     - "installed package metadata and official documentation when relevant"
 
   permitted_writes:
-    - "local GEE OS adoption documents explicitly included in the migration"
+    - "local source and documentation changes within the current task's scope"
 
   production_capabilities: []
 
@@ -15,8 +15,9 @@ mcp_profile:
     - "deployments and production database changes"
     - "DNS, hosting, billing and payment mutations"
     - "outbound email, messages and notifications"
+    - "creating, renaming or posting on any social or Google account"
     - "copying or printing credentials"
-    - "remote Git operations during local migration"
+    - "pushing to main"
 
-  environment_confirmation: "required before every future MCP use"
+  environment_confirmation: "required before every MCP use"
   evidence: "record non-secret identifiers, operation, result and verification"

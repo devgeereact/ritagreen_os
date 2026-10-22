@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useDocumentTitle } from "@/hooks/use-document-title"
 import { LogOut, ShieldCheck, ShieldAlert, Plus, MessageSquareWarning } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,7 @@ type PortalData = {
 const DIVS = ["care", "academy", "cleaning", "security"]
 
 export default function ClientPortal() {
+  useDocumentTitle("Client portal — RitaGreen Services")
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { data, loading, error, reload } = useApi<PortalData>("portal.php")

@@ -39,6 +39,7 @@ if (method() === 'GET') {
         'SELECT DISTINCT w.id, w.name, w.role, w.division, w.right_to_work, w.dbs_expiry, w.sia_expiry
          FROM shifts s JOIN workers w ON w.id = s.worker_id
          WHERE s.client_id = ? AND s.starts_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) AND s.status = "scheduled"
+           AND s.is_draft = 0 AND s.deleted_at IS NULL
          ORDER BY w.name'
     );
     $stmt->bind_param('i', $clientId);

@@ -7,6 +7,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The skills catalogue is only reached from Scheduling, which is office-only.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET') {

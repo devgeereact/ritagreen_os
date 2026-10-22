@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { canAccess, isStaff, isClientAccount, isWorkerAccount, rolesFor, OFFICE, STAFF } from "@/lib/access"
+import { canAccess, homeFor, isStaff, isClientAccount, isWorkerAccount, rolesFor, OFFICE, STAFF } from "@/lib/access"
 import type { Role, User } from "@/providers/auth-provider"
 
 // The permission map decides what the interface offers. It is not the security
@@ -80,9 +80,50 @@ describe("rolesFor", () => {
     expect(rolesFor("/app/academy/7")).toContain("trainer")
   })
 
+  // The spreadsheet import changes staff contact details, so it is narrower than
+  // Recruitment itself: a trainer sees candidates but cannot import.
+  it("keeps the spreadsheet import to the office", () => {
+    expect(rolesFor("/app/ats")).toContain("trainer")
+    expect(rolesFor("/app/ats/import")).toEqual(OFFICE)
+    expect(rolesFor("/app/ats/import/12")).toEqual(OFFICE)
+  })
+
   it("does not treat a shared word-prefix as a match", () => {
-    // "/app/workers" must not be matched by a rule for "/app/work".
-    expect(rolesFor("/app/workers")).toEqual(STAFF)
+    // "/app/workers" must not be matched by a rule for "/app/work". Asserted on
+    // the rule it resolves to rather than a role list, so tightening who may
+    // open the page does not look like a prefix-matching regression.
+    expect(rolesFor("/app/workers")).toEqual(rolesFor("/app/workers/42"))
+    expect(rolesFor("/app/workers")).not.toEqual(rolesFor("/app"))
+  })
+
+  // Special-category pages are narrower than "any internal login". Editor is a
+  // content role and holds no compliance zone in server/migrations/015, so the
+  // link must not appear for it; incidents carry safeguarding and RIDDOR detail
+  // and are office-only. These mirror the server checks, which are the boundary.
+  it("keeps vetting records away from the content role", () => {
+    for (const path of ["/app/workers", "/app/compliance"]) {
+      expect(rolesFor(path)).not.toContain("editor")
+      expect(rolesFor(path)).toContain("trainer")
+      expect(rolesFor(path)).toContain("manager")
+    }
+  })
+
+  it("keeps safeguarding incidents to the office", () => {
+    expect(rolesFor("/app/incidents")).toEqual(OFFICE)
+  })
+
+  // Hours are what pay is calculated from, so the screens showing them are
+  // payroll screens. server/migrations/015 gives the payroll zone to the office
+  // alone, and server/timesheets.php and server/payroll.php both enforce it.
+  // These three read as STAFF while the server let any internal account read
+  // every worker's hours, so the two layers agreed and both were wrong.
+  it("keeps other people's hours inside the payroll zone", () => {
+    for (const path of ["/app/timesheets", "/app/timetable", "/app/payroll"]) {
+      expect(rolesFor(path)).toEqual(OFFICE)
+      for (const role of ["editor", "trainer", "employee"] as const) {
+        expect(canAccess(account(role), path)).toBe(false)
+      }
+    }
   })
 
   it("returns null for a path it does not govern", () => {
@@ -132,6 +173,11 @@ describe("canAccess", () => {
     const editor = account("editor")
     expect(canAccess(editor, "/app/blog")).toBe(true)
     expect(canAccess(editor, "/app/testimonials")).toBe(true)
+    expect(canAccess(editor, "/app/vacancies")).toBe(true)
+    expect(canAccess(editor, "/app/website-forms")).toBe(true)
+    // Company details are the owner's: server/company.php is super_admin and admin.
+    expect(canAccess(editor, "/app/company")).toBe(false)
+    // The retired Content Studio address redirects to Blog, behind the same gate.
     expect(canAccess(editor, "/app/content-studio")).toBe(true)
     expect(canAccess(editor, "/app/payroll")).toBe(false)
     expect(canAccess(editor, "/app/clients")).toBe(false)
@@ -170,6 +216,39 @@ describe("canAccess", () => {
     const client = account("client")
     for (const path of ["/app/help", "/app/profile", "/app/notifications"]) {
       expect(canAccess(client, path)).toBe(false)
+    }
+  })
+})
+
+describe("homeFor", () => {
+  it("sends a client account to the portal", () => {
+    expect(homeFor(account("client"))).toBe("/portal")
+    // A client_id decides it even when the role does not say "client".
+    expect(homeFor(account("employee", { client_id: 4 }))).toBe("/portal")
+  })
+
+  it("sends a worker-linked account to the worker app", () => {
+    expect(homeFor(account("employee", { worker_id: 9 }))).toBe("/m")
+  })
+
+  it("sends internal staff to the office", () => {
+    for (const role of ["super_admin", "admin", "manager", "trainer", "editor", "employee"] as Role[]) {
+      expect(homeFor(account(role))).toBe("/app")
+    }
+  })
+
+  it("prefers the portal when an account is linked to both", () => {
+    // Rare, but it must be decided rather than left to ordering: a client
+    // contact who also holds a worker record is a client first.
+    expect(homeFor(account("client", { client_id: 1, worker_id: 2 }))).toBe("/portal")
+  })
+
+  it("only ever lands somewhere the account may actually go", () => {
+    for (const role of ALL_ROLES) {
+      for (const extra of [{}, { client_id: 1 }, { worker_id: 1 }]) {
+        const user = account(role, extra)
+        expect(canAccess(user, homeFor(user))).toBe(true)
+      }
     }
   })
 })

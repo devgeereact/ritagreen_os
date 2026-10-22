@@ -1,15 +1,19 @@
 # RitaGreen OS
 
-The operations platform behind RitaGreen Services — one company, four divisions
-(Care, Academy, Cleaning, Security), one workforce database.
+The operations platform and public website of RitaGreen Services: one company, four services
+(Healthcare, Cleaning, Security and Training; internal ids `care`, `cleaning`, `security`,
+`academy`), one person record per human.
 
 A React single-page application served as static files from cPanel, talking to a set of flat
-PHP endpoints over the same domain, backed by MySQL.
+PHP endpoints over the same domain, backed by MariaDB.
 
 **Start here:** [`docs/`](docs/) is the documentation pack.
 [`docs/PRD.md`](docs/PRD.md) for why, [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md) for what,
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how,
-[`docs/RULES.md`](docs/RULES.md) before you change anything.
+[`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) before you write UI,
+[`docs/RULES.md`](docs/RULES.md) before you change anything,
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for what remains. Agents start at
+[`AGENTS.md`](AGENTS.md) (all agents) or [`CLAUDE.md`](CLAUDE.md) (Claude Code).
 
 ---
 
@@ -17,25 +21,22 @@ PHP endpoints over the same domain, backed by MySQL.
 
 | Surface | Path | For |
 |---|---|---|
-| Public site | `/` | Marketing, services, careers, certificate verification |
-| Internal CMS | `/app/*` | Owner and staff — 31 pages |
-| Client portal | `/portal` | Client accounts — cover requests, invoices, assigned workers |
-| Worker app | `/m` | Workers — own compliance, shifts, clock in and out |
+| Public site | `/` | Services, requests for staff and care, careers with Google Forms, news, certificate verification |
+| Office app | `/app/*` | Owner and office staff: Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings (and Finance while switched on) |
+| Staff portal | `/m` | Workers: Home, Rota, Records, Me |
+| Client portal | `/portal` | Client accounts, restricted until its future is decided |
 
-Covering recruitment, workers, compliance and credential expiry, training records and
-certificates, scheduling and field operations, timesheets and pay, clients and sites, quotes
-through to invoices, incidents, communications and reporting.
+The modules are described in [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md), Part 2.
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
 | Frontend | React 19, Vite 7, TypeScript 5.9, React Router 7 |
-| UI | shadcn/ui over Radix, Tailwind 3, ApexCharts, FullCalendar |
+| UI | shadcn/ui over Radix, Tailwind 3 |
 | API | PHP 8.4, flat file-per-resource, `mysqli` prepared statements, no framework, no Composer |
-| Database | MySQL / MariaDB on cPanel |
+| Database | MariaDB on cPanel |
 | Auth | Opaque bearer tokens, bcrypt cost 12, TOTP two-factor, Google SSO |
-| AI | OpenRouter, proxied server-side so the key never reaches the browser |
 | Deploy | GitHub Actions, FTPS, `dist/` only |
 
 ## Running it
@@ -46,13 +47,13 @@ Two processes: the Vite dev server, and a local PHP API for it to talk to.
 npm install
 
 # One-time: a local database and config
-#   (needs MySQL or MariaDB installed — brew install mariadb, or Docker)
+#   (needs MariaDB installed, or Docker: docs/TESTING.md, "Docker toolbox")
 mysql -u root -e "CREATE DATABASE ritagreen_os_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 mysql -u root ritagreen_os_dev < server/schema.sql
 cp server/config.local.php.example server/config.php   # edit if your MySQL user differs
-php server/migrate.php --go            # applies 001-003, stops at 004
+php server/migrate.php --go            # applies migrations up to 004, which waits for the backfill
 npm run seed -- --confirm
-php server/backfill-people.php --go    # creates people, links every record
+php server/backfill-people.php --go    # links anything not already linked; safe to re-run
 php server/migrate.php --go            # 004 now passes its precondition
 
 # Every day: two terminals
@@ -77,12 +78,13 @@ Other scripts: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run pr
 ### Tests
 
 ```bash
-npm test           # frontend: the permission map
-npm run test:php   # server: expiry banding, access rules, field status, pay premiums
+npm test           # frontend unit tests (Vitest)
+npm run test:php   # server pure logic and the endpoint guard check; no database
+npm run test:db    # real HTTP against a disposable local database
 ```
 
-Both are dependency-free — no PHPUnit, no Composer — because the production host cannot
-install packages. `npm run test:php` needs no database and no `config.php`.
+No PHPUnit and no Composer, because the production host cannot install packages. What each
+suite covers is in [`docs/TESTING.md`](docs/TESTING.md).
 
 ## Repository layout
 
@@ -90,15 +92,17 @@ install packages. `npm run test:php` needs no database and no `config.php`.
 src/
   routes/index.tsx      every route, in one file
   pages/                public/ · app/ · auth/ · portal/ · worker/
-  components/ui/        37 vendored shadcn components
-  lib/                  api client, divisions, types, pdf, csv
+  components/ui/        vendored shadcn components
+  lib/                  api client, access map, nav, services, types, pdf, csv
   providers/            auth context
 server/
   lib.php               the shared kernel every endpoint requires
-  *.php                 55 endpoints, one per resource
-  schema.sql            the database, as a single re-runnable file
-docs/                   the documentation pack
+  *.php                 endpoints, one per resource (docs/API.md lists them)
+  schema.sql            the from-scratch baseline
+  migrations/           numbered changes, applied by migrate.php
+docs/                   the documentation pack; docs/runbooks/ for release, backup and form intake
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
+scripts/agent_guard.py  Claude Code hook that blocks config.php edits, PROGRESS.md hand edits and pushes to main
 ```
 
 ## Server setup
@@ -106,23 +110,20 @@ scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
 The PHP tier is **not** part of the automated deploy. It is version-controlled here and
 uploaded to the document root by hand, so a frontend deploy can never disturb it.
 
-1. Create the MySQL database and user in cPanel.
-2. Import `server/schema.sql` through phpMyAdmin.
-3. Copy `server/config.sample.php` to `config.php` **on the server** and fill it in.
-   `config.php` is gitignored and must never be committed — it holds the database password and
-   every API key.
-4. Upload the `*.php` files to the document root, alongside `index.html`.
-
-Two scripts are cron-driven and refuse HTTP access without a key:
-`server/expiry-alerts.php` (the credential renewal engine) and `server/backup.php`.
+First-time setup, cron jobs and the files that must not be served are in
+[`server/README.md`](server/README.md). Releasing the 2026 build is
+[`docs/runbooks/release-2026.md`](docs/runbooks/release-2026.md).
 
 ## Deploying
 
-Push to `main`. GitHub Actions runs `npm ci`, `npm run build` and uploads `dist/` over FTPS.
-PHP files, `config.php` and `.htaccess` are excluded from the upload by design.
+Merging into `main` deploys. CI runs on `main`, and `deploy.yml` builds and uploads `dist/`
+over FTPS only when that CI run succeeds. PHP files, `config.php` and `.htaccess` are excluded
+from the upload by design and are placed by hand.
 
-CI runs typecheck, lint, build, `php -l` across every PHP file and a documentation consistency
-check on every pull request.
+CI runs typecheck, `eslint --max-warnings 0`, the three test suites (the database one on
+MariaDB 10.11), build, a build-output assertion
+(no source maps ship), `php -l` across every PHP file, a guard against a committed `config.php`
+and a documentation consistency check on every pull request. All of them block.
 
 ## Contributing
 

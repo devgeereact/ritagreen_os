@@ -112,9 +112,12 @@ if ($m === 'POST' && ($action === 'create' || $action === 'update')) {
 if ($m === 'POST' && $action === 'delete') {
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('A testimonial is required.');
-    $stmt = $conn->prepare('UPDATE testimonials SET deleted_at = NOW() WHERE id = ?');
+    $stmt = $conn->prepare('UPDATE testimonials SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'testimonials', $id, false)) {
+        fail('Testimonial not found.', 404);
+    }
     audit($conn, (int) $user['id'], 'testimonial.delete', "#$id");
     json_out(['ok' => true]);
 }

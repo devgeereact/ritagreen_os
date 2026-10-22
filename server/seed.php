@@ -23,10 +23,15 @@ $args = array_slice($argv, 1);
 $confirmed = in_array('--confirm', $args, true);
 $reset = in_array('--reset', $args, true);
 
-// Guard 1: never a remote database. This is the whole point of the script.
-$localHosts = ['localhost', '127.0.0.1', '::1'];
-if (!in_array(DB_HOST, $localHosts, true)) {
-    exit("REFUSED: DB_HOST is '" . DB_HOST . "'. seed.php only runs against a local database.\n");
+// Guard 1: never anything but a declared local database. This is the whole point
+// of the script, and it used to ask DB_HOST — which is 'localhost' on the cPanel
+// production host as well. --reset empties clients, workers, invoices and
+// twenty more tables, so that guard was one misplaced config.php away from
+// wiping the live system. RG_ENV is declared, and an undeclared config is
+// treated as production.
+if (!rg_is_local_database()) {
+    exit("REFUSED: " . DB_NAME . " is not declared as a local database. seed.php only ever runs against one.\n"
+        . rg_env_hint());
 }
 
 // Guard 2: never silently. Show what is about to be written to, and to where.
@@ -62,11 +67,21 @@ if ($reset) {
         'incident_actions', 'incidents', 'credit_notes', 'invoices', 'quotes',
         'contracts', 'jobs', 'rate_cards', 'service_requests', 'sites',
         'clients', 'workers', 'contact_enquiries', 'notifications', 'files',
+        // Hang off people rather than workers, so they outlive a reset that
+        // only clears the employment tables and leave the spine inconsistent.
+        'person_services', 'right_to_work_checks', 'verifications', 'leave_records',
     ] as $table) {
         run($conn, "DELETE FROM $table");
     }
     // Keep the seeded super admin; clear the fixture logins around it.
     run($conn, "DELETE FROM users WHERE email LIKE '%@local.invalid'");
+    // And the people nothing points at any more. Without this every --reset
+    // left the previous run's identities behind, and `people` grew each time.
+    run($conn, 'DELETE p FROM people p
+                LEFT JOIN users u      ON u.person_id = p.id
+                LEFT JOIN workers w    ON w.person_id = p.id
+                LEFT JOIN applicants a ON a.person_id = p.id
+                WHERE u.id IS NULL AND w.id IS NULL AND a.id IS NULL');
     run($conn, 'SET FOREIGN_KEY_CHECKS = 1');
 }
 
@@ -81,16 +96,31 @@ echo "Seeding…\n";
 // throwaway credential for a throwaway database; it is not a secret and must
 // never appear in a real config.
 $password = password_hash('LocalDev123!', PASSWORD_BCRYPT, ['cost' => 10]);
+// The last column is scope_to_division. It is opt-in per account (migration 015)
+// and every seeded account had it off, so service scope -- the rule that a
+// manager for one service does not see another's candidates and workers -- was
+// not exercised by any fixture, and therefore not by any test. Sonia is scoped to
+// security and exists to be told no.
 $staff = [
-    ['Olu Admin',      'admin@local.invalid',    'admin',    null],
-    ['Mara Manager',   'manager@local.invalid',  'manager',  'care'],
-    ['Tam Trainer',    'trainer@local.invalid',  'trainer',  'academy'],
-    ['Eddie Editor',   'editor@local.invalid',   'editor',   null],
-    ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning'],
+    ['Olu Admin',      'admin@local.invalid',    'admin',    null,       0],
+    ['Mara Manager',   'manager@local.invalid',  'manager',  'care',     0],
+    ['Sonia Scoped',   'scoped@local.invalid',   'manager',  'security', 1],
+    ['Tam Trainer',    'trainer@local.invalid',  'trainer',  'academy',  0],
+    ['Eddie Editor',   'editor@local.invalid',   'editor',   null,       0],
+    ['Ivy Employee',   'employee@local.invalid', 'employee', 'cleaning', 0],
 ];
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division) VALUES (?, ?, ?, ?, ?)');
-foreach ($staff as [$name, $email, $role, $division]) {
-    $ins->bind_param('sssss', $name, $email, $password, $role, $division);
+// Every identity is created through find_or_create_person(), the same call the
+// application uses. Migration 004 made users.person_id, workers.person_id and
+// applicants.person_id NOT NULL, and these inserts still named none of them --
+// so seeding a migrated database failed outright with "Field 'person_id'
+// doesn't have a default value", which is every developer's database.
+$ins = $conn->prepare(
+    'INSERT INTO users (name, email, password_hash, role, division, scope_to_division, person_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)'
+);
+foreach ($staff as [$name, $email, $role, $division, $scoped]) {
+    $personId = find_or_create_person($conn, $name, $email);
+    $ins->bind_param('sssssii', $name, $email, $password, $role, $division, $scoped, $personId);
     $ins->execute();
 }
 echo "  users        " . count($staff) . "\n";
@@ -137,17 +167,47 @@ $workers = [
     ['Ivan Petrov',   'ivan@local.invalid',   '07700900109', 'cleaner', 'cleaning', 'onboarding', 0, null,      null,     null,           null,    1200],
     ['Jade Thompson', 'jade@local.invalid',   '07700900110', 'trainer', 'academy',  'active',     1, 'valid',   $d(600),  null,           null,    2500],
 ];
+// Through next_payroll_no(), because both paths that create a worker in the
+// application do -- and these inserts did not, so every seeded worker had a NULL
+// payroll number and no test could tell the difference between "the fixtures are
+// unnumbered" and "the allocator is broken".
 $ins = $conn->prepare(
     'INSERT INTO workers (name, email, phone, role, division, status, right_to_work,
-                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye")'
+                          dbs_status, dbs_expiry, sia_number, sia_expiry, pay_rate_pence, pay_type,
+                          person_id, payroll_no)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "paye", ?, ?)'
 );
 $workerIds = [];
+$workerPersonIds = [];
 foreach ($workers as $w) {
-    $ins->bind_param('ssssssissssi', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11]);
+    $personId = find_or_create_person($conn, $w[0], $w[1], $w[2]);
+    $payrollNo = next_payroll_no($conn);
+    $ins->bind_param('ssssssissssiis', $w[0], $w[1], $w[2], $w[3], $w[4], $w[5], $w[6], $w[7], $w[8], $w[9], $w[10], $w[11], $personId, $payrollNo);
     $ins->execute();
     $workerIds[$w[0]] = $conn->insert_id;
+    $workerPersonIds[$w[0]] = $personId;
 }
+// Approval, for the workers seeded as active.
+//
+// Migration 034 made approval a requirement and backfilled every already-active
+// worker on a real database. These rows are inserted AFTER the migrations run, so
+// the backfill never sees them -- and without this the fixtures are a workforce
+// nobody ever approved, which is not what a working system looks like and makes
+// every gate test start from a false state.
+//
+// approved_by is the seeded admin: a fixture approval needs a fixture approver,
+// and NULL here would mean "approved by nobody", which is what the migration says
+// about records whose approver genuinely cannot be known.
+$adminId = (int) $conn->query(
+    "SELECT id FROM users WHERE email = 'admin@local.invalid' LIMIT 1"
+)->fetch_row()[0];
+$conn->query(
+    "UPDATE workers SET approved_at = created_at, approved_by = $adminId,
+            approval_note = 'Approved by the seed fixtures'
+      WHERE status = 'active' AND approved_at IS NULL"
+);
+echo "  approvals    " . $conn->affected_rows . " active workers\n";
+
 // A statutory-style entitlement in hours, so the leave balance means something.
 // 28 days at 7.5 hours is 210; part-time workers get less, which is the point of
 // counting in hours rather than days.
@@ -155,22 +215,26 @@ $conn->query('UPDATE workers SET holiday_hours = 210 WHERE holiday_hours = 0');
 echo "  workers      " . count($workers) . " (mixed compliance: valid, expiring, expired, no RTW)\n";
 
 // A worker login, so /m can be exercised. Linked to Amara Chen.
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, worker_id) VALUES (?, ?, ?, "employee", "care", ?)');
+// Deliberately the same person_id as the worker record, not a new person: a
+// worker and their login are one human, and the fixtures have to demonstrate
+// that or they teach the opposite of the rule.
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, division, worker_id, person_id) VALUES (?, ?, ?, "employee", "care", ?, ?)');
 $wname = 'Amara Chen'; $wemail = 'amara.login@local.invalid';
-$ins->bind_param('sssi', $wname, $wemail, $password, $workerIds['Amara Chen']);
+$ins->bind_param('sssii', $wname, $wemail, $password, $workerIds['Amara Chen'], $workerPersonIds['Amara Chen']);
 $ins->execute();
 
 // A client portal login, so /portal can be exercised.
-$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, client_id) VALUES (?, ?, ?, "client", ?)');
+$ins = $conn->prepare('INSERT INTO users (name, email, password_hash, role, client_id, person_id) VALUES (?, ?, ?, "client", ?, ?)');
 $cname = 'Priya Nair'; $cemail = 'priya@local.invalid';
-$ins->bind_param('sssi', $cname, $cemail, $password, $clientIds['Oakleaf Care Home']);
+$cpid = find_or_create_person($conn, $cname, $cemail);
+$ins->bind_param('sssii', $cname, $cemail, $password, $clientIds['Oakleaf Care Home'], $cpid);
 $ins->execute();
 echo "  portal login 1 client, 1 worker\n";
 
 // ---- Certifications, again spread across the expiry tiers ------------------
 $certs = [
     ['Amara Chen',    'Care Certificate',      'CC-2024-001', $d(200)],
-    ['Amara Chen',    'Moving & Handling',     null,          $d(55)],
+    ['Amara Chen',    'Moving and handling',   null,          $d(55)],
     ['Bola Adeyemi',  'NMC Registration',      'NMC-77123',   $d(90)],
     ['Cerys Hughes',  'First Aid',             null,          $d(-40)],
     ['Dmitri Volkov', 'First Aid',             null,          $d(120)],
@@ -232,9 +296,10 @@ $applicants = [
     ['Nadia Rahman',  'nadia@local.invalid',  '07700900204', 'Care assistant',  'care',     'vetting'],
     ['Omar Diallo',   'omar@local.invalid',   '07700900205', 'Security officer','security', 'offer'],
 ];
-$ins = $conn->prepare('INSERT INTO applicants (name, email, phone, role_applied, division, stage, source) VALUES (?, ?, ?, ?, ?, ?, "seed")');
+$ins = $conn->prepare('INSERT INTO applicants (name, email, phone, role_applied, division, stage, source, person_id) VALUES (?, ?, ?, ?, ?, ?, "seed", ?)');
 foreach ($applicants as $a) {
-    $ins->bind_param('ssssss', $a[0], $a[1], $a[2], $a[3], $a[4], $a[5]);
+    $personId = find_or_create_person($conn, $a[0], $a[1], $a[2]);
+    $ins->bind_param('ssssssi', $a[0], $a[1], $a[2], $a[3], $a[4], $a[5], $personId);
     $ins->execute();
 }
 echo "  applicants   " . count($applicants) . "\n";
@@ -256,6 +321,13 @@ foreach ($shifts as $s) {
     $ins->bind_param('iissssss', $s[0], $s[1], $s[2], $s[3], $s[4], $s[5], $s[6], $s[7]);
     $ins->execute();
 }
+// Point each shift at its site record (migration 038), the way the migration
+// links existing rows: same client, same name. Seeded shifts are published, as
+// every shift was before drafts existed.
+$conn->query(
+    'UPDATE shifts s JOIN sites t ON t.client_id = s.client_id AND t.name = s.site_name AND t.deleted_at IS NULL
+        SET s.site_id = t.id WHERE s.site_id IS NULL'
+);
 echo "  shifts       " . count($shifts) . " (2 open, for the matching path)\n";
 
 // ---- Academy ---------------------------------------------------------------
@@ -292,7 +364,12 @@ foreach ([
     $ins->execute();
 }
 
-$ref = 'INC-' . date('Y') . '-0001';
+// Through next_seq(), not hard-coded: the fixture used to write INC-<year>-0001
+// directly and leave the counter at zero, so the first incident anybody filed on
+// a freshly seeded database drew 0001 again and died on the unique index with a
+// 500. See docs/RULES.md — next_seq() for any sequence, no exceptions.
+$year = date('Y');
+$ref = sprintf('INC-%s-%04d', $year, next_seq($conn, "incident-$year"));
 $ins = $conn->prepare(
     'INSERT INTO incidents (ref, division, type, severity, title, detail, client_id, site_name, worker_id, status, occurred_at)
      VALUES (?, "cleaning", "near_miss", "medium", ?, ?, ?, ?, ?, "open", ?)'

@@ -14,6 +14,11 @@ require __DIR__ . '/pay-lib.php';
 
 $user = require_auth($conn);
 require_role($user, 'super_admin', 'admin', 'manager');
+// A pay run is the payroll zone by definition. workers.php already hides a
+// single worker's pay_rate_pence behind this zone, so the endpoint that returns
+// every worker's gross must ask the same question -- otherwise the narrower
+// screen is the only one enforcing it.
+if (!can_view_zone($conn, $user, 'payroll')) fail('You do not have access to this.', 403);
 
 $from = trim((string) ($_GET['from'] ?? ''));
 $to = trim((string) ($_GET['to'] ?? ''));
@@ -72,4 +77,5 @@ json_out([
     'rows' => $out['workers'],
     'totals' => $totals,
     'rules' => $out['rules'],
+    'floor_pence' => $out['floor_pence'],
 ]);

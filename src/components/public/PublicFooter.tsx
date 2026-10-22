@@ -1,176 +1,179 @@
-import { type ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { ArrowUp, Instagram, Linkedin, Facebook, Mail, Phone } from "lucide-react"
-import { Logo } from "@/components/brand/Logo"
-import { Button } from "@/components/ui/button"
-import { DIVISIONS } from "@/lib/divisions"
-import { COMPANY, SOCIALS } from "@/lib/company"
+import { Clock, Facebook, Globe, Instagram, Linkedin, Mail, MessageCircle, Phone, type LucideIcon } from "lucide-react"
+import { Wordmark } from "@/components/brand/Wordmark"
+import { useCompanyDetails, type SocialKey } from "@/lib/company"
+import { SERVICE_NAV } from "@/lib/site-nav"
+import { openStorageNotice } from "@/lib/storage-notice"
 
-/**
- * The two ways in, one per audience.
- *
- * This band used to be a newsletter signup. Its submit handler validated the
- * address, showed "Thanks — we'll keep you posted", cleared the field and sent
- * nothing anywhere: there is no subscribers table, no endpoint and no
- * unsubscribe mechanism in this system. Every person who used it was told they
- * had subscribed to a list that does not exist. A form that reports success
- * without storing anything is worse than no form, and a marketing list without a
- * working unsubscribe is a compliance problem on top -- so it is not something
- * to half-wire. Capturing subscribers properly is tracked as future work.
- *
- * What stands here instead are the two entry points that actually complete, and
- * that nothing on the site linked to: /request for a client who needs cover, and
- * /apply for someone who wants work. Both post to endpoints that persist -- a
- * service_requests row and an ATS applicant respectively.
- */
-function FooterActions() {
-  return (
-    <div className="border-b border-border">
-      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8 sm:grid-cols-2">
-        <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <h3 className="font-display text-lg font-bold tracking-tight">Need cover?</h3>
-          <p className="text-sm text-muted-foreground">
-            Tell us the role, the site and the times. We confirm fast — same-day where we can.
-          </p>
-          <Button asChild className="mt-auto">
-            <Link to="/request">Request cover</Link>
-          </Button>
-        </div>
-        <div className="flex flex-col items-start gap-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <h3 className="font-display text-lg font-bold tracking-tight">Looking for work?</h3>
-          <p className="text-sm text-muted-foreground">
-            Care, training, cleaning and security roles across London. No experience needed for the
-            academy route.
-          </p>
-          <Button asChild variant="outline" className="mt-auto">
-            <Link to="/apply">Apply to join</Link>
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
+// The website footer, on green-900 as the design system sets for the footer
+// and the careers band. Four columns and a legal line, nothing else: who we are
+// and how to reach us, the four services, the company pages, and help. Every
+// fact comes from useCompanyDetails(), which reads the CMS record (S7); a fact
+// that is not confirmed (the registered address today) is left out rather than
+// shown as a placeholder.
+//
+// There is no newsletter box. An earlier footer had one that stored nothing and
+// told people they had subscribed; capturing subscribers properly needs a table,
+// a consent record and a working unsubscribe, and is future work.
+
+// Lucide has no TikTok mark; the globe stands in, and every icon link carries
+// its name for screen readers and as a tooltip.
+const SOCIAL_ICONS: Record<SocialKey, LucideIcon> = {
+  instagram: Instagram,
+  facebook: Facebook,
+  linkedin: Linkedin,
+  tiktok: Globe,
 }
 
-const SOCIAL_ICON: Record<string, ReactNode> = {
-  instagram: <Instagram className="size-4" />,
-  facebook: <Facebook className="size-4" />,
-  linkedin: <Linkedin className="size-4" />,
-  // Inline rather than an icon font: this was the only glyph the whole
-  // Bootstrap Icons stylesheet and webfont were loaded for.
-  x: (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4 fill-current">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  ),
-}
+const COMPANY_LINKS = [
+  { to: "/about", label: "About us" },
+  { to: "/careers", label: "Careers" },
+  { to: "/news", label: "News and advice" },
+  { to: "/verify", label: "Check a certificate" },
+] as const
+
+const HELP_LINKS = [
+  { to: "/request", label: "Request staff" },
+  { to: "/contact", label: "Send a message" },
+  { to: "/data-request", label: "Your data" },
+] as const
+
+// Green-200 on green-900 is about 9:1; white for headings and hover.
+const linkClass = "text-[#C6D6BF] underline-offset-4 transition-colors duration-150 hover:text-white hover:underline"
+const headingClass = "font-sans text-sm font-semibold uppercase tracking-wider text-white"
+const iconLinkClass =
+  "grid size-10 place-items-center rounded-md border border-white/15 text-[#C6D6BF] transition-colors duration-150 hover:border-white/40 hover:text-white"
 
 export function PublicFooter() {
+  const company = useCompanyDetails()
+  const year = new Date().getFullYear()
+
   return (
-    <footer className="mt-20 border-t border-border bg-soft-mesh">
-      <FooterActions />
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">
+    <footer className="bg-[#1F3219] text-[15px] text-[#C6D6BF]">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
-          <Logo />
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            {COMPANY.primaryTagline}
+          <Link to="/" aria-label="RitaGreen Services, home" className="inline-block rounded-md">
+            <Wordmark tone="light" />
+          </Link>
+          <p className="mt-3 max-w-xs leading-relaxed">
+            Healthcare staffing, cleaning, security and training across London, from one office.
           </p>
-          <p className="mt-3 max-w-xs text-sm text-muted-foreground">
-            Care, training, cleaning and security across London. Trained, checked and trusted staff,
-            from one name.
-          </p>
-          {/* For any enquiry — Oxybuild's prominent footer call-to-action. */}
-          <div className="mt-5 rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              For any enquiry
-            </p>
-            <a
-              href={COMPANY.phoneHref}
-              className="mt-1 block font-display text-2xl font-bold tracking-tight text-primary hover:underline"
-            >
-              {COMPANY.phone}
-            </a>
-            <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-              <a href={COMPANY.emergencyPhoneHref} className="flex items-center gap-2 hover:text-foreground">
-                <Phone className="size-4" /> {COMPANY.emergencyPhone}
-                <span className="text-xs font-medium text-primary">24hr</span>
-              </a>
-              <a
-                href={`mailto:${COMPANY.email}`}
-                className="flex items-center gap-2 hover:text-foreground"
-              >
-                <Mail className="size-4" /> {COMPANY.email}
-              </a>
-            </div>
-          </div>
-        </div>
+          {company.registeredAddress && <p className="mt-3 max-w-xs">{company.registeredAddress}</p>}
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Company</h3>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li><Link to="/about" className="hover:text-foreground">About</Link></li>
-            <li><Link to="/sectors" className="hover:text-foreground">Sectors we serve</Link></li>
-            <li><Link to="/accreditations" className="hover:text-foreground">Accreditations</Link></li>
-            <li><Link to="/careers" className="hover:text-foreground">Careers</Link></li>
-            <li><Link to="/resources" className="hover:text-foreground">Resources</Link></li>
-            <li><Link to="/quote" className="hover:text-foreground">Request a quote</Link></li>
-            <li><Link to="/request" className="hover:text-foreground">Request cover</Link></li>
-            <li><Link to="/apply" className="hover:text-foreground">Apply to join us</Link></li>
-            <li><Link to="/contact" className="hover:text-foreground">Contact</Link></li>
+          <ul className="mt-5 grid gap-2.5">
+            <li className="flex items-center gap-2.5">
+              <Phone aria-hidden="true" className="size-4 shrink-0 text-[#9FB995]" />
+              <a href={company.phone.href} className={`${linkClass} font-semibold text-white`}>
+                {company.phone.display}
+              </a>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Mail aria-hidden="true" className="size-4 shrink-0 text-[#9FB995]" />
+              <a href={`mailto:${company.email}`} className={`${linkClass} break-all`}>
+                {company.email}
+              </a>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <Clock aria-hidden="true" className="size-4 shrink-0 text-[#9FB995]" />
+              <span>{company.officeHours}</span>
+            </li>
           </ul>
+
+          {(company.socials.length > 0 || company.whatsappHref) && (
+            <ul aria-label="RitaGreen on social media" className="mt-6 flex flex-wrap gap-2">
+              {company.socials.map((s) => {
+                const Icon = SOCIAL_ICONS[s.key]
+                return (
+                  <li key={s.key}>
+                    <a href={s.href} target="_blank" rel="noopener noreferrer" title={s.label} className={iconLinkClass}>
+                      <Icon aria-hidden="true" className="size-[18px]" />
+                      <span className="sr-only">{s.label} (opens in a new tab)</span>
+                    </a>
+                  </li>
+                )
+              })}
+              {company.whatsappHref && (
+                <li>
+                  <a href={company.whatsappHref} target="_blank" rel="noopener noreferrer" title="WhatsApp" className={iconLinkClass}>
+                    <MessageCircle aria-hidden="true" className="size-[18px]" />
+                    <span className="sr-only">WhatsApp (opens WhatsApp)</span>
+                  </a>
+                </li>
+              )}
+            </ul>
+          )}
         </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Services</h3>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            {DIVISIONS.map((d) => (
-              <li key={d.id}>
-                <Link to={`/services#${d.id}`} className="flex items-center gap-2 hover:text-foreground">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: d.accent }} />
-                  {d.name}
+        <nav aria-labelledby="footer-services">
+          <h2 id="footer-services" className={headingClass}>
+            Services
+          </h2>
+          <ul className="mt-4 grid gap-2.5">
+            {SERVICE_NAV.map((s) => (
+              <li key={s.to}>
+                <Link to={s.to} className={linkClass}>
+                  {s.label}
                 </Link>
               </li>
             ))}
           </ul>
-        </div>
+        </nav>
 
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">Resources & legal</h3>
-          <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-            <li><Link to="/resources" className="hover:text-foreground">Guides & articles</Link></li>
-            <li><Link to="/verify" className="hover:text-foreground">Verify a certificate</Link></li>
-            <li><Link to="/privacy" className="hover:text-foreground">Privacy policy</Link></li>
-            <li><Link to="/terms" className="hover:text-foreground">Terms</Link></li>
-            <li><Link to="/cookies" className="hover:text-foreground">Cookies</Link></li>
-            <li><Link to="/login" className="hover:text-foreground">Member login</Link></li>
+        <nav aria-labelledby="footer-company">
+          <h2 id="footer-company" className={headingClass}>
+            Company
+          </h2>
+          <ul className="mt-4 grid gap-2.5">
+            {COMPANY_LINKS.map((l) => (
+              <li key={l.to}>
+                <Link to={l.to} className={linkClass}>
+                  {l.label}
+                </Link>
+              </li>
+            ))}
           </ul>
-        </div>
+        </nav>
+
+        <nav aria-labelledby="footer-help">
+          <h2 id="footer-help" className={headingClass}>
+            Help
+          </h2>
+          <ul className="mt-4 grid gap-2.5">
+            {HELP_LINKS.map((l) => (
+              <li key={l.to}>
+                <Link to={l.to} className={linkClass}>
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              {company.urgentLabel}:{" "}
+              <a href={company.urgentPhone.href} className={`${linkClass} font-semibold text-white whitespace-nowrap`}>
+                {company.urgentPhone.display}
+              </a>
+            </li>
+          </ul>
+        </nav>
       </div>
 
-      <div className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 py-5 text-xs text-muted-foreground sm:flex-row">
+      <div className="border-t border-white/10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 text-sm sm:px-6 md:flex-row md:items-center md:justify-between">
           <p>
-            © {new Date().getFullYear()} {COMPANY.legalName}. Company No. {COMPANY.companyNo}.
+            © {year} {company.legalName}. Registered in England and Wales, company number {company.companyNo}.
           </p>
-          <div className="flex items-center gap-4">
-            {SOCIALS.map((s) => (
-              <a
-                key={s.key}
-                href={s.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={s.label}
-                className="hover:text-foreground"
-              >
-                {SOCIAL_ICON[s.key]}
-              </a>
-            ))}
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              className="flex items-center gap-1 hover:text-foreground"
-            >
-              Back to top <ArrowUp className="size-3.5" />
-            </button>
-          </div>
+          <ul aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-1">
+            <li><Link to="/privacy" className={linkClass}>Privacy</Link></li>
+            <li><Link to="/terms" className={linkClass}>Terms</Link></li>
+            <li><Link to="/cookies" className={linkClass}>Cookies</Link></li>
+            <li>
+              {/* The storage notice can be reopened at any time: a preference you
+                  cannot revisit is not a preference. */}
+              <button type="button" onClick={openStorageNotice} className={`${linkClass} rounded-sm text-left`}>
+                Storage notice
+              </button>
+            </li>
+            <li><Link to="/login" className={linkClass}>Staff login</Link></li>
+          </ul>
         </div>
       </div>
     </footer>

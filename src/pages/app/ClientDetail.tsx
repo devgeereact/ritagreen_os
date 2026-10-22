@@ -27,6 +27,8 @@ import { api, ApiError } from "@/lib/api"
 import type { Client, Job, Quote, Invoice, Enquiry, RateCard, ClientFinancials, AdminUser } from "@/lib/types"
 import { shortDate, gbp, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SitesTab } from "@/components/rota/sites-tab"
 
 type Site = { id: number; name: string; address: string | null }
 type Detail = { client: Client; sites: Site[]; rate_cards: RateCard[]; financials: ClientFinancials }
@@ -49,7 +51,10 @@ const EVENT_ICON = {
 
 // Activity timeline assembled from the module endpoints filtered to this client.
 function ClientTimeline({ clientId, email }: { clientId: number; email: string | null }) {
-  const jobs = useApi<{ jobs: Job[] }>("jobs.php")
+  // Filtered by the server. This fetched every work order in the business and
+  // filtered in the browser, which quietly computed against a truncated set once
+  // the list passed the page size.
+  const jobs = useApi<{ jobs: Job[] }>(`jobs.php?client_id=${clientId}`, [clientId])
   const quotes = useApi<{ quotes: Quote[] }>("quotes.php")
   const invoices = useApi<{ invoices: Invoice[] }>("invoices.php")
   const enquiries = useApi<{ enquiries: Enquiry[] }>("enquiries.php")
@@ -112,6 +117,15 @@ export default function ClientDetail() {
     [id],
   )
   const [editing, setEditing] = useState(false)
+  // ?tab=sites opens straight on the sites, so a link from the rota lands there.
+  const [params, setParams] = useSearchParams()
+  const tab = params.get("tab") === "sites" ? "sites" : "overview"
+  const setTab = (t: string) => {
+    const next = new URLSearchParams(params)
+    if (t === "overview") next.delete("tab")
+    else next.set("tab", t)
+    setParams(next, { replace: true })
+  }
 
   return (
     <div className="space-y-6">
@@ -140,6 +154,15 @@ export default function ClientDetail() {
             </div>
           </div>
 
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="sites">Sites ({data.sites.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="sites" className="mt-4">
+              <SitesTab clientId={data.client.id} />
+            </TabsContent>
+            <TabsContent value="overview" className="mt-4 space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-1">
               <CardHeader><CardTitle className="text-base">Contact</CardTitle></CardHeader>
@@ -170,7 +193,8 @@ export default function ClientDetail() {
               <CardHeader><CardTitle className="text-base">Sites</CardTitle></CardHeader>
               <CardContent>
                 {data.sites.length === 0 ? (
-                  <EmptyBlock title="No sites yet" hint="Add the buildings or homes this client covers." />
+                  <EmptyBlock title="No sites yet" hint="Add the buildings or homes this client covers."
+                    action={<Button size="sm" onClick={() => setTab("sites")}>Add a site</Button>} />
                 ) : (
                   <ul className="space-y-2 text-sm">
                     {data.sites.map((s) => (
@@ -209,6 +233,8 @@ export default function ClientDetail() {
           <DirectDebitCard clientId={data.client.id} />
 
           <ClientTimeline clientId={data.client.id} email={data.client.email} />
+            </TabsContent>
+          </Tabs>
 
           <EditClientDialog
             open={editing}
@@ -295,8 +321,8 @@ function Fin({ label, value, tone }: { label: string; value: string; tone?: "pri
 }
 
 const DIVISIONS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]

@@ -8,6 +8,9 @@
 //   GET  /forms-intake.php?action=health            integration status (staff)
 //   GET  /forms-intake.php?action=submissions       recent submissions (staff)
 //   POST /forms-intake.php?action=retry&id=N        re-map a failed submission
+//   POST /forms-intake.php?action=set_secret&id=N   new shared secret, shown once (owner)
+//
+// Setting up a form end to end: docs/runbooks/google-forms-intake.md.
 //
 // Called by an Apps Script on the form's submit trigger. The CMS owns the
 // record; Google Forms is an integration, which is what makes it replaceable.
@@ -16,6 +19,7 @@
 // A submission that fails to map is a person who applied and would otherwise
 // vanish; the payload is what makes them recoverable once the mapping is fixed.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/people-lib.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -97,6 +101,33 @@ if ($action === 'retry') {
     json_out($result);
 }
 
+// ---- Set a new shared secret (owner only) ------------------------------------
+// The secret is generated here, shown once in the response and stored only as a
+// hash. Nobody types one in, so nobody picks a weak one, and a leaked database
+// still does not hand over the ability to post applications. Setting a new one
+// replaces the old: the Apps Script must be given the new value, which is the
+// point when a secret may have leaked. The secret is never written to the audit
+// log.
+if ($action === 'set_secret') {
+    $user = require_auth($conn);
+    require_role($user, 'super_admin', 'admin');
+    $id = (int) ($_GET['id'] ?? 0);
+    $stmt = $conn->prepare('SELECT id, integration_key, secret_hash IS NOT NULL AS had_secret FROM integrations WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $integration = $stmt->get_result()->fetch_assoc();
+    if (!$integration) fail('Integration not found.', 404);
+
+    $secret = bin2hex(random_bytes(24));
+    $hash = hash('sha256', $secret);
+    $stmt = $conn->prepare('UPDATE integrations SET secret_hash = ? WHERE id = ?');
+    $stmt->bind_param('si', $hash, $id);
+    $stmt->execute();
+    audit($conn, (int) $user['id'], 'intake.secret_set', $integration['integration_key'], 'integration', $id,
+        ['had_secret' => (bool) $integration['had_secret']], ['had_secret' => true]);
+    json_out(['ok' => true, 'integration_key' => $integration['integration_key'], 'secret' => $secret]);
+}
+
 // ---- The webhook -----------------------------------------------------------
 // Deliberately unauthenticated in the bearer-token sense: Google Apps Script has
 // no login. It is authenticated by a shared secret compared with hash_equals,
@@ -147,7 +178,26 @@ if ($externalId !== null) {
 
 $stmt = $conn->prepare('INSERT INTO integration_submissions (integration_id, external_id, raw_payload) VALUES (?, ?, ?)');
 $stmt->bind_param('iss', $integrationId, $externalId, $raw);
-$stmt->execute();
+
+try {
+    $stmt->execute();
+} catch (mysqli_sql_exception $e) {
+    // 1062 on uniq_external (integration_id, external_id). The duplicate check
+    // above and this insert are two statements with nothing between them, so two
+    // deliveries of the same response -- which is exactly what a retrying Apps
+    // Script produces -- can both find nothing and both insert. The unique key
+    // refuses the second one correctly; unhandled, that refusal reached Google as
+    // a 500, which it would then retry again.
+    if ($e->getCode() !== 1062 || $externalId === null) throw $e;
+
+    $stmt = $conn->prepare('SELECT id, applicant_id FROM integration_submissions WHERE integration_id = ? AND external_id = ? LIMIT 1');
+    $stmt->bind_param('is', $integrationId, $externalId);
+    $stmt->execute();
+    $winner = $stmt->get_result()->fetch_assoc();
+    if (!$winner) throw $e;
+    json_out(['ok' => true, 'duplicate' => true, 'submission_id' => (int) $winner['id'],
+              'applicant_id' => $winner['applicant_id'] !== null ? (int) $winner['applicant_id'] : null]);
+}
 $submissionId = (int) $conn->insert_id;
 
 $result = process_submission($conn, $integrationId, $submissionId, $answers);
@@ -162,6 +212,31 @@ json_out($result, $result['ok'] ? 201 : 422);
  */
 function process_submission(mysqli $conn, int $integrationId, int $submissionId, array $answers): array
 {
+    // Already mapped: return what it mapped to, and map nothing again.
+    //
+    // The retry branch re-ran this on any submission it was given, so pressing
+    // "retry" on a submission that had already produced a candidate produced a
+    // SECOND candidate for the same person -- a duplicate application, a second
+    // notification email, and an integration_submissions row repointed at the
+    // newer of the two. Retry is for a submission that FAILED to map; making the
+    // guard part of the mapping rather than part of the branch means a future
+    // caller cannot reintroduce the same fault.
+    $stmt = $conn->prepare(
+        'SELECT status, applicant_id, person_id FROM integration_submissions WHERE id = ? LIMIT 1'
+    );
+    $stmt->bind_param('i', $submissionId);
+    $stmt->execute();
+    $existing = $stmt->get_result()->fetch_assoc();
+    if ($existing && $existing['applicant_id'] !== null) {
+        return [
+            'ok' => true,
+            'already_mapped' => true,
+            'submission_id' => $submissionId,
+            'applicant_id' => (int) $existing['applicant_id'],
+            'person_id' => $existing['person_id'] !== null ? (int) $existing['person_id'] : null,
+        ];
+    }
+
     $stmt = $conn->prepare('SELECT default_service, default_role FROM integrations WHERE id = ?');
     $stmt->bind_param('i', $integrationId);
     $stmt->execute();
@@ -223,13 +298,12 @@ function process_submission(mysqli $conn, int $integrationId, int $submissionId,
     // Same person resolution as every other intake route.
     $personId = find_or_create_person($conn, $name, $email, $phone);
 
-    $stmt = $conn->prepare(
-        'INSERT INTO applicants (person_id, name, email, phone, role_applied, division, source, notes)
-         VALUES (?, ?, ?, ?, ?, ?, "google_form", ?)'
-    );
-    $stmt->bind_param('issssss', $personId, $name, $email, $phone, $role, $service, $notesVal);
-    $stmt->execute();
-    $applicantId = (int) $conn->insert_id;
+    // The same applicant row and first history entry as the spreadsheet import
+    // (people-lib.php). changed_by is NULL: an integration has no user behind it.
+    $applicantId = rg_create_applicant($conn, $personId, [
+        'name' => $name, 'email' => $email, 'phone' => $phone, 'role' => $role,
+        'service' => $service, 'source' => 'google_form', 'notes' => $notesVal,
+    ], 'Submitted through a linked form', null);
 
     $stmt = $conn->prepare(
         'UPDATE integration_submissions SET status = "mapped", applicant_id = ?, person_id = ?, failure_reason = NULL, processed_at = NOW() WHERE id = ?'

@@ -37,3 +37,11 @@ server/uploads/
 .env
 .env.*
 !.env.example
+
+# Playwright MCP scratch output (snapshots, console logs)
+.playwright-mcp/
+/backups/
+__pycache__/
+
+# Local agent tool config (editor MCP ports)
+.codex/

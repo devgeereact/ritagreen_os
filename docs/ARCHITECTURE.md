@@ -1,6 +1,7 @@
 # Architecture
 
-**Status:** describes the system as built on 2026-08-31, plus the target identity model.
+**Status:** describes the system as built, revised for the 2026 build (sections S1 to S10). The
+endpoint list is [`docs/API.md`](API.md); the migrations are `ls server/migrations`.
 
 ---
 
@@ -10,10 +11,10 @@
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 55 flat endpoint files, no framework, no router, no Composer
+server/*.php: flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
-MySQL / MariaDB on cPanel shared hosting (host = localhost)
+MariaDB on cPanel shared hosting (host = localhost)
 ```
 
 The React application never touches the database. It calls PHP over HTTP and receives JSON.
@@ -28,17 +29,22 @@ API call is same-origin.
 |---|---|
 | Framework | React 19.2, Vite 7.2, TypeScript 5.9 (strict, `noUnusedLocals`, `noUnusedParameters`) |
 | Routing | `react-router-dom` 7.11, `createBrowserRouter`, single route table in `src/routes/index.tsx` |
-| UI | shadcn/ui (`new-york` style) over Radix primitives, 37 vendored components in `src/components/ui/` |
+| UI | shadcn/ui (`new-york` style) over Radix primitives, vendored in `src/components/ui/` |
 | Styling | Tailwind 3.4 with CSS custom properties, dark mode by class |
 | State | React `useState`, one context (`AuthProvider`), one fetch hook (`useApi`). No Redux, no react-query |
-| Charts | ApexCharts | 
-| Calendar | FullCalendar |
-| Documents | jsPDF (`src/lib/pdf.ts`), SheetJS + file-saver (`src/lib/csv.ts`) |
+| Documents | jsPDF and jspdf-autotable (`src/lib/pdf.ts`), file-saver (`src/lib/csv.ts`) |
 
-**Rendering split.** The 17 public marketing pages are eager-imported so the first paint is
-fast. All 34 CMS pages are `lazy()` behind a Suspense boundary, so a public visitor never
-downloads the internal application bundle. `vite.config.ts` additionally splits React, charts,
-calendar, editor and PDF into their own vendor chunks.
+**Rendering split.** `src/routes/index.tsx` imports `Home` eagerly and every other route with
+`lazy()` behind a Suspense boundary, `AppLayout` included, so a public visitor never downloads
+the office application. In `vite.config.ts` the only manual chunk is `react` (`react`,
+`react-dom`, `react-router-dom`), because it is needed immediately. Everything else, PDF
+included, is split by Rollup as genuine async chunks reached only from lazy pages. Naming more
+manual chunks promotes them into the entry's preload list, which once broke the app offline;
+the reasoning is in the comments in `vite.config.ts`. The workbox `globIgnores` list there
+keeps office-only chunks (the rota page, the PDF engine) and the serif and Latin Extended font
+files out of the worker app's install, and has to be re-checked against `ls dist/assets`
+whenever chunking changes. There is no charting or calendar library: ApexCharts left in S9 and
+FullCalendar in S3.
 
 **Data fetching.** `src/hooks/use-api.ts` is a hand-rolled GET hook carrying a monotonic
 request-id guard so a slow earlier response cannot overwrite a faster later one. There is no
@@ -53,7 +59,7 @@ cache, no mutation layer and no optimistic update.
 | Client portal | `/portal` | Client accounts |
 | Worker app | `/m` | Worker accounts |
 
-`homeFor()` in `src/providers/auth-provider.tsx` routes a user to their surface after login:
+`homeFor()` in `src/lib/access.ts` routes a user to their surface after login:
 a `client` role or a `client_id` goes to `/portal`, a `worker_id` goes to `/m`, everyone else
 to `/app`.
 
@@ -96,7 +102,9 @@ Anything that is a function of its arguments belongs in `pure.php`, where it can
 
 ## 3a. Tests
 
-Two suites, both dependency-free, both run in CI.
+The suites, what they cover and how to run them are in [`docs/TESTING.md`](TESTING.md). In
+CI, `npm run test:db` runs against a MariaDB 10.11 service (`.github/workflows/ci.yml`), the
+engine the host uses. The two dependency-free suites:
 
 | Suite | Covers | Run |
 |---|---|---|
@@ -107,14 +115,15 @@ No PHPUnit and no Composer: the production host cannot install packages, and a s
 runs on one machine stops being run. `server/tests/run.php` is a few dozen lines of assertion
 helper.
 
-Endpoints and React components are not yet covered. The compliance engine (Milestone 2) must
-be, because its output decides whether a person may work.
+Endpoints are covered by the database-backed HTTP suite (`server/tests/db/`); React components
+are not unit tested.
 
 `smtp_send()` is a minimal SMTP client written directly over `fsockopen` — no PHPMailer, no
 vendor directory. `totp_verify()` is a hand-rolled RFC 6238 implementation. Both exist because
 the host cannot install packages.
 
-**Three cron-only scripts**, refused over HTTP unless `?key=` matches `ALERTS_KEY`:
+**Three cron-only scripts**, refused over HTTP unless the key in an `X-Cron-Key` header (or,
+for existing crontabs, `?key=`) matches `ALERTS_KEY`:
 
 - `server/expiry-alerts.php` — the credential renewal engine
 - `server/send-queued-mail.php` — drains `email_queue`; the only place SMTP is spoken
@@ -197,6 +206,29 @@ home rather than to a dead end. The map mirrors the `require_role()` calls in `s
 Until this landed, `RequireAuth` accepted a `roles` prop that no route ever passed, so all
 three authenticated surfaces were gated identically on "logged in".
 
+**A failure to check is not a failure to exist.** `/verify` told a visitor whose connection had
+dropped that their certificate could not be found, because a transport error and a genuine 404
+set the same state. They are separate outcomes now, and only a real 404 says the certificate is
+not there. `/login` also stopped offering the sign-in form to somebody already signed in, which
+issued a second session for the same person; it redirects to `homeFor()` instead.
+
+**Every authenticated surface names itself.** The public site sets its title through
+`useSeo()`; `/app`, `/portal` and `/m` set nothing at all, so each of them kept whichever
+`<title>` the last public page had left in place — the browser tab, the history entry and a
+screen reader's page announcement all said the marketing home page's title. `useDocumentTitle()`
+(`src/hooks/use-document-title.ts`) now sets it: `AppLayout` derives the name from
+`titleFor()` in `src/lib/app-routes.ts`, and the portal and worker app pass their own.
+
+**A guard belongs above the read, not just above the write.** Twenty endpoints role-gated their
+POST branches and left every GET on `require_auth()` alone, so any logged-in account — a client
+portal login and a worker's own login included — could list the whole client base, every
+applicant, the full rota and the entire workforce's compliance state by calling the PHP file
+directly. The guard now sits immediately after `require_auth()` in each of them, above every
+branch, and `server/tests/guards.php` fails the suite if an endpoint returns anything between
+`require_auth()` and its first authorisation call. Endpoints that genuinely serve any
+authenticated account are named there with the reason, and each scopes its own query to the
+caller.
+
 **Role is not sufficient on its own.** A worker's login is an ordinary account with
 `users.worker_id` set, and a client portal login has `users.client_id` set, so either may hold
 a role such as `employee`. Anything gated on "internal staff" must therefore check the link,
@@ -216,11 +248,12 @@ of the same list with one extra member — `contact_enquiries.division` adds `ot
 independently. Sixteen columns in all, seventeen counting the TypeScript union.
 
 Divisions drive real behaviour: `dashboard.php` filters the whole command centre by one;
-`analytics.php` and `margin.php` report by one; `scheduling.php` uses the division to decide
+`margin.php` reports by one (`analytics.php` was retired in S9); `scheduling.php` uses the division to decide
 *which* compliance check is mandatory; `comms.php` targets an announcement at one.
 
-`src/lib/divisions.ts` is the single source of truth for the public site — one array driving
-the navigation mega-menu, the services pages, the home page and the footer.
+On the public site the names come from `src/lib/services.ts` (Healthcare, Cleaning, Security,
+Training for `care`, `cleaning`, `security`, `academy`) and the words for the six service pages
+from `src/lib/service-pages.ts`. `src/lib/divisions.ts` was retired with the 2026 website (S6).
 
 **Known cost:** adding or renaming a division is a schema migration against every ENUM column
 plus the TypeScript literals. `clients.divisions` sidesteps this with a comma-separated string,
@@ -279,7 +312,7 @@ schema.sql                       the baseline
   ↓
 migrate.php --go                 applies 001–003, stops at 004
   ↓
-backfill-people.php --go         creates people, links every record
+backfill-people.php --go         links anything unlinked; a no-op once it is
   ↓
 migrate.php --go                 004 now passes its precondition and applies
 ```
@@ -294,9 +327,10 @@ every unlinked `person_id` to 0 and leave the spine quietly wrong instead of lou
 ## 8. Configuration
 
 All server configuration is PHP constants in `server/config.php`, hand-placed on the server
-and never committed. `server/config.sample.php` is the tracked template, with 43 `define()`
-constants covering database, OpenRouter, Stripe, GoCardless, Google OAuth, Twilio, OpenWeather,
-SMTP, IMAP, CORS and security policy.
+and never committed. `server/config.sample.php` is the tracked template, with `define()`
+constants covering database, Stripe, GoCardless, Google OAuth, Twilio, SMTP, IMAP, CORS and
+security policy. The OpenRouter and OpenWeather constants left with `ai.php` and `weather.php`
+in S9; a live `config.php` that still defines them is harmless.
 
 There is no `.env` and there are no `VITE_*` variables. **Nothing secret or configurable
 reaches the client bundle** — the only `import.meta.env` uses are Vite's own `DEV` and `PROD`
@@ -322,7 +356,39 @@ locally or in CI and ship as static artifacts.
 
 `public/.htaccess` handles SPA routing, passes the `Authorization` header through, and hard
 blocks `^uploads/` so uploaded documents are only ever reachable through `files.php` with an
-authentication check.
+authentication check. It also refuses `*.sql`, `*.md`, `migrations/`, `tests/` and the six
+CLI-only tools, which land in the document root when `server/` is uploaded beside `index.html`.
+It is a mirror of the hand-maintained server copy, so a change to it is live only once
+copied across by hand; see `server/README.md`. Since S6 it also carries the 301 redirects from
+the previous website's addresses (`/services/*`, `/sectors`, `/accreditations`, `/resources/*`,
+`/apply`, `/quote`); the same table drives the in-app redirects in `src/lib/public-routes.ts`.
+
+**The sitemap is generated at build time** (S6). A small plugin in `vite.config.ts` writes
+`dist/sitemap.xml` from `PUBLIC_PAGES` in `src/lib/public-routes.ts`, the same table the router
+and its redirects read, so there is no hand-kept `public/sitemap.xml` to fall out of date.
+That file is imported by `vite.config.ts` as well as the app, which is why it has no imports
+of its own and is listed in `tsconfig.node.json`. It holds static pages only: published posts
+live in the database, which the build in CI cannot reach. Those are listed by
+`server/sitemap.php` (S7): published role pages and posts, public, cached for an hour.
+`robots.txt` names both files, which is simpler than a sitemap index and needs no
+`.htaccess` rewrite; the static file stays because the build already knows those pages.
+
+**The one third-party frame** (S7). The CSP in `public/.htaccess` was `default-src 'self'`
+with nothing allow-listed. It now adds `frame-src 'self' https://docs.google.com` and nothing
+else, for the Google Form on a role page. No script, style, font, image or connect origin was
+added. The frame is not in the page until the visitor presses "Load the application form from
+Google" (`src/components/public/GoogleFormEmbed.tsx`), so a visit that does not choose it still
+makes no third-party request; the iframe is built from the stored form id only
+(`src/lib/google-forms.ts`), never from a stored address. There is no `sandbox` attribute: one
+permissive enough for Google Forms (scripts, forms, same-origin, popups) adds little to a
+cross-origin frame and could not be tested against a real form here. The `.htaccess` change
+reaches production only when copied by hand; until then browsers block the frame and the page
+falls back to its "Open the form in a new tab" link and phone number.
+
+**Company details are a CMS record with a code fallback** (S7). `useCompanyDetails()` in
+`src/lib/company.ts` paints the bundled facts, then swaps in `server/company.php`'s record once
+it arrives (one request per page load, shared through `useSyncExternalStore`). If the API is
+down the bundled facts stay on screen.
 
 ## 10. Development environment
 
@@ -342,8 +408,7 @@ path maps to the file, which is how the production document root works too.
 
 **Configuration.** `server/config.local.php.example` is the tracked template. Copy it to
 `server/config.php`, which is gitignored. It points at a local database and **disables every
-outbound integration** — mail, SMS, WhatsApp, Stripe, GoCardless, Google SSO, OpenRouter,
-weather. A local run must not be able to email a real worker or charge a real card.
+outbound integration** — mail, SMS, WhatsApp, Stripe, GoCardless, Google SSO. A local run must not be able to email a real worker or charge a real card.
 
 **Fixtures.** `server/seed.php` populates a local database with staff logins for each role, a
 worker login, a client portal login, four clients with sites, ten workers whose compliance is

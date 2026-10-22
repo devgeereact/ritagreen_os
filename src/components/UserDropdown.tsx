@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { User, Settings, LayoutDashboard, LifeBuoy, LogOut } from "lucide-react"
 import { useAuth } from "@/providers/auth-provider"
+import { canAccess } from "@/lib/access"
 
 // Canonical account menu (top-right). Real auth data, real navigation, working
 // logout. Identity also shows in the sidebar footer; both stay consistent.
@@ -50,9 +51,11 @@ export function UserDropdown() {
         <DropdownMenuItem className="h-9 gap-2" onClick={go("/app")}>
           <LayoutDashboard className="size-4" /> Command Centre
         </DropdownMenuItem>
-        <DropdownMenuItem className="h-9 gap-2" onClick={go("/app/settings")}>
-          <Settings className="size-4" /> Settings
-        </DropdownMenuItem>
+        {canAccess(user, "/app/settings") && (
+          <DropdownMenuItem className="h-9 gap-2" onClick={go("/app/settings")}>
+            <Settings className="size-4" /> Settings
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem className="h-9 gap-2" onClick={go("/app/help")}>
           <LifeBuoy className="size-4" /> Help &amp; support
         </DropdownMenuItem>

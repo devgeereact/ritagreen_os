@@ -9,6 +9,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Programmes and their named learners. Mirrors /app/academy in src/lib/access.ts.
+require_role($user, 'super_admin', 'admin', 'manager', 'trainer', 'editor');
 $action = $_GET['action'] ?? '';
 
 // Single programme + its learners.
@@ -144,6 +146,8 @@ if ($action === 'publish' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE programmes SET status = ? WHERE id = ?');
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'programmes', $id, false)) fail('Programme not found.', 404);
     json_out(['ok' => true]);
 }
 

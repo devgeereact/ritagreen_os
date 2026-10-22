@@ -1,5 +1,22 @@
 # RITAGREEN_SETUP.md — the transformation brief
 
+> **Superseded; kept as history (note of 10 October 2026).** The multi-tenant plan below was
+> not implemented. Part D described the application as it stood on 2026-09-02; the 2026
+> build has since changed it (new design, eight-destination office app, rota, staff portal,
+> rebuilt website), so for the system as built read [`docs/BLUEPRINT.md`](BLUEPRINT.md),
+> Part 2, and [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md).
+>
+> **Superseded, 14 September 2026.** The approved product direction is
+> [`LEAN-CMS-LAUNCH-PLAN.md`](LEAN-CMS-LAUNCH-PLAN.md): one company, four services, one person
+> record, on the existing React/Vite, PHP and MySQL architecture. The multi-tenant SaaS
+> transformation this file briefs — tenants, custom domains, sign-up, per-tenant branding — is
+> **not being built**, and neither is the LMS scope it assumes.
+>
+> This file is kept because Part D is still the fullest written account of what the application
+> actually does, surface by surface, and that account is accurate and useful. Read it as a
+> description of the system, not as a plan for it. Where Parts A to C describe the
+> transformation, treat them as a proposal that was considered and set aside.
+
 **Status:** working brief, written against the codebase as it stood on 2026-09-02.
 **Owner:** Gideon Akinlotan.
 **Purpose:** a single, self-contained prompt that briefs an executive product team on RitaGreen
@@ -92,7 +109,7 @@ a rename as in scope, and treat "RitaGreen Services" as *the first tenant*, not 
 
 ### Current Product
 
-A single React 19 SPA served as static files from cPanel shared hosting, talking to 55 flat PHP
+A single React 19 SPA served as static files from cPanel shared hosting, talking to 54 flat PHP
 8.4 endpoint files in `server/` over the same domain, backed by MySQL/MariaDB. No framework, no
 router, no Composer, no Node on the host. It runs the whole of one UK services company across
 four divisions — **Care, Academy, Cleaning, Security** — as one workforce database.
@@ -106,7 +123,7 @@ Four surfaces, one bundle, one domain (`ritagreenservices.com`):
 | Client portal | `/portal` | Client accounts | 1 page, scoped by `users.client_id` |
 | Worker app | `/m` | Worker accounts | 1 page, scoped by `users.worker_id` |
 
-`homeFor()` in `src/providers/auth-provider.tsx` routes each account to its surface after login.
+`homeFor()` in `src/lib/access.ts` routes each account to its surface after login.
 
 ### Business Goals
 
@@ -134,16 +151,18 @@ Four surfaces, one bundle, one domain (`ritagreenservices.com`):
 
 ### Current Screens
 
-**Public (`src/pages/public/`, eager):** Home · Services · ServiceDetail · Sectors · About ·
-Accreditations · Careers · Apply · Contact · Quote · RequestCover · Resources · Article ·
-Verify (public certificate verification) · Offer (tokenised shift acceptance, no login) ·
-Legal · NotFoundPublic.
+**Public (`src/pages/public/`, lazy except Home; rebuilt in S6):** Home · ServicePage (the six
+service pages: Healthcare, Staffing, Supported living, Cleaning, Security, Training) · Request ·
+About · Careers · Contact · News · Article · Verify (public certificate verification) · Offer
+(tokenised shift acceptance, no login) · Legal · DataRequest · NotFoundPublic. The previous
+site's Services, ServiceDetail, Sectors, Accreditations, Quote, RequestCover, Resources and Apply
+pages are gone; their addresses redirect (`src/lib/public-routes.ts`, `public/.htaccess`).
 
 **Auth (`src/pages/auth/`):** Login · Register (creates an *applicant*, never a user) ·
 ForgotPassword · ResetPassword · GoogleCallback.
 
 **Internal CMS (`src/pages/app/`, lazy):** Dashboard · Workers · Compliance · ATS · Academy ·
-AcademyDetail · Scheduling · Timetable · Jobs · FieldOps · Timesheets · Payroll · Clients ·
+AcademyDetail · Scheduling · Jobs · FieldOps · Timesheets · Payroll · Clients ·
 ClientDetail · Bookings · Enquiries · Quotes · Contracts · Invoicing · Incidents · Files ·
 Reports · Analytics · Insights · Comms · Mailbox · Notifications · Blog · ContentStudio ·
 Testimonials · Settings · Profile · Help · SmokeTest.
@@ -152,7 +171,7 @@ Testimonials · Settings · Profile · Help · SmokeTest.
 **Worker:** WorkerApp (`/m`) — own compliance, shifts, open shifts to claim, clock in/out.
 
 Audit every one of them in Phase 2 and Phase 3. Several are thin, several duplicate each other
-(Analytics/Insights/Reports; Jobs/Scheduling/Timetable; Comms/Mailbox/Notifications), and the
+(Analytics/Insights/Reports; Comms/Mailbox/Notifications), and the
 CMS is thirty-four links deep for a business whose owner mostly wants to know what needs
 attention today.
 
@@ -163,8 +182,8 @@ in `src/index.css` and consumed through Tailwind semantic tokens.
 
 | Role | Token | Value |
 |---|---|---|
-| Primary — navy | `--primary` | `210 82% 27%` / `#0C447C` |
-| Accent — mint | `--accent` | `160 51% 58%` / `#5DCAA5` |
+| Primary, navy (retired) | `--primary` | `210 82% 27%` / `#0C447C` |
+| Accent, mint (retired) | `--accent` | `160 51% 58%` / `#5DCAA5` |
 | Surface tint | `--secondary` | `209 72% 94%` / `#E6F1FB` |
 | Status | `--destructive` · `--warning` · `--success` | expired · expiring · valid |
 
@@ -174,8 +193,8 @@ motion ≤200ms. Components: shadcn/ui `new-york` over Radix, 37 vendored into
 `src/components/ui/`. Icons: Lucide, one set. Dark mode via `next-themes`, every token
 redefined under `.dark`.
 
-Division accents (`src/lib/divisions.ts`) are a dot or a rule, never a page background:
-Care `#0C447C` · Academy `#B7791F` · Cleaning `#5DCAA5` · Security `#1B2A3C`.
+Service accents (`src/lib/services.ts`) are a dot or a rule, never a page background:
+Healthcare `#33512D` · Cleaning `#2C6E7F` · Security `#3B4452` · Training `#B7791F`.
 
 The repository previously carried **four competing brand palettes**; three were retired.
 Multi-tenancy reintroduces exactly this risk at scale — see Part B §3 on tenant theming, and do
@@ -214,7 +233,7 @@ a stale figure written down is a figure that gets trusted.
 Browser — React 19 SPA (Vite build, static files)
    │  fetch() with  Authorization: Bearer <token>
    ▼
-server/*.php — 55 flat endpoint files, no framework, no router, no Composer
+server/*.php — 54 flat endpoint files, no framework, no router, no Composer
    │  mysqli prepared statements
    ▼
 MySQL / MariaDB on cPanel shared hosting (host = localhost)
@@ -229,13 +248,13 @@ MySQL / MariaDB on cPanel shared hosting (host = localhost)
 | Pure logic | `server/pure.php` — no database, no config, no output, no globals; every date function takes an injectable clock. Holds expiry classification, reminder banding, staff/worker/client distinction, field status, person match keys, and `rg_evaluate_eligibility()` |
 | Auth | Opaque bearer tokens (32 random bytes, SHA-256 stored, 30-day expiry), bcrypt cost 12, hand-rolled RFC 6238 TOTP, device/session list with per-session revoke, rate limiting, Google SSO matched on verified email only, idle lock screen, `MANDATORY_2FA` flag |
 | Mail | Nothing in a web request opens an SMTP socket. `queue_mail()` writes to `email_queue`; `send-queued-mail.php` drains it on cron, claims each row, logs every attempt including skips. Three sends stay synchronous by design: panic alert, password reset, interactive mailbox reply |
-| Cron-only | `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` — refused over HTTP without `?key=` matching `ALERTS_KEY` |
-| CLI-only | `migrate.php`, `seed.php`, `backfill-people.php` — refuse HTTP entirely |
+| Cron-only | `expiry-alerts.php`, `send-queued-mail.php`, `backup.php` — refused over HTTP unless an `X-Cron-Key` header (or `?key=`) matches `ALERTS_KEY` |
+| CLI-only | `migrate.php`, `seed.php`, `backfill-people.php`, `create-admin.php` — refuse HTTP entirely |
 | Config | 43 `define()` constants in `server/config.php`, gitignored, hand-placed on the server. `config.sample.php` is the tracked template. **No `.env`, no `VITE_*`, nothing secret in the bundle** |
 | Deploy | Push to `main` → GitHub Actions → `npm ci` → `npm run build` → FTPS upload of `dist/` **only**. PHP, `config.php` and `.htaccess` excluded by design; `dangerous-clean-slate` must never be added (rule 16) |
 | Dev | `npm run dev` (Vite, port 5122, `strictPort`) + `npm run dev:api` (`php -S 127.0.0.1:8122 -t server`). Proxy target from `RG_API_TARGET`, defaults local, warns when overridden (rule 13) |
-| Tests | `server/tests/run.php` (254 assertions, no database, no Composer) and `src/lib/__tests__/access.test.ts` (24 assertions over the permission map) |
-| CI | typecheck, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Lint reports but does not block |
+| Tests | `server/tests/run.php` (466 assertions, no database, no Composer — pure logic plus `server/tests/guards.php`, which fails if any endpoint returns before it authorises) and three vitest files, `src/lib/__tests__/access.test.ts`, `app-routes.test.ts` and `format.test.ts` (44 tests over the permission map, `homeFor()`, the page registry and the display formatters) |
+| CI | typecheck, `eslint --max-warnings 0`, both test suites, build, source-map assertion, `php -l` across every PHP file, a guard against committing `config.php`, `python3 scripts/docs_sync.py --check`. Every one of them blocks |
 
 **Hard host constraints — treat as inputs to every recommendation:**
 - No Node on the host. The build happens locally or in CI and ships as static artifacts.
@@ -305,7 +324,7 @@ corrected against a real database.
 
 ### API Documentation
 
-55 flat endpoint files in `server/`. Dispatch is by HTTP method plus `?action=`. Full detail in
+54 flat endpoint files in `server/`. Dispatch is by HTTP method plus `?action=`. Full detail in
 `docs/API.md`. Grouped:
 
 | Group | Files |
@@ -320,7 +339,7 @@ corrected against a real database.
 | Files and reporting | `files.php` · `reports.php` · `analytics.php` · `dashboard.php` · `action-centre.php` |
 | Governance | `audit.php` · `gdpr.php` · `governance.php` · `insurance.php` · `system-health.php` · `backup.php` |
 | AI | `ai.php` — OpenRouter proxied server-side so the key never reaches the browser |
-| Tooling | `migrate.php` · `seed.php` · `backfill-people.php` · `api.php` |
+| Tooling | `migrate.php` · `seed.php` · `backfill-people.php` · `create-admin.php` · `api.php` |
 
 ### Repository
 
@@ -329,16 +348,16 @@ src/
   routes/index.tsx      every route, in one file
   pages/                public/ · app/ · auth/ · portal/ · worker/
   components/ui/        37 vendored shadcn components
-  lib/                  access.ts · divisions.ts · types.ts · pdf.ts · csv.ts · api client
+  lib/                  access.ts · services.ts · service-pages.ts · types.ts · pdf.ts · csv.ts · api client
   providers/            auth context
   hooks/use-api.ts      the one fetch hook
 server/
   lib.php               the kernel every endpoint requires
   pure.php              testable domain logic
-  *.php                 55 endpoints, one per resource
+  *.php                 54 endpoints, one per resource
   migrations/           001–018
   schema.sql            the from-scratch baseline
-  tests/run.php         254 assertions, no database
+  tests/run.php         466 assertions, no database
 docs/                   the documentation pack
 scripts/docs_sync.py    keeps PROGRESS.md in step with STATUS.json
 ```
@@ -577,17 +596,15 @@ From `docs/PROGRESS.md`, generated from `docs/STATUS.json`: **151 done · 14 par
 
 **Everything still open, in full — do not plan around a rosier picture:**
 
-- Automated tests are partial: 254 server assertions and 24 access-map assertions; **endpoints
-  and React components are untested.**
-- CI quality gates are partial: typecheck, build, `php -l` and docs checks block; **lint reports
-  only**, with 27 ESLint errors remaining (8 `react-hooks/set-state-in-effect`, 7
-  `react-refresh/only-export-components`, 4 `react-hooks/refs`, 3 `react-hooks/static-components`,
-  2 `no-explicit-any`, 2 `react-hooks/purity`, 1 `no-unused-expressions`) — all of which change
-  runtime behaviour to fix.
-- **The migration production guard does not fire on cPanel.** `migrate.php` treats
-  `DB_HOST=localhost` as local, but on shared hosting the production database *is* localhost. Gate
-  on database name or an explicit environment constant. This is a live footgun and it gets worse
-  with tenants.
+- Automated tests are partial: 466 server assertions and 44 vitest tests; **endpoints and React
+  components have no automated coverage of their own.** The endpoint sweep that found the
+  authorisation and 404 defects was run by hand against a local database, and only its invariant
+  — no endpoint returns before it authorises — is locked in `server/tests/guards.php`.
+- CI quality gates now all block, lint included, at zero errors.
+- ~~**The migration production guard does not fire on cPanel.**~~ **Fixed.** It was inferred
+  from `DB_HOST`, and on shared hosting the production database *is* localhost — so the live
+  system read as local. `config.php` now declares `RG_ENV`, read through
+  `rg_is_local_database()`, and a config without it counts as production.
 - Soft delete is missing on some records that must not be lost.
 - Compliance status is read-only where it matters, but **older screens still show raw DBS/SIA
   fields**.
@@ -647,9 +664,10 @@ states · empty states · error handling · success feedback · micro-interactio
 Identify: confusing flows · duplicate pages · dead ends · feature overload · hidden actions ·
 poor accessibility · visual inconsistencies.
 
-Start with the four that are known to be crowded: Analytics/Insights/Reports;
-Jobs/Scheduling/Timetable; Comms/Mailbox/Notifications; Workers/Compliance/ATS/Profile now that
-one person record exists and the separate applicant and worker views should have merged.
+Start with the three that are known to be crowded: Analytics/Insights/Reports;
+Comms/Mailbox/Notifications; Workers/Compliance/ATS/Profile now that one person record exists
+and the separate applicant and worker views should have merged. Timetable was the fourth and is
+resolved: it duplicated Timesheets outright and is now a redirect to it.
 
 ## PHASE 3 — UI AUDIT
 
@@ -713,7 +731,7 @@ and the blast radius of one bad migration. If it does not, sequence the move so 
 keeps working throughout, and cost it honestly — including the fact that the deploy pipeline
 uploads `dist/` over FTPS today and PHP is placed by hand.
 
-Do not propose a rewrite as the opening move. 55 endpoints, 18 migrations and 278 assertions of
+Do not propose a rewrite as the opening move. 54 endpoints, 20 migrations and 466 assertions of
 tested behaviour are an asset.
 
 ## PHASE 9 — BRAND REPOSITIONING
@@ -928,7 +946,7 @@ with evidence, and for refusing the work when the answer is no.
 | Client portal | `/portal` | Client accounts | Cover requests, assigned workers, invoices, raising an issue |
 | Worker app | `/m` | Worker accounts | Own compliance, shifts, open shifts to claim, clock in and out, payslip |
 
-One React bundle serves all four. `homeFor()` in `src/providers/auth-provider.tsx` sends an
+One React bundle serves all four. `homeFor()` in `src/lib/access.ts` sends an
 account to its own surface after login: a `client` role or a `client_id` to `/portal`, a
 `worker_id` to `/m`, everyone else to `/app`. The 17 public pages are eager-imported so first
 paint is fast; the 34 CMS pages are `lazy()` behind a Suspense boundary, so a public visitor
@@ -989,7 +1007,7 @@ cp server/config.local.php.example server/config.php
 # 3. The migration chain, in the only order that works
 php server/migrate.php --go            # applies 001–003, stops at 004 on its precondition
 npm run seed -- --confirm              # fixtures with a deliberate spread of compliance states
-php server/backfill-people.php --go    # creates people, links every record
+php server/backfill-people.php --go    # links anything not already linked; safe to re-run
 php server/migrate.php --go            # 004 now passes its precondition and applies
 
 # 4. Two processes, every day
@@ -1040,13 +1058,16 @@ hand, so a frontend deploy can never disturb it.
 4. **Upload the `*.php` files** to the document root, alongside `index.html`.
 5. **Place `.htaccess`.** It handles SPA routing, re-injects the `Authorization` header that
    LiteSpeed otherwise strips before PHP sees it, and hard-blocks `^uploads/` so uploaded
-   documents are only ever reachable through `files.php` behind an auth check.
+   documents are only ever reachable through `files.php` behind an auth check. It also refuses
+   `*.sql`, `*.md`, `migrations/`, `tests/` and the CLI tools; confirm `/schema.sql` is 403.
 6. **Create the uploads directory** and confirm a direct request to `/uploads/<stored_name>` is
    refused.
-7. **Add the cron jobs** (see D11). Each refuses HTTP without `?key=` matching `ALERTS_KEY`.
-8. **Apply migrations**, after a restore-tested backup (rule 15). Note the live footgun recorded
-   in Part B §5: `migrate.php` treats `DB_HOST=localhost` as local, and on shared hosting the
-   production database *is* localhost, so the `--production` guard never fires.
+7. **Add the cron jobs** (see D11). Each refuses HTTP unless an `X-Cron-Key` header (or `?key=`)
+   matches `ALERTS_KEY`.
+8. **Apply migrations**, after a restore-tested backup (rule 15). Set `define('RG_ENV',
+   'production');` in the server's `config.php` first — `migrate.php` reads that, not `DB_HOST`,
+   and will then refuse `--go` without `--production` and the database name typed in full. A
+   `config.php` without the constant is treated as production, so the guard holds either way.
 9. **Deploy the frontend** by pushing to `main`.
 
 **Frontend deploy.** GitHub Actions runs `npm ci`, `npm run build`, then
@@ -1245,18 +1266,19 @@ their evidence pack is exported for an inspector.
 
 ### 1. A stranger arrives — the public site
 
-The 17 public pages carry the marketing story (Home, Services, ServiceDetail, Sectors, About,
-Accreditations, Resources, Article, Legal), the two commercial front doors (Contact, Quote,
-RequestCover) and the two recruitment front doors (Careers, Apply). Two further pages exist for
+The public pages (rebuilt in S6) carry the story (Home, six service pages, About, News,
+Article, Legal), one commercial front door (Request, with four focused forms, plus the general
+form on Contact) and one recruitment front door (Careers). Two further pages exist for
 people who arrive holding a link rather than an intention: **Verify**, which resolves a
 certificate id, and **Offer**, which resolves a shift-offer token.
 
-Four public writes exist, all rate-limited, all consent-logged where they concern a person:
+Five public writes exist, all rate-limited, all consent-logged where they concern a person:
 
 | Route | Creates | Also does |
 |---|---|---|
-| `contact.php` POST | `contact_enquiries` | Office alert with the sender as `Reply-To`, plus an autoresponder. CR/LF stripped from every header value. A message beginning `CAREERS APPLICATION` switches both to careers wording |
+| `contact.php` POST | `contact_enquiries` | Office alert with the sender as `Reply-To`, plus an autoresponder. CR/LF stripped from every header value. `type` care or training (S6) files it under Healthcare or Training and opens the message with the type. A message beginning `CAREERS APPLICATION` switches both to careers wording |
 | `bookings.php` POST | `service_requests` | Links to an existing client by email, writes `consent_log`, raises a broadcast notification, emails the office |
+| `quotes.php?action=request` POST | `service_requests` (division `cleaning`, detail opens "Cleaning quote request") | The website's cleaning quote (S6). The same as bookings, never a priced quote |
 | `ats.php` POST | `applicants` (source `careers`) | `consent_log`, broadcast notification, office email |
 | `auth.php?action=register` | `applicants` (source `self-registration`) | The same three |
 
@@ -1267,7 +1289,7 @@ Enquiries land in `enquiries.php` for the office and can be marked handled. Cove
 
 Four intake routes, all of which resolve to **one person**:
 
-1. `/apply` on the public site.
+1. `/careers` on the public site (`/apply` redirects there).
 2. Self-registration through `auth.php?action=register`.
 3. **Google Forms**, through `forms-intake.php`. Apps Script POSTs with a shared secret in the
    `X-RitaGreen-Secret` header, compared with `hash_equals`; an integration with no secret
@@ -1750,7 +1772,7 @@ their own endpoints; and the places the TypeScript types and the SQL disagree.
 
 ## D10. The API at a glance
 
-55 HTTP endpoint files plus four libraries and three CLI tools. Auth posture in one table; full
+54 application endpoint files, four key-gated cron scripts, four libraries and four CLI tools. Auth posture in one table; full
 routes, parameters and return shapes in `docs/API.md`.
 
 | Endpoint | Auth posture |
@@ -1784,8 +1806,8 @@ routes, parameters and return shapes in `docs/API.md`.
 | `system-health.php` | `super_admin` / `admin` / `manager` |
 | `forms-intake.php` | **Webhook: shared secret in `X-RitaGreen-Secret`, no bearer token.** Views staff only |
 | `notifications.php` · `dashboard.php` · `ai.php` · `weather.php` · `api.php` | Auth, any role |
-| `expiry-alerts.php` · `send-queued-mail.php` · `backup.php` | **Cron.** CLI, or HTTP with `?key=` matching `ALERTS_KEY` |
-| `migrate.php` · `seed.php` · `backfill-people.php` | **CLI only.** They refuse to run over HTTP at all |
+| `expiry-alerts.php` · `send-queued-mail.php` · `backup.php` | **Cron.** CLI, or HTTP with an `X-Cron-Key` header (or `?key=`) matching `ALERTS_KEY` |
+| `migrate.php` · `seed.php` · `backfill-people.php` · `create-admin.php` | **CLI only.** They refuse to run over HTTP at all |
 
 **Four auth mechanisms are in use, and they are not interchangeable:** a bearer token; a shared
 secret compared with `hash_equals` (`forms-intake.php`, the cron scripts); an unguessable
@@ -1800,9 +1822,10 @@ understates what its code does.
 
 ## D11. Scheduled work
 
-Three cron scripts. Each runs from the CLI with no key, or over HTTP with `?key=` matching
-`ALERTS_KEY`; a key that is unset or `CHANGE_ME` refuses every HTTP request. A key in a query
-string lands in the access log, so prefer the CLI trigger.
+Three cron scripts. Each runs from the CLI with no key, or over HTTP with `ALERTS_KEY` in an
+`X-Cron-Key` header (or `?key=`, kept for existing crontabs; the header wins when both are
+sent); a key that is unset or `CHANGE_ME` refuses every HTTP request. A key in a query string
+lands in the access log and a header does not, so prefer the CLI trigger, then the header.
 
 | Script | Cadence | What it does |
 |---|---|---|
@@ -1822,9 +1845,9 @@ eligible for Security" for cleaners.
 | Route table | `src/routes/index.tsx` | Every route in one file. Public eager, CMS lazy |
 | Permission map | `src/lib/access.ts` | Path prefix → roles, plus the staff/worker/client predicates. Read by the guard **and** the sidebar |
 | Guard | `src/auth/RequireAuth.tsx` | Redirects to the user's own home, not to a dead end |
-| Auth context | `src/providers/auth-provider.tsx` | The `Role` union, `homeFor()`, token handling |
+| Auth context | `src/providers/auth-provider.tsx` | The `Role` union and token handling. `homeFor()` sits in `src/lib/access.ts`, beside the other account-kind helpers |
 | Fetch hook | `src/hooks/use-api.ts` | A hand-rolled GET hook with a monotonic request-id guard, so a slow earlier response cannot overwrite a faster later one. No cache, no mutation layer, no optimistic update |
-| Divisions | `src/lib/divisions.ts` | Single source for names, taglines, audiences, assurances, services and accents — drives the mega-menu, the services pages, the home page and the footer |
+| Services | `src/lib/services.ts`, `src/lib/service-pages.ts` | Public names and accents for the four services; the words for the six service pages |
 | Types | `src/lib/types.ts` | Including `Person`, `EligibilityVerdict`, `RequirementState`, `RightToWorkCheck`, `AuditEntry`, `QueuedEmail` |
 | Export | `src/lib/pdf.ts`, `src/lib/csv.ts` | jsPDF; SheetJS plus file-saver |
 | Shells | `PublicLayout`, `AppLayout` | Marketing nav and footer; collapsible sidebar rail with sticky header carrying global search, the AI assistant, theme toggle, notifications and the account menu |
@@ -1847,12 +1870,12 @@ component — use the token**, and never invent a fourth colour for a compliance
 |---|---|---|
 | `npm run typecheck` | `tsc -b --force` over the referenced strict config | Yes |
 | `npm run build` | Vite production build, plus a source-map assertion | Yes |
-| `npm run test:php` | `server/tests/run.php` — **254 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
-| `npm test` | `src/lib/__tests__/access.test.ts` — 24 assertions over the permission map, including that a client or worker account cannot reach `/app` | Yes |
+| `npm run test:php` | `server/tests/run.php` — **466 assertions** over pure server logic: expiry classification and its boundary days, reminder banding, the staff/worker/client distinction, field status, pay premiums, person matching, eligibility evaluation | Yes |
+| `npm test` | `src/lib/__tests__/access.test.ts`, `app-routes.test.ts` and `format.test.ts` — 44 tests over the permission map (including that a client or worker account cannot reach `/app`), `homeFor()`, the page registry behind the ⌘K palette and the browser tab title, and the display formatters | Yes |
 | `php -l` | Every PHP file | Yes |
 | Config guard | Fails if `server/config.php` is committed | Yes |
 | `python3 scripts/docs_sync.py --check` | `PROGRESS.md` matches `STATUS.json`, and **every backticked source path in `TRACEABILITY.md` resolves**, so a fabricated path fails CI | Yes |
-| `npm run lint` | ESLint | **No — reports only.** 27 errors remain; all change runtime behaviour to fix |
+| `npm run lint` | ESLint, `--max-warnings 0` | **Yes.** At zero, from 33. It stopped being advisory once the last 19 were cleared |
 
 Both test suites are dependency-free — no PHPUnit, no Composer — because the production host
 cannot install packages, and a suite that only runs on one machine stops being run.
@@ -1900,7 +1923,7 @@ with a reason.
 | To turn self-registration into a login | It creates an applicant |
 | To let a non-super-admin create a super admin, or anyone deactivate themselves | 403 and 409 |
 | To reveal whether an email address exists | `forgot` always returns ok |
-| To run `migrate.php`, `seed.php` or `backfill-people.php` over HTTP | CLI only |
+| To run `migrate.php`, `seed.php`, `backfill-people.php` or `create-admin.php` over HTTP | CLI only |
 | To run a cron script over HTTP without the key | `hash_equals` against `ALERTS_KEY`; unset or `CHANGE_ME` refuses everything |
 | To apply a migration by default | Dry run is the default; `--go` applies; a non-local database also needs `--production` and a typed database name |
 | To apply migration 004 before the backfill | Its precondition stops with the count and the remedy |

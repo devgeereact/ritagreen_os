@@ -2,6 +2,7 @@ import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { VitePWA } from "vite-plugin-pwa"
 import path from "path"
+import { buildSitemapXml } from "./src/lib/public-routes"
 
 // Where the dev server sends *.php. Local by default — see the proxy comment below.
 const API_TARGET = process.env.RG_API_TARGET ?? "http://127.0.0.1:8122"
@@ -18,6 +19,18 @@ export default defineConfig({
   base: "/",
   plugins: [
     react(),
+    // dist/sitemap.xml, written at build time from the public route table in
+    // src/lib/public-routes.ts, the same table the router's redirects read. It
+    // replaced a hand-kept public/sitemap.xml that still listed retired pages.
+    // Static pages only: published posts live in the database, which the build
+    // in CI cannot reach (docs/ARCHITECTURE.md).
+    {
+      name: "rg-sitemap",
+      apply: "build",
+      generateBundle() {
+        this.emitFile({ type: "asset", fileName: "sitemap.xml", source: buildSitemapXml() })
+      },
+    },
     // Replaces the hand-written public/sw.js, which precached four fixed paths
     // and had no idea about hashed asset names. Assets were only cached
     // opportunistically after a first fetch, so offline broke after every
@@ -35,8 +48,8 @@ export default defineConfig({
         start_url: "/m",
         scope: "/",
         display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#0C447C",
+        background_color: "#F7F6F1",
+        theme_color: "#33512D",
         icons: [
           { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -67,13 +80,21 @@ export default defineConfig({
         // entry preloads: offline, the module graph waits for it forever and the
         // app renders a blank page on every route.
         globIgnores: [
-          "**/react-apexcharts.esm-*.js", // charts — Dashboard, Analytics, Insights
-          "**/Scheduling-*.js", // carries FullCalendar
+          "**/Scheduling-*.js", // the office rota; nothing a worker opens offline
           "**/pdf-*.js", // jspdf + autotable
           "**/html2canvas*.js", // jspdf dependency
           "**/index.es-*.js", // jspdf dependency
           "**/purify.es-*.js", // jspdf dependency
           "**/og.png", // social share image, never needed by the app
+          // Latin Extended font subsets. Same-origin and cached normally by the
+          // browser, but ~430 kB that most visits never request — the browser
+          // only fetches a subset when a glyph in its unicode-range appears.
+          // Offline, a name with an accent falls back to the system font rather
+          // than the install being half a megabyte heavier for everyone.
+          "**/*-latin-ext.woff2",
+          // Source Serif 4 is for website headlines only. The worker app never
+          // sets a serif, so it is not part of the install.
+          "**/source-serif-4-*.woff2",
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",
@@ -81,28 +102,14 @@ export default defineConfig({
         // would mean showing somebody an eligibility answer that is no longer
         // true, which is worse than showing them nothing.
         navigateFallbackDenylist: [/\.php/],
-        runtimeCaching: [
-          {
-            // Read-only worker data, network-first: fresh when online, and the
-            // last known answer when not. Writes are never served from here.
-            urlPattern: /\/(me|notifications)\.php/,
-            handler: "NetworkFirst",
-            method: "GET",
-            options: {
-              cacheName: "worker-reads",
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 12 },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "google-fonts",
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
+        // No runtime caching of the API at all. The worker app used to keep
+        // me.php and notifications.php for twelve hours (NetworkFirst) so a
+        // worker saw their shifts with no signal. Since S4 the portal holds a
+        // worker's documents, emergency contacts, address, availability, leave
+        // and pay, and none of that should outlive the session on a phone that
+        // may be shared or lost. Offline, the installed shell still loads and
+        // each tab says "You are offline" instead of showing stale personal
+        // data (docs/PRIVACY.md). WorkerApp drops the old "worker-reads" cache.
       },
       devOptions: { enabled: false },
     }),

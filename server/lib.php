@@ -46,7 +46,30 @@ set_error_handler(function ($severity, $message, $file, $line) {
 // endpoint has it, and so server/tests/run.php can include it on its own.
 require_once __DIR__ . '/pure.php';
 
-if (!file_exists(__DIR__ . '/config.php')) {
+// Which config file to load. server/config.php is the only answer on the server
+// and the normal answer locally. RG_CONFIG names a different one, and exists so
+// the database-backed test harness can run against a disposable database without
+// the developer's own config.php -- which holds real credentials and points at a
+// database whose contents the tests would destroy.
+//
+// It is read from the environment, so it can only be set by whoever starts the
+// process. It is refused outright unless the file it names declares
+// RG_ENV === 'local': an env var must not be able to redirect a deployed server
+// at another database, and a test run must not be able to reach production.
+$_config = __DIR__ . '/config.php';
+$_override = getenv('RG_CONFIG');
+if (is_string($_override) && $_override !== '') {
+    $_resolved = realpath($_override);
+    if ($_resolved === false || !is_file($_resolved)) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => "RG_CONFIG names a file that does not exist: $_override"]);
+        exit;
+    }
+    $_config = $_resolved;
+}
+
+if (!file_exists($_config)) {
     http_response_code(500);
     header('Content-Type: application/json');
     // Two audiences: a developer who has not set up locally yet, and an operator
@@ -56,7 +79,16 @@ if (!file_exists(__DIR__ . '/config.php')) {
         : 'config.php is missing on the server. Upload it to the document root.']);
     exit;
 }
-require __DIR__ . '/config.php';
+require $_config;
+
+// An overriding config must say it is local, and must say it before it is
+// trusted. Checked after the require because RG_ENV is defined inside the file.
+if ($_config !== __DIR__ . '/config.php' && !(defined('RG_ENV') && RG_ENV === 'local')) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => "RG_CONFIG is only honoured for a config that declares RG_ENV as 'local'."]);
+    exit;
+}
 
 // From here on a failed query THROWS instead of returning false.
 //
@@ -70,7 +102,32 @@ require __DIR__ . '/config.php';
 // exception handler above, which logs the detail and returns a reference.
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-foreach (['ALLOWED_ORIGINS', 'OR_API_KEY', 'OR_MODEL'] as $_required) {
+// One clock, in UTC, on both sides of the connection.
+//
+// Neither was pinned. PHP used the host's date.timezone and the connection used
+// the MySQL server's default, so the two disagreed with each other by an hour
+// for the seven months of British Summer Time -- measured on a developer
+// machine: NOW() returned 21:47:21 while date() in the same request returned
+// 20:47:21. Every created_at, updated_at and decided_at was written on one
+// clock and every date comparison in PHP made on the other, so "today's shifts"
+// in field.php and the retention sweep's cut-off both moved for the hour after
+// midnight, and the same code gave different answers on a laptop and on cPanel.
+//
+// schema.sql has declared `SET time_zone = '+00:00'` since the first import;
+// that only applied to the import itself, never to a request. This makes the
+// connection honour what the schema already says.
+//
+// DATETIME columns -- shifts.starts_at, shifts.ends_at, work dates -- store a
+// literal wall-clock value and are not converted, so the rota is unaffected.
+// TIMESTAMP columns are converted on read, so on a server that was running
+// something other than UTC an existing created_at now reads as the UTC instant
+// it always was, which during BST is an hour earlier than it used to display.
+date_default_timezone_set('UTC');
+$conn->query("SET time_zone = '+00:00'");
+
+// OR_API_KEY and OR_MODEL were required here until S9 retired ai.php. A live
+// config.php that still defines them is harmless: nothing reads them.
+foreach (['ALLOWED_ORIGINS'] as $_required) {
     if (!defined($_required)) {
         http_response_code(500);
         header('Content-Type: application/json');
@@ -186,6 +243,27 @@ function require_staff(array $user): void
 }
 
 /**
+ * May this user be given a candidate, a task, an interview, a vacancy or a form to own?
+ *
+ * Internal staff only. A client portal login and a worker's login are ordinary
+ * user rows, so without this an owner could be set to somebody who is then shown
+ * -- or emailed about -- a record they are not allowed to open.
+ *
+ * Here rather than in ats.php so the Website area (vacancies.php,
+ * website-forms.php) applies the same test.
+ */
+function is_assignable_staff(mysqli $conn, int $userId): bool
+{
+    $stmt = $conn->prepare(
+        'SELECT role, client_id, worker_id FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row !== null && is_staff($row);
+}
+
+/**
  * May this account see a category of information?
  *
  * Zones exist because a worker profile is not one undifferentiated record.
@@ -241,6 +319,111 @@ function service_scope(array $user): ?string
 }
 
 /**
+ * Refuse a record that is outside this account's service scope.
+ *
+ * Call it immediately after loading the record and before doing anything with
+ * it, on reads as well as writes. service_scope() returns null for an account
+ * that sees everything, so this is a no-op for an admin.
+ *
+ * The predicate is rg_in_service_scope() in pure.php, where it is tested.
+ */
+function require_service_scope(array $user, ?string $service): void
+{
+    if (!rg_in_service_scope(service_scope($user), $service)) {
+        fail('You do not have access to this.', 403);
+    }
+}
+
+/**
+ * A worker's service, or null when there is no such worker.
+ *
+ * Branches that take a worker id need the division to check the scope against,
+ * and each of them was otherwise about to write a second query for it.
+ */
+function worker_division(mysqli $conn, int $workerId): ?string
+{
+    $stmt = $conn->prepare('SELECT division FROM workers WHERE id = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('i', $workerId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    // No worker is not this function's refusal to make -- the caller's own
+    // "not found" message is better than a scope error. Returning null means a
+    // scoped account is refused first, which tells them nothing they should not
+    // already know: that id is not theirs either way.
+    return $row['division'] ?? null;
+}
+
+/**
+ * As above, from inside an open transaction.
+ *
+ * fail() exits, and an exit with a transaction still open relies on the
+ * connection closing to roll it back. That does happen, but leaving it implicit
+ * means the next person to add a statement before the refusal has to know it.
+ */
+function require_service_scope_tx(mysqli $conn, array $user, ?string $service): void
+{
+    if (!rg_in_service_scope(service_scope($user), $service)) {
+        $conn->rollback();
+        fail('You do not have access to this.', 403);
+    }
+}
+
+/**
+ * Every service each of these people is connected to, keyed by person id.
+ *
+ * A person holds a service through a worker record, an application or a
+ * person_services row (migration 001). Lists that show people rather than
+ * workers -- the verification queue, right-to-work checks due, leave waiting on a
+ * decision -- need this to apply a service scope, and asking once for the whole
+ * page is cheaper than once per row.
+ *
+ * @param list<int> $personIds
+ * @return array<int, list<string>>
+ */
+function rg_people_services(mysqli $conn, array $personIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $personIds), static fn($id) => $id > 0)));
+    if ($ids === []) return [];
+
+    $marks = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $stmt = $conn->prepare(
+        "SELECT person_id, division AS service FROM workers WHERE person_id IN ($marks) AND deleted_at IS NULL
+         UNION SELECT person_id, division FROM applicants WHERE person_id IN ($marks) AND deleted_at IS NULL
+         UNION SELECT person_id, service FROM person_services WHERE person_id IN ($marks) AND active = 1"
+    );
+    $params = array_merge($ids, $ids, $ids);
+    $stmt->bind_param($types . $types . $types, ...$params);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $out = [];
+    while ($row = $res->fetch_assoc()) {
+        $out[(int) $row['person_id']][] = (string) $row['service'];
+    }
+    foreach ($out as $id => $services) $out[$id] = array_values(array_unique($services));
+    return $out;
+}
+
+/**
+ * Refuse a person who is outside this account's service scope.
+ *
+ * The person-level endpoints (verifications, right to work, leave, the profile)
+ * took a person id and applied no scope at all, so a manager confined to security
+ * could read a care worker's vetting record by changing a number. The rule is
+ * rg_person_in_scope() in pure.php: in scope when any service the person holds is
+ * the account's. Records belonging to the person's OTHER services are then
+ * filtered by the caller, record by record.
+ */
+function require_person_scope(mysqli $conn, array $user, int $personId): void
+{
+    $scope = service_scope($user);
+    if ($scope === null) return;
+    $services = rg_people_services($conn, [$personId])[$personId] ?? [];
+    if (!rg_person_in_scope($scope, $services)) fail('You do not have access to this.', 403);
+}
+
+/**
  * Find the person these details describe, or create them.
  *
  * Every path that creates a candidate, worker or login goes through here, which
@@ -276,8 +459,35 @@ function find_or_create_person(mysqli $conn, string $name, ?string $email = null
     $normalised = rg_normalise_email($email);
     $stmt = $conn->prepare('INSERT INTO people (full_name, email, phone, match_key) VALUES (?, ?, ?, ?)');
     $stmt->bind_param('ssss', $name, $normalised, $phone, $match['key']);
-    $stmt->execute();
-    return (int) $conn->insert_id;
+
+    try {
+        $stmt->execute();
+        return (int) $conn->insert_id;
+    } catch (mysqli_sql_exception $e) {
+        // 1062 is a duplicate on people.match_key (UNIQUE, migration 001).
+        //
+        // The lookup above and this insert are two statements with nothing
+        // between them, so two requests for the same person can both find
+        // nothing and both try to create them. The unique key is what stops the
+        // second one -- correctly -- and with no handling that refusal surfaced
+        // as a 500. Reproduced with four simultaneous applications from one
+        // address in server/tests/db/cases/050_identity.php: two runs in three
+        // returned "Server error: Duplicate entry 'e:...' for key
+        // 'uniq_people_match'" to an applicant who had done nothing wrong.
+        //
+        // The other request has created exactly the person this one was about to
+        // create, so read it and carry on. Anything else is rethrown.
+        if ($e->getCode() !== 1062 || $match['key'] === null) throw $e;
+
+        $stmt = $conn->prepare('SELECT id FROM people WHERE match_key = ? LIMIT 1');
+        $stmt->bind_param('s', $match['key']);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        // A 1062 on this key with no row behind it should not be reachable. If it
+        // ever is, the original error is the honest thing to report.
+        if (!$row) throw $e;
+        return (int) $row['id'];
+    }
 }
 
 /**
@@ -514,6 +724,171 @@ function next_seq(mysqli $conn, string $key): int
     return (int) $conn->insert_id;
 }
 
+/**
+ * Does this row exist? Used to tell "nothing changed" from "nothing there".
+ *
+ * mysqli's affected_rows is 0 both when an UPDATE matched no row AND when it
+ * matched one whose value was already what was written, so a bare affected_rows
+ * check would 404 an idempotent re-click. Ask only when nothing changed:
+ *
+ *     $stmt->execute();
+ *     if ($stmt->affected_rows === 0 && !row_exists($conn, 'quotes', $id)) {
+ *         fail('Quote not found.', 404);
+ *     }
+ *
+ * Without it a status change against a deleted or mistyped id returned
+ * {"ok": true} and wrote an audit entry for a record that does not exist.
+ *
+ * $table is a code literal at every call site and never user input. It cannot be
+ * bound, so it must stay that way -- see docs/RULES.md rule 4.
+ */
+function row_exists(mysqli $conn, string $table, int $id, bool $respectSoftDelete = true): bool
+{
+    $sql = "SELECT id FROM `$table` WHERE id = ?";
+    if ($respectSoftDelete) $sql .= ' AND deleted_at IS NULL';
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    return (bool) $stmt->get_result()->fetch_assoc();
+}
+
+/**
+ * How many rows would go with this one, per table, if it were deleted now.
+ *
+ * Read from the live foreign keys rather than a hand-kept list, so it cannot
+ * drift out of step with the schema. Only ON DELETE CASCADE children are
+ * counted: SET NULL keeps the row and loses the link, which is a different
+ * thing and not data loss.
+ *
+ * Call BEFORE the delete. Returns [table => count], omitting empty ones.
+ */
+/**
+ * Is this a local development database?
+ *
+ * Declared in config.php as RG_ENV, never inferred from DB_HOST. On cPanel the
+ * PRODUCTION database is also on localhost, so the host answers "local" for the
+ * live system — which meant `seed.php --confirm --reset` would have emptied the
+ * client, worker and invoice tables of the real database, and `migrate.php --go`
+ * would have applied DDL to it with neither --production nor the typed-name
+ * confirmation. Both guards were written believing localhost meant a laptop.
+ *
+ * A config.php that predates RG_ENV is treated as production. Failing closed is
+ * the only safe default for scripts that can wipe tables: the cost of being
+ * wrong is a refusal and a one-line edit, not a restore from backup.
+ */
+function rg_is_local_database(): bool
+{
+    return defined('RG_ENV') && RG_ENV === 'local';
+}
+
+/** What to tell somebody whose config.php has not declared where it points. */
+function rg_env_hint(): string
+{
+    if (defined('RG_ENV')) return '';
+    return "config.php does not define RG_ENV, so this is treated as production.\n"
+        . "Add one of these to server/config.php:\n"
+        . "  define('RG_ENV', 'local');       // a development database on your own machine\n"
+        . "  define('RG_ENV', 'production');  // the live database\n";
+}
+
+function cascade_counts(mysqli $conn, string $table, int $id): array
+{
+    $stmt = $conn->prepare(
+        'SELECT k.TABLE_NAME, k.COLUMN_NAME
+         FROM information_schema.KEY_COLUMN_USAGE k
+         JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+           ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+          AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+         WHERE k.CONSTRAINT_SCHEMA = DATABASE()
+           AND k.REFERENCED_TABLE_NAME = ?
+           AND r.DELETE_RULE = "CASCADE"'
+    );
+    $stmt->bind_param('s', $table);
+    $stmt->execute();
+    $children = [];
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) $children[] = $row;
+
+    $counts = [];
+    foreach ($children as $child) {
+        // Both names come from information_schema, never from a request, and
+        // neither can be bound. See docs/RULES.md rule 4.
+        $childTable = (string) $child['TABLE_NAME'];
+        $childColumn = (string) $child['COLUMN_NAME'];
+        $q = $conn->prepare("SELECT COUNT(*) FROM `$childTable` WHERE `$childColumn` = ?");
+        $q->bind_param('i', $id);
+        $q->execute();
+        $n = (int) $q->get_result()->fetch_row()[0];
+        if ($n > 0) $counts[$childTable] = $n;
+    }
+    return $counts;
+}
+
+// ----- Marketing consent -----
+//
+// There is no marketing_preferences table. consent_log already records
+// (email, kind, granted, source, ip), which is the right shape; it simply never
+// held a granted = 0 row because nothing ever wrote one. An opt-out is a new
+// row, never a deletion: erasing the record that somebody unsubscribed is
+// precisely how they get signed up again by the next import.
+
+/**
+ * May we send marketing to this address?
+ *
+ * The latest row wins, and no row means no. Silence is not consent, and an
+ * address we have never asked is an address we have not been given permission
+ * to email.
+ */
+function marketing_allowed(mysqli $conn, string $email): bool
+{
+    $email = mb_strtolower(trim($email));
+    if ($email === '') return false;
+    $stmt = $conn->prepare(
+        'SELECT granted FROM consent_log WHERE email = ? AND kind = "marketing" ORDER BY id DESC LIMIT 1'
+    );
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return $row !== null && (int) $row['granted'] === 1;
+}
+
+/** Record a marketing choice, in either direction. */
+function record_marketing_consent(mysqli $conn, string $email, bool $granted, string $source): void
+{
+    $email = mb_strtolower(trim($email));
+    if ($email === '') return;
+    $g = $granted ? 1 : 0;
+    $ip = client_ip();
+    $stmt = $conn->prepare(
+        'INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "marketing", ?, ?, ?)'
+    );
+    $stmt->bind_param('siss', $email, $g, $source, $ip);
+    $stmt->execute();
+}
+
+/**
+ * The secret behind unsubscribe links.
+ *
+ * Not derived from anything else. A configuration this depends on should be
+ * absent loudly rather than fall back to something that merely looks random.
+ */
+function app_secret(): string
+{
+    $s = defined('APP_SECRET') ? (string) APP_SECRET : '';
+    return ($s === '' || $s === 'CHANGE_ME') ? '' : $s;
+}
+
+/** A one-click unsubscribe URL, or null when APP_SECRET has not been set. */
+function unsubscribe_link(string $email): ?string
+{
+    $secret = app_secret();
+    if ($secret === '') return null;
+    $base = defined('PUBLIC_BASE_URL') ? rtrim((string) PUBLIC_BASE_URL, '/') : '';
+    if ($base === '') return null;
+    return $base . '/unsubscribe.php?e=' . rawurlencode(mb_strtolower(trim($email)))
+        . '&t=' . rg_unsubscribe_token($email, $secret);
+}
+
 // ----- Email notifications -----
 // Optional: only fires when config.php defines MAIL_ENABLED, MAIL_FROM and
 // MAIL_TO. Used to alert the office the moment a public enquiry or application
@@ -672,6 +1047,67 @@ function encode_mime_word(string $text): string
     return $text;
 }
 
+// ----- Feature switches (migration 036) -----
+// The owner turns finance, online payments, SMS/WhatsApp, the inbox and the AI
+// assistant on and off in Settings. The rule for each name is in pure.php
+// (rg_feature_on); this reads the stored rows once per request.
+
+/** Every stored switch as name => enabled. Empty if migration 036 is not applied. */
+function feature_rows(mysqli $conn): array
+{
+    static $rows = null;
+    if ($rows !== null) return $rows;
+    $rows = [];
+    try {
+        $res = $conn->query('SELECT name, enabled FROM feature_switches');
+        while ($r = $res->fetch_assoc()) $rows[$r['name']] = (int) $r['enabled'];
+    } catch (mysqli_sql_exception $e) {
+        // No table yet: PHP uploaded ahead of the migration. Fall back to the
+        // defaults, which preserve what the server did before switches existed.
+        error_log('feature_switches unreadable, using defaults: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
+/** Is a feature switched on? Unknown names are off. */
+function feature_enabled(mysqli $conn, string $name): bool
+{
+    return rg_feature_on($name, feature_rows($conn));
+}
+
+/** Refuse the request with a 403 when a feature is switched off. */
+function require_feature(mysqli $conn, string $name, string $what): void
+{
+    if (!feature_enabled($conn, $name)) {
+        fail("$what is switched off. An owner can turn it on in Settings, Features.", 403);
+    }
+}
+
+// ----- Settings (migration 038) -----
+// Numbers the owner may change, such as the minimum rest between shifts. The
+// names and defaults are in rg_setting_defaults() (pure.php).
+
+/** Every stored setting as name => value. Empty if migration 038 is not applied. */
+function setting_rows(mysqli $conn, bool $fresh = false): array
+{
+    static $rows = null;
+    if ($rows !== null && !$fresh) return $rows;
+    $rows = [];
+    try {
+        $res = $conn->query('SELECT name, value FROM app_settings');
+        while ($r = $res->fetch_assoc()) $rows[$r['name']] = $r['value'];
+    } catch (mysqli_sql_exception $e) {
+        error_log('app_settings unreadable, using defaults: ' . $e->getMessage());
+    }
+    return $rows;
+}
+
+/** One integer setting, falling back to its default. */
+function setting_int(mysqli $conn, string $name): int
+{
+    return rg_setting_int($name, setting_rows($conn));
+}
+
 // ----- SMS (Twilio) -----
 // Optional: only sends when TWILIO_SID/TWILIO_TOKEN/TWILIO_FROM are set in
 // config.php. Used for shift offers and reminders. Every attempt is logged to
@@ -703,6 +1139,11 @@ function send_sms(mysqli $conn, ?string $to, string $body): bool
 
     if (!$num) {
         sms_log($conn, (string) $to, $body, 'failed', 'invalid number');
+        return false;
+    }
+    // Switched off by the owner: logged, so the office can see what would have gone.
+    if (!feature_enabled($conn, 'sms_whatsapp')) {
+        sms_log($conn, $num, $body, 'skipped', 'sms switched off in settings');
         return false;
     }
     if (!sms_enabled()) {
@@ -749,6 +1190,10 @@ function send_whatsapp(mysqli $conn, ?string $to, string $body): bool
     $body = mb_substr($body, 0, 1500);
     if (!$num) {
         sms_log($conn, (string) $to, $body, 'failed', 'whatsapp: invalid number');
+        return false;
+    }
+    if (!feature_enabled($conn, 'sms_whatsapp')) {
+        sms_log($conn, $num, $body, 'skipped', 'whatsapp switched off in settings');
         return false;
     }
     if (!whatsapp_enabled()) {
@@ -849,4 +1294,48 @@ function notify(mysqli $conn, ?int $userId, string $title, string $body = '', st
     $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, body, url) VALUES (?, ?, ?, ?, ?)');
     $stmt->bind_param('issss', $userId, $type, $title, $body, $url);
     $stmt->execute();
+}
+
+// ----- Scheduled jobs: when each last ran (migration 043) -----
+//
+// Each cron script calls rg_cron_started() once it has passed its own key check,
+// and rg_cron_succeeded() at the point it has done its job. The finish time is
+// written on shutdown whatever happened, so a run that died part way shows a
+// finish without a success. Settings reads cron_runs through system-health.php.
+//
+// Never allowed to break the job it describes: before migration 043 is applied
+// the table does not exist, and a backup must not fail for want of a heartbeat.
+function rg_cron_started(mysqli $conn, string $job): void
+{
+    try {
+        $stmt = $conn->prepare(
+            'INSERT INTO cron_runs (job, last_started_at, runs) VALUES (?, UTC_TIMESTAMP(), 1)
+             ON DUPLICATE KEY UPDATE last_started_at = UTC_TIMESTAMP(), runs = runs + 1'
+        );
+        $stmt->bind_param('s', $job);
+        $stmt->execute();
+    } catch (Throwable $e) {
+        return;
+    }
+    register_shutdown_function(static function () use ($conn, $job): void {
+        try {
+            $stmt = $conn->prepare('UPDATE cron_runs SET last_finished_at = UTC_TIMESTAMP() WHERE job = ?');
+            $stmt->bind_param('s', $job);
+            $stmt->execute();
+        } catch (Throwable $e) {
+            // The connection may already be gone; the start time still stands.
+        }
+    });
+}
+
+function rg_cron_succeeded(mysqli $conn, string $job, string $detail = ''): void
+{
+    try {
+        $detail = mb_substr($detail, 0, 255);
+        $stmt = $conn->prepare('UPDATE cron_runs SET last_success_at = UTC_TIMESTAMP(), last_detail = ? WHERE job = ?');
+        $stmt->bind_param('ss', $detail, $job);
+        $stmt->execute();
+    } catch (Throwable $e) {
+        // As above: recording the run must never fail the run.
+    }
 }

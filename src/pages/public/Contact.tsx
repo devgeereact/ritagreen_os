@@ -1,227 +1,89 @@
-import { useState } from "react"
 import { Link } from "react-router-dom"
-import { Mail, Phone, MapPin, Clock } from "lucide-react"
-import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { PageHeader, Section } from "@/components/public/section"
-import { Faqs } from "@/components/public/Faqs"
-import { api, ApiError } from "@/lib/api"
-import { DIVISIONS } from "@/lib/divisions"
-import { COMPANY, FAQS } from "@/lib/company"
+import { GeneralEnquiryForm } from "@/components/public/forms/ContactForms"
+import { useCompanyDetails } from "@/lib/company"
 import { useSeo } from "@/hooks/use-seo"
 
-const NEXT_STEPS = [
-  "We read your enquiry and route it to the right division.",
-  "A named contact replies — usually the same working day.",
-  "We confirm scope, availability and rates in writing.",
-  "We vet, brief and send the right people, then keep cover steady.",
-]
-
+// /contact: how to reach the office, and the general message form
+// (contact.php, type general). Staff, quotes, care and training each have their
+// own focused form on /request, linked from here so nobody has to describe a
+// shift in a free-text box.
 export default function Contact() {
+  const company = useCompanyDetails()
   useSeo({
-    title: "Contact RitaGreen — tell us what you need",
-    description:
-      "One enquiry reaches the right division — care staff, training, cleaning or security. We'll get the right people ready, usually the same day. Call or send a message.",
+    title: "Contact us",
+    description: `Call RitaGreen Services on ${company.phone.display}, email ${company.email}, or send a message. ${company.officeHours}.`,
     path: "/contact",
   })
 
-  const [submitting, setSubmitting] = useState(false)
-  const [division, setDivision] = useState("")
-  const [errors, setErrors] = useState<{ name?: string; email?: string; message?: string }>({})
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
-    const data = new FormData(form)
-    const payload = {
-      name: String(data.get("name") || "").trim(),
-      email: String(data.get("email") || "").trim(),
-      phone: String(data.get("phone") || "").trim(),
-      division,
-      message: String(data.get("message") || "").trim(),
-    }
-
-    // Inline per-field validation so the offending field is marked, not just a toast.
-    const next: typeof errors = {}
-    if (!payload.name) next.name = "Please tell us your name."
-    if (!payload.email) next.email = "Please add an email so we can reply."
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) next.email = "That email doesn't look right."
-    if (!payload.message) next.message = "Tell us briefly what you need."
-    setErrors(next)
-    if (Object.keys(next).length > 0) {
-      const first = form.querySelector<HTMLElement>("[aria-invalid='true']")
-      first?.focus()
-      return
-    }
-
-    setSubmitting(true)
-    try {
-      await api("contact.php", { method: "POST", body: payload, auth: false })
-      toast.success("Thanks. We've received your enquiry and will be in touch shortly.")
-      form.reset()
-      setDivision("")
-      setErrors({})
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again."
-      toast.error(msg)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   return (
     <>
-      <PageHeader
-        eyebrow="Contact"
-        title="Tell us what you need, and when"
-        intro="One enquiry reaches the right division — staff, training, cleaning or security. We'll get the right people ready, usually the same day."
-      />
-      <Section className="grid gap-12 md:grid-cols-3">
-        {/* Form */}
-        <form onSubmit={onSubmit} className="space-y-5 md:col-span-2" noValidate>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="name">
-                Name <span className="text-destructive" aria-hidden="true">*</span>
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                required
-                autoComplete="name"
-                aria-invalid={!!errors.name}
-                aria-describedby={errors.name ? "name-error" : undefined}
-                onChange={() => errors.name && setErrors((p) => ({ ...p, name: undefined }))}
-              />
-              {errors.name && <p id="name-error" className="text-xs text-destructive">{errors.name}</p>}
+      <PageHeader eyebrow="Contact" title="Talk to the office" intro={<p>Call, email or send a message. A person in our office will pick it up.</p>} />
+      <Section tone="surface">
+        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-[1.5rem] leading-tight">Call or email</h2>
+              <dl className="mt-4 grid gap-4">
+                <div>
+                  <dt className="text-sm text-muted-foreground">Office</dt>
+                  <dd>
+                    <a href={company.phone.href} className="text-xl font-semibold text-foreground underline-offset-4 hover:underline">
+                      {company.phone.display}
+                    </a>
+                    <span className="block text-[15px] text-muted-foreground">{company.officeHours}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">{company.urgentLabel}</dt>
+                  <dd>
+                    <a href={company.urgentPhone.href} className="text-xl font-semibold text-foreground underline-offset-4 hover:underline">
+                      {company.urgentPhone.display}
+                    </a>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Email</dt>
+                  <dd>
+                    <a href={`mailto:${company.email}`} className="break-all font-semibold text-foreground underline-offset-4 hover:underline">
+                      {company.email}
+                    </a>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-muted-foreground">Area</dt>
+                  <dd>{company.area}</dd>
+                </div>
+                {company.registeredAddress && (
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Registered office</dt>
+                    <dd>{company.registeredAddress}</dd>
+                  </div>
+                )}
+              </dl>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">
-                Email <span className="text-destructive" aria-hidden="true">*</span>
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "email-error" : undefined}
-                onChange={() => errors.email && setErrors((p) => ({ ...p, email: undefined }))}
-              />
-              {errors.email && <p id="email-error" className="text-xs text-destructive">{errors.email}</p>}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Phone (optional)</Label>
-              <Input id="phone" name="phone" type="tel" autoComplete="tel" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="division">What is this about?</Label>
-              <Select value={division} onValueChange={setDivision}>
-                <SelectTrigger id="division">
-                  <SelectValue placeholder="Choose a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DIVISIONS.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="other">Something else</SelectItem>
-                </SelectContent>
-              </Select>
+
+            <div>
+              <h2 className="text-[1.5rem] leading-tight">Quicker with a focused form</h2>
+              <ul className="mt-4 grid gap-2">
+                <li><Link to="/request?type=staff" className="font-semibold text-primary underline underline-offset-4">Request staff</Link></li>
+                <li><Link to="/request?type=cleaning" className="font-semibold text-primary underline underline-offset-4">Ask for a cleaning quote</Link></li>
+                <li><Link to="/request?type=care" className="font-semibold text-primary underline underline-offset-4">Ask about support for you or a family member</Link></li>
+                <li><Link to="/request?type=training" className="font-semibold text-primary underline underline-offset-4">Ask about training</Link></li>
+                <li><Link to="/careers" className="font-semibold text-primary underline underline-offset-4">Apply for work</Link></li>
+                <li><Link to="/data-request" className="font-semibold text-primary underline underline-offset-4">Ask what data we hold about you</Link></li>
+              </ul>
             </div>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="message">
-              Message <span className="text-destructive" aria-hidden="true">*</span>
-            </Label>
-            <Textarea
-              id="message"
-              name="message"
-              rows={5}
-              required
-              placeholder="Tell us the role, the site and the times you need covered."
-              aria-invalid={!!errors.message}
-              aria-describedby={errors.message ? "message-error" : undefined}
-              onChange={() => errors.message && setErrors((p) => ({ ...p, message: undefined }))}
-            />
-            {errors.message && <p id="message-error" className="text-xs text-destructive">{errors.message}</p>}
-          </div>
-          <Button type="submit" size="lg" disabled={submitting}>
-            {submitting ? "Sending…" : "Send enquiry"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            By sending this you agree we may contact you about your enquiry. We handle your details
-            under our{" "}
-            <Link to="/privacy" className="font-medium text-primary hover:underline">privacy policy</Link>.
-          </p>
-        </form>
 
-        {/* Aside */}
-        <aside className="space-y-5 text-sm">
-          <div className="surface p-5">
-            <h2 className="font-semibold">Get in touch</h2>
-            <ul className="mt-3 space-y-3 text-muted-foreground">
-              <li>
-                <a href={COMPANY.phoneHref} className="flex items-center gap-3 hover:text-foreground">
-                  <Phone className="size-4 text-primary" /> {COMPANY.phone}
-                </a>
-              </li>
-              <li>
-                <a href={`mailto:${COMPANY.email}`} className="flex items-center gap-3 hover:text-foreground">
-                  <Mail className="size-4 text-primary" /> {COMPANY.email}
-                </a>
-              </li>
-              <li className="flex items-start gap-3"><MapPin className="mt-0.5 size-4 text-primary" /> {COMPANY.area}</li>
-              <li className="flex items-start gap-3"><Clock className="mt-0.5 size-4 text-primary" /> {COMPANY.hours}</li>
-            </ul>
+          <div className="rounded-lg border border-border bg-background p-5 sm:p-8">
+            <h2 className="text-[1.5rem] leading-tight">Send a message</h2>
+            <div className="mt-6">
+              <GeneralEnquiryForm />
+            </div>
           </div>
-
-          <div className="surface bg-soft-mesh p-5">
-            <h2 className="font-semibold">What happens next</h2>
-            <ol className="mt-4 space-y-3 text-muted-foreground">
-              {NEXT_STEPS.map((s, i) => (
-                <li key={s} className="flex items-start gap-3">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="leading-relaxed">{s}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="surface p-5 text-muted-foreground">
-            <p>Already a client or worker? Use the member login to reach your account.</p>
-            <Link to="/login" className="mt-2 inline-block font-medium text-primary hover:underline">
-              Member login
-            </Link>
-          </div>
-        </aside>
-      </Section>
-
-      {/* FAQ */}
-      <section className="border-t border-border bg-soft-mesh">
-        <div className="mx-auto max-w-3xl px-4 py-16 md:py-24">
-          <p className="eyebrow">FAQ</p>
-          <h2 className="mt-3 text-2xl font-bold md:text-3xl">Before you ask</h2>
-          <p className="mt-4 leading-relaxed text-muted-foreground">
-            A few answers to the questions we hear most. Anything else, just send a message.
-          </p>
-          <Faqs items={FAQS} className="mt-8" />
         </div>
-      </section>
+      </Section>
     </>
   )
 }

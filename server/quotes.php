@@ -4,10 +4,107 @@
 // POST /quotes.php {title, division, net_pence, client_id?}  -> create (20% VAT)
 // POST /quotes.php?action=status&id=5 {status}   -> sent | declined
 // POST /quotes.php?action=accept&id=5            -> accept + auto-create an invoice
+// POST /quotes.php?action=request (public)        -> a cleaning quote request from the website
 require __DIR__ . '/lib.php';
 
-$user = require_auth($conn);
 $action = $_GET['action'] ?? '';
+
+// ---------- Public: a cleaning quote request from the website ----------
+//
+// The website's quote form used to post to contact.php, so a request for a
+// priced cleaning contract arrived in the general enquiry inbox as free text.
+//
+// It does not become a row in `quotes`. A quote is a priced document with a
+// number, a net figure and VAT, and the office writes it; this is somebody asking
+// for one, with no price and no client record yet. It is filed where the office
+// already triages incoming work for a price: the service_requests queue (the
+// Bookings screen), as a Cleaning request whose detail opens "Cleaning quote
+// request". That queue's status runs new -> quoted, which is exactly this
+// journey, and the Bookings screen is not hidden by the finance switch.
+//
+// Same guards as the other public forms: rate-limited by IP, every field capped
+// at its column, explicit consent to be contacted, marketing a separate unticked
+// box recorded only as a yes.
+if (method() === 'POST' && $action === 'request') {
+    rate_limit($conn, 'quote', 5, 600);
+    $d = body();
+    // Single-line fields lose CR/LF: they are interpolated into a mail subject.
+    $line = static fn (string $k): string => trim(str_replace(["\r", "\n"], ' ', (string) ($d[$k] ?? '')));
+    $name = $line('contact_name');
+    $email = trim((string) ($d['email'] ?? ''));
+    $phone = $line('phone');
+    $org = $line('organisation');
+    $area = $line('area');
+    $siteType = $line('site_type');
+    $size = $line('size');
+    $frequency = $line('frequency');
+    $startDate = $line('start_date');
+    $notes = trim((string) ($d['notes'] ?? ''));
+    $consent = !empty($d['consent']);
+    $marketing = !empty($d['marketing_consent']);
+
+    $siteTypes = rg_cleaning_site_types();
+    $frequencies = rg_cleaning_frequencies();
+
+    if ($name === '') fail('Please add your name.');
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('A valid email is required.');
+    if (!array_key_exists($siteType, $siteTypes)) fail('Choose the type of site.');
+    if (!array_key_exists($frequency, $frequencies)) fail('Choose how often you need cleaning.');
+    if (!$consent) fail('Please agree to be contacted about your request.');
+    if (mb_strlen($name) > 160) fail('That name is too long.');
+    if (mb_strlen($email) > 190) fail('That email is too long.');
+    if (mb_strlen($phone) > 40) fail('That phone number is too long.');
+    if (mb_strlen($org) > 160) fail('That organisation name is too long.');
+    if (mb_strlen($area) > 120) fail('That area is too long.');
+    if (mb_strlen($size) > 200) fail('Please describe the size more briefly.');
+    if (mb_strlen($notes) > 3000) fail('Please keep the notes under 3000 characters.');
+    $startVal = null;
+    if ($startDate !== '') {
+        $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $startDate);
+        if (!$dt || $dt->format('Y-m-d') !== $startDate) fail('That start date is not a date.');
+        $startVal = $startDate;
+    }
+
+    $detail = "Cleaning quote request\n"
+        . 'Organisation: ' . ($org !== '' ? $org : 'not given') . "\n"
+        . 'Site type: ' . $siteTypes[$siteType] . "\n"
+        . 'Area: ' . ($area !== '' ? $area : 'not given') . "\n"
+        . 'Size: ' . ($size !== '' ? $size : 'not given') . "\n"
+        . 'Frequency: ' . $frequencies[$frequency] . "\n"
+        . 'Start: ' . ($startVal ?? 'not given')
+        . ($notes !== '' ? "\n\nNotes:\n$notes" : '');
+
+    // Link to an existing client by email if we know them, as bookings.php does.
+    $clientId = null;
+    $stmt = $conn->prepare('SELECT id FROM clients WHERE email = ? AND deleted_at IS NULL LIMIT 1');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    if ($row = $stmt->get_result()->fetch_assoc()) $clientId = (int) $row['id'];
+
+    $site = $org !== '' ? $org : ($area !== '' ? $area : null);
+    $phoneVal = $phone !== '' ? $phone : null;
+    $stmt = $conn->prepare(
+        'INSERT INTO service_requests (client_id, contact_name, email, phone, division, site_name, detail)
+         VALUES (?, ?, ?, ?, "cleaning", ?, ?)'
+    );
+    $stmt->bind_param('isssss', $clientId, $name, $email, $phoneVal, $site, $detail);
+    $stmt->execute();
+
+    $ip = client_ip();
+    $stmt = $conn->prepare('INSERT INTO consent_log (email, kind, granted, source, ip) VALUES (?, "quote", 1, "cleaning-quote", ?)');
+    $stmt->bind_param('ss', $email, $ip);
+    $stmt->execute();
+    if ($marketing) record_marketing_consent($conn, $email, true, 'quote');
+
+    notify($conn, null, 'New cleaning quote request', "$name: " . $siteTypes[$siteType] . ', ' . $frequencies[$frequency], 'booking', '/app/bookings');
+    // Queued regardless of whether mail is on -- see server/send-queued-mail.php.
+    queue_mail($conn, MAIL_TO, "New cleaning quote request: $name", "$name <$email>" . ($phoneVal ? " ($phoneVal)" : '') . "\n\n$detail", $email);
+    json_out(['ok' => true], 201);
+}
+
+$user = require_auth($conn);
+// The quote pipeline, including client names and values. Reads were unguarded.
+require_role($user, 'super_admin', 'admin', 'manager');
 
 if (method() === 'GET') {
     $res = $conn->query(
@@ -41,6 +138,8 @@ if ($action === 'status' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE quotes SET status = ? WHERE id = ? AND status NOT IN ("accepted")');
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'quotes', $id, false)) fail('Quote not found.', 404);
     audit($conn, (int) $user['id'], 'quote.status', "#$id -> $status");
     json_out(['ok' => true]);
 }
@@ -94,6 +193,11 @@ if (method() === 'POST') {
     if ($title === '') fail('A quote title is required.');
     if (!in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Invalid division.');
     if ($net <= 0) fail('Enter a net amount greater than zero.');
+
+    // Check the parents before drawing a number: a stale id reached the INSERT
+    // and came back as a foreign-key 500 with the constraint name in it, having
+    // already burnt a sequence value on a record that was never written.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
 
     $vat = (int) round($net * 0.20);
     $total = $net + $vat;

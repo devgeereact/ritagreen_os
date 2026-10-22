@@ -3,133 +3,123 @@
 @tailwind utilities;
 
 @layer base {
-  /* RitaGreen Design System v2 — Navy + Mint rebrand.
-     Primary #0C447C, Accent #5DCAA5, Surface #E6F1FB, BG #FFFFFF. */
+  /* RitaGreen design system v3: the company green, warm neutrals.
+     Source: docs/DESIGN_SYSTEM.md (from the 2026 plan, file 04). The navy and
+     mint v2 palette is retired; do not reintroduce it.
+     Every value is an HSL triple so Tailwind can apply opacity. The hex beside
+     each one is the design value it was converted from. */
   :root {
-    /* white canvas, deep navy ink */
-    --background: 0 0% 100%;
-    --foreground: 213 50% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 213 50% 12%;
+    /* Paper canvas, ink text. */
+    --background: 50 27% 96%; /* paper #F7F6F1 */
+    --foreground: 111 11% 12%; /* ink #1C221B */
+    --card: 0 0% 100%; /* surface #FFFFFF */
+    --card-foreground: 111 11% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 213 50% 12%;
-    /* primary navy — #0C447C */
-    --primary: 210 82% 27%;
+    --popover-foreground: 111 11% 12%;
+    /* Brand: primary buttons, links, active navigation, logo. */
+    --primary: 110 29% 25%; /* green-700 #33512D */
     --primary-foreground: 0 0% 100%;
-    /* secondary surface — #E6F1FB tint */
-    --secondary: 209 72% 94%;
-    --secondary-foreground: 210 82% 22%;
-    --muted: 209 50% 96%;
-    --muted-foreground: 213 18% 38%;
-    /* mint accent — #5DCAA5 */
-    --accent: 160 51% 58%;
-    --accent-foreground: 213 60% 10%;
-    --destructive: 4 76% 45%;
-    --destructive-foreground: 0 0% 100%;
-    --warning: 32 92% 42%;
-    --warning-foreground: 0 0% 100%;
-    --success: 160 60% 30%;
+    /* Quiet green surface for secondary buttons, tags and calendar events. */
+    --secondary: 102 25% 90%; /* green-100 #E2EBDE */
+    --secondary-foreground: 110 29% 20%; /* green-800 #2A4325 */
+    /* Neutral wells and secondary text. */
+    --muted: 51 18% 92%; /* #EFEEE8 */
+    --muted-foreground: 102 5% 36%; /* muted #5A6157 */
+    /* shadcn's accent is the hover and selected surface, not a brand colour. */
+    --accent: 100 23% 95%; /* green-50 #F1F5EF */
+    --accent-foreground: 110 29% 20%;
+    /* Ochre: one highlight per screen at most. Dots, rules, a single marker. */
+    --highlight: 36 71% 42%; /* ochre #B7791F */
+    --highlight-foreground: 0 0% 100%;
+    /* Status. Text colour on its soft background; always with an icon and a word.
+       "Valid" is deliberately not the brand green. */
+    --success: 152 56% 28%; /* #1F6F4A */
     --success-foreground: 0 0% 100%;
-    /* hairline blue-tinted borders */
-    --border: 210 30% 88%;
-    --input: 210 30% 88%;
-    --ring: 210 82% 27%;
-    /* data viz — navy + mint + neutrals + amber */
-    --chart-1: 210 82% 27%;
-    --chart-2: 160 51% 45%;
-    --chart-3: 213 18% 45%;
-    --chart-4: 209 72% 80%;
-    --chart-5: 32 92% 50%;
-    --radius: 0.625rem;
-    /* sidebar — surface rail, muted nav text, navy active */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 213 22% 30%;
-    --sidebar-primary: 210 82% 27%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 209 72% 94%;
-    --sidebar-accent-foreground: 210 82% 22%;
-    --sidebar-border: 210 30% 88%;
-    --sidebar-ring: 210 82% 27%}
-
-  .dark {
-    /* deep navy canvas, surface-tint text, brighter navy + mint accents */
-    --background: 213 45% 6%;
-    --foreground: 209 30% 95%;
-    --card: 213 38% 10%;
-    --card-foreground: 209 30% 95%;
-    --popover: 213 38% 10%;
-    --popover-foreground: 209 30% 95%;
-    --primary: 210 75% 60%;
-    --primary-foreground: 213 45% 6%;
-    --secondary: 213 28% 20%;
-    --secondary-foreground: 209 30% 92%;
-    --muted: 213 30% 14%;
-    --muted-foreground: 209 22% 68%;
-    --accent: 160 55% 58%;
-    --accent-foreground: 213 45% 6%;
-    --destructive: 4 72% 58%;
+    --success-soft: 141 33% 92%; /* #E3F1E8 */
+    --warning: 39 100% 27%; /* #8A5A00 */
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 41 81% 92%; /* #FBF0D9 */
+    --destructive: 5 71% 37%; /* #A1261B */
     --destructive-foreground: 0 0% 100%;
-    --warning: 32 92% 60%;
-    --warning-foreground: 213 45% 6%;
-    --success: 160 55% 55%;
-    --success-foreground: 213 45% 6%;
-    --border: 213 25% 22%;
-    --input: 213 25% 22%;
-    --ring: 210 75% 60%;
-    --chart-1: 210 75% 60%;
-    --chart-2: 160 55% 58%;
-    --chart-3: 209 22% 68%;
-    --chart-4: 213 28% 35%;
-    --chart-5: 32 92% 62%;
-    --sidebar-background: 213 38% 10%;
-    --sidebar-foreground: 209 22% 68%;
-    --sidebar-primary: 210 75% 60%;
-    --sidebar-primary-foreground: 213 45% 6%;
-    --sidebar-accent: 213 28% 20%;
-    --sidebar-accent-foreground: 209 30% 92%;
-    --sidebar-border: 213 25% 22%;
-    --sidebar-ring: 210 75% 60%}
-}
+    --destructive-soft: 7 76% 93%; /* #FBE4E1 */
+    --awaiting: 217 16% 28%; /* #3B4452 */
+    --awaiting-foreground: 0 0% 100%;
+    --awaiting-soft: 216 15% 94%; /* #ECEEF1 */
+    /* Lines. Inputs are darker than dividers so a field edge meets 3:1. */
+    --border: 67 12% 86%; /* #DEDFD6 */
+    --input: 75 9% 74%; /* #BFC2B6 */
+    --ring: 110 29% 25%;
+    /* Data viz, fixed order: green, teal, ochre, slate, sage. */
+    --chart-1: 110 29% 25%;
+    --chart-2: 192 49% 34%;
+    --chart-3: 36 71% 42%;
+    --chart-4: 217 16% 28%;
+    --chart-5: 105 20% 48%;
+    /* One radius: 8px. */
+    --radius: 0.5rem;
+    /* Sidebar: white rail on the paper canvas, green-50 for the active link. */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 111 11% 12%;
+    --sidebar-primary: 110 29% 25%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 100 23% 95%;
+    --sidebar-accent-foreground: 110 29% 25%;
+    --sidebar-border: 67 12% 86%;
+    --sidebar-ring: 110 29% 25%;
+    /* Shadow tint: ink, so menus and dialogs do not cast a blue cast. */
+    --shadow-tint: 111 11% 12%;
+  }
 
-
-/* ================================
-   FullCalendar – shadcn Dark Mode
-================================ */
-
-.fc {
-  --fc-border-color: hsl(var(--border));
-  --fc-page-bg-color: hsl(var(--background));
-  --fc-today-bg-color: hsl(var(--muted));
-}
-
-/* Event container */
-.fc .fc-event {
-  background-color: hsl(var(--secondary));
-  border: none;
-  border-radius: 0.5rem;
-  padding: 2px 6px;
-}
-
-/* Event text */
-.fc .fc-event-title,
-.fc .fc-event-time {
-  color: hsl(var(--secondary-foreground)) !important;
-  font-weight: 500;
-}
-
-/* Hover */
-.fc .fc-event:hover {
-  opacity: 0.9;
-}
-
-/* Day number */
-.fc .fc-daygrid-day-number {
-  color: hsl(var(--foreground));
-}
-
-/* Selected / today cell */
-.fc .fc-day-today {
-  background-color: hsl(var(--muted)) !important;
+  /* Dark mode, office app only (the website forces light). Green-black
+     surfaces from the same family, lighter greens for anything that has to
+     read against them. */
+  .dark {
+    --background: 120 11% 7%; /* #101410 */
+    --foreground: 75 10% 91%;
+    --card: 110 12% 10%;
+    --card-foreground: 75 10% 91%;
+    --popover: 110 12% 10%;
+    --popover-foreground: 75 10% 91%;
+    --primary: 103 20% 65%; /* green-300 #9FB995 */
+    --primary-foreground: 120 11% 7%;
+    --secondary: 110 14% 17%;
+    --secondary-foreground: 90 15% 90%;
+    --muted: 110 10% 14%;
+    --muted-foreground: 85 6% 66%;
+    --accent: 110 14% 16%;
+    --accent-foreground: 90 15% 92%;
+    --highlight: 36 70% 60%;
+    --highlight-foreground: 120 11% 7%;
+    --success: 151 45% 56%;
+    --success-foreground: 120 11% 7%;
+    --success-soft: 152 30% 14%;
+    --warning: 39 78% 60%;
+    --warning-foreground: 120 11% 7%;
+    --warning-soft: 39 45% 14%;
+    --destructive: 5 66% 62%;
+    --destructive-foreground: 120 11% 7%;
+    --destructive-soft: 5 40% 16%;
+    --awaiting: 216 20% 76%;
+    --awaiting-foreground: 120 11% 7%;
+    --awaiting-soft: 216 14% 18%;
+    --border: 100 8% 20%;
+    --input: 100 8% 28%;
+    --ring: 103 20% 65%;
+    --chart-1: 103 24% 62%;
+    --chart-2: 192 42% 56%;
+    --chart-3: 36 70% 60%;
+    --chart-4: 216 20% 72%;
+    --chart-5: 105 18% 44%;
+    --sidebar-background: 110 12% 9%;
+    --sidebar-foreground: 80 8% 78%;
+    --sidebar-primary: 103 20% 65%;
+    --sidebar-primary-foreground: 120 11% 7%;
+    --sidebar-accent: 110 14% 16%;
+    --sidebar-accent-foreground: 103 24% 75%;
+    --sidebar-border: 100 8% 18%;
+    --sidebar-ring: 103 20% 65%;
+    --shadow-tint: 0 0% 0%;
+  }
 }
 
 @layer base {
@@ -164,9 +154,25 @@
 }
 
 @layer components {
-  /* Small uppercase brand label that sits above headings across the site. */
+  /* Website headlines are Source Serif 4. Scoped to the public site's layout
+     (PublicLayout carries the class), so the office app and the staff portal
+     keep Source Sans 3 headings. Only 500 and 600 are shipped, so a heading
+     asking for bold gets 600 rather than a synthesised bold. */
+  .website :where(h1, h2) {
+    font-family: theme("fontFamily.display");
+    font-weight: 600;
+    font-synthesis: none;
+    letter-spacing: -0.01em;
+  }
+  /* Website body text is 17px (file 04: 17 to 18px), not the app's 14 to 16. */
+  .website {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  /* Small label above a website heading: green, semibold, sentence case. */
   .eyebrow {
-    @apply inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary;
+    @apply text-sm font-semibold text-primary;
   }
 
   /* Clean card surface: hairline border first, shadow-1 only to lift off canvas. */
@@ -179,63 +185,17 @@
 }
 
 @layer utilities {
-  /* Professional hero base — clean canvas, a faint cool tint sweeping down from
-     the top, and one restrained brand wash in the top corner. No blobs. */
-  .bg-hero-pro {
-    background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(55% 55% at 82% -5%, hsl(var(--primary) / 0.10), transparent 70%),
-      linear-gradient(to bottom, hsl(var(--secondary) / 0.55), transparent 38%);
-  }
-  /* Fine engineering grid for the hero — crisp lines that fade out toward the
-     content with a radial mask, so text stays clean. Reads precise, not busy. */
-  .bg-hero-grid {
-    background-image:
-      linear-gradient(to right, hsl(var(--primary) / 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-    background-size: 56px 56px;
-    -webkit-mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
-    mask-image: radial-gradient(120% 95% at 80% -5%, #000 28%, transparent 72%);
-  }
-  /* Quieter mesh for interior section bands. */
-  .bg-soft-mesh {
-    background-color: hsl(var(--secondary) / 0.5);
-    background-image:
-      radial-gradient(45% 70% at 100% 0%, hsl(var(--primary) / 0.08), transparent 60%),
-      radial-gradient(40% 60% at 0% 100%, hsl(var(--accent) / 0.10), transparent 55%);
-  }
-  /* Hairline grid texture — subtle structure on dark CTA bands. */
-  .bg-grid-faint {
-    background-image:
-      linear-gradient(hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--primary-foreground) / 0.06) 1px, transparent 1px);
-    background-size: 44px 44px;
-  }
-  /* Tabular figures for tables / metrics / money — reads as "precise". */
+  /* Tabular figures for tables / metrics / money: digits align down a column. */
   .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
   /* Every data table gets aligned figures automatically. */
   table { font-variant-numeric: tabular-nums; }
-  .animation-delay-100 { animation-delay: 0.1s; }
-  .animation-delay-200 { animation-delay: 0.2s; }
-  .animation-delay-300 { animation-delay: 0.3s; }
-  .animation-delay-400 { animation-delay: 0.4s; }
-  .animation-delay-500 { animation-delay: 0.5s; }
-  /* Gentle continuous float for hero cards. Duration/delay varied per card via
-     inline style so they drift independently, not in lockstep. */
-  .animate-float { animation: float 7s ease-in-out infinite; }
-  /* Soft, slow opacity pulse for the decorative hero glow. */
-  .animate-glow { animation: glow 8s ease-in-out infinite; }
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes glow {
-  0%, 100% { opacity: 0.35; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.08); }
-}
+/* The website's hero gradients, engineering grids, mesh bands, floating cards,
+   pulsing glows and staggered fade-up entrances were removed with the website
+   rebuild (section S6). They read as a generated template (2026 plan, file 04,
+   "What to avoid"). Do not reintroduce them: the website is flat paper, 1px
+   borders and deep green blocks. */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

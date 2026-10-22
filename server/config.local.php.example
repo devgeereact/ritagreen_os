@@ -14,6 +14,13 @@
 // Every outbound integration below is deliberately disabled. A local run must
 // not be able to email a real worker, charge a real card, or text anyone.
 
+// ----- Which database is this? -----
+// Declared, never guessed. seed.php, migrate.php and backfill-people.php all
+// used to read DB_HOST to decide, and on cPanel the PRODUCTION database is on
+// localhost too — so the live system looked local and `seed.php --reset` would
+// have emptied it. A config.php without this constant is treated as production.
+define('RG_ENV', 'local');
+
 // ----- Error display -----
 // On locally: you want the stack trace. Never true on the server.
 define('GK_DEBUG', true);
@@ -33,15 +40,6 @@ define('DB_NAME', 'ritagreen_os_dev');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 
-// ----- AI -----
-// Leave as CHANGE_ME and ai.php returns an error instead of calling out. Put a
-// real key here only if you are actually working on an AI feature.
-define('OR_API_KEY', 'CHANGE_ME');
-define('OR_MODEL', 'openai/gpt-oss-120b:free');
-define('OR_MODELS', ['openai/gpt-oss-120b:free']);
-define('OR_REFERER', 'http://localhost:5122');
-define('OR_TITLE', 'RitaGreenOS (local)');
-
 // ----- Payments: OFF -----
 // payments.php and gocardless.php return 503 while these are CHANGE_ME.
 define('STRIPE_SECRET_KEY', 'CHANGE_ME');
@@ -57,10 +55,6 @@ define('MANDATORY_2FA', false);
 // ----- Cron scripts -----
 // expiry-alerts.php and backup.php still run from the CLI without this.
 define('ALERTS_KEY', 'local-development-only-not-a-secret');
-
-// ----- Weather: OFF -----
-define('OPENWEATHER_API_KEY', 'CHANGE_ME');
-define('OPENWEATHER_UNITS', 'metric');
 
 // ----- SMS and WhatsApp: OFF -----
 // send_sms() logs to sms_log with status 'skipped' and returns false.

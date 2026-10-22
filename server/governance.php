@@ -1,7 +1,7 @@
 <?php
 // Deletion approval and export logging.
 //
-//   GET  /governance.php?action=deletions[&status=requested]
+//   GET  /governance.php?action=deletions[&status=requested]  -> { requests (each with is_mine), can_decide }
 //   POST /governance.php?action=request_deletion
 //   POST /governance.php?action=decide_deletion&id=N
 //   GET  /governance.php?action=exports
@@ -36,7 +36,7 @@ if (method() === 'GET' && $action === 'deletions') {
     $status = trim((string) ($_GET['status'] ?? ''));
     $sql = 'SELECT d.id, d.entity_type, d.entity_id, d.entity_label, d.reason, d.disposition,
                    d.status, d.requested_at, d.decided_at, d.decision_note, d.completed_at,
-                   r.name AS requested_by, a.name AS decided_by
+                   d.requested_by AS requested_by_id, r.name AS requested_by, a.name AS decided_by
             FROM deletion_requests d
             LEFT JOIN users r ON r.id = d.requested_by
             LEFT JOIN users a ON a.id = d.decided_by';
@@ -55,9 +55,13 @@ if (method() === 'GET' && $action === 'deletions') {
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['entity_id'] = (int) $row['entity_id'];
+        // The four-eyes rule, said in advance: the screen offers no decision on
+        // a request this account made, because decide_deletion would refuse it.
+        $row['is_mine'] = (int) $row['requested_by_id'] === (int) $user['id'];
+        unset($row['requested_by_id']);
         $items[] = $row;
     }
-    json_out(['requests' => $items]);
+    json_out(['requests' => $items, 'can_decide' => in_array($user['role'], ['super_admin', 'admin'], true)]);
 }
 
 if (method() === 'POST' && $action === 'request_deletion') {
@@ -141,24 +145,81 @@ if (method() === 'POST' && $action === 'decide_deletion') {
     if ($table === null) fail('That kind of record can no longer be removed here.', 409);
 
     $entityId = (int) $req['entity_id'];
+    $cascade = [];
     if ($req['disposition'] === 'archive') {
         // Soft delete where the table supports it, which is everywhere it matters.
         $hasDeletedAt = $conn->query("SHOW COLUMNS FROM $table LIKE 'deleted_at'")->num_rows > 0;
         if (!$hasDeletedAt) fail("Records in $table cannot be archived; they have no deleted_at.", 409);
         $stmt = $conn->prepare("UPDATE $table SET deleted_at = NOW() WHERE id = ?");
     } else {
+        // A hard delete of a file row has to take the bytes with it. Removing
+        // the row and leaving the document on disk under a random name is not a
+        // deletion, it is a deletion that cannot be found again -- the worst of
+        // both. Read the stored name first, because the row is about to go.
+        if ($table === 'files') {
+            $q = $conn->prepare('SELECT stored_name FROM files WHERE id = ? LIMIT 1');
+            $q->bind_param('i', $entityId);
+            $q->execute();
+            $f = $q->get_result()->fetch_assoc();
+            $storedName = $f ? (string) $f['stored_name'] : '';
+        }
+        // What else goes with it, and who agreed to that.
+        //
+        // Several foreign keys onto workers and people are ON DELETE CASCADE, so
+        // approving one deletion also removes shifts, timesheets, certifications
+        // and references. Some of those the business is required to keep --
+        // payroll and working-time records outlive the employment they belong to
+        // -- and none of it was visible: the approver saw one record named in the
+        // request and the rest went without trace.
+        //
+        // The schema's cascade is not changed here; what changes is that nobody
+        // can trigger it without being told first. An approval with collateral is
+        // refused once, with the counts, and only proceeds when the approver
+        // sends it back with confirm_cascade. Archiving cascades nothing and is
+        // unaffected, which is the point: it is usually the right answer.
+        $cascade = cascade_counts($conn, $table, $entityId);
+        if ($cascade && empty($data['confirm_cascade'])) {
+            json_out([
+                'error' => 'That deletion would take other records with it. Review the list, then '
+                    . 'send the decision again with confirm_cascade set — or reject it and request '
+                    . 'an archive instead, which keeps them.',
+                'cascade' => $cascade,
+                'confirm_with' => 'confirm_cascade',
+            ], 409);
+        }
         $stmt = $conn->prepare("DELETE FROM $table WHERE id = ?");
     }
     $stmt->bind_param('i', $entityId);
     $stmt->execute();
 
+    // Only after the row is gone, and only for a name we read from the
+    // database -- never one from a request. basename() is belt and braces
+    // against a stored_name that ever stopped being 32 hex characters.
+    if ($table === 'files' && $req['disposition'] === 'delete' && !empty($storedName)) {
+        $path = __DIR__ . '/uploads/' . basename($storedName);
+        if (is_file($path)) {
+            @unlink($path);
+            audit($conn, $uid, 'file.unlink', "#$entityId", 'file', $entityId, null, null,
+                'Approved deletion: the document itself was removed from disk.');
+        }
+    }
+
     $stmt = $conn->prepare('UPDATE deletion_requests SET status = "completed", decided_by = ?, decided_at = NOW(), decision_note = ?, completed_at = NOW() WHERE id = ?');
     $stmt->bind_param('isi', $uid, $noteVal, $id);
     $stmt->execute();
 
-    audit($conn, $uid, 'deletion.' . $req['disposition'], "{$req['entity_type']} #$entityId ({$req['entity_label']})",
-        $req['entity_type'], $entityId, ['existed' => true], ['disposition' => $req['disposition']], $req['reason']);
-    json_out(['ok' => true, 'status' => 'completed', 'disposition' => $req['disposition']]);
+    $cascadeDetail = $cascade ? ' cascaded: ' . implode(', ', array_map(
+        static fn(string $t, int $n): string => "$t $n", array_keys($cascade), $cascade
+    )) : '';
+    audit($conn, $uid, 'deletion.' . $req['disposition'], "{$req['entity_type']} #$entityId ({$req['entity_label']})$cascadeDetail",
+        $req['entity_type'], $entityId, ['existed' => true],
+        ['disposition' => $req['disposition']] + ($cascade ? ['cascaded' => $cascade] : []), $req['reason']);
+    json_out([
+        'ok' => true,
+        'status' => 'completed',
+        'disposition' => $req['disposition'],
+        'cascaded' => $cascade,
+    ]);
 }
 
 // ---- Export log ------------------------------------------------------------

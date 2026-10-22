@@ -6,6 +6,8 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The sales ledger. Reads were unguarded; the writes below already were.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 const PAYMENT_TERMS_DAYS = 30;
@@ -71,7 +73,21 @@ if ($action === 'pay' && method() === 'POST') {
     require_role($user, 'super_admin', 'admin', 'manager');
     $id = (int) ($_GET['id'] ?? 0);
     if ($id <= 0) fail('An invoice is required.');
-    $stmt = $conn->prepare('UPDATE invoices SET status = "paid" WHERE id = ?');
+
+    // Three outcomes worth telling apart. It reported success for all of them:
+    // a mistyped id, an invoice a credit note has voided, and a real payment.
+    $stmt = $conn->prepare('SELECT status FROM invoices WHERE id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $invoice = $stmt->get_result()->fetch_assoc();
+    if (!$invoice) fail('Invoice not found.', 404);
+    if ($invoice['status'] === 'void') fail('That invoice has been voided by a credit note.', 409);
+    if ($invoice['status'] === 'paid') json_out(['ok' => true]);   // already settled
+
+    // amount_paid_pence is set here as payments.php and gocardless.php both set
+    // it on their own confirmations. Marking an invoice paid by hand left it at
+    // zero, so the same invoice read as paid in one column and unpaid in another.
+    $stmt = $conn->prepare('UPDATE invoices SET status = "paid", amount_paid_pence = total_pence WHERE id = ?');
     $stmt->bind_param('i', $id);
     $stmt->execute();
     audit($conn, (int) $user['id'], 'invoice.paid', "#$id");
@@ -97,6 +113,11 @@ if (method() === 'POST') {
     $seq = next_seq($conn, "invoice-$year");
     $number = sprintf('INV-%s-%04d', $year, $seq);
     $dueDate = date('Y-m-d', strtotime('+' . PAYMENT_TERMS_DAYS . ' days'));
+
+    // A client_id that does not exist reached the INSERT and came back as a
+    // foreign-key 500 with the constraint name in it, plus a logged exception,
+    // for what is only a stale id from a page left open.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
 
     $stmt = $conn->prepare(
         'INSERT INTO invoices (number, client_id, division, net_pence, vat_pence, total_pence, status, due_date)

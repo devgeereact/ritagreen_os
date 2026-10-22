@@ -1,23 +1,39 @@
 # Product requirements — RitaGreen Services Management System
 
-**Status:** baseline, written against the codebase as it stood on 2026-08-31.
+**Status:** baseline of 2026-08-31, revised on 10 October 2026 for the owner's 2026 decisions
+([`docs/DECISIONS-2026.md`](DECISIONS-2026.md)).
 **Owner:** Gideon Akinlotan.
 
 ---
 
 ## 1. What this product is
 
-RitaGreen Services is one company operating four divisions — Care, Academy, Cleaning and
-Security. This product is the single operational system behind all four: one company
-identity, one worker database, one recruitment pipeline, one compliance engine, one document
-repository, one communications centre, one audit trail.
+RitaGreen Services Ltd trades as one brand, **RitaGreen Services**, with four services shown
+publicly as **Healthcare, Cleaning, Security and Training** (decision D01). Inside the system
+the services keep their stored identifiers `care`, `cleaning`, `security` and `academy`; the
+public labels "Care" and "Academy" are retired. This product is the single operational system
+behind all four: one company identity, one worker database, one recruitment pipeline, one
+compliance engine, one document repository, one communications centre, one audit trail, plus
+the public website that feeds it.
+
+| Service (internal id) | Who buys | What RitaGreen supplies | Roles |
+|---|---|---|---|
+| **Healthcare** (`care`), the lead service | Care homes, nursing homes, NHS and private hospitals, day centres, supported living providers; families arranging care | Staffing, planned and short-notice cover. Second: supported living and home care, offered through a page and an enquiry route (D02) | Care assistant, support worker, senior carer, registered nurse |
+| **Cleaning** (`cleaning`) | Landlords and letting agents, schools, construction sites, offices and commercial premises, care settings | Contract cleaning: regular, communal, void and end of tenancy, builders' cleans, infection-control cleaning | Cleaner, team leader, supervisor |
+| **Security** (`security`) | Companies, sites, events, residential blocks | Licensed officers: static guarding, patrols, door supervision, concierge | Security officer, door supervisor, supervisor |
+| **Training** (`academy`) | Care providers, RitaGreen's own staff, individuals | Instructor-led courses, in person or through an external provider | Trainer |
+
+Healthcare leads navigation, the homepage and the social profiles. The checks each service
+needs, and what the system enforces, are in [`docs/UK_GOVERNANCE.md`](UK_GOVERNANCE.md), "Role
+checks per service". Company facts the owner has still to confirm (registered address, CQC
+position, office hours and others) are listed in [`docs/ROADMAP.md`](ROADMAP.md).
 
 It is a **workforce compliance and operations platform**, not four management systems and not
 a website CMS that grew.
 
-The Academy is a **record and enrolment module inside the platform**, not a learning
-management system. The platform records who was trained, in what, by whom, when, and when it
-expires. Course delivery stays where it is.
+Training is a **record and enrolment module inside the platform**, not a learning management
+system. The platform records bookings, attendance, who was trained, in what, by whom, when, and
+when it expires. Course delivery stays in the room or with an external provider.
 
 ## 2. The problem
 
@@ -44,8 +60,8 @@ from a spreadsheet is the risk this product exists to remove.
 Three things must become true.
 
 **One permanent record per human.** A person exists once. Candidate, worker, learner and
-former worker are *roles that person holds*, not separate records. Today the system can hold
-the same human three times over (see `docs/BLUEPRINT.md` §"The identity defect").
+former worker are *roles that person holds*, not separate records. The system used to hold the
+same human up to three times over; that is fixed (see `docs/BLUEPRINT.md`, "The identity defect").
 
 **Compliance is calculated, never remembered.** The system derives whether a person may work,
 per service, from the evidence on file and the rules configured for that service. No staff
@@ -56,12 +72,17 @@ service cannot be assigned to work in it. The system blocks the action and state
 
 ## 4. Users
 
-| User | Sees | Key need |
-|---|---|---|
-| **Owner** | Everything | "What needs my attention today?" — not a list of records |
-| **Staff** | Scoped by role and service | Get through the day's verification and recruitment work without opening fifteen pages |
-| **Worker** | Their own record only | Know their own status, upload what is asked, request leave |
-| **Client** | Their own account only | Raise a cover request, see who is assigned, see invoices |
+| User | Uses | Sees | Key need |
+|---|---|---|---|
+| **Owner** | Office app at `/app`, Today and Reports | Everything | See blockers, approvals and expiring checks at a glance, not a list of records |
+| **Office staff** | Office app at `/app` | Scoped by role and service, sensitive zones only where granted | One list of what needs doing today; one record per person |
+| **Worker** | Staff portal at `/m` | Their own record only | Know where to be, keep documents in date, ask for leave |
+| **Client organisation** | Website and enquiry forms; client portal at `/portal`, restricted until its future is decided | Their own account only | Get reliable staff quickly and know they are checked |
+| **Family arranging care** | Website, care enquiry | Nothing in the system | A human conversation, not a sales form |
+| **Job seeker** | Website careers pages and the linked Google Forms | Nothing in the system | Find a role and apply in minutes on a phone |
+
+One person can be an applicant, a worker in more than one service and a training attendee at
+once. They exist once, and approval for one service never approves them for another.
 
 The three top-level account types are Owner, Staff and Worker, with Client as a fourth,
 externally-facing type. Beneath Staff sit granular roles and per-service scoping — "Staff"
@@ -70,7 +91,7 @@ must never mean "full access".
 ## 5. Principles
 
 1. **Person-centred.** The person is the spine. Everything else hangs off them.
-2. **Service-aware.** Care, Academy, Cleaning and Security have genuinely different
+2. **Service-aware.** Healthcare, Cleaning, Security and Training have genuinely different
    requirements. One person may be eligible for some and not others, simultaneously.
 3. **Compliance-driven.** Status is derived from evidence. Rules are configured by the
    business, not hard-coded by a developer.
@@ -84,12 +105,17 @@ must never mean "full access".
 
 Explicitly out of scope. These are how this product turns into an unfinishable one.
 
-- Full payroll processing (pay *records* yes; running payroll, no)
+- Full payroll processing (pay *records* and the pay-run export yes; running payroll, no)
 - Accounting
-- A learning management system — no video hosting, no course authoring, no quizzes, no
-  classrooms
+- A learning management system: no lessons, quizzes, video hosting, course authoring,
+  classrooms or learner progress
+- Care plans and medication records. The rota schedules healthcare shifts and records clock-in; it does
+  not hold clinical or care-planning information (D02)
 - A full CRM
-- Full rota management and complex time tracking beyond what already exists
+- Route optimisation and live location tracking
+- Native app-store apps (the staff portal is an installable web app)
+- Automatic social posting, and a page builder for the website
+- Multi-company or multi-tenant features
 - AI recruitment scoring or automated hiring decisions
 - Biometric monitoring or employee surveillance
 

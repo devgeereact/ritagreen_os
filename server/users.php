@@ -11,6 +11,27 @@ $action = $_GET['action'] ?? '';
 const ROLES = ['super_admin', 'admin', 'manager', 'trainer', 'editor', 'employee', 'client'];
 const DIVS = ['care', 'academy', 'cleaning', 'security'];
 
+// Names for an owner dropdown: who a candidate, a task or an interview may be
+// assigned to. Office roles, not just admin -- a manager has to be able to hand a
+// task to a colleague, and the full account list is not theirs to read.
+//
+// Deliberately narrow: id and name, internal staff only, active only. is_staff()
+// is the same test the assignment endpoints apply, so the list cannot offer
+// somebody the write would then refuse.
+if ($action === 'assignable' && method() === 'GET') {
+    require_role($user, 'super_admin', 'admin', 'manager');
+    $res = $conn->query(
+        'SELECT id, name, role, division, client_id, worker_id
+           FROM users WHERE deleted_at IS NULL ORDER BY name'
+    );
+    $staff = [];
+    while ($row = $res->fetch_assoc()) {
+        if (!is_staff($row)) continue;
+        $staff[] = ['id' => (int) $row['id'], 'name' => $row['name'], 'role' => $row['role']];
+    }
+    json_out(['staff' => $staff]);
+}
+
 if (method() === 'GET') {
     require_role($user, 'super_admin', 'admin');
     $res = $conn->query(
@@ -41,6 +62,8 @@ if ($action === 'deactivate' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL');
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    // Already deactivated is not an error; no such account is.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'users', $id, false)) fail('User not found.', 404);
     // Revoke their tokens so access stops immediately.
     $del = $conn->prepare('DELETE FROM tokens WHERE user_id = ?');
     $del->bind_param('i', $id);

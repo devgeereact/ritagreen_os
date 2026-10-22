@@ -8,6 +8,7 @@ import { Toaster } from "sonner"
 import { AuthProvider } from "@/providers/auth-provider"
 
 import { router } from "@/routes"
+import "@/fonts.css"
 import "@/index.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

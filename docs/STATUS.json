@@ -29,6 +29,11 @@
           "note": "migrations/001. Applied and verified against a local MariaDB: schema, migrations, fixtures, backfill and the API exercised end to end. Not yet applied to production"
         },
         {
+          "name": "Backfill is safe to run twice",
+          "status": "done",
+          "note": "backfill-people.php --go inserted a fresh person for every group regardless of existing links, repointed every record at the duplicate and orphaned the original with its right-to-work checks, verifications, eligibility and leave records. Both the quickstart and the production runbook run it after a seed, when everything is already linked. It now leaves linked rows alone and gives an unlinked row its group's existing person; a group pointing at two different people is reported, never merged. Verified: --go on a linked database creates nothing and relinks nothing, and an artificially unlinked login rejoins its worker's person rather than making a second"
+        },
+        {
           "name": "Person de-duplication migration",
           "status": "done",
           "note": "server/backfill-people.php. Verified: 22 people from 23 records, no duplicates, and the UNIQUE match_key refuses a second person with the same identity (error 1062)"
@@ -97,6 +102,11 @@
           "name": "One person across every creation path",
           "status": "done",
           "note": "find_or_create_person() in lib.php is used by the public application, self-registration, the learner handoff, worker creation and user creation. A login linked to a worker inherits that worker's person"
+        },
+        {
+          "name": "Person profile, one page per person",
+          "status": "done",
+          "note": "server/people.php and /app/people/:personId: the seven tabs of docs/Plans 2026/02, read in one call behind the staff role, the person's service scope and a zone per section. Linked from the Workers list, the recruitment applicant dialog, the compliance list and the verification queue. Verified in server/tests/db/cases/140_person_profile.php and in the browser at 1280px and 375px"
         }
       ]
     },
@@ -201,7 +211,7 @@
         {
           "name": "Role-filtered navigation",
           "status": "done",
-          "note": "app-sidebar filters NAV_GROUPS through canAccess, so no link is offered that the guard would refuse"
+          "note": "src/lib/nav.ts holds the sidebar's destinations and visibleDestinations() filters them through canAccess and the owner's feature switches, so no link is offered that the guard would refuse; src/lib/__tests__/nav.test.ts checks every role"
         },
         {
           "name": "Per-service scoping is enforced",
@@ -212,6 +222,11 @@
           "name": "A super admin cannot lock themselves out",
           "status": "done",
           "note": "Denying a super admin a zone is refused, and edit-without-view is refused as incoherent. The account that fixes a mistake must not be able to lose the screen that fixes it"
+        },
+        {
+          "name": "Person-level endpoints apply service scope",
+          "status": "done",
+          "note": "require_person_scope() in lib.php, from rg_person_in_scope() in pure.php: a person is in scope when any service they hold is the account's. verifications.php, right-to-work.php, leave.php, employment-contracts.php and people.php took a person id and applied none, and the verification queue, right-to-work due list and leave lists named everybody. Verified in 140_person_profile.php"
         }
       ]
     },
@@ -269,6 +284,11 @@
           "name": "Raw submissions retained",
           "status": "done",
           "note": "The payload is stored before any mapping and kept whether or not it maps. A submission that fails to map is a person who applied and would otherwise vanish; the payload is what makes them recoverable once the mapping is fixed"
+        },
+        {
+          "name": "Onboarding checklists per service",
+          "status": "done",
+          "note": "onboarding_template_items (migration 037) and server/onboarding-templates.php, edited under Compliance, Onboarding lists. Starting onboarding seeds from the active items for the service; ad-hoc tasks are still added per person. Verified in 150_onboarding_and_approval.php"
         }
       ]
     },
@@ -324,7 +344,7 @@
         {
           "name": "Compliance status read-only in the UI",
           "status": "partial",
-          "note": "The eligibility dialog on the Workers page is read-only by construction, and there is no endpoint that would accept a compliance status. Older screens still show raw DBS/SIA fields"
+          "note": "The person profile's checks tab shows each requirement as a calculated chip (Valid, Due soon, Expired, Awaiting review, Missing) from rg_requirement_chip(); its actions add evidence or record a decision and never set a status. The Workers list still shows raw DBS/SIA fields"
         },
         {
           "name": "Right to work check record",
@@ -395,6 +415,26 @@
           "name": "Seeded rules match prior enforcement",
           "status": "done",
           "note": "Migration 003 claimed it changed no behaviour but made contract, identity and references mandatory, which scheduling.php never enforced. On production that made all 8 workers not-eligible and would have blocked every assignment. Migration 018 drops them to recommended; the 5 still blocked are exactly the 5 the old code refused"
+        },
+        {
+          "name": "Verification queue screen",
+          "status": "done",
+          "note": "Compliance, Verification queue: everything requested, received or under review, oldest first, filtered by service and type of check, scoped to the caller's service. Upload evidence, verify with what was checked, reject with a reason. Exercised in the browser as the scoped security manager"
+        },
+        {
+          "name": "Right-to-work screen",
+          "status": "done",
+          "note": "Compliance, Right to work, and the person profile: record a check with method, date checked, outcome, follow-up date and evidence, and sign it off as the named reviewer. Recording and verifying recalculate derived status at once"
+        },
+        {
+          "name": "Evidence files belong to the person they evidence",
+          "status": "done",
+          "note": "A verification, right-to-work check, contract or training record that names a document filed against somebody else is refused with 422. files.php uploads can be filed against a person directly"
+        },
+        {
+          "name": "Where a check's evidence came from is shown (S10)",
+          "status": "done",
+          "note": "rg_load_evidence() tags each entry with its origin; the profile says 'From certificate record, not yet verified' instead of 'Verifier: Nobody yet'. Precedence unchanged. Certificate labels match with & read as and (rg_label_key())"
         }
       ]
     },
@@ -409,7 +449,13 @@
         },
         {
           "name": "Shifts, templates and recurrence",
-          "status": "done"
+          "status": "done",
+          "note": "Creating was the whole of it: a shift could not be reassigned, taken off somebody or cancelled, so a worker falling ill left a wrong row on the rota with no route out but the database. scheduling.php now carries assign, unassign and cancel, each behind the same deployment gate and clash check as creating, and Scheduling opens a shift on click. has_clash() ignores archived shifts and the shift being moved, so a shift no longer clashes with itself. Template generation created shifts in the past: the weekday offset is 0 when today is the template's own weekday, so generating on a Monday afternoon produced that morning's 09:00 shift. Past occurrences are skipped, and the duplicate guard now respects deleted_at, which was silently blocking a slot's regeneration."
+        },
+        {
+          "name": "Work orders (jobs)",
+          "status": "done",
+          "note": "Care visits, cleans, guard shifts and courses on one spine. Untracked here until now, and it showed: a typo in a date was stored as 1970-01-01, an \"Other\" job was filed under Care whatever it was for, notes were collected and never shown, there was no edit and nothing ever set deleted_at. The status enum had \"assigned\" with no assignee column anywhere, so the status was decorative; migration 030 adds assigned_to and the assignment runs the same deployment gate as the rota, so the job board cannot name somebody a shift would refuse."
         },
         {
           "name": "Smart matching on skills and availability",
@@ -418,16 +464,17 @@
         {
           "name": "Shift broadcast with token acceptance",
           "status": "done",
-          "note": "shift_offers, SMS link, no login required"
+          "note": "shift_offers, SMS link, no login required. Accepting now runs the gate; a refusal expires the offer, audits shift.blocked and notifies the office. Broadcast is rate-limited: each one sends a chargeable message per eligible worker and nothing stopped it being replayed."
         },
         {
           "name": "Field events: clock in/out, check-in, panic, signature",
           "status": "done",
-          "note": "shift_events with lat/lng"
+          "note": "shift_events with lat/lng. Location is personal data about the worker (docs/PRIVACY.md) and was gated by nothing: is_staff() is true for editor, trainer and employee, so a content role could read a named colleague's coordinates to six decimal places. Coordinates now need the 'employment' zone, or the trail being the caller's own. The board also dropped a shift the moment it was clocked out, and ran one query per shift for its events; both fixed. A panic alert still cannot be acknowledged and, separately, notifies nobody -- notifications.php forces every broadcast to read. A panic alert also reached nobody: it is a broadcast, and notifications had no per-user read state, so it arrived marked read and the bell never lit (migration 025). It can be acknowledged now (migration 026) instead of latching for the day, the clock sequence is validated, and check_in -- accepted by the API and advertised in the palette since the beginning -- can finally be sent from the worker app."
         },
         {
           "name": "Timesheets and pay rules",
-          "status": "done"
+          "status": "done",
+          "note": "Three defects found by exercising it. A shift crossing midnight was rejected outright, so a business running waking nights could not record one; the calculation is now rg_shift_minutes() in pure.php, UTC and tested. Reads were open to any internal account, so an editor could pull every worker's hours; every branch now takes the payroll zone, and src/lib/access.ts matches. A manager could only ever approve, never reject: migration 021 adds 'rejected', decided_at and decision_note, and a reason is required. The page defaults to the current month and filters by period and status. Two more found on a second pass: the approval tiles were summed in PHP over the fetched page, so past the page size the figure the office acts on was an under-count, and they are now aggregated by the database over the whole filter; and overtime reset at the pay-period boundary because the 40-hour threshold is weekly while the query was monthly, so a week straddling a month end was counted from zero twice. pay_compute() now scans whole ISO weeks and pays only the days inside the period. The arithmetic itself was untestable: base pay, the overtime split, the premium application and both roundings all lived inside pay_compute()'s result loop, which takes a mysqli. pay_entry() and pay_holiday() are pure and carry 21 assertions; pay_compute() calls them and its output is unchanged to the penny. A further pass on the money itself: pay rates had no history, so a rise re-priced every past period (migration 022); bank holidays stopped at 2026-12-28, so every 2027 one would have paid flat (migration 023, generated by a tested function); premiums were chosen for a whole entry from its start hour, so a 05:00-13:00 shift was paid night for all eight hours (rg_premium_segments); nothing checked a rate was plausible (migration 024, a dated floor, empty by default, flags not blocks); and the PDF was titled PAYSLIP while showing gross with no deductions and no net. Two structural gaps closed as well (migration 029): there was no unpaid break at all, so gross hours were paid door to door, and a timesheet had no link to the shift it was worked on, so the same shift could be claimed and paid twice with nothing showing it. Clock events still do not become timesheets automatically. me.php?action=payslip had also existed since the beginning with nothing calling it; the worker app shows it now, gross and labelled as such."
         },
         {
           "name": "Compliance guard on assignment",
@@ -437,7 +484,7 @@
         {
           "name": "Single reusable deployment eligibility gate",
           "status": "done",
-          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned"
+          "note": "rg_deployment_check() in compliance-lib.php, called by scheduling.php. Verified: a worker with a lapsed SIA is refused with the exact reason and the full blocking list; an eligible worker is assigned Reusable, but three paths did not reuse it. Matching and broadcast ran the legacy worker_compliant() (hard-coded DBS/SIA) while assignment ran the configured rule set, so Find eligible offered a nurse with an expired NMC registration whom assigning then refused; the legacy pair is deleted. Accepting an SMS offer and claiming a shift in the worker app tested division only -- verified against a local database, a worker scheduled 08:00-16:00 accepted an overlapping 09:00-17:00 shift through /m and ended up on both. Both now call rg_claim_check()."
         },
         {
           "name": "Four-eyes approval on high-risk actions",
@@ -448,6 +495,81 @@
           "name": "Blocked deployments are audited",
           "status": "done",
           "note": "A refused assignment writes shift.blocked with the reason, so the pattern of what is blocking deployments is visible rather than only felt"
+        },
+        {
+          "name": "Rota drafts, publish and change notices",
+          "status": "done",
+          "note": "Migration 038 adds shifts.is_draft (existing rows count as published), published_at/by and cancel_reason/at/by. Every new shift is a draft; workers, offers, the client portal and the field board never see one. Publish a week (audited), edit, reassign and cancel with a reason; after publishing the worker is told what changed in the app and by email (rg_notify_worker in server/rota-lib.php). Copy last week makes drafts and skips duplicates; templates generate drafts. History is the audit log for the shift. server/tests/db/cases/160_rota.php"
+        },
+        {
+          "name": "Sites as records, with site requirements in eligibility",
+          "status": "done",
+          "note": "server/sites.php creates and edits sites under a client: address, postcode, access notes, contact, active, and the requirements the site insists on (site_requirements). rg_load_rules(..., $siteId) adds them as mandatory rules, so the same evaluator decides and the service verdict in person_services is untouched. Shifts link to site_id; site_name stays as history. Sites tab on the client page"
+        },
+        {
+          "name": "Leave, unavailability and rest checked on every assignment path",
+          "status": "done",
+          "note": "rg_assignment_check() in compliance-lib.php: employment and evidence (with the site), clash and approved leave block; marked unavailability and a rest gap below app_settings.rest_gap_min_hours (default 11) are warnings the office must acknowledge, audited. Used by office create, assign, edit, matching, broadcast, offers by name, offer.php and me.php. Rest is measured in Europe/London real time; tested across 29 March and 25 October 2026 in server/tests/run.php, and every path in server/tests/db/cases/160_rota.php"
+        },
+        {
+          "name": "Office rota screen",
+          "status": "done",
+          "note": "/app/scheduling is now Rota: week picker, Today, service and site filters, Add shift, Copy last week, Publish drafts; a week grid by site or by worker on desktop and a day list on phones. Each shift shows time, role, worker or Open, service and state, with conflicts written on it. The shift panel edits, assigns with the eligibility result and reasons, takes warnings acknowledgement, offers, cancels with a reason and shows history. FullCalendar removed. Checked in a browser at 1280 and 375"
+        },
+        {
+          "name": "Timesheets from clock events, submitted and approved or queried",
+          "status": "done",
+          "note": "Clocking out makes a draft timesheet (rg_timesheet_from_clock, Europe/London times). The worker submits it with their break through me.php?action=submit_timesheet; the office approves, queries with a reason the worker is told, or corrects with a reason kept as before and after in the audit log. Office screen filters by week, service and status. The worker confirms the break, submits, reads a query and sends again in the staff portal, Records (S4)"
+        },
+        {
+          "name": "Requests: cover requests and enquiries with an owner",
+          "status": "done",
+          "note": "server/requests.php lists both with type, owner and status; /app/requests sets the owner, closes them, and creates one or more draft shifts at a site from a cover request (bookings.php?action=confirm). /app/enquiries and /app/bookings still work"
+        },
+        {
+          "name": "Staff portal: Home, Rota, Records, Me",
+          "status": "done",
+          "note": "/m is four tabs (src/pages/worker/). Home: next shift with site, address and a plain map link, site contact and notes, clock in from 15 minutes before (also enforced in field.php), report a problem, panic, blockers from rg_deployment_check() with what to do, training due, messages. Rota: published shifts by day, offers with accept and decline (rg_offer_respond(), shared with offer.php), open shifts with pick-up and the server's reason, an .ics file built on the phone. Records: checks with chips, training certificates, timesheets, gross pay with the GROSS PAY statement. Me: contact details written to people, emergency contacts, unavailability, leave. Checked in a browser at 375 and 1280"
+        },
+        {
+          "name": "Worker sends evidence; it waits for review",
+          "status": "done",
+          "note": "me.php?action=upload files a photo or PDF against the person (never the worker row, never as a contract) and moves the check to received for the office queue. Right to work, references and contract stay with the office. Nothing a worker uploads verifies itself. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "Every portal action proves ownership on the server",
+          "status": "done",
+          "note": "me.php takes the worker from the login only; ids in a request are looked up with it, so another worker's offer, timesheet, file, leave, availability or contact details read as not found. Client and office logins get 403 from every me.php action. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "The portal keeps no personal data offline",
+          "status": "done",
+          "note": "The worker-reads runtime cache of me.php and notifications.php is removed from vite.config.ts and deleted when /m opens. The installed shell loads offline and each tab says You are offline. docs/PRIVACY.md section 9, docs/COOKIES.md. Not tested against a real installed service worker offline"
+        },
+        {
+          "name": "Staff portal: Home, Rota, Records, Me",
+          "status": "done",
+          "note": "/m is four tabs (src/pages/worker/). Home: next shift with site, address and a plain map link, site contact and notes, clock in from 15 minutes before (also enforced in field.php), report a problem, panic, blockers from rg_deployment_check() with what to do, training due, messages. Rota: published shifts by day, offers with accept and decline (rg_offer_respond(), shared with offer.php), open shifts with pick-up and the server's reason, an .ics file built on the phone. Records: checks with chips, training certificates, timesheets, gross pay with the GROSS PAY statement. Me: contact details written to people, emergency contacts, unavailability, leave. Checked in a browser at 375 and 1280"
+        },
+        {
+          "name": "Worker sends evidence; it waits for review",
+          "status": "done",
+          "note": "me.php?action=upload files a photo or PDF against the person (never the worker row, never as a contract) and moves the check to received for the office queue. Right to work, references and contract stay with the office. Nothing a worker uploads verifies itself. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "Every portal action proves ownership on the server",
+          "status": "done",
+          "note": "me.php takes the worker from the login only; ids in a request are looked up with it, so another worker's offer, timesheet, file, leave, availability or contact details read as not found. Client and office logins get 403 from every me.php action. server/tests/db/cases/180_staff_portal.php"
+        },
+        {
+          "name": "The portal keeps no personal data offline",
+          "status": "done",
+          "note": "The worker-reads runtime cache of me.php and notifications.php is removed from vite.config.ts and deleted when /m opens. The installed shell loads offline and each tab says You are offline. docs/PRIVACY.md section 9, docs/COOKIES.md. Not tested against a real installed service worker offline"
+        },
+        {
+          "name": "Minimum rest between shifts set in Settings (S10)",
+          "status": "done",
+          "note": "Rota rules card in Settings, Features: owners change rest_gap_min_hours (0 to 24), the office reads it. 240_launch_followups"
         }
       ]
     },
@@ -463,8 +585,8 @@
         },
         {
           "name": "Employment contract lifecycle",
-          "status": "partial",
-          "note": "employment_contracts (migration 010) with draft/sent/viewed/accepted/signed/declined/expired/superseded and an access token. The schema and versioning are in; the endpoint and document generation are not"
+          "status": "done",
+          "note": "server/employment-contracts.php and the Employment tab of the person profile: draft with the agreed version attached (document_file_id, action=document while still a draft), sent, accepted, signed copy filed against the same person, review by a named person, and supersede, which keeps the old version. Verified in server/tests/db/cases/110_activation.php and 150_onboarding_and_approval.php. Not a document designer or e-signature service, by design: documents are prepared and signed outside"
         },
         {
           "name": "Contract versioning",
@@ -505,6 +627,21 @@
           "name": "Overlapping leave is refused",
           "status": "done",
           "note": "Rather than quietly double-booking somebody's holiday. The refusal names the dates that clash"
+        },
+        {
+          "name": "Emergency contacts",
+          "status": "done",
+          "note": "Two contacts on people (migration 001 plus the second in 037). Edited on the profile by office roles holding the employment zone, validated by rg_validate_emergency_contacts(), audited by field name without the values. rg_save_emergency_contacts() in server/people-lib.php is the same function the worker calls from the staff portal, Me, through me.php?action=emergency (S4), audited via portal"
+        },
+        {
+          "name": "Activation approval shows its blockers",
+          "status": "done",
+          "note": "rg_approval_blockers() in pure.php is the rule workers.php?action=approve enforces and the profile shows before the button is offered. Approval moves the application to onboarded"
+        },
+        {
+          "name": "Suspension recorded with a reason",
+          "status": "done",
+          "note": "workers.php?action=suspend and reinstate, with suspended_at, suspended_by and suspension_reason (migration 037). The gate refuses a suspended worker; lifting it returns them to active only if they were approved"
         }
       ]
     },
@@ -543,6 +680,11 @@
           "name": "Training records linked to the person",
           "status": "done",
           "note": "academy.php?action=enrol resolves a person from an explicit id, or an email or phone. With only a name it records the enrolment UNLINKED rather than guessing -- matching on a name would merge every John Smith"
+        },
+        {
+          "name": "Training records added from the person profile",
+          "status": "done",
+          "note": "people.php?action=training: provider, course, completion, expiry and certificate, written to enrolments with person_id and no copy of the name. Records, certifications and renewal dates are shown on the Training tab. No lessons or quizzes"
         }
       ]
     },
@@ -637,6 +779,11 @@
           "name": "Queued regardless of whether mail is enabled",
           "status": "done",
           "note": "The queue records intent; the drainer decides what can go out and logs 'skipped' when mail is off. Gating at the call site would leave no trace that somebody should have been contacted"
+        },
+        {
+          "name": "Marketing consent and unsubscribe",
+          "status": "done",
+          "note": "Optional unticked box on the contact and quote forms, marketing_allowed() where the latest consent_log row wins and no row means no, and unsubscribe.php reached from an email with no login, authenticated by an HMAC over the address. An opt-out is a new row, never a deletion. Refuses to build a link at all if APP_SECRET is unset"
         }
       ]
     },
@@ -646,18 +793,19 @@
       "milestone": 9,
       "items": [
         {
-          "name": "Command centre dashboard",
+          "name": "Today page (S5, F19)",
           "status": "done",
-          "note": "filterable by division"
+          "note": "src/pages/app/Today.tsx at /app replaces the Command Centre: \"Today, <weekday date>\", tiles for unfilled shifts, checks to review, evidence expiring in 30 days and approvals waiting (left out when the account may not see them), today's shifts with state chips linking to the rota (office), and Needs action from action-centre.php with named people linking to their profiles. No charts, no money. Checked in a browser at 1280 and 375 as admin and as a security-scoped manager"
         },
         {
           "name": "Analytics and margin reconciliation",
-          "status": "done"
+          "status": "done",
+          "note": "Analytics and Insights were folded into Reports in S5 and their pages and server/analytics.php were deleted in S9; /app/analytics and /app/insights redirect to /app/reports. Workforce, compliance and pipeline content is in Reports; revenue charts are not carried over (finance is a switched area)"
         },
         {
           "name": "Regulatory packs",
           "status": "done",
-          "note": "cqc_pack, sia_acs, coshh, skills_for_care"
+          "note": "cqc_pack, sia_acs, coshh, skills_for_care. S5: now take the compliance zone and the service scope"
         },
         {
           "name": "CSV and PDF export",
@@ -666,22 +814,32 @@
         {
           "name": "Action Centre",
           "status": "done",
-          "note": "server/action-centre.php. Grouped by urgency rather than by module, and entirely DERIVED -- no action table to fall out of step, so an item cannot linger after the thing it describes is fixed"
+          "note": "server/action-centre.php. Derived, grouped by urgency. S5: every group obeys the guard of the endpoint it links to (rg_action_centre_access() in pure.php) and a scoped account counts its own service only, by service column or by person (rg_person_in_scope); email and intake counts are for unscoped office accounts only. db case 200_today"
         },
         {
           "name": "Staff workload view",
           "status": "done",
-          "note": "?action=workload. Not a performance measure: it exists so work can be moved before somebody quietly drowns in it, which is only possible if it is visible"
+          "note": "Reports, Staff workload (reports.php?report=workload): candidates recruited for, open and overdue onboarding tasks per owner, and tasks with no owner, in the account's scope. system-health.php?action=workload remains"
         },
         {
           "name": "Export logging with user and purpose",
           "status": "done",
-          "note": "export_log plus governance.php?action=log_export. Exports are built in the browser from data already fetched, so this is the only point at which the server can know one happened"
+          "note": "export_log. S5 report exports are built on the server (reports.php?action=export) from declared columns only and logged in the same request, with purpose, row count, scope and whether the rows name people; regulator packs log through governance.php?action=log_export"
         },
         {
           "name": "Fix the open-shifts dashboard tile",
           "status": "done",
           "note": "Fixed. Now counts shifts with status='open', respecting the division filter"
+        },
+        {
+          "name": "Reports, one page (S5, F20)",
+          "status": "done",
+          "note": "reports.php run/export/list: recruitment pipeline by stage and service, active and blocked workers with the reason (compliance zone), evidence expiring in 30/60/90 days (compliance zone), unfilled shifts by week and service, approved hours by week (payroll zone), staff workload. Totals over the whole filtered dataset; the service filter narrows a scope and never widens it. db case 210_reports"
+        },
+        {
+          "name": "Worker profile pack PDF for clients (S5, F21)",
+          "status": "done",
+          "note": "compliance.php?action=profile_pack plus buildProfilePackPdf() in src/lib/pdf.ts, from the person profile: initials (no photo held), name, roles, services, training with dates, verified DBS date and recorded level (rg_dbs_level), right to work yes/no and date, SIA for security. No address, DOB, NI, contact details or right-to-work document numbers. Compliance zone and person scope; every download audited. db case 220_profile_pack"
         }
       ]
     },
@@ -701,8 +859,8 @@
         },
         {
           "name": "GDPR export and erasure",
-          "status": "partial",
-          "note": "by email address; erases immediately with no approval step"
+          "status": "done",
+          "note": "Export resolves through the people spine in both directions -- people.email is routinely empty when the row came from an application -- and returns 27 collections instead of 5, names what it leaves out, and is written to export_log. Erasure anonymises public-form data and routes everything else to the four-eyes deletion workflow instead of erasing immediately"
         },
         {
           "name": "Incidents with RIDDOR and safeguarding flags",
@@ -715,13 +873,13 @@
         },
         {
           "name": "Restore testing",
-          "status": "partial",
-          "note": "Reported as a WARN that cannot be inferred, rather than assumed to be fine. A backup nobody has restored is a hope, not a backup -- the check says so rather than staying silent"
+          "status": "done",
+          "note": "S10: server/restore-check.php compares a restored database table by table and the restored uploads document by document; --record writes the restore_test heartbeat that system health reads (ok within 90 days). Rehearsed locally on 2026-10-10: docs/runbooks/backup-and-restore.md"
         },
         {
           "name": "Retention engine",
-          "status": "partial",
-          "note": "retention_policies is seeded with 8 record types and NULL periods -- deliberately, since the values belong to the business and its legal advice. The sweep that acts on them is not built"
+          "status": "done",
+          "note": "server/retention-sweep.php is the consumer retention_policies never had. Reports by default, acts only with --go from the CLI, acts only where a period is set, and never hard-deletes: review raises a task, archive sets deleted_at, delete opens a request in the approval workflow. All 14 periods are NULL, so it changes nothing until the business sets one"
         },
         {
           "name": "Deletion approval workflow",
@@ -735,7 +893,7 @@
         {
           "name": "System health dashboard",
           "status": "done",
-          "note": "server/system-health.php. Live checks, not a stored status -- a health table goes stale exactly when it matters. Covers database, pending migrations, mail, the queue drainer, integrations, eligibility freshness, storage and backups"
+          "note": "server/system-health.php, shown in Settings, System health (S5). Live checks plus when each scheduled job last ran (cron_runs, migration 043: backup, expiry alerts, retention sweep, mail drainer) shown as ok, late or unknown, the email queue with recent failures (no recipients) and per-form intake health. The restore test stays an explicit unknown. Scoped accounts are refused. db case 230_system_health"
         },
         {
           "name": "Reconcile part-paid Direct Debit collections",
@@ -770,12 +928,37 @@
         {
           "name": "Backups are restore-tested",
           "status": "partial",
-          "note": "Surfaced by system-health.php as an explicit unknown"
+          "note": "Rehearsed and recorded on the local test database (S10). A rehearsal on the live host is step 1 of docs/runbooks/release-2026.md and has not been done"
         },
         {
           "name": "Unapplied migrations are visible",
           "status": "done",
           "note": "A deploy that ships migration files without running them looks completely normal until something fails oddly. system-health.php compares the directory against schema_migrations"
+        },
+        {
+          "name": "Data-subject request pathway",
+          "status": "done",
+          "note": "/data-request and server/data-request.php. Public form, reference, acknowledgement, staff queue with a status trail. Collects no identity documents and self-serves nothing -- whether a deletion can be honoured depends on employment and safeguarding duties a form cannot weigh. No statutory deadline is written into the code"
+        },
+        {
+          "name": "Sensitive zones enforced",
+          "status": "partial",
+          "note": "can_view_zone() existed and was called once, for payroll. Now enforced for compliance (workers.php, compliance.php) and health (leave.php, where a person always sees their own). disciplinary, legal and employment have no feature storing that data yet. The person profile (server/people.php) returns each section behind its zone -- compliance for checks, training and contracts, payroll for pay history, health for leave reasons, employment for emergency contacts -- as {restricted: true} rather than data"
+        },
+        {
+          "name": "Privacy documentation",
+          "status": "done",
+          "note": "docs/PRIVACY.md is an evidence-backed data inventory with file:line provenance; docs/COOKIES.md is verified at runtime; docs/RETENTION.md carries the schedule with every period marked as needing legal review"
+        },
+        {
+          "name": "Approved deletion removes the document itself",
+          "status": "done",
+          "note": "A hard delete used to remove the files row and leave the bytes on disk under a random name: gone from the system, still on the server, no longer findable. governance.php now unlinks it and audits it. Archive keeps the bytes, which is what makes it recoverable. Verified end to end against a local database"
+        },
+        {
+          "name": "Deletion requests decided in Settings (S10)",
+          "status": "done",
+          "note": "Settings, Data requests lists governance.php deletion requests; approve or decline with the four-eyes rule shown in advance (is_mine) and the cascade confirmation. Today links to it. 240_launch_followups"
         }
       ]
     },
@@ -787,7 +970,7 @@
         {
           "name": "Web app manifest",
           "status": "done",
-          "note": "Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, and the navy theme colour"
+          "note": "Generated by vite-plugin-pwa with 192, 512 and a separate maskable icon, theme colour green #33512D and paper background"
         },
         {
           "name": "Service worker",
@@ -827,7 +1010,7 @@
         {
           "name": "Brand-correct app icon",
           "status": "done",
-          "note": "favicon.svg was still the retired green #15803D. Redrawn navy and mint, with PNGs generated for 192, 512, maskable and the iOS touch icon, which ignores SVG"
+          "note": "favicon.svg and the 192, 512, maskable and iOS touch PNGs redrawn in the company green (2026 design system); the PNGs are rendered from SVG with ImageMagick, as docs/DESIGN_SYSTEM.md describes"
         }
       ]
     },
@@ -838,8 +1021,8 @@
       "items": [
         {
           "name": "Documentation pack",
-          "status": "partial",
-          "note": "Milestone 0, in progress"
+          "status": "done",
+          "note": "S10: the 2026 plan pack folded into the permanent docs (PRD, BLUEPRINT, ROADMAP, DESIGN_SYSTEM, ARCHITECTURE, UK_GOVERNANCE, RULES, DECISIONS-2026); docs/Plans 2026/ kept until the owner approves removing it"
         },
         {
           "name": "Automated deploy",
@@ -848,13 +1031,13 @@
         },
         {
           "name": "CI quality gates",
-          "status": "partial",
-          "note": "typecheck, build, php -l and docs checks block; lint reports only"
+          "status": "done",
+          "note": "typecheck, lint (--max-warnings 0), tests, build, the build-output assertion, php -l, the PHP suite, the committed-config check and the docs check all block"
         },
         {
           "name": "Automated tests",
           "status": "partial",
-          "note": "Two dependency-free suites, both in CI: server/tests/run.php (254 assertions over pure server logic) and src/lib/__tests__/access.test.ts (24 over the permission map). Endpoints and components are still untested"
+          "note": "Two dependency-free suites, both in CI: server/tests/run.php (466 assertions over pure server logic plus the endpoint-guard check in server/tests/guards.php) and src/lib/__tests__/access.test.ts (over the permission map). Endpoints and components are still untested end to end"
         },
         {
           "name": "Exception messages withheld from callers",
@@ -868,8 +1051,8 @@
         },
         {
           "name": "ESLint baseline clean",
-          "status": "todo",
-          "note": "27 errors remain, down from 33: 8 react-hooks/set-state-in-effect, 7 react-refresh/only-export-components, 4 react-hooks/refs, 3 react-hooks/static-components, 2 no-explicit-any, 2 react-hooks/purity, 1 no-unused-expressions. All change runtime behaviour to fix; everything mechanical is already done"
+          "status": "done",
+          "note": "0 errors, from 33. The last 19 were cleared by changing the code, not the rules: the unreferenced src/components/calendar template deleted, effects in Scheduling/Verify/auth-provider/theme-toggle restructured so none sets state synchronously, icons rendered with createElement, homeFor/openStorageNotice/PageLoader moved out of component modules, sidebar skeleton width derived from useId. CI runs eslint --max-warnings 0 and blocks"
         },
         {
           "name": "Documentation consistency enforced in CI",
@@ -913,8 +1096,113 @@
         },
         {
           "name": "Migration production guard is meaningful on cPanel",
-          "status": "todo",
-          "note": "migrate.php treats DB_HOST=localhost as local, but on shared hosting the PRODUCTION database is localhost, so the --production guard never fires. Gate on database name or an explicit environment constant instead"
+          "status": "done",
+          "note": "Was inferred from DB_HOST, and on cPanel the production database is localhost too — so the live system read as local: migrate.php --go skipped the typed-name confirmation, backfill-people.php --go wrote unchallenged, and seed.php --confirm --reset would have emptied clients, workers and invoices. Now declared as RG_ENV in config.php and read through rg_is_local_database(); a config.php without it is treated as production. Verified: with RG_ENV=production, seed and backfill refuse and migrate demands --production and the typed database name"
+        },
+        {
+          "name": "No third-party requests from the public site",
+          "status": "done",
+          "note": "Google Fonts was the only one and sent every visitor's IP and user agent to Google on first paint. Self-hosted under public/fonts; both origins removed from the CSP and the service worker. Verified: a cold load requests nothing but the site's own origin"
+        },
+        {
+          "name": "Design system: company green, Source Serif 4 headlines",
+          "status": "done",
+          "note": "src/index.css tokens and tailwind.config.ts rebuilt on #33512D with warm neutrals, status colours that are not the brand green, one 8px radius and a green-black dark mode. Source Serif 4 (500, 600) self-hosted for website headlines; Plus Jakarta Sans removed. Navy and mint retired. docs/DESIGN_SYSTEM.md rewritten. Website page designs are S6"
+        },
+        {
+          "name": "Eight-destination office navigation",
+          "status": "done",
+          "note": "Today, Recruitment, People, Compliance, Rota, Website, Reports, Settings, with secondary pages underneath; Finance only while switched on. Notifications live in the header bell and the command palette. Content Studio, Analytics and Insights were retired in S9 and their addresses redirect"
+        },
+        {
+          "name": "Owner feature switches",
+          "status": "done",
+          "note": "Migration 036 and server/features.php: finance, online_payments, sms_whatsapp, inbox. Owner-only and audited; inbox.php, payments.php and gocardless.php refuse when off (webhooks stay open), SMS and WhatsApp are logged as skipped. finance is interface only. The fifth switch, ai_assistant, was retired in S9 with ai.php: no longer listed or settable, its stored row kept. server/tests/db/cases/120_feature_switches.php"
+        },
+        {
+          "name": "Retirements: AI, weather, Content Studio, Analytics and Insights (S9)",
+          "status": "done",
+          "note": "Deleted through the removal protocol, recorded per path in docs/CHANGELOG.md: server/ai.php, server/weather.php, server/analytics.php, files.php?action=extract, the header AI assistant, the weather widget, the Content Studio, Analytics and Insights pages, the Academy quiz builder and every AI button (Enquiries, Files, Comms, Academy, smoke test). Old addresses redirect; apexcharts and react-apexcharts uninstalled; OpenRouter and OpenWeather keys out of the config templates. No table dropped and no row deleted. server/tests/db/cases/231_retirements.php and a guard in server/tests/run.php that fails if a retired endpoint file comes back"
+        },
+        {
+          "name": "Public website rebuilt on the 2026 design (S6)",
+          "status": "done",
+          "note": "Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids or scroll animation. Header reduced to four destinations with a Services panel; home hero on the split image-card pattern with one framed status card and a reduced-motion-safe entrance; green-900 footer (website/hero-nav-refresh). Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show (labelled samples appear on the dev server only, never in a build). Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders"
+        },
+        {
+          "name": "Website enquiries reach the right queue",
+          "status": "done",
+          "note": "Request staff to bookings.php; cleaning quote to the new public quotes.php?action=request (a Cleaning request in the Bookings queue, not a priced quote); care, training and general to contact.php with a type. server/tests/db/cases/130_website_enquiries.php, and each form submitted in a browser against a local API"
+        },
+        {
+          "name": "Old website addresses redirect",
+          "status": "done",
+          "note": "/services, the twelve /services/:slug pages, /sectors, /accreditations, /resources, /resources/:slug, /apply and /quote redirect in the app and with 301 rules in public/.htaccess, kept in step by src/lib/__tests__/public-routes.test.ts. The .htaccess block reaches production only when copied to the server by hand"
+        },
+        {
+          "name": "Sitemap: static pages at build time, records live",
+          "status": "done",
+          "note": "dist/sitemap.xml is written by a Vite plugin from src/lib/public-routes.ts for the static pages. Published role pages and posts live in the database, which the build in CI cannot reach, so server/sitemap.php lists them (public, cached an hour, drafts and closed roles never listed). robots.txt names both. server/tests/db/cases/170_careers_cms.php"
+        },
+        {
+          "name": "Structured data on public pages",
+          "status": "done",
+          "note": "EmploymentAgency and LocalBusiness on the home page, Service on each service page, Article on news posts, JobPosting on role pages (S7: title, description, date posted, organisation, location; no salary because pay is optional free text), from src/lib/structured-data.ts. No address until the registered office is confirmed, no ratings"
+        },
+        {
+          "name": "Vacancies and role pages from the CMS (S7, F22)",
+          "status": "done",
+          "note": "Migration 039 vacancies and server/vacancies.php: draft, published, closed; the address is fixed once published; checks prefilled per service from plan file 01. Website, Vacancies in the office app (editor and office roles, service scope on every branch, audited). /careers lists published roles with a service filter and an empty state; /careers/:slug shows the role, its checks and one way to apply; a closed or unknown role gets a friendly page with other roles. Public reads return named public fields only. server/tests/db/cases/170_careers_cms.php"
+        },
+        {
+          "name": "Forms directory and embedded Google Forms (S7, F23)",
+          "status": "done",
+          "note": "Migration 039 website_forms and server/website-forms.php. Only https://docs.google.com/forms/d/e/<id>/viewform is accepted (rg_parse_google_form(), 422 for anything else) and only the id is stored; the website builds the iframe from it (src/lib/google-forms.ts). The frame loads only after the visitor presses Load the application form from Google; Open the form in a new tab and the phone number are always shown. CSP gains frame-src https://docs.google.com only. Previous values are in the audit log and shown as history. Settings, Form intake lists forms not reviewed for 90 days and each one intake health. No sandbox attribute: submission inside a sandbox could not be tested without a real form"
+        },
+        {
+          "name": "Company details and social links from the CMS (S7, F24)",
+          "status": "done",
+          "note": "Migration 039 company_settings (one row, seeded from src/lib/company.ts) and server/company.php: public read of named fields with a five-minute cache, owner-only (super_admin, admin) edit, audited with before and after. useCompanyDetails() reads it and keeps the bundled facts as the fallback. Instagram, Facebook, LinkedIn, TikTok and a WhatsApp enquiry link, each checked against its own host; X is not offered"
+        },
+        {
+          "name": "Link-in-bio page /links (S7)",
+          "status": "done",
+          "note": "Request staff, Arrange care, Current roles, Training, Contact, the office phone, then the social profiles and WhatsApp link from the company record. Text only, no third-party requests"
+        },
+        {
+          "name": "Google Forms auto-feed set-up (S7, F25)",
+          "status": "partial",
+          "note": "docs/runbooks/google-forms-intake.md: copy-paste Apps Script (onFormSubmit, {response_id, answers}, key and X-RitaGreen-Secret from Script Properties, retries, logging), sandbox test steps and what the office sees on failure. forms-intake.php?action=set_secret lets an owner create the shared secret in Settings, shown once and stored as a hash. Partial: the script has not been run inside Google Apps Script from this environment; the payload and secret path are covered by the database tests"
+        },
+        {
+          "name": "Spreadsheet import (S8)",
+          "status": "done",
+          "note": "Recruitment > Import from spreadsheet: CSV upload (2 MB, 1,000 rows, UTF-8 or Windows-1252, BOM handled, header row required; XLSX is not read, the screen says to download CSV from Google Sheets), column mapping saved per form and reused, a preview of every row (new applicant, update, duplicate, no change, needs a decision, problem), matching on email then phone then name with date of birth with uncertain matches left to a person, apply per row in a transaction through find_or_create_person() and rg_create_applicant(), staff changes limited to contact details and availability, idempotent through a UNIQUE applied fingerprint, report with counts, failures CSV and history. Migration 042, server/sheet-import.php, src/pages/app/SheetImport.tsx, server/tests/db/cases/190_sheet_import.php"
+        },
+        {
+          "name": "Training forms on /training (S10)",
+          "status": "done",
+          "note": "website-forms.php?action=public&purpose=training; click to load, open in a new tab, phone fallback, as on role pages"
+        },
+        {
+          "name": "Launch journeys in a browser (S10)",
+          "status": "done",
+          "note": "scripts/launch-journeys.mjs: 16 journey steps and 5 refusals, all PASS on a fresh local test database; docs/TESTING.md, 2026 launch journeys"
+        },
+        {
+          "name": "Release runbook for the 2026 build (S10)",
+          "status": "done",
+          "note": "docs/runbooks/release-2026.md. Not run: production release is the owner's decision"
+        },
+        {
+          "name": "Docs consistency guard: links and retired colours (S10)",
+          "status": "done",
+          "note": "scripts/docs_sync.py --check fails on broken relative markdown links and on the retired navy and mint outside history; tested by scripts/test_docs_sync.py in CI"
+        },
+        {
+          "name": "Agent guard hooks (S10)",
+          "status": "done",
+          "note": ".claude/settings.json runs scripts/agent_guard.py: blocks writes to server/config.php, hand edits to docs/PROGRESS.md and pushes to main; tested by scripts/test_agent_guard.py in CI. Codex has no hooks"
         }
       ]
     }

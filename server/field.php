@@ -1,10 +1,16 @@
 <?php
 // §8 Field operations & service delivery.
 // GET  /field.php?action=live              -> today's shifts with on-site status (office board)
-// GET  /field.php?shift_id=N               -> { events:[...] } timeline for a shift
+// GET  /field.php?shift_id=N               -> { events:[...], location_withheld } timeline for a shift
+//   lat/lng are returned to the worker whose trail it is, and to roles holding the
+//   'employment' zone. Everyone else gets the timeline with the coordinates nulled.
 // POST /field.php {shift_id, kind, note?, lat?, lng?, signer?} -> log a field event
-//   kind: clock_in | clock_out | check_in | panic | note | task | signoff
+//   kind: clock_in | clock_out | check_in | panic | panic_ack | note | task | signoff
+//   panic_ack is office-only: acknowledging an alert is the office responding to
+//   it, not the worker standing it down. A shift cannot be clocked in twice, or
+//   clocked out without being clocked in.
 require __DIR__ . '/lib.php';
+require __DIR__ . '/rota-lib.php';
 
 $user = require_auth($conn);
 $action = $_GET['action'] ?? '';
@@ -15,7 +21,11 @@ function shift_belongs_to(mysqli $conn, array $user, int $shiftId): bool
 {
     $workerId = linked_worker_id($user);
     if ($workerId === null) return false;
-    $stmt = $conn->prepare('SELECT 1 FROM shifts WHERE id = ? AND worker_id = ? LIMIT 1');
+    // A draft is not the worker's yet: they cannot see it, so they cannot read
+    // or write its trail either.
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM shifts WHERE id = ? AND worker_id = ? AND is_draft = 0 AND deleted_at IS NULL LIMIT 1'
+    );
     $stmt->bind_param('ii', $shiftId, $workerId);
     $stmt->execute();
     return (bool) $stmt->get_result()->fetch_row();
@@ -32,29 +42,60 @@ if ($action === 'live' && method() === 'GET') {
     // The office board: every shift today, with worker and client names on it.
     require_staff($user);
     $today = date('Y-m-d');
+    // "completed" belongs on today's board.
+    //
+    // Clocking out sets shifts.status = 'completed' further down this file, and
+    // this filter listed only scheduled and open -- so a shift finished at 14:00
+    // disappeared from the day at 14:00, and STATUS_META.completed in FieldOps
+    // was unreachable. A duty manager needs to see what has already been done
+    // today, not only what has not. Cancelled stays off it.
     $stmt = $conn->prepare(
         'SELECT s.id, s.title, s.division, s.site_name, s.starts_at, s.ends_at, s.status,
                 w.name AS worker, c.name AS client
          FROM shifts s
          LEFT JOIN workers w ON w.id = s.worker_id
          LEFT JOIN clients c ON c.id = s.client_id
-         WHERE DATE(s.starts_at) = ? AND s.status IN ("scheduled","open")
+         WHERE DATE(s.starts_at) = ? AND s.deleted_at IS NULL AND s.is_draft = 0
+           AND s.status IN ("scheduled","open","completed")
          ORDER BY s.starts_at'
     );
     $stmt->bind_param('s', $today);
     $stmt->execute();
     $res = $stmt->get_result();
+
+    $rows = [];
+    while ($s = $res->fetch_assoc()) $rows[] = $s;
+
+    // One query for every shift's events, not one per shift. The loop ran a
+    // separate SELECT for each row, with the id interpolated rather than bound.
+    $kindsByShift = [];
+    if ($rows) {
+        $ids = array_map(static fn(array $r): int => (int) $r['id'], $rows);
+        $marks = implode(',', array_fill(0, count($ids), '?'));
+        // Ordered, because rg_panic_open() reads the sequence: a shift can be
+        // raised, acknowledged and raised again.
+        $ev = $conn->prepare(
+            "SELECT shift_id, kind FROM shift_events WHERE shift_id IN ($marks) AND deleted_at IS NULL ORDER BY id"
+        );
+        $ev->bind_param(str_repeat('i', count($ids)), ...$ids);
+        $ev->execute();
+        $evRes = $ev->get_result();
+        while ($row = $evRes->fetch_assoc()) {
+            $kindsByShift[(int) $row['shift_id']][] = $row['kind'];
+        }
+    }
+
     $shifts = [];
-    while ($s = $res->fetch_assoc()) {
-        $kinds = [];
-        $e = $conn->query('SELECT kind FROM shift_events WHERE shift_id = ' . (int) $s['id']);
-        while ($ev = $e->fetch_assoc()) $kinds[] = $ev['kind'];
+    foreach ($rows as $s) {
+        $kinds = $kindsByShift[(int) $s['id']] ?? [];
         $shifts[] = [
             'id' => (int) $s['id'], 'title' => $s['title'], 'division' => $s['division'],
             'site_name' => $s['site_name'], 'client' => $s['client'], 'worker' => $s['worker'],
             'starts_at' => $s['starts_at'], 'ends_at' => $s['ends_at'],
-            'field_status' => $s['status'] === 'open' ? 'unfilled' : field_status($kinds, $s['starts_at'], $s['ends_at']),
-            'panic' => in_array('panic', $kinds, true),
+            'field_status' => $s['status'] === 'open'
+                ? 'unfilled'
+                : ($s['status'] === 'completed' ? 'completed' : field_status($kinds, $s['starts_at'], $s['ends_at'])),
+            'panic' => rg_panic_open($kinds),
         ];
     }
     json_out(['shifts' => $shifts]);
@@ -66,10 +107,30 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
     if (!is_staff($user) && !shift_belongs_to($conn, $user, $sid)) {
         fail('You do not have access to this.', 403);
     }
+
+    // Where somebody physically was is not ordinary operational detail.
+    //
+    // docs/PRIVACY.md records shift_events location as personal data about the
+    // worker, and nothing here asked anything about it: is_staff() is true for
+    // editor, trainer and employee, and access.ts grants /app/field to all of
+    // STAFF, so a content editor could open the board, click any shift and read
+    // a named colleague's coordinates to six decimal places. The timeline is
+    // still useful to them -- who clocked in, when, what was noted -- so the
+    // coordinates are withheld rather than the whole trail, the same way
+    // workers.php withholds a pay rate from a profile it still returns.
+    //
+    // The 'employment' zone, not 'compliance': migration 015 grants compliance to
+    // trainer and employee as well, which would leave the gate excluding only the
+    // content role, and where a person physically was is employment-record
+    // detail rather than a vetting credential. Employment is the office alone.
+    //
+    // A worker always sees their own trail in full: it is their own location.
+    $ownTrail = !is_staff($user);
+    $seesLocation = $ownTrail || can_view_zone($conn, $user, 'employment');
     $stmt = $conn->prepare(
         'SELECT e.id, e.kind, e.note, e.lat, e.lng, e.signer, e.created_at, w.name AS worker
          FROM shift_events e LEFT JOIN workers w ON w.id = e.worker_id
-         WHERE e.shift_id = ? ORDER BY e.created_at'
+         WHERE e.shift_id = ? AND e.deleted_at IS NULL ORDER BY e.created_at'
     );
     $stmt->bind_param('i', $sid);
     $stmt->execute();
@@ -77,9 +138,26 @@ if (method() === 'GET' && isset($_GET['shift_id'])) {
     $events = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
+        if (!$seesLocation) {
+            $row['lat'] = null;
+            $row['lng'] = null;
+        }
         $events[] = $row;
     }
-    json_out(['events' => $events]);
+    // Reading somebody's movements is a privileged act on personal data, and
+    // only the write was audited. Recorded when the coordinates were actually
+    // released, and not for a worker reading their own trail -- an audit line
+    // every time somebody opens their own app is noise, not accountability.
+    if ($seesLocation && !$ownTrail && $events) {
+        $withCoords = 0;
+        foreach ($events as $e) {
+            if ($e['lat'] !== null || $e['lng'] !== null) $withCoords++;
+        }
+        if ($withCoords > 0) {
+            audit($conn, (int) $user['id'], 'field.location_read', "shift #$sid ($withCoords located events)", 'shift', $sid);
+        }
+    }
+    json_out(['events' => $events, 'location_withheld' => !$seesLocation]);
 }
 
 if (method() === 'POST') {
@@ -88,13 +166,25 @@ if (method() === 'POST') {
     $kind = trim((string) ($data['kind'] ?? ''));
     $note = trim((string) ($data['note'] ?? ''));
     $signer = trim((string) ($data['signer'] ?? ''));
+    // Stored at a precision proportionate to the purpose -- see rg_coord_places.
     $lat = isset($data['lat']) && $data['lat'] !== '' ? (float) $data['lat'] : null;
     $lng = isset($data['lng']) && $data['lng'] !== '' ? (float) $data['lng'] : null;
-    $valid = ['clock_in', 'clock_out', 'check_in', 'panic', 'note', 'task', 'signoff'];
+    $valid = ['clock_in', 'clock_out', 'check_in', 'panic', 'panic_ack', 'note', 'task', 'signoff'];
     if ($shiftId <= 0 || !in_array($kind, $valid, true)) fail('A shift and valid event kind are required.');
 
+    // Acknowledging an alert is the office responding to it, not the worker
+    // standing it down, so it is the one kind a worker cannot post.
+    if ($kind === 'panic_ack') require_role($user, 'super_admin', 'admin', 'manager');
+
+    // A routine attendance record is stored to ~110 m: enough to show somebody
+    // was at the site, not enough to be a movement history. A panic alert keeps
+    // full precision, because the point of it is that somebody has to be found.
+    $places = rg_coord_places($kind);
+    $lat = rg_round_coord($lat, $places);
+    $lng = rg_round_coord($lng, $places);
+
     // Resolve the worker on this shift (used to stamp the event).
-    $stmt = $conn->prepare('SELECT worker_id, title FROM shifts WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT worker_id, title, is_draft, starts_at FROM shifts WHERE id = ? AND deleted_at IS NULL LIMIT 1');
     $stmt->bind_param('i', $shiftId);
     $stmt->execute();
     $shift = $stmt->get_result()->fetch_assoc();
@@ -105,13 +195,50 @@ if (method() === 'POST') {
     // panic alert against an arbitrary shift id.
     if (!is_staff($user)) {
         $workerId = linked_worker_id($user);
-        if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId) {
+        if ($workerId === null || $shift['worker_id'] === null || (int) $shift['worker_id'] !== $workerId
+            || (int) $shift['is_draft'] === 1) {
             fail('You are not assigned to this shift.', 403);
+        }
+        // Clocking in opens fifteen minutes before the start (plan file 03). The
+        // portal greys the button until then; this is the rule, the button only
+        // reflects it. The office is not held to it: correcting a missed clock is
+        // their job.
+        if ($kind === 'clock_in' && !rg_clock_in_open((string) $shift['starts_at'])) {
+            fail('You can clock in from ' . rg_shift_when(rg_clock_in_opens_at((string) $shift['starts_at'])) . '.', 409);
         }
     }
 
     // Prefer the logged-in user's linked worker, else the shift's worker.
     $workerId = $user['worker_id'] ? (int) $user['worker_id'] : ($shift['worker_id'] !== null ? (int) $shift['worker_id'] : null);
+
+    // A clock sequence that cannot have happened is a data-entry problem, not a
+    // record. Nothing stopped two clock_in rows on one shift, or a clock_out
+    // with no clock_in, and both corrupt the derived field status -- and, once
+    // clock events feed timesheets, the hours.
+    if ($kind === 'clock_in' || $kind === 'clock_out' || $kind === 'panic_ack') {
+        $stmt = $conn->prepare(
+            'SELECT kind FROM shift_events
+              WHERE shift_id = ? AND deleted_at IS NULL
+                AND kind IN ("clock_in","clock_out","panic","panic_ack")
+              ORDER BY id'
+        );
+        $stmt->bind_param('i', $shiftId);
+        $stmt->execute();
+        $prior = [];
+        $priorRes = $stmt->get_result();
+        while ($r = $priorRes->fetch_assoc()) $prior[] = $r['kind'];
+
+        if ($kind === 'clock_in' && in_array('clock_in', $prior, true)) {
+            fail('That shift has already been clocked in.', 409);
+        }
+        if ($kind === 'clock_out') {
+            if (!in_array('clock_in', $prior, true)) fail('That shift has not been clocked in.', 409);
+            if (in_array('clock_out', $prior, true)) fail('That shift has already been clocked out.', 409);
+        }
+        if ($kind === 'panic_ack' && !rg_panic_open($prior)) {
+            fail('There is no open panic alert on that shift.', 409);
+        }
+    }
 
     $noteVal = $note !== '' ? $note : null;
     $signerVal = $signer !== '' ? $signer : null;
@@ -124,6 +251,9 @@ if (method() === 'POST') {
     // Mark the shift completed when clocked out.
     if ($kind === 'clock_out') {
         $conn->query('UPDATE shifts SET status = "completed" WHERE id = ' . $shiftId . ' AND status = "scheduled"');
+        // The clock-in and clock-out become the draft timesheet the worker then
+        // submits (plan file 03). Nothing is paid until the office approves it.
+        if ($shift['worker_id'] !== null) rg_timesheet_from_clock($conn, $shiftId, (int) $shift['worker_id']);
     }
     // Panic / lone-worker alert → escalate hard.
     if ($kind === 'panic') {

@@ -6,6 +6,11 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// The whole CRM: every client, their contacts, and per-client financials.
+// Only the GET branches lacked this -- the writes below already carry it -- so
+// any authenticated account, a client portal login included, could list every
+// other client and read their invoiced and outstanding totals.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 // Single client + its sites + rate cards + a financial summary.
@@ -112,6 +117,8 @@ if ($action === 'update' && method() === 'POST') {
     );
     $stmt->bind_param('ssiii', $stage, $status, $amId, $sla, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'clients', $id)) fail('Client not found.', 404);
     audit($conn, (int) $user['id'], 'client.update', "#$id stage=$stage");
     json_out(['ok' => true]);
 }
@@ -127,6 +134,9 @@ if ($action === 'rate_card' && method() === 'POST') {
     if ($id <= 0 || !in_array($division, ['care', 'academy', 'cleaning', 'security'], true)) fail('Client and division are required.');
     if ($charge <= 0) fail('Enter a charge greater than zero.');
     if ($role === '') $role = 'standard';
+    // Without this the INSERT trips the foreign key and the caller gets a 500
+    // and a logged exception for what is only a mistyped id.
+    if (!row_exists($conn, 'clients', $id)) fail('Client not found.', 404);
     $stmt = $conn->prepare('INSERT INTO rate_cards (client_id, division, role, charge_pence) VALUES (?, ?, ?, ?)');
     $stmt->bind_param('issi', $id, $division, $role, $charge);
     $stmt->execute();

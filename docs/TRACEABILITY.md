@@ -12,9 +12,15 @@ every backticked source path resolves, so a fabricated path fails CI.
 **Test column:** two suites exist, both dependency-free and both run in CI.
 `server/tests/run.php` covers the pure server logic — credential expiry banding, the
 staff/worker/client distinction, field status, pay premiums — with no database and no
-`server/config.php`. `src/lib/__tests__/access.test.ts` covers the client permission map. Most rows
-still read _none_; the compliance engine rows in particular must not stay that way, see
+`server/config.php`, and carries `server/tests/guards.php`, which fails if any endpoint returns
+before it authorises. On the client, `src/lib/__tests__/access.test.ts` covers the permission map
+and `homeFor()`, and `src/lib/__tests__/app-routes.test.ts` the page registry. Most rows still
+read _none_; the compliance engine rows in particular must not stay that way, see
 `docs/ROADMAP.md` Milestone 2.
+
+**"unapplied" means production.** Migrations 001–020 are applied and verified against a local
+database. None has been applied to the live one, which is a separate deliberate act — see
+`docs/ROADMAP.md`.
 
 ---
 
@@ -22,8 +28,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| A person exists once | `people` (migration 001, unapplied) | `server/backfill-people.php` | planned | `server/tests/run.php` (matching) |
-| A person may serve several services | `person_services` (migration 001, unapplied) | planned | planned | none |
+| A person exists once | `people` (migration 001, unapplied in production) | `find_or_create_person()` in `server/lib.php`, `server/backfill-people.php`, `server/seed.php` | `src/pages/app/Workers.tsx` | `server/tests/run.php` (matching) |
+| A person may serve several services | `person_services` (migration 001, unapplied in production) | `server/compliance.php` `?action=eligibility_all` | `src/components/app/eligibility-dialog.tsx` | `server/tests/run.php` (evaluation) |
 | Candidate becomes worker without duplication | `applicants.worker_id` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Staff and workers authenticate | `users`, `tokens` | `server/auth.php` | `src/pages/auth/Login.tsx` | none |
 | Privileged accounts use 2FA | `user_2fa` | `server/auth.php` | `src/components/app/force-2fa.tsx` | none |
@@ -31,22 +37,28 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Idle sessions lock | — | `server/auth.php` | `src/components/app/lock-screen.tsx` | none |
 | Roles restrict what staff can do | `roles`, `users.role` | `require_role()` in `server/lib.php` | `src/auth/RequireAuth.tsx` | none |
 | Staff, worker and client accounts are distinguished | `users.worker_id`, `users.client_id` | `is_staff()` in `server/pure.php` | `src/lib/access.ts` | both suites |
-| Navigation hides what the user cannot open | — | — | `src/components/app-sidebar.tsx` | none |
+| Navigation hides what the user cannot open | none | none | `src/lib/nav.ts`, `src/components/app-sidebar.tsx`, `src/components/global-search.tsx`, `src/layouts/Footer.tsx` | `src/lib/__tests__/access.test.ts`, `src/lib/__tests__/nav.test.ts` |
+| The office app has eight destinations, Finance only when switched on | none | none | `src/lib/nav.ts`, `src/components/nav-main.tsx`, `src/lib/app-routes.ts` | `src/lib/__tests__/nav.test.ts`, `src/lib/__tests__/app-routes.test.ts` |
+| The owner switches optional areas on and off | `feature_switches` (migration 036) | `server/features.php`, `feature_enabled()` in `server/lib.php` | `src/components/app/features-card.tsx`, `src/hooks/use-features.ts` | `server/tests/run.php`, `server/tests/db/cases/120_feature_switches.php` |
+| A switched-off area is refused by the server | `feature_switches` | `server/inbox.php`, `server/payments.php`, `server/gocardless.php`, `send_sms()` in `server/lib.php` | hidden in `src/layouts/AppLayout.tsx`; overdue invoices reach Today only while finance is on (`rg_action_centre_access()`) | `server/tests/db/cases/120_feature_switches.php` |
 | A worker acts only on their own shifts | `shifts.worker_id` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
 | Routes are role-gated in the client | — | — | `src/lib/access.ts` via `src/auth/RequireAuth.tsx` | `src/lib/__tests__/access.test.ts` |
 | Per-service scoping is enforced | `users.scope_to_division` | `service_scope()` in `server/lib.php` | `src/lib/access.ts` | none |
 | Sensitive zones are separately permissioned | `zone_permissions` | `can_view_zone()` in `server/lib.php` | planned settings screen | none |
+| Reading a record is authorised, not just writing it | — | every endpoint, immediately after `require_auth()` | `src/lib/access.ts` | `server/tests/guards.php` |
+| Navigation and page actions match what the server allows | — | — | `src/lib/access.ts`, `src/lib/app-routes.ts` | `src/lib/__tests__/access.test.ts`, `src/lib/__tests__/app-routes.test.ts` |
+| Every authenticated page names itself | — | — | `useDocumentTitle()` in `src/hooks/use-document-title.ts` | `src/lib/__tests__/app-routes.test.ts` (`titleFor`) |
 
 ## Recruitment
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| The public can apply | `applicants` | `server/ats.php` | `src/pages/public/Apply.tsx` | none |
+| The public can apply | `applicants` | `server/ats.php` | `src/components/public/ApplicationForm.tsx` (on `/careers` and on role pages without a form) | none |
 | Applications move through stages | `applicants.stage` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | Onboarding generates tasks | `onboarding_tasks` | `server/ats.php` | `src/pages/app/ATS.tsx` | none |
 | A learner can become a candidate | `applicants.source` | `server/ats.php` | `src/pages/app/Academy.tsx` | none |
 | Google Forms submissions reach the system | `integration_submissions` | `server/forms-intake.php` | planned settings screen | `server/tests/run.php` (mapping) |
-| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php` | planned | none |
+| A stalled integration raises an alert | `integrations.expect_within_hours` | `server/action-centre.php`, `server/system-health.php` | `src/pages/app/Today.tsx`, Settings System health | `server/tests/db/cases/230_system_health.php` |
 
 ## Compliance
 
@@ -59,7 +71,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Evidence can be produced per worker | `files`, `certifications` | `server/compliance.php` | `src/pages/app/Compliance.tsx` | none |
 | References are checked | `worker_references` | `server/references.php` | `src/pages/app/Workers.tsx` | none |
 | Company insurance is current | `insurance` | `server/insurance.php` | `src/pages/app/Compliance.tsx` | none |
-| Requirements are configurable per service | `compliance_rules` (migration 003, unapplied) | planned | planned rule builder | none |
+| Requirements are configurable per service | `compliance_rules` (migration 003, unapplied in production) | `rg_load_rules()` in `server/compliance-lib.php` | planned rule builder | `server/tests/run.php` (evaluation) |
 | Requirements carry a weight | planned | planned | planned | none |
 | Eligibility is calculated, with a reason | planned storage | `rg_evaluate_eligibility()` in `server/pure.php` | planned | `server/tests/run.php` |
 | Requirements carry a weight that decides blocking | planned storage | `server/pure.php` | planned | `server/tests/run.php` |
@@ -74,14 +86,47 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| Clients and sites are recorded | `clients`, `sites` | `server/clients.php` | `src/pages/app/Clients.tsx` | none |
-| Shifts are scheduled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
-| Recurring shifts are generated | `shift_templates` | `server/shift-templates.php` | `src/pages/app/Scheduling.tsx` | none |
+| Clients and sites are recorded | `clients`, `sites` | `server/clients.php`, `server/sites.php` | `src/pages/app/Clients.tsx`, `src/components/rota/sites-tab.tsx` | `server/tests/db/cases/160_rota.php` |
+| A site's required training is part of eligibility | `site_requirements` | `rg_load_rules()` in `server/compliance-lib.php` | `src/components/rota/sites-tab.tsx`, shift panel | `server/tests/db/cases/160_rota.php` |
+| Shifts are scheduled | `shifts` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| Workers never see a draft; a week is published | `shifts.is_draft` | `server/scheduling.php`, `server/me.php`, `server/offer.php`, `server/field.php`, `server/portal.php` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| A change after publishing tells the worker | `notifications`, `email_queue` | `rg_notify_worker()` in `server/rota-lib.php` | shift panel | `server/tests/db/cases/160_rota.php` |
+| Last week can be copied as drafts | `shifts` | `server/scheduling.php?action=copy_week` | `src/pages/app/Scheduling.tsx` | `server/tests/db/cases/160_rota.php` |
+| A shift can be reassigned or cancelled | `shifts` | `server/scheduling.php` | `src/components/rota/shift-panel.tsx` | `server/tests/db/cases/160_rota.php` |
+| Approved leave blocks every assignment path | `leave_records` | `rg_assignment_check()` in `server/compliance-lib.php` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Unavailability and a short rest gap need acknowledging | `availability_blocks`, `app_settings` | `rg_assignment_check()`, `rg_rest_gap_warnings()` | shift panel | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Cover requests and enquiries have an owner | `service_requests`, `contact_enquiries` | `server/requests.php` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
+| A worker sees their next shift, site details and what blocks them | `shifts`, `sites`, `verifications` | `server/me.php`, `rg_portal_blockers()` | `src/pages/worker/PortalHome.tsx` | `server/tests/run.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker clocks in from 15 minutes before the start | `shift_events` | `rg_clock_in_open()` in `server/pure.php`, `server/field.php` | `src/pages/worker/PortalHome.tsx` | `server/tests/run.php`, `server/tests/db/cases/160_rota.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker answers offers and picks up open shifts through the one check | `shift_offers`, `shifts` | `rg_offer_respond()`, `rg_claim_check()` | `src/pages/worker/PortalRota.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| A worker sends evidence and it waits for review | `files`, `verifications` | `server/me.php?action=upload`, `server/files-lib.php` | `src/pages/worker/PortalRecords.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| A worker submits timesheets and reads their gross pay | `timesheets` | `server/me.php` | `src/pages/worker/PortalRecords.tsx` | `server/tests/db/cases/160_rota.php`, `server/tests/db/cases/180_staff_portal.php` |
+| A worker keeps their contact details, emergency contacts, availability and leave | `people`, `availability_blocks`, `leave_records` | `server/me.php`, `server/leave.php` | `src/pages/worker/PortalMe.tsx` | `server/tests/db/cases/180_staff_portal.php` |
+| Another worker's record cannot be read or changed from the portal | all of the above | `server/me.php`, `server/portal-lib.php` | every portal tab | `server/tests/db/cases/180_staff_portal.php` |
+| Shifts are created from a cover request | `service_requests`, `shifts` | `server/bookings.php?action=confirm` | `src/pages/app/Requests.tsx` | `server/tests/db/cases/160_rota.php` |
+| Work orders are raised and tracked | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
+| A work order can be corrected or archived | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
+| A work order names who is doing it | `jobs` | `server/jobs.php` | `src/pages/app/Jobs.tsx` | none |
+| An unpaid break is not paid | `timesheets` | `rg_deduct_break()` in `server/pure.php` | `src/pages/app/Timesheets.tsx` | `server/tests/run.php` |
+| Hours can be traced to the shift worked | `timesheets`, `shifts` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
+| Clocking out makes a draft timesheet the worker submits | `timesheets` | `rg_timesheet_from_clock()` in `server/rota-lib.php`, `server/me.php` | staff portal (S4) | `server/tests/run.php`, `server/tests/db/cases/160_rota.php` |
+| Hours can be queried and corrected with history | `timesheets`, `audit_log` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | `server/tests/db/cases/160_rota.php` |
+| A worker can see their own hours and pay | `timesheets` | `server/me.php` | `src/pages/worker/WorkerApp.tsx` | none |
+| A pay rate is priced as at the date worked | `worker_pay_rates` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
+| Premiums follow the worked interval | `pay_rules`, `bank_holidays` | `rg_premium_segments()` in `server/pure.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` |
+| Bank holidays are known beyond this year | `bank_holidays` | `rg_bank_holidays()` in `server/pure.php` | — | `server/tests/run.php` |
+| A rate below the configured floor is visible | `pay_floors` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | none |
+| Hours are approved or rejected with a reason | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | `server/tests/run.php` |
+| A panic alert reaches somebody | `notifications`, `notification_reads` | `server/notifications.php` | `src/components/app/*` | none |
+| A panic alert can be acknowledged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` |
+| A lone worker can make a check call | `shift_events` | `server/field.php` | `src/pages/worker/WorkerApp.tsx` | none |
+| Recurring shifts are generated as drafts | `shift_templates` | `server/shift-templates.php` | `src/components/rota/dialogs.tsx` | none |
 | Workers are matched on skills | `skills`, `worker_skills` | `server/skills.php` | `src/pages/app/Scheduling.tsx` | none |
 | Open shifts are broadcast | `shift_offers` | `server/offer.php` | `src/pages/public/Offer.tsx` | none |
 | An ineligible worker cannot be scheduled | `workers` | `server/scheduling.php` | `src/pages/app/Scheduling.tsx` | none |
-| No path can assign an ineligible worker | — | `rg_deployment_check()` in `server/compliance-lib.php` | `server/scheduling.php` | none |
-| The office is shown what needs attention | — | `server/action-centre.php` | planned | none |
+| No path can assign an ineligible worker | — | `rg_deployment_check()`, `rg_assignment_check()` in `server/compliance-lib.php` | `server/scheduling.php`, `server/me.php`, `server/offer.php` | `server/tests/db/cases/160_rota.php` |
+| The office is shown what needs attention | none | `server/action-centre.php` | `src/pages/app/Today.tsx` | `server/tests/db/cases/200_today.php` |
+| Today's counts obey service scope and zones | none | `rg_action_centre_access()` in `server/pure.php`, `server/action-centre.php`, `server/dashboard.php` | `src/pages/app/Today.tsx` | `server/tests/run.php`, `server/tests/db/cases/200_today.php` |
 | Field events are logged | `shift_events` | `server/field.php` | `src/pages/app/FieldOps.tsx` | `server/tests/run.php` (status derivation) |
 | Hours are recorded and approved | `timesheets` | `server/timesheets.php` | `src/pages/app/Timesheets.tsx` | none |
 | Pay is calculated from rules | `pay_rules`, `bank_holidays` | `server/pay-lib.php` | `src/pages/app/Payroll.tsx` | `server/tests/run.php` (premium selection) |
@@ -90,7 +135,7 @@ still read _none_; the compliance engine rows in particular must not stay that w
 
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
-| Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied) | planned, on `next_seq()` in `server/lib.php` | planned | none |
+| Workers have a payroll number | `workers.payroll_no` (migration 001, unapplied in production) | `next_payroll_no()` in `server/lib.php`, called by `server/ats.php` on onboarding | `src/pages/app/Workers.tsx` | none |
 | Employment contracts have a lifecycle | `employment_contracts` | planned endpoint | planned | none |
 | Written-statement particulars are structured | `employment_contracts` fields | planned endpoint | planned | none |
 | Leave and absence are recorded | `leave_records` | `server/leave.php` | planned | `server/tests/run.php` (balance) |
@@ -121,6 +166,8 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Requirement | Data | Endpoint | Interface | Test |
 |---|---|---|---|---|
 | The office is emailed on an enquiry | `contact_enquiries` | `server/contact.php` | `src/pages/public/Contact.tsx` | none |
+| Each website enquiry reaches the right queue (staff, cleaning quote, care, training, general) | `service_requests`, `contact_enquiries` | `server/bookings.php`, `server/quotes.php?action=request`, `server/contact.php` (`type`) | `src/components/public/forms/`, `src/pages/public/Request.tsx` | `server/tests/db/cases/130_website_enquiries.php` |
+| Old website addresses still land | none | `public/.htaccess` (301) | `src/routes/legacy-redirects.tsx` | `src/lib/__tests__/public-routes.test.ts` |
 | Staff can reply from the app | — | `server/inbox.php` | `src/pages/app/Mailbox.tsx` | none |
 | Workers are reachable by SMS or WhatsApp | `sms_log` | `send_sms()` in `server/lib.php` | `src/pages/app/Comms.tsx` | none |
 | Staff see in-app notifications | `notifications` | `server/notifications.php` | `src/components/notification-dropdown.tsx` | none |
@@ -135,17 +182,86 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Sensitive actions are audited | `audit_log` | `audit()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
 | Audit records before and after values | `audit_log.before_json`, `after_json` | `audit_diff()` in `server/lib.php` | `src/pages/app/Settings.tsx` | none |
 | A record's own history is retrievable | `audit_log.entity_type`, `entity_id` | `server/audit.php` | planned | none |
-| Consent is recorded | `consent_log` | `server/contact.php` | — | none |
-| Subject data can be exported | — | `server/gdpr.php` | `src/pages/app/Settings.tsx` | none |
+| Consent is recorded | `consent_log` | `server/ats.php`, `server/bookings.php`, `server/quotes.php`, `server/auth.php` | the consent checkboxes on the website forms | `server/tests/db/cases/130_website_enquiries.php` (quote) |
+| Marketing is opt-in and reversible | `consent_log` (`kind = 'marketing'`) | `server/contact.php`, `server/quotes.php`, `server/unsubscribe.php` | `src/components/public/forms/ContactForms.tsx`, `src/components/public/forms/CleaningQuoteForm.tsx` | `server/tests/run.php` (token), `server/tests/db/cases/130_website_enquiries.php` |
+| Subject data can be exported | resolved through `people` | `server/gdpr.php` | `src/pages/app/Settings.tsx` | none |
+| A person can make a request | `data_requests` | `server/data-request.php` | `src/pages/public/DataRequest.tsx` | none |
 | Deletion requires approval | `deletion_requests` | `server/governance.php` | planned | none |
 | Records have a retention policy | `retention_policies` | `server/governance.php` | planned | none |
+| Retention periods are acted on | `retention_policies` | `server/retention-sweep.php` | cron, dry run by default | `server/tests/run.php` |
 | Incidents are logged and actioned | `incidents`, `incident_actions` | `server/incidents.php` | `src/pages/app/Incidents.tsx` | none |
 | The database is backed up | — | `server/backup.php` | cron | none |
 | Backups are restore-tested | — | `server/system-health.php` reports it as an explicit unknown | — | none |
-| Regulatory packs can be produced | — | `server/reports.php` | `src/pages/app/Reports.tsx` | none |
-| Staff workload is visible | — | `server/system-health.php` | planned | none |
-| The system reports its own health | — | `server/system-health.php` | planned | none |
+| Regulatory packs can be produced | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` (scope refusal) |
+| Reports total the whole filtered dataset, in scope | none | `server/reports.php` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` |
+| Exports carry declared columns only and are logged | `export_log` | `rg_csv()` in `server/pure.php`, `server/reports.php?action=export` | `src/pages/app/Reports.tsx` | `server/tests/run.php`, `server/tests/db/cases/210_reports.php` |
+| A client profile pack shows client-safe fields only | none | `server/compliance.php?action=profile_pack`, `rg_dbs_level()` | `src/pages/app/PersonProfile.tsx`, `buildProfilePackPdf()` in `src/lib/pdf.ts` | `server/tests/db/cases/220_profile_pack.php` |
+| Staff workload is visible | none | `server/reports.php?report=workload`, `server/system-health.php?action=workload` | `src/pages/app/Reports.tsx` | `server/tests/db/cases/210_reports.php` |
+| The system reports its own health | `cron_runs` (migration 043) | `server/system-health.php`, `rg_cron_started()`/`rg_cron_succeeded()` in `server/lib.php`, `rg_cron_state()` | `src/components/app/system-health.tsx` (Settings) | `server/tests/db/cases/230_system_health.php` |
 | Exports are logged | `export_log` | `server/governance.php` | planned | none |
+
+## People and compliance (section S2)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| One profile per person, every tab behind its zone | `people`, `workers`, `applicants`, `verifications`, `right_to_work_checks`, `employment_contracts`, `worker_pay_rates`, `leave_records`, `audit_log` | `server/people.php` | `src/pages/app/PersonProfile.tsx`, `src/components/people/` | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` (`rg_service_statuses`) |
+| A person is read only inside the account's service scope | (none) | `require_person_scope()` in `server/lib.php`, `rg_person_in_scope()` in `server/pure.php` | `src/lib/access.ts` (`/app/people`) | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` |
+| The profile names the one next action | (none) | `rg_person_next_action()` in `server/pure.php` | `src/pages/app/PersonProfile.tsx` | `server/tests/run.php`, `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Each requirement shows a calculated status chip | (none) | `rg_requirement_chip()` in `server/pure.php` | `src/components/people/checks-tab.tsx` | `server/tests/run.php` |
+| Emergency contacts are kept, validated and audited | `people.emergency_contact*` (migrations 001, 037) | `rg_save_emergency_contacts()` in `server/people-lib.php` | `src/components/people/emergency-tab.tsx` | `server/tests/db/cases/140_person_profile.php`, `server/tests/run.php` |
+| Evidence waiting for review is one queue | `verifications` | `server/verifications.php` `?action=queue` | `src/components/compliance/verification-queue.tsx` | `server/tests/db/cases/140_person_profile.php` |
+| Right-to-work checks are recorded and signed off | `right_to_work_checks` | `server/right-to-work.php` | `src/components/compliance/right-to-work-panel.tsx`, `src/components/people/rtw-dialog.tsx` | `server/tests/db/cases/140_person_profile.php` |
+| Onboarding starts from the service's checklist | `onboarding_template_items` (migration 037) | `server/onboarding-templates.php`, `server/ats.php` | `src/components/compliance/onboarding-templates.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Approval is offered only when the server would accept it | `workers.approved_at` | `rg_approval_blockers()` in `server/pure.php`, `server/workers.php` | `src/components/people/overview-tab.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php`, `server/tests/run.php` |
+| A suspension is a recorded decision | `workers.suspended_at`, `suspension_reason` (migration 037) | `server/workers.php` `?action=suspend` | `src/components/people/overview-tab.tsx` | `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Contract evidence follows its lifecycle | `employment_contracts` | `server/employment-contracts.php` | `src/components/people/employment-tab.tsx` | `server/tests/db/cases/110_activation.php`, `server/tests/db/cases/150_onboarding_and_approval.php` |
+| Training records link to the person | `enrolments.person_id` | `rg_add_training_record()` in `server/people-lib.php` | `src/components/people/training-tab.tsx` | `server/tests/db/cases/140_person_profile.php` |
+
+## Website: careers, forms and company details (section S7)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| Only published roles are public, with named fields | `vacancies` (migration 039) | `server/vacancies.php` | `src/pages/public/Careers.tsx`, `src/pages/public/CareerRole.tsx` | `server/tests/db/cases/170_careers_cms.php` |
+| The office manages roles, inside its service scope, audited | `vacancies`, `audit_log` | `server/vacancies.php` | `src/pages/app/Vacancies.tsx` | `server/tests/db/cases/170_careers_cms.php`, `server/tests/run.php` (`rg_vacancy_transition_ok`, `rg_slugify`) |
+| One intake path per role | `vacancies.form_id`, `website_forms.active` | `rg_vacancy_apply_route()` in `server/pure.php` | `src/pages/public/CareerRole.tsx` | `server/tests/db/cases/170_careers_cms.php`, `server/tests/run.php` |
+| Only an approved Google Forms address is stored, as an id | `website_forms.google_form_id` | `rg_parse_google_form()`, `server/website-forms.php` | `src/pages/app/WebsiteForms.tsx`, `src/lib/google-forms.ts` | `server/tests/run.php`, `server/tests/db/cases/170_careers_cms.php`, `src/lib/__tests__/google-forms.test.ts` |
+| Nothing loads from Google until the visitor chooses | CSP `frame-src` in `public/.htaccess` | none | `src/components/public/GoogleFormEmbed.tsx` | none (checked in a browser) |
+| A changed form address keeps its history | `audit_log` (`website_form.update`) | `server/website-forms.php?action=history` | `src/pages/app/WebsiteForms.tsx` | `server/tests/db/cases/170_careers_cms.php` |
+| Forms are reviewed and their intake watched | `website_forms.last_reviewed_at`, `integrations` | `server/website-forms.php`, `server/forms-intake.php?action=health` | `src/components/app/intake-tab.tsx` | `server/tests/run.php` (`rg_form_review_due`) |
+| An owner sets an intake secret, shown once, stored hashed | `integrations.secret_hash` | `server/forms-intake.php?action=set_secret` | `src/components/app/intake-tab.tsx`, `docs/runbooks/google-forms-intake.md` | `server/tests/db/cases/170_careers_cms.php` |
+| Company details and socials come from the CMS, with a fallback | `company_settings` (migration 039) | `server/company.php` | `src/lib/company.ts`, `src/pages/app/CompanyDetails.tsx`, `src/pages/public/Links.tsx` | `server/tests/db/cases/170_careers_cms.php`, `src/lib/__tests__/company.test.ts`, `server/tests/run.php` (`rg_social_url_ok`) |
+| Role pages and posts are in a sitemap | `vacancies`, `blog_posts` | `server/sitemap.php` | `public/robots.txt` | `server/tests/db/cases/170_careers_cms.php` |
+| Role pages carry JobPosting structured data | (none) | none | `src/lib/structured-data.ts` | none (checked in a browser) |
+
+## Spreadsheet import (section S8)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| An office user uploads a Google Sheet as CSV; the file is not kept | `sheet_imports`, `sheet_import_rows.cells_json` (migration 042) | `server/sheet-import.php?action=upload`, `rg_csv_parse()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php` (CSV parsing), `server/tests/db/cases/190_sheet_import.php` |
+| Columns are mapped once per form and reused; only listed fields can be mapped | `sheet_import_mappings` | `server/sheet-import.php?action=map`, `RG_IMPORT_FIELDS`, `rg_import_guess_field()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Every row is previewed before anything is written | `sheet_import_rows` | `rg_import_plan_row()`, `server/sheet-import.php` GET | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| People are matched on email, phone, then name and date of birth; uncertain matches wait for a person | `people` | `rg_import_match_decision()`, `?action=row` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Responses the form feed already delivered, and rows already imported, are duplicates | `integration_submissions`, `sheet_import_rows.applied_fingerprint` (UNIQUE) | `rg_import_same_application()`, `server/sheet-import.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Applying writes through the person spine, row by row, audited with file and row | `people`, `applicants`, `audit_log` | `rg_create_applicant()`, `rg_save_contact_details()` in `server/people-lib.php` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+| Only contact details change for staff; never compliance, pay or status | `people`, `workers.avail_*` | `rg_import_contact_changes()`, `rg_save_contact_details()` | `src/pages/app/SheetImport.tsx` | `server/tests/run.php`, `server/tests/db/cases/190_sheet_import.php` |
+| Service scope on every row; office roles only | `sheet_imports.created_by` | `server/sheet-import.php` | `src/lib/access.ts` | `server/tests/db/cases/190_sheet_import.php`, `src/lib/__tests__/access.test.ts` |
+| A report with counts, a failures download and an import history | `sheet_imports` counts | `?action=failures`, `?action=history` | `src/pages/app/SheetImport.tsx` | `server/tests/db/cases/190_sheet_import.php` |
+
+## Launch gate and follow-ups (section S10)
+
+| Requirement | Data | Endpoint | Interface | Test |
+|---|---|---|---|---|
+| A check valid only from a certificate or worker record says so, and changes no precedence | `rg_load_evidence()` `origin` in `server/compliance-lib.php` | `server/people.php` `evidence_origin` | `src/components/people/checks-tab.tsx`, `verifierLabel()` in `src/lib/people.ts` | `server/tests/db/cases/240_launch_followups.php`, `src/lib/__tests__/people.test.ts` |
+| A certificate labelled with "&" matches its requirement, and nothing looser | `certifications.type` | `rg_label_key()` in `server/pure.php` | none | `server/tests/run.php`, `server/tests/db/cases/240_launch_followups.php` |
+| The owner sets the minimum rest between shifts; the office reads it | `app_settings.rest_gap_min_hours` | `server/scheduling.php` `?action=settings` | `src/components/app/rest-gap-card.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| Deletion requests are decided by somebody other than the requester, on a screen | `deletion_requests` | `server/governance.php` `?action=deletions`, `?action=decide_deletion` | `src/components/app/data-requests-tab.tsx`, Today item in `server/action-centre.php` | `server/tests/db/cases/240_launch_followups.php` |
+| The inbox badge is quiet when no mailbox is set up | none | `server/inbox.php` `?action=unread` | `src/components/app-sidebar.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| Training forms appear on /training only after the visitor's click | `website_forms` purpose training | `server/website-forms.php` `?action=public` | `src/components/public/TrainingForms.tsx`, `src/components/public/GoogleFormEmbed.tsx` | `server/tests/db/cases/240_launch_followups.php` |
+| A backup is proved by restoring it, and the date is shown | `cron_runs` job `restore_test` | `server/restore-check.php`, `server/system-health.php` | Settings, System health | `server/tests/run.php`, `server/tests/db/cases/240_launch_followups.php`; rehearsal in `docs/runbooks/backup-and-restore.md` |
+| The core journey and its refusals work in a browser | test database | every endpoint on the path | office app, `/m`, `/careers` | `scripts/launch-journeys.mjs`; results in `docs/TESTING.md` |
+| The rota clock case passes whatever the hour or date | `timesheets` | `server/field.php` | none | `server/tests/db/cases/160_rota.php` |
+| Documents keep working links and the retired colours stay retired | `docs/` | `scripts/docs_sync.py` | none | `scripts/test_docs_sync.py` |
+| Agents cannot edit the live config, hand-edit generated progress or push to main | `.claude/settings.json` | `scripts/agent_guard.py` | none | `scripts/test_agent_guard.py` |
 
 ## Platform
 
@@ -159,4 +275,9 @@ still read _none_; the compliance engine rows in particular must not stay that w
 | Fixtures exist without production data | `server/seed.php` | CLI | — | none |
 | Schema changes are ordered migrations | `server/schema.sql` is the baseline | `server/migrate.php` | — | none |
 | Errors do not leak internals | — | `server/lib.php` returns exception messages | — | none |
-| The app is installable and works offline | `public/manifest.webmanifest`, `public/sw.js` | — | `src/main.tsx` registers it | none |
+| The app is installable and works offline | generated by `vite.config.ts` | — | `src/main.tsx` registers it | none |
+| The public site loads nothing third-party unless the visitor asks for a Google Form | `public/fonts`, `src/fonts.css` | none | `index.html`, CSP in `public/.htaccess`, `src/components/public/GoogleFormEmbed.tsx` | none |
+| One visual identity in the company green | `src/index.css`, `tailwind.config.ts`, `src/lib/services.ts` | none | `docs/DESIGN_SYSTEM.md`, `src/components/brand/Logo.tsx`, `public/favicon.svg` | none (checked in a browser) |
+| Sensitive categories are separated by permission | `zone_permissions` | `server/workers.php`, `server/compliance.php`, `server/leave.php` | redacted fields | none |
+| Documents are readable only by those entitled | `files` | `server/files.php` | `src/pages/app/Files.tsx` | `server/tests/run.php` |
+| Retired features stay retired: no AI or weather call, no Content Studio, Analytics or Insights page; old addresses redirect (S9) | none deleted; `feature_switches.ai_assistant` row kept, unread | the AI, weather and Analytics endpoints deleted (404); `server/files.php` no longer has `action=extract` | `src/routes/index.tsx` redirects, `src/lib/app-routes.ts` | `server/tests/db/cases/231_retirements.php`, `guard_retired_present()` in `server/tests/run.php`, `src/lib/__tests__/nav.test.ts` |

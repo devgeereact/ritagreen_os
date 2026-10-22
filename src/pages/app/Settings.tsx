@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { IntakeTab } from "@/components/app/intake-tab"
+import { SystemHealthTab } from "@/components/app/system-health"
+import { useSearchParams } from "react-router-dom"
 import {
   Table,
   TableBody,
@@ -37,39 +40,70 @@ import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import type { AdminUser, AuditEntry } from "@/lib/types"
 import { shortDate } from "@/lib/format"
+import { SERVICE_OPTIONS } from "@/lib/services"
+import { FeaturesCard } from "@/components/app/features-card"
+import { RestGapCard } from "@/components/app/rest-gap-card"
+import { DataRequestsTab } from "@/components/app/data-requests-tab"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
 const ROLES = ["super_admin", "admin", "manager", "trainer", "editor", "employee", "client"]
-const DIVISIONS = ["care", "academy", "cleaning", "security"]
+
 
 export default function Settings() {
   const { hasRole } = useAuth()
   const isAdmin = hasRole("super_admin", "admin")
+  const isOffice = hasRole("super_admin", "admin", "manager")
+  // The open tab is in the address, so Today can link straight to System health.
+  const [params, setParams] = useSearchParams()
+  const tab = params.get("tab") ?? (isAdmin ? "users" : "security")
+  const setTab = (value: string) => setParams((p) => { p.set("tab", value); return p }, { replace: true })
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          {isAdmin ? "Manage people, roles, data and your own security." : "Manage your account security."}
+          {isAdmin ? "Manage people, roles, features, data and your own security." : "Manage your account security."}
         </p>
       </div>
 
-      <Tabs defaultValue={isAdmin ? "users" : "security"}>
-        <TabsList>
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <TabsList className="w-max justify-start">
           <TabsTrigger value="security">Security</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">Users & roles</TabsTrigger>}
+          {isOffice && <TabsTrigger value="features">Features</TabsTrigger>}
+          {isOffice && <TabsTrigger value="intake">Form intake</TabsTrigger>}
+          {isOffice && <TabsTrigger value="health">System health</TabsTrigger>}
           {isAdmin && <TabsTrigger value="audit">Audit log</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="requests">Data requests</TabsTrigger>}
           {isAdmin && <TabsTrigger value="gdpr">Data & GDPR</TabsTrigger>}
         </TabsList>
+        </div>
         <TabsContent value="security" className="mt-4 space-y-6">
           <TwoFactorCard />
           <SessionsCard />
         </TabsContent>
+        {/* Intake is a manager's screen as well as an admin's: a form that stops
+            feeding the system is a recruitment problem before it is an IT one. */}
+        {/* Everyone in the office can see which areas are switched on; only an
+            owner (super_admin, admin) can change them, and the server enforces it. */}
+        {isOffice && (
+          <TabsContent value="features" className="mt-4 space-y-6">
+            <FeaturesCard canEdit={isAdmin} />
+            <RestGapCard canEdit={isAdmin} />
+          </TabsContent>
+        )}
+        {isOffice && <TabsContent value="intake" className="mt-4"><IntakeTab /></TabsContent>}
+        {/* Email queue, form intake, scheduled jobs and the restore test. The
+            server refuses a service-scoped manager, whose figures would span
+            every service; the tab then says so. */}
+        {isOffice && <TabsContent value="health" className="mt-4"><SystemHealthTab /></TabsContent>}
         {isAdmin && (
           <>
             <TabsContent value="users" className="mt-4"><UsersTab /></TabsContent>
             <TabsContent value="audit" className="mt-4"><AuditTab /></TabsContent>
+            <TabsContent value="requests" className="mt-4"><DataRequestsTab /></TabsContent>
             <TabsContent value="gdpr" className="mt-4"><GdprTab /></TabsContent>
           </>
         )}
@@ -481,13 +515,13 @@ function NewUserDialog({
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="division">Division</Label>
+              <Label htmlFor="division">Service</Label>
               <Select value={division} onValueChange={setDivision}>
                 <SelectTrigger id="division"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {DIVISIONS.map((d) => (
-                    <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                  {SERVICE_OPTIONS.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

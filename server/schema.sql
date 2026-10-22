@@ -42,11 +42,21 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uniq_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Seed super-admin: dev@ritagreenservices.com / Testing123!
--- (bcrypt hash of Testing123!; change the password after first login.)
-INSERT IGNORE INTO users (name, email, password_hash, role) VALUES
-  ('RitaGreen Dev', 'dev@ritagreenservices.com',
-   '$2y$12$Edlcu2ZtmatAFKEbK6OeJeZbgjMZEMx1xKQiyqF2Ee15QdycnAEN6', 'super_admin');
+-- No administrator is seeded here, deliberately.
+--
+-- This file used to create a super_admin whose password was written in plain
+-- text in the comment above the hash -- in a tracked file, in a public
+-- repository, for an account with access to every worker record in the system.
+-- "Change it after first login" is not a control; nothing enforced it and
+-- nothing checked whether anyone had.
+--
+-- Create the first administrator with a password you choose, after importing
+-- this file:
+--
+--     php server/create-admin.php --email you@example.com --name "Your Name"
+--
+-- Local development does not need this: seed.php creates its own fixture
+-- accounts, and refuses to run against anything but a local database.
 
 -- ---- Auth tokens ----
 CREATE TABLE IF NOT EXISTS tokens (
@@ -77,6 +87,10 @@ CREATE TABLE IF NOT EXISTS counters (
   name VARCHAR(64) PRIMARY KEY,
   val INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- The payroll counter is seeded by migration 032, which sets it to the highest
+-- payroll number already in use. On a database built from this file there are no
+-- workers yet, so next_seq() starting it at 1 is correct.
 
 -- ---- Rate limiting (brute-force / spam throttle for public endpoints) ----
 -- rate_limit() in lib.php writes one row per hit and counts within a window.
@@ -124,7 +138,7 @@ CREATE TABLE IF NOT EXISTS workers (
   phone VARCHAR(40) NULL,
   role ENUM('carer','nurse','cleaner','guard','trainer') NOT NULL DEFAULT 'carer',
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
-  status ENUM('active','onboarding','inactive') NOT NULL DEFAULT 'onboarding',
+  status ENUM('active','onboarding','inactive','suspended') NOT NULL DEFAULT 'onboarding',
   right_to_work TINYINT(1) NOT NULL DEFAULT 0,
   dbs_status ENUM('valid','pending','expired') NULL,
   dbs_expiry DATE NULL,
@@ -616,7 +630,7 @@ CREATE TABLE IF NOT EXISTS applicants (
   phone VARCHAR(40) NULL,
   role_applied VARCHAR(80) NULL,
   division ENUM('care','academy','cleaning','security') NOT NULL DEFAULT 'care',
-  stage ENUM('applied','screened','interview','vetting','offer','onboarded','rejected') NOT NULL DEFAULT 'applied',
+  stage ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected','withdrawn') NOT NULL DEFAULT 'applied',
   source VARCHAR(80) NULL,
   notes TEXT NULL,
   worker_id INT NULL,
@@ -881,3 +895,187 @@ CREATE TABLE IF NOT EXISTS testimonials (
   deleted_at TIMESTAMP NULL,
   KEY idx_testi_pub (status, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Data-subject requests (baseline of migration 020) ----
+--
+-- A person's route to ask for their data, and the record of what was done. It
+-- collects no identity documents on purpose: a public form is the wrong place
+-- to gather a passport scan, and asking for more personal data in order to
+-- answer a question about personal data is the wrong instinct.
+CREATE TABLE IF NOT EXISTS data_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ref VARCHAR(24) NOT NULL,
+  kind ENUM('access','correction','deletion','objection','restriction','portability','withdraw_consent','other')
+    NOT NULL DEFAULT 'access',
+  name VARCHAR(160) NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  relationship VARCHAR(120) NULL,
+  detail TEXT NULL,
+  status ENUM('received','verifying','in_progress','completed','refused','withdrawn') NOT NULL DEFAULT 'received',
+  acknowledged_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  outcome_note VARCHAR(1000) NULL,
+  handled_by INT NULL,
+  ip VARCHAR(45) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_data_req_ref (ref),
+  KEY idx_data_req_status (status, created_at),
+  KEY idx_data_req_email (email),
+  CONSTRAINT fk_data_req_user FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Marketing consent is the latest consent_log row for kind = 'marketing', and
+-- idx_consent_email_kind is what makes that a lookup rather than a scan. It is
+-- added by migration 020, which owns it, and was copied here as well -- so on a
+-- fresh install (this file, then the migrations) migration 020 stopped dead on
+-- "Duplicate key name 'idx_consent_email_kind'" and everything from 020 to 030
+-- was left unapplied. The migration's own statement has no IF NOT EXISTS, and
+-- adding one would only hide the duplication rather than remove it.
+
+-- Public intake data had no way to be archived: the only disposal available was
+-- a hard DELETE, which is not a disposal a retention policy should have to use.
+ALTER TABLE contact_enquiries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+-- integration_submissions gets the same column, but from migration 020, which is
+-- also where the table itself is created (migration 011). It was listed here as
+-- well, and an ALTER on a table this file never creates made schema.sql fail on
+-- the third statement of a fresh install -- the one path it exists to serve.
+-- A statement only belongs in this file if the table it names is created in it.
+
+-- A timesheet decision (migration 021). The CREATE above predates rejection:
+-- a manager could only ever agree with the hours in front of them. Approval
+-- recorded who but not when, and never why.
+ALTER TABLE timesheets
+  MODIFY COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending';
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP NULL DEFAULT NULL AFTER approved_by;
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS decision_note VARCHAR(255) NULL DEFAULT NULL AFTER decided_at;
+ALTER TABLE timesheets ADD INDEX IF NOT EXISTS idx_ts_status_date (status, work_date);
+
+-- ---- Pay rate history (migration 022) ----
+--
+-- workers.pay_rate_pence is the CURRENT rate. This is the history behind it, and
+-- pay-lib.php prices every timesheet entry at the rate in force on the day the
+-- work was done. Reading the current rate meant a rise re-priced every period
+-- the worker had ever worked, so no closed period could be reproduced.
+CREATE TABLE IF NOT EXISTS worker_pay_rates (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  worker_id INT NOT NULL,
+  rate_pence INT NOT NULL,
+  pay_type ENUM('paye','umbrella') NOT NULL DEFAULT 'paye',
+  effective_from DATE NOT NULL,
+  set_by INT NULL,
+  note VARCHAR(255) NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_worker_effective (worker_id, effective_from),
+  KEY idx_wpr_lookup (worker_id, effective_from),
+  CONSTRAINT fk_wpr_worker FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_wpr_user FOREIGN KEY (set_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Pay floor (migration 024) ----
+--
+-- Deliberately empty. A floor, not the National Minimum Wage: NMW has age bands
+-- and an apprentice rate and workers holds no date of birth, so a single figure
+-- cannot decide lawfulness. pay-lib.php flags a rate below it and never blocks.
+CREATE TABLE IF NOT EXISTS pay_floors (
+  effective_from DATE PRIMARY KEY,
+  rate_pence INT NOT NULL,
+  label VARCHAR(120) NOT NULL DEFAULT '',
+  set_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_pay_floor_user FOREIGN KEY (set_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---- Per-user read state for a broadcast notification (migration 025) ----
+--
+-- A broadcast is one row read by many people and notifications has a single
+-- read_at, so every broadcast was forced to read = true and the unread count
+-- ignored them. A panic alert is a broadcast: it arrived already marked read and
+-- the bell never lit.
+CREATE TABLE IF NOT EXISTS notification_reads (
+  notification_id INT NOT NULL,
+  user_id INT NOT NULL,
+  read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (notification_id, user_id),
+  KEY idx_nr_user (user_id),
+  CONSTRAINT fk_nr_notification FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+  CONSTRAINT fk_nr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A panic alert can be acknowledged (migration 026). Without it the board's
+-- panic flag was a latch: raised once, up for the rest of the day.
+ALTER TABLE shift_events
+  MODIFY COLUMN kind ENUM('clock_in','clock_out','check_in','panic','panic_ack','note','task','signoff')
+  NOT NULL DEFAULT 'note';
+ALTER TABLE shift_events ADD INDEX IF NOT EXISTS idx_se_shift_kind (shift_id, kind, id);
+
+-- An offer stops working when its shift starts, and a worker gets one live
+-- offer per shift rather than a fresh link on every re-broadcast (migration 027).
+ALTER TABLE shift_offers ADD COLUMN IF NOT EXISTS expires_at DATETIME NULL AFTER status;
+ALTER TABLE shift_offers ADD UNIQUE KEY IF NOT EXISTS uniq_offer_shift_worker (shift_id, worker_id);
+
+-- A generated shift knows which template made it, so two templates sharing a
+-- title, division and time no longer collapse into one (migration 027).
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS template_id INT NULL AFTER client_id;
+ALTER TABLE shifts ADD INDEX IF NOT EXISTS idx_shifts_template (template_id, starts_at);
+-- The foreign key is added by migration 027, which owns it. MySQL has no
+-- ADD CONSTRAINT IF NOT EXISTS, so a copy here is not re-runnable: it made a
+-- fresh install fail on "Duplicate FOREIGN KEY constraint name" at 027 and
+-- leave 027 to 030 unapplied.
+
+-- bank_holidays is seeded to 2035 by migration 023, generated by
+-- rg_bank_holidays() in pure.php. A from-scratch import gets 2026 from the rows
+-- above and the rest when migrate.php runs.
+
+-- Attendance and location can be archived, and has a retention policy
+-- (migration 028). It is personal data about the worker -- docs/PRIVACY.md --
+-- and the only disposal available was a hard DELETE.
+ALTER TABLE shift_events ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP NULL;
+ALTER TABLE shift_events ADD INDEX IF NOT EXISTS idx_se_deleted (deleted_at);
+
+-- An unpaid break, and the shift the hours belong to (migration 029).
+--
+-- Gross hours were paid door to door, so a twelve-hour shift with an unpaid half
+-- hour was paid twelve hours. And a timesheet had no link to the rota, so hours,
+-- shifts and clock events could only be reconciled by eye.
+--
+-- shift_id stays NULLABLE: hours are still recorded for work that never had a
+-- rota entry. The FK is SET NULL because a timesheet is a pay record and
+-- outlives the shift it came from -- losing the link is acceptable, losing the
+-- hours is not.
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS break_minutes INT NOT NULL DEFAULT 0 AFTER minutes;
+ALTER TABLE timesheets ADD COLUMN IF NOT EXISTS shift_id INT NULL AFTER worker_id;
+ALTER TABLE timesheets ADD INDEX IF NOT EXISTS idx_ts_shift (shift_id);
+-- The foreign key is added by migration 029, which owns it. See the note on
+-- fk_shifts_template above for why it is not repeated here.
+
+-- A work order can name who is doing it (migration 030). jobs.status has had
+-- 'assigned' in its enum since the table was created with no assignee column
+-- anywhere, so the status was decorative.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_to INT NULL AFTER client_id;
+ALTER TABLE jobs ADD INDEX IF NOT EXISTS idx_jobs_assignee (assigned_to, status);
+-- The foreign key is added by migration 030, which owns it. See the note on
+-- fk_shifts_template above for why it is not repeated here.
+
+-- ---- Activation is somebody's decision (migration 034) ----
+--
+-- rg_derive_worker_status() weighs outstanding tasks, a signed contract and
+-- eligibility. Whether anybody with the authority actually said yes is a
+-- separate fact, and nothing recorded it. The columns are added by migration
+-- 034, which also backfills every already-active worker so that introducing the
+-- requirement did not stand the workforce down.
+--
+-- employment_contracts gains reviewed_at/reviewed_by/review_note in the same
+-- migration: a contract being signed and somebody having read the signed copy
+-- are two different things.
+
+-- ---- The rota (migration 038) ----
+--
+-- shifts gains is_draft/published_at/published_by, cancel_reason/cancelled_at/
+-- cancelled_by and site_id; sites gains postcode, access notes, a site contact
+-- and active; timesheets gains 'draft' and 'queried', source and submitted_at;
+-- service_requests and contact_enquiries gain owner_id.
+-- New tables: site_requirements, availability_blocks, app_settings. All of it is
+-- added by migration 038, which owns it: the new tables are not created in this
+-- file, and the columns sit beside two foreign keys that cannot be repeated here.

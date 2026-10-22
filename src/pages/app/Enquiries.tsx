@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react"
-import { Sparkles, Copy, Check, Inbox } from "lucide-react"
+import { useState } from "react"
+import { Inbox } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
   TableBody,
@@ -21,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useApi } from "@/hooks/use-api"
-import { api, aiDraft, ApiError } from "@/lib/api"
+import { api, ApiError } from "@/lib/api"
 import type { Enquiry } from "@/lib/types"
 import { shortDate, DIVISION_LABELS } from "@/lib/format"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
@@ -111,57 +110,9 @@ function EnquiryDialog({
   onClose: () => void
   onHandled: (id: number) => void
 }) {
-  const [draft, setDraft] = useState("")
-  const [drafting, setDrafting] = useState(false)
-  const [routing, setRouting] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  // Reset local state whenever a different enquiry opens.
+  // The AI draft and routing buttons were retired in S9; replies are written
+  // in the office mailbox, opened from the link below.
   const key = enquiry?.id ?? 0
-  useEffect(() => {
-    setDraft("")
-    setRouting(null)
-    setCopied(false)
-  }, [key])
-
-  async function draftReply() {
-    if (!enquiry) return
-    setDrafting(true)
-    try {
-      const text = await aiDraft(
-        `A prospective client sent this enquiry to RitaGreen (care, training, cleaning, security). ` +
-          `Write a warm, professional reply (UK English, no fluff) that acknowledges their need, asks one or two ` +
-          `clarifying questions, and offers next steps. Sign off as "The RitaGreen team".\n\n` +
-          `From: ${enquiry.name}\nAbout: ${DIVISION_LABELS[enquiry.division] ?? "General"}\n` +
-          `Message: ${enquiry.message}`,
-      )
-      setDraft(text)
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "AI drafting failed.")
-    } finally {
-      setDrafting(false)
-    }
-  }
-
-  async function suggestRoute() {
-    if (!enquiry) return
-    try {
-      const text = await aiDraft(
-        `Classify this enquiry into exactly one RitaGreen division: Healthcare & Care, Academy & Training, ` +
-          `Cleaning Services, or Security Services. Reply with only the division name and a 6-word reason.\n\n` +
-          `Message: ${enquiry.message}`,
-      )
-      setRouting(text)
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "AI routing failed.")
-    }
-  }
-
-  function copy() {
-    navigator.clipboard.writeText(draft)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
 
   return (
     <Dialog open={!!enquiry} onOpenChange={(o) => !o && onClose()}>
@@ -178,34 +129,14 @@ function EnquiryDialog({
 
             <div className="rounded-md bg-muted p-3 text-sm">{enquiry.message}</div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={draftReply} disabled={drafting}>
-                <Sparkles className="mr-1 size-3.5" /> {drafting ? "Drafting…" : "AI draft reply"}
-              </Button>
-              <Button size="sm" variant="outline" onClick={suggestRoute}>
-                <Sparkles className="mr-1 size-3.5" /> AI suggest routing
-              </Button>
+            <div>
+              <a
+                href={`mailto:${enquiry.email}?subject=Your%20RitaGreen%20enquiry`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              >
+                <Inbox className="size-3.5" /> Reply by email
+              </a>
             </div>
-
-            {routing && <p className="rounded-md bg-accent p-2 text-xs text-accent-foreground">{routing}</p>}
-
-            {draft && (
-              <div className="space-y-2">
-                <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={8} />
-                <div className="flex justify-between">
-                  <Button size="sm" variant="ghost" onClick={copy}>
-                    {copied ? <Check className="mr-1 size-3.5" /> : <Copy className="mr-1 size-3.5" />}
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                  <a
-                    href={`mailto:${enquiry.email}?subject=Your%20RitaGreen%20enquiry&body=${encodeURIComponent(draft)}`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                  >
-                    <Inbox className="size-3.5" /> Open in email
-                  </a>
-                </div>
-              </div>
-            )}
 
             <div className="flex justify-end border-t border-border pt-3">
               {enquiry.status !== "handled" && (

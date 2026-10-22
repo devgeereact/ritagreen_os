@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
 import { Plus, ShieldCheck, ShieldAlert, ShieldX, HelpCircle, FileDown, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useApi } from "@/hooks/use-api"
+import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
 import type {
   ComplianceItem,
@@ -45,6 +47,10 @@ import type {
 import { shortDate, gbp } from "@/lib/format"
 import { compliancePackPdf } from "@/lib/pdf"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { personPath } from "@/lib/people"
+import { VerificationQueue } from "@/components/compliance/verification-queue"
+import { RightToWorkPanel } from "@/components/compliance/right-to-work-panel"
+import { OnboardingTemplates } from "@/components/compliance/onboarding-templates"
 
 type Data = { summary: ComplianceSummary; items: ComplianceItem[] }
 
@@ -59,6 +65,18 @@ const STATUS_META: Record<
 }
 
 export default function Compliance() {
+  // /app/compliance is open to trainer and employee as well as the office, but
+  // insurance.php and references.php are office-only on the server. Offering
+  // those tabs to a trainer led straight to an error block, so they are hidden
+  // rather than shown and refused.
+  const { hasRole } = useAuth()
+  const isOffice = hasRole("super_admin", "admin", "manager")
+  // The open tab is in the address, so a link can land on the queue or the
+  // right-to-work list directly.
+  const [params, setParams] = useSearchParams()
+  const tab = params.get("tab") ?? "queue"
+  const setTab = (value: string) => setParams((p) => { p.set("tab", value); return p }, { replace: true })
+
   return (
     <div className="space-y-6">
       <div>
@@ -68,21 +86,41 @@ export default function Compliance() {
         </p>
       </div>
 
-      <Tabs defaultValue="credentials">
-        <TabsList>
-          <TabsTrigger value="credentials">Credentials</TabsTrigger>
-          <TabsTrigger value="insurance">Insurance</TabsTrigger>
-          <TabsTrigger value="references">References</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList className="w-max justify-start">
+            <TabsTrigger value="queue">Verification queue</TabsTrigger>
+            <TabsTrigger value="rtw">Right to work</TabsTrigger>
+            <TabsTrigger value="credentials">Credentials</TabsTrigger>
+            {isOffice && <TabsTrigger value="onboarding">Onboarding lists</TabsTrigger>}
+            {isOffice && <TabsTrigger value="insurance">Insurance</TabsTrigger>}
+            {isOffice && <TabsTrigger value="references">References</TabsTrigger>}
+          </TabsList>
+        </div>
+        <TabsContent value="queue" className="mt-6">
+          <VerificationQueue canManage={isOffice} />
+        </TabsContent>
+        <TabsContent value="rtw" className="mt-6">
+          <RightToWorkPanel canManage={isOffice} />
+        </TabsContent>
+        {isOffice && (
+          <TabsContent value="onboarding" className="mt-6">
+            <OnboardingTemplates />
+          </TabsContent>
+        )}
         <TabsContent value="credentials" className="mt-6">
           <CredentialsTab />
         </TabsContent>
-        <TabsContent value="insurance" className="mt-6">
-          <InsuranceTab />
-        </TabsContent>
-        <TabsContent value="references" className="mt-6">
-          <ReferencesTab />
-        </TabsContent>
+        {isOffice && (
+          <TabsContent value="insurance" className="mt-6">
+            <InsuranceTab />
+          </TabsContent>
+        )}
+        {isOffice && (
+          <TabsContent value="references" className="mt-6">
+            <ReferencesTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
@@ -135,7 +173,11 @@ function CredentialsTab() {
                 <TableBody>
                   {data.items.map((it, i) => (
                     <TableRow key={i}>
-                      <TableCell className="font-medium">{it.worker}</TableCell>
+                      <TableCell className="font-medium">
+                        {it.person_id ? (
+                          <Link to={personPath(it.person_id)} className="text-primary underline-offset-2 hover:underline">{it.worker}</Link>
+                        ) : it.worker}
+                      </TableCell>
                       <TableCell className="capitalize text-muted-foreground">{it.division}</TableCell>
                       <TableCell>{it.type}</TableCell>
                       <TableCell className="text-muted-foreground">{it.identifier || "—"}</TableCell>

@@ -39,6 +39,42 @@
   # Uploaded files are served only through files.php (which checks auth).
   RewriteRule ^uploads/ - [F,L]
 
+  # Server-side files that sit beside index.html because server/ is uploaded to
+  # the document root by hand. None is meant for a browser: the schema and
+  # migrations describe every table, the tests and notes describe the internals,
+  # and the CLI tools already refuse HTTP but need not be reachable at all.
+  # NOT YET ON THE SERVER as of 2026-10-08: copy this block into the live
+  # .htaccess by hand (see server/README.md), then confirm /schema.sql is 403.
+  RewriteRule ^(migrations|tests)(/|$) - [F,L]
+  RewriteRule \.(sql|md)$ - [F,NC,L]
+  RewriteRule ^(migrate|seed|backfill-people|backfill-payroll|create-admin|report-activation|restore-check)\.php$ - [F,NC,L]
+
+  # The previous website's addresses (website rebuild, section S6, 2026-10).
+  # Permanent redirects, so search engines move their index to the new pages and
+  # old bookmarks still land. src/lib/public-routes.ts holds the same table for
+  # the in-app redirects, and src/lib/__tests__/public-routes.test.ts fails if an
+  # address there has no rule here. /services goes to the overview of all four
+  # services on the home page (NE keeps the # unescaped).
+  # NOT YET ON THE SERVER: copy this block into the live .htaccess by hand when
+  # the S6 frontend is deployed, then confirm /services/concierge answers 301.
+  RewriteRule ^services/?$ /#services [R=301,NE,L]
+  RewriteRule ^services/care-home-staffing/?$ /healthcare/staffing [R=301,L]
+  RewriteRule ^services/(domiciliary-care|supported-living)/?$ /healthcare/supported-living [R=301,L]
+  RewriteRule ^services/(health-social-care|mandatory-training|cpd-courses)/?$ /training [R=301,L]
+  RewriteRule ^services/(commercial-cleaning|care-environment-cleaning|communal-end-of-tenancy)/?$ /cleaning [R=301,L]
+  RewriteRule ^services/(manned-guarding|event-security|concierge)/?$ /security [R=301,L]
+  RewriteRule ^services/.+$ /healthcare [R=301,L]
+  RewriteRule ^sectors/?$ /about [R=301,L]
+  RewriteRule ^accreditations/?$ /about [R=301,L]
+  RewriteRule ^resources/?$ /news [R=301,L]
+  RewriteRule ^resources/([^/]+)/?$ /news/$1 [R=301,L]
+  RewriteRule ^apply/?$ /careers [R=301,L]
+  RewriteCond %{QUERY_STRING} (^|&)service=(care|security)(&|$)
+  RewriteRule ^quote/?$ /request?type=staff&service=%2 [R=301,L]
+  RewriteCond %{QUERY_STRING} (^|&)service=academy(&|$)
+  RewriteRule ^quote/?$ /request?type=training [R=301,L]
+  RewriteRule ^quote/?$ /request?type=cleaning [R=301,L]
+
   # Don't rewrite requests for the PHP API or other real files/directories.
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
@@ -81,15 +117,26 @@
   # Content-Security-Policy.
   #
   # 'unsafe-inline' is present for styles only, and is not removable today:
-  # Tailwind is compiled to a stylesheet but Radix, the FullCalendar build and
-  # ApexCharts all set inline style attributes at runtime, and several components
+  # Tailwind is compiled to a stylesheet but Radix sets inline style attributes
+  # at runtime, and several components
   # here compute a colour into style={{...}}. Scripts carry no such exemption --
   # which is the half that matters, and the half that turns a stored-XSS bug into
   # a non-event. `connect-src 'self'` is enough because every third-party call is
   # proxied server-side; nothing in the bundle talks to an API directly.
   #
   # frame-ancestors repeats X-Frame-Options for browsers that have dropped it.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+  #
+  # frame-src (section S7, 2026-10): the one third-party origin the site may
+  # load, and only as a frame: an embedded Google Form on a role page
+  # (/careers/:slug). The frame is not in the page until the visitor presses
+  # "Load the application form from Google", so no request reaches Google before
+  # they choose to (src/components/public/GoogleFormEmbed.tsx, docs/COOKIES.md).
+  # 'self' keeps what default-src already allowed for frames. Nothing else is
+  # allow-listed: no script, font, image or connect origin.
+  # NOT YET ON THE SERVER: copy this line into the live .htaccess by hand when
+  # the S7 frontend is deployed, or the embedded form is blocked and the page
+  # falls back to its "Open the form in a new tab" link.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; frame-src 'self' https://docs.google.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
 </IfModule>
 
 # --- Caching ---

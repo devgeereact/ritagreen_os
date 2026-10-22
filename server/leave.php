@@ -46,6 +46,8 @@ if (method() === 'GET' && $action === '') {
         $personId = $own;
     }
     if ($personId <= 0) fail('A person is required.');
+    // Staff reading somebody else's leave are held to their service scope.
+    if ($personId !== $own) require_person_scope($conn, $user, $personId);
 
     $year = trim((string) ($_GET['year'] ?? rg_leave_year(date('Y-m-d'), LEAVE_YEAR_START_MONTH)));
 
@@ -63,12 +65,24 @@ if (method() === 'GET' && $action === '') {
     $stmt->execute();
     $res = $stmt->get_result();
 
+    // The HEALTH zone, enforced. Why somebody was absent, and what was said in
+    // their return-to-work discussion, is health information -- a manager needs
+    // to know a person is off and for how long to arrange cover, which is not
+    // the same as needing to know why. Seeded so only super_admin and admin hold
+    // the zone; see migration 015. A person always sees their own record in full.
+    $seesHealth = ($own !== null && $personId === $own) || can_view_zone($conn, $user, 'health');
+
     $records = [];
     while ($row = $res->fetch_assoc()) {
         $row['id'] = (int) $row['id'];
         $row['hours'] = (float) $row['hours'];
         $row['in_lieu'] = (bool) $row['in_lieu'];
         $row['carried_over'] = (bool) $row['carried_over'];
+        if (!$seesHealth) {
+            $row['reason'] = null;
+            $row['return_to_work_note'] = null;
+            $row['health_redacted'] = true;
+        }
         $records[] = $row;
     }
 
@@ -106,28 +120,38 @@ if (method() === 'GET' && $action === 'calendar') {
     $stmt->bind_param('ss', $to, $from);
     $stmt->execute();
     $res = $stmt->get_result();
-    $items = [];
-    while ($row = $res->fetch_assoc()) {
+    $rows = [];
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
+    $items = leave_in_scope($conn, $user, $rows);
+    foreach ($items as &$row) {
         $row['id'] = (int) $row['id'];
         $row['person_id'] = (int) $row['person_id'];
         $row['hours'] = (float) $row['hours'];
-        $items[] = $row;
     }
+    unset($row);
     json_out(['from' => $from, 'to' => $to, 'items' => $items]);
 }
 
 // ----- Waiting on a decision -----
 if (method() === 'GET' && $action === 'pending') {
     require_staff($user);
+    $seesHealth = can_view_zone($conn, $user, 'health');
     $res = $conn->query(
         'SELECT l.id, l.person_id, p.full_name, l.kind, l.starts_on, l.ends_on, l.hours, l.reason, l.created_at
          FROM leave_records l JOIN people p ON p.id = l.person_id
          WHERE l.status = "requested" ORDER BY l.starts_on'
     );
+    $rows = [];
+    while ($row = $res->fetch_assoc()) $rows[] = $row;
     $items = [];
-    while ($row = $res->fetch_assoc()) {
+    foreach (leave_in_scope($conn, $user, $rows) as $row) {
         $row['id'] = (int) $row['id'];
+        $row['person_id'] = (int) $row['person_id'];
         $row['hours'] = (float) $row['hours'];
+        if (!$seesHealth) {
+            $row['reason'] = null;
+            $row['health_redacted'] = true;
+        }
         $items[] = $row;
     }
     json_out(['items' => $items]);
@@ -147,6 +171,7 @@ if (method() === 'POST' && $action === '') {
         $personId = $own;
     }
     if ($personId <= 0) fail('A person is required.');
+    if ($isStaff && $personId !== $own) require_person_scope($conn, $user, $personId);
 
     $kind = trim((string) ($data['kind'] ?? 'annual'));
     $start = trim((string) ($data['starts_on'] ?? ''));
@@ -156,6 +181,14 @@ if (method() === 'POST' && $action === '') {
     $inLieu = !empty($data['in_lieu']) ? 1 : 0;
     $carried = !empty($data['carried_over']) ? 1 : 0;
     $paid = isset($data['paid_pence']) && $data['paid_pence'] !== '' ? (int) $data['paid_pence'] : null;
+    // Holiday pay, payment in lieu and carry-over are the office's to record. A
+    // worker's request is dates, hours and a reason; it was storing whatever
+    // money figure the request body carried.
+    if (!is_staff($user)) {
+        $paid = null;
+        $inLieu = 0;
+        $carried = 0;
+    }
 
     if (!in_array($kind, LEAVE_KINDS, true)) fail('Unknown leave type.');
     foreach ([$start, $end] as $d) {
@@ -224,6 +257,7 @@ if (method() === 'POST' && $action === 'decide') {
     $stmt->execute();
     $rec = $stmt->get_result()->fetch_assoc();
     if (!$rec) fail('Leave record not found.', 404);
+    require_person_scope($conn, $user, (int) $rec['person_id']);
 
     $uid = (int) $user['id'];
     $stmt = $conn->prepare('UPDATE leave_records SET status = ?, decided_by = ?, decided_at = NOW() WHERE id = ?');
@@ -243,14 +277,41 @@ if (method() === 'POST' && $action === 'return') {
     $note = trim((string) ($data['note'] ?? ''));
     if ($id <= 0) fail('A leave record is required.');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $on)) fail('The date must be YYYY-MM-DD.');
+    $stmt = $conn->prepare('SELECT person_id FROM leave_records WHERE id = ?');
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $rec = $stmt->get_result()->fetch_assoc();
+    if (!$rec) fail('Leave record not found.', 404);
+    require_person_scope($conn, $user, (int) $rec['person_id']);
 
     $noteVal = $note !== '' ? $note : null;
     $stmt = $conn->prepare('UPDATE leave_records SET return_to_work_on = ?, return_to_work_note = ? WHERE id = ?');
     $stmt->bind_param('ssi', $on, $noteVal, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'leave_records', $id, false)) {
+        fail('Leave record not found.', 404);
+    }
 
     audit($conn, (int) $user['id'], 'leave.return_to_work', "#$id", 'leave', $id, null, ['return_to_work_on' => $on]);
     json_out(['ok' => true]);
 }
 
 fail('Method not allowed.', 405);
+
+/**
+ * The rows of a people-wide leave list this account may see.
+ *
+ * The calendar and the pending list named everybody's leave to every member of
+ * staff, whatever service they were confined to.
+ */
+function leave_in_scope(mysqli $conn, array $user, array $rows): array
+{
+    $scope = service_scope($user);
+    if ($scope === null) return $rows;
+    $services = rg_people_services($conn, array_column($rows, 'person_id'));
+    return array_values(array_filter(
+        $rows,
+        static fn(array $row): bool => rg_person_in_scope($scope, $services[(int) $row['person_id']] ?? [])
+    ));
+}

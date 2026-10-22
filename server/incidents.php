@@ -9,6 +9,11 @@
 require __DIR__ . '/lib.php';
 
 $user = require_auth($conn);
+// Incidents carry safeguarding and RIDDOR records with free-text detail about
+// named people. Reading them takes the same roles as acting on them -- the
+// checks further down covered writes only, and the GET paths had none at all,
+// so any authenticated account could read a safeguarding case by id.
+require_role($user, 'super_admin', 'admin', 'manager');
 $action = $_GET['action'] ?? '';
 
 if (method() === 'GET' && isset($_GET['id'])) {
@@ -76,6 +81,8 @@ if ($action === 'status' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE incidents SET status = ? WHERE id = ?');
     $stmt->bind_param('si', $status, $id);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'incidents', $id)) fail('Incident not found.', 404);
     audit($conn, (int) $user['id'], 'incident.status', "#$id -> $status");
     json_out(['ok' => true]);
 }
@@ -100,6 +107,10 @@ if ($action === 'action_done' && method() === 'POST') {
     $stmt = $conn->prepare('UPDATE incident_actions SET done = ? WHERE id = ?');
     $stmt->bind_param('ii', $done, $aid);
     $stmt->execute();
+    // affected_rows is 0 when the value was already this, so only ask when nothing changed.
+    if ($stmt->affected_rows === 0 && !row_exists($conn, 'incident_actions', $aid, false)) {
+        fail('Action not found.', 404);
+    }
     json_out(['ok' => true]);
 }
 
@@ -123,6 +134,11 @@ if (method() === 'POST') {
     if (!in_array($type, ['accident', 'incident', 'near_miss', 'safeguarding', 'complaint'], true)) fail('Invalid type.');
     if (!in_array($severity, ['low', 'medium', 'high', 'critical'], true)) fail('Invalid severity.');
     if ($type === 'safeguarding') $safeguarding = 1;
+    // Check the parents before drawing a number: a stale id reached the INSERT
+    // and came back as a foreign-key 500 with the constraint name in it, having
+    // already burnt a sequence value on a record that was never written.
+    if ($clientId !== null && !row_exists($conn, 'clients', $clientId)) fail('Client not found.', 404);
+    if ($workerId !== null && !row_exists($conn, 'workers', $workerId)) fail('Worker not found.', 404);
 
     $year = date('Y');
     $seq = next_seq($conn, "incident-$year");

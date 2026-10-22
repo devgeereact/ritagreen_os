@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Banknote, Clock, Plane, Download, FileText } from "lucide-react"
+import { Banknote, Clock, Plane, Download, FileText, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,22 +17,13 @@ import {
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
 import type { PayRun, Payslip } from "@/lib/types"
-import { gbp, DIVISION_LABELS } from "@/lib/format"
+import { gbp, monthBounds, DIVISION_LABELS } from "@/lib/format"
 import { exportCsv } from "@/lib/csv"
 import { payslipPdf } from "@/lib/pdf"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
 
-// First and last day of the current month, as YYYY-MM-DD.
-function monthRange(): { from: string; to: string } {
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth(), 1)
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  return { from: iso(first), to: iso(last) }
-}
-
 export default function Payroll() {
-  const init = monthRange()
+  const init = monthBounds()
   const [from, setFrom] = useState(init.from)
   const [to, setTo] = useState(init.to)
   const { data, loading, error, reload } = useApi<PayRun>(
@@ -48,13 +39,22 @@ export default function Payroll() {
         `payroll.php?action=payslip&worker_id=${workerId}&from=${from}&to=${to}`,
       )
       payslipPdf(slip)
-      toast.success("Payslip generated.")
+      toast.success("Gross pay statement generated.")
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Could not generate the payslip.")
+      toast.error(err instanceof ApiError ? err.message : "Could not generate the statement.")
     } finally {
       setSlipBusy(null)
     }
   }
+
+  // Umbrella workers are calculated identically to PAYE: pay-lib.php never
+  // branches on pay_type, so they sit inside the same gross total with nothing
+  // saying so. Subtotalled here rather than in the API, because it is a
+  // presentation question and the rows already carry the type.
+  const umbrella = (data?.rows ?? []).reduce(
+    (acc, r) => (r.pay_type === "umbrella" ? { count: acc.count + 1, gross: acc.gross + r.gross_pence } : acc),
+    { count: 0, gross: 0 },
+  )
 
   function exportRun() {
     if (!data || data.rows.length === 0) return
@@ -65,6 +65,7 @@ export default function Payroll() {
         division: DIVISION_LABELS[r.division] ?? r.division,
         pay_type: r.pay_type,
         hours: r.hours.toFixed(2),
+        rate_changed_in_period: r.rate_changed ? "yes" : "no",
         rate: (r.pay_rate_pence / 100).toFixed(2),
         base: (r.base_pence / 100).toFixed(2),
         premiums: (r.premium_pence / 100).toFixed(2),
@@ -110,7 +111,28 @@ export default function Payroll() {
             <StatCard icon={Clock} label="Total hours" value={data.totals.hours.toFixed(2)} />
             <StatCard icon={Banknote} label="Gross pay" value={gbp(data.totals.gross_pence)} tone="primary" />
             <StatCard icon={Banknote} label="Premiums" value={gbp(data.totals.premium_pence)} />
-            <StatCard icon={Plane} label="Holiday pay accrued" value={gbp(data.totals.holiday_pay_pence)} />
+            <StatCard icon={Plane} label="Holiday accrued" value={gbp(data.totals.holiday_pay_pence)} />
+          </div>
+
+          {/* Three things this page has to say plainly, because each of them is
+              a number somebody could act on wrongly. */}
+          <div className="space-y-1.5 text-xs text-muted-foreground">
+            <p>
+              <strong className="font-medium text-foreground">Holiday accrued</strong> is rolled-up
+              accrual at 12.07% of the hours worked, shown for information. It is not included in
+              gross, is not paid by this run, and is counted separately from the holiday balance on
+              a worker&rsquo;s leave record — taking leave produces no pay here, because leave is not
+              a timesheet.
+            </p>
+            {umbrella.count > 0 && (
+              <p>
+                <strong className="font-medium text-foreground">{umbrella.count} umbrella worker
+                {umbrella.count === 1 ? " is" : "s are"}</strong> included above, at{" "}
+                {gbp(umbrella.gross)} of the gross. They are calculated exactly as PAYE — premiums,
+                overtime and all — because nothing here branches on pay type. Check that is what you
+                want before treating this total as a PAYE figure.
+              </p>
+            )}
           </div>
 
           {data.rows.length === 0 ? (
@@ -147,6 +169,12 @@ export default function Payroll() {
                       <TableCell className="text-right">{r.hours.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {r.pay_rate_pence > 0 ? `${gbp(r.pay_rate_pence)}/hr` : <span className="text-destructive">No rate</span>}
+                        {r.rate_changed && (
+                          <div className="text-xs text-muted-foreground">rate changed in period</div>
+                        )}
+                        {r.below_floor && (
+                          <div className="text-xs font-medium text-destructive">below pay floor</div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{gbp(r.base_pence)}</TableCell>
                       <TableCell className="text-right text-muted-foreground">{gbp(r.premium_pence)}</TableCell>
@@ -159,7 +187,7 @@ export default function Payroll() {
                           onClick={() => payslip(r.worker_id)}
                           disabled={slipBusy === r.worker_id}
                         >
-                          <FileText className="mr-1 size-4" /> Payslip
+                          <FileText className="mr-1 size-4" /> Statement
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -172,6 +200,24 @@ export default function Payroll() {
           {data.rows.some((r) => r.pay_rate_pence === 0) && (
             <p className="text-sm text-destructive">
               Some workers have no pay rate set — their pay shows as £0. Set rates on the Workers page.
+            </p>
+          )}
+
+          {data.rows.some((r) => r.below_floor) && data.floor_pence !== null && (
+            <p className="flex items-start gap-2 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Some workers are paid below the configured floor of {gbp(data.floor_pence)}/hr. The floor
+                is a single figure and does not know age bands or apprentice rates, so check the worker
+                rather than assuming the rate is unlawful — and check it is not simply a typo.
+              </span>
+            </p>
+          )}
+
+          {data.rows.some((r) => r.rate_changed) && (
+            <p className="text-sm text-muted-foreground">
+              A rate changed inside this period for one or more workers. Each shift is paid at the rate
+              in force on the day it was worked; the rate column shows the latest of them.
             </p>
           )}
         </>

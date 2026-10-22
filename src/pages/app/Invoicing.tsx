@@ -50,8 +50,8 @@ const STATUS_VARIANT: Record<Invoice["status"], "default" | "secondary" | "destr
 }
 
 const DIVISIONS = [
-  { value: "care", label: "Care" },
-  { value: "academy", label: "Academy" },
+  { value: "care", label: "Healthcare" },
+  { value: "academy", label: "Training" },
   { value: "cleaning", label: "Cleaning" },
   { value: "security", label: "Security" },
 ]

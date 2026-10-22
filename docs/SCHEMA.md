@@ -1,8 +1,9 @@
 # Database schema reference
 
-Source of truth: [`server/schema.sql`](../server/schema.sql) (864 lines, 50 tables) **plus**
-`server/migrations/` (17 migrations). A freshly built database has **71 tables**: the 50 in the
-baseline and 21 added by migration. `schema.sql` is the from-scratch baseline and is not
+Source of truth: [`server/schema.sql`](../server/schema.sql) (52 tables) **plus**
+`server/migrations/` (20 migrations). A freshly built database has **73 tables**: the 52 in the
+baseline, 20 added by migration, and `schema_migrations` itself. Counted against a local
+database built from scratch on 2026-09-04. `schema.sql` is the from-scratch baseline and is not
 edited to reflect migrations — `php server/migrate.php --status` is what tells you where a
 database actually is.
 Every line citation below is of the form `schema.sql:LINE`.
@@ -141,9 +142,9 @@ Fifty tables. One line each.
 
 | Table | Purpose |
 |---|---|
-| `timesheets` | Worked time awaiting approval. |
+| `timesheets` | Worked time, as claimed and then approved or rejected. |
 | `pay_rules` | Uplift multipliers for night, weekend, bank holiday, overtime. |
-| `bank_holidays` | England and Wales bank-holiday calendar. |
+| `bank_holidays` | England and Wales bank-holiday calendar, seeded to 2035. |
 | `contracts` | Recurring service agreements with rate and SLA. |
 
 ### Commercial (5)
@@ -279,8 +280,14 @@ Keys: `KEY idx_action (action)`.
 
 Named atomic sequences. `next_seq()` in `lib.php` increments `val` in one
 statement, so concurrent invoice, quote and certificate creates never collide.
+Verified: 24 invoices raised in parallel produced 24 unique numbers.
 Key format is e.g. `invoice-2026` (`schema.sql:73-75`).
 `CREATE` at `schema.sql:76`.
+
+**Every document number comes from here, including in fixtures.** `server/seed.php` used to
+write the incident ref `INC-<year>-0001` by hand and leave `val` at zero, so the first incident
+filed on a freshly seeded database drew 0001 again and died on `uniq_inc_ref`. A number written
+around this table is a collision waiting for the next writer.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -493,24 +500,82 @@ status instead.
 
 ### `timesheets`
 
-Worked time awaiting approval; the input to payroll.
-`CREATE` at `schema.sql:218`.
+Worked time, as claimed and then decided on; the input to payroll.
+`CREATE` at `schema.sql:228`, patched by migrations 013, 014 and 021.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | `id` | INT AUTO_INCREMENT | no | — | Primary key |
 | `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
-| `work_date` | DATE | no | — | |
+| `work_date` | DATE | no | — | The date the shift **starts**; an `end_time` at or before `start_time` means it crossed midnight |
 | `start_time` | TIME | no | — | |
 | `end_time` | TIME | no | — | |
-| `minutes` | INT | no | 0 | Denormalised duration |
-| `status` | ENUM('pending','approved') | no | 'pending' | |
-| `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `shift_id` | INT | yes | NULL | FK → `shifts(id)` **ON DELETE SET NULL**. The rota entry these hours were worked on, when there was one. Nullable on purpose: hours are recorded for call-outs and cover arranged by phone that never had a shift. Migration 029 |
+| `minutes` | INT | no | 0 | Clock duration start to end, breaks included, computed by `rg_shift_minutes()` |
+| `break_minutes` | INT | no | 0 | Unpaid break. Pay is on `minutes - break_minutes`. Migration 029 |
+| `status` | ENUM('draft','pending','approved','rejected','queried') | no | 'pending' | `rejected` added by migration 021; `draft` and `queried` by migration 038. Only `approved` is paid |
+| `approved_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL**. Who decided, whichever way |
+| `decided_at` | TIMESTAMP | yes | NULL | When. Migration 021 |
+| `decision_note` | VARCHAR(255) | yes | NULL | Why. Required by the endpoint on a rejection. Migration 021 |
 | `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+| `updated_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP ON UPDATE | Migration 014 |
+| `deleted_at` | TIMESTAMP | yes | NULL | Migration 013 |
 
 Keys: `KEY idx_worker_date (worker_id, work_date)`,
-`KEY idx_ts_approver (approved_by)`. No `deleted_at`, no `updated_at`, no link
-to the `shift` the time was worked on.
+`KEY idx_ts_approver (approved_by)`, `KEY idx_timesheets_deleted (deleted_at)`,
+`KEY idx_ts_status_date (status, work_date)`, `KEY idx_ts_shift (shift_id)`.
+
+Only `approved` rows reach pay, and `pay_compute()` in `pay-lib.php` also
+excludes rows with `deleted_at` set — it did not, so an archived entry was still
+paid. `shift_id` links the hours to the rota entry (migration 029), and the endpoint
+refuses a shift belonging to a different worker or one that already has a
+timesheet — the same shift could previously be claimed twice and paid twice with
+nothing showing it. Clock events in `shift_events` still do **not** become
+timesheets automatically: attendance and hours are recorded separately, and
+reconciling them is still a human job.
+
+### `worker_pay_rates`
+
+A worker's pay rate over time. `CREATE` in `server/migrations/022`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | INT AUTO_INCREMENT | no | — | Primary key |
+| `worker_id` | INT | no | — | FK → `workers(id)` **ON DELETE CASCADE** |
+| `rate_pence` | INT | no | — | |
+| `pay_type` | ENUM('paye','umbrella') | no | 'paye' | |
+| `effective_from` | DATE | no | — | First day this rate applies. A rate has no end date — the next row's `effective_from` ends it, which makes an overlap impossible to express |
+| `set_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+| `note` | VARCHAR(255) | yes | NULL | |
+| `created_at` | TIMESTAMP | yes | CURRENT_TIMESTAMP | |
+
+Keys: `UNIQUE KEY uniq_worker_effective (worker_id, effective_from)`,
+`KEY idx_wpr_lookup (worker_id, effective_from)`.
+
+`workers.pay_rate_pence` remains the **current** rate, for the profile screen and
+for costing a new shift. This table is the history behind it, and `pay_compute()`
+reads it per timesheet entry. Before it existed the engine read the current rate,
+so a rise re-priced every period the worker had ever worked and no closed period
+could be reproduced. Migration 022 backfills every worker at `2000-01-01`,
+deliberately far enough back that every pay run already produced returns exactly
+the same figures.
+
+### `pay_floors`
+
+A configured minimum hourly rate, by date. `CREATE` in `server/migrations/024`.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `effective_from` | DATE | no | — | Primary key |
+| `rate_pence` | INT | no | — | |
+| `label` | VARCHAR(120) | no | '' | |
+| `set_by` | INT | yes | NULL | FK → `users(id)` **ON DELETE SET NULL** |
+
+**Empty by default**, the same reasoning as retention periods: an unset floor
+checks nothing, and a wrong floor in code is worse than no floor. A floor, not
+the National Minimum Wage — NMW has age bands and an apprentice rate, and
+`workers` holds no date of birth — so `pay_compute()` flags a row below it
+(`below_floor`) and never blocks the run.
 
 ### `announcements`
 
@@ -576,7 +641,9 @@ No `deleted_at`.
 
 ### `jobs`
 
-Work orders. Soft-deleted. `CREATE` at `schema.sql:292`.
+Work orders. Soft-deleted, and `jobs.php?action=archive` is what sets it —
+nothing did until then, so the column existed and every query respected it while
+no job could ever be taken off the board. `CREATE` at `schema.sql:302`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -717,7 +784,33 @@ England and Wales calendar. `CREATE` at `schema.sql:439`.
 | `holiday_date` | DATE | no | — | Primary key |
 | `name` | VARCHAR(80) | no | — | |
 
-Seeded with 2026 only — see §5.
+Seeded to the end of **2035** by migration 023. It held 2026 only, and
+`pay_load_bank_holidays()` returns what it finds, so from 2027-01-01 every bank
+holiday would silently have paid flat rate instead of the configured 2×
+multiplier.
+
+Those rows are generated, not typed: `rg_bank_holidays()` in `server/pure.php`
+computes the standard eight for a year (Easter by the anonymous Gregorian
+algorithm, not `easter_days()`, which needs `ext-calendar` a host may not have),
+and `server/tests/run.php` checks it reproduces the eight 2026 rows this table
+already held — substitute days included — plus the published 2027 dates and the
+2022 Christmas-on-a-Sunday case, where Boxing Day keeps the Monday and Christmas
+moves to the Tuesday.
+
+The table stays the source of truth rather than the function. One-off holidays
+happen — the 2022 Jubilee and the 2023 Coronation were announced, not derived —
+and are inserted alongside. Scotland and Northern Ireland differ; operating
+there needs a nation column before it needs more rows.
+
+### `jobs.assigned_to`
+
+`INT NULL`, FK → `workers(id)` **ON DELETE SET NULL** (migration 030).
+`jobs.status` has had `assigned` in its enum since the table was created and
+there was no assignee column anywhere, so the status was decorative: a job could
+be marked assigned with nothing recording who to. `jobs.php?action=assign` runs
+`rg_deployment_check()` before naming somebody — a work order is not a shift, but
+putting a named carer against a care visit is a deployment decision, and it would
+be odd for the rota to refuse what the job board allows.
 
 ### `credit_notes`
 
@@ -741,7 +834,7 @@ credit notes. Since `invoices` has no `deleted_at`, that path is a hard delete.
 ### `shifts`
 
 Scheduled and open shifts. `worker_id` is nullable because an open shift has no
-worker until one accepts a broadcast offer (`schema.sql:480-481`).
+worker until one accepts a broadcast offer (`schema.sql:480-481`). Draft and published, the site link and the cancellation reason were added by migration 038; see "The rota: migration 038" at the end of this file.
 `CREATE` at `schema.sql:482`, with two no-op `MODIFY` statements at
 `schema.sql:733-734` for older installs.
 
@@ -1156,20 +1249,19 @@ file does not duplicate or overwrite them.
 `super_admin`, `admin`, `manager`, `trainer`, `editor`, `employee`, `client`,
 each with a display label.
 
-### Super-admin account — 1 row (`schema.sql:47`)
+### Super-admin account — removed
 
-A single seed user is created with the `super_admin` role, using a bcrypt hash
-that is written literally into the file. **The account's password is stated in
-plain text in a comment at `schema.sql:45-46`.** It is not reproduced here.
+`schema.sql` used to seed a `super_admin` whose password was written in plain text in the
+comment above its bcrypt hash, in a version-controlled file, for an account with access to every
+worker record. "Change it after first login" was the only control, and nothing enforced or
+checked it.
 
-Two consequences worth acting on:
+The seed is gone. `php server/create-admin.php --email … --name …` creates the first
+administrator with a prompted password instead. Local development is unaffected: `seed.php`
+makes its own fixture accounts and refuses to run against a remote database.
 
-1. The comment at `schema.sql:46` instructs that the password be changed after
-   first login. Nothing enforces that — there is no `must_change_password` flag
-   and no forced-rotation mechanism anywhere in the schema.
-2. Because `schema.sql` is version-controlled and the credentials are in it, the
-   seed password is public to anyone with repository access. Any install that
-   has not had that password changed is accessible to them at super-admin level.
+**Any database built from the old `schema.sql` still has that account.** Check for
+`dev@ritagreenservices.com` on every existing install and remove it or change its password.
 
 ### Pay rules — 4 rows (`schema.sql:432`)
 
@@ -1275,9 +1367,12 @@ The TypeScript type documents the workaround rather than fixing it:
 
 ### 6.3 Tables lacking `deleted_at` that arguably need it
 
-Eleven tables carry `deleted_at`: `users`, `clients`, `sites`, `workers`,
-`contracts`, `jobs`, `certificates`, `files`, `insurance`, `blog_posts` and
-`testimonials`. The remaining thirty-nine are hard-delete only.
+Eleven tables carry `deleted_at` in the baseline: `users`, `clients`, `sites`, `workers`,
+`contracts`, `jobs`, `certificates`, `files`, `insurance`, `blog_posts` and `testimonials`.
+Migration 013 added five more (`applicants`, `invoices`, `incidents`, `timesheets`, `shifts`),
+and migration 020 three more that hold public-intake personal data and previously had no way to
+be archived at all: `contact_enquiries`, `service_requests` and `integration_submissions`. The
+rest are hard-delete only.
 
 The ones where that is a real problem:
 
@@ -1286,7 +1381,7 @@ The ones where that is a real problem:
 | `invoices` | A financial record. `void` covers cancellation, but an accidental `DELETE` is unrecoverable, and it **cascades to `credit_notes`** (`schema.sql:475`), destroying the credit trail with it. |
 | `quotes` | Commercial record with a unique document number from `counters`; deleting one leaves a permanent gap with no record of why. |
 | `credit_notes` | A refund record. Cascade-deleted along with its invoice. |
-| `timesheets` | The evidentiary basis for what a worker was paid. No soft delete, no `updated_at`, so an edit or removal after approval leaves no trace. |
+| `timesheets` | The evidentiary basis for what a worker was paid. Soft delete (013) and `updated_at` (014) exist; migration 021 adds `decided_at` and `decision_note`, so a decision now records who, when and why. An amendment to the times themselves still leaves no before-and-after. |
 | `incidents` | Accident, RIDDOR and safeguarding records carry statutory retention duties. A hard delete is a compliance failure, and it **cascades to `incident_actions`** (`schema.sql:591`). |
 | `certifications` | Evidence that a worker was cleared to work on a given date. Cascade-deleted with the worker (`schema.sql:148`). |
 | `worker_references` | Vetting evidence. Cascade-deleted with the worker (`schema.sql:401`). |
@@ -1494,13 +1589,16 @@ guarantee structural.
 by webhook. Without a unique key, a replayed or duplicated webhook inserts a
 second payment row for the same real-world payment.
 
-**`bank_holidays` runs out at the end of 2026** (`schema.sql:444-452`). See §5.
+~~**`bank_holidays` runs out at the end of 2026.**~~ Fixed by migration 023,
+which seeds to the end of 2035 from the tested `rg_bank_holidays()` generator.
 
-**No expiry on `shift_offers`** (`schema.sql:790`). The `expired` status exists
-but no timestamp drives it; there is also no unique key on
-`(shift_id, worker_id)`.
+~~**No expiry on `shift_offers`.**~~ Fixed by migration 027: `expires_at` is set
+to the shift's start when the offer is created, `offer.php` refuses an expired
+link with 410, and a unique key on `(shift_id, worker_id)` means a re-broadcast
+refreshes the existing link rather than sending a second live one.
 
-**`notifications` cannot track per-user read state for a broadcast.** A
+~~**`notifications` cannot track per-user read state for a broadcast.**~~ Fixed
+by migration 025 (`notification_reads`). The original note, for the record: A
 `user_id IS NULL` row (`schema.sql:808`) has one `read_at` shared by everyone.
 
 **`shift_templates.weekday TINYINT` is not range-constrained**
@@ -1617,6 +1715,11 @@ It sets `STRICT_ALL_TABLES` for its own session rather than trusting the server'
 without strict mode MySQL coerces every unlinked `person_id` to 0, leaving the spine quietly
 wrong instead of loudly unfinished.
 
+**Once 004 is applied, anything that inserts one of these rows must supply a `person_id`.**
+`server/seed.php` did not, and stopped working entirely against a migrated database — the
+documented local setup path, broken by a migration nobody thought to re-check it against. Every
+insert of a worker, applicant or user goes through `find_or_create_person()`.
+
 `enrolments` is deliberately excluded — it carries only a `learner_name`, with no email or
 phone to match on, so those rows are linked by hand as the Academy module is rebuilt. Forcing
 `NOT NULL` there would mean inventing links.
@@ -1654,3 +1757,286 @@ UNIQUE on `(service, worker_role, requirement_id)`.
 everywhere, DBS for Care, SIA for Security — so wiring the engine in changes no behaviour on
 day one. Everything beyond that starts as `recommended`, so the business raises a requirement
 to mandatory deliberately rather than discovering overnight that half the workforce is blocked.
+
+
+## `data_requests` — migration 020
+
+A person's route to ask about their own data, and the record of what was done about it. Written
+by `server/data-request.php`; read by the same file's staff queue.
+
+| Column | Type | Notes |
+|---|---|---|
+| `ref` | VARCHAR(24) | `DSR-NNNN` from `next_seq()`. UNIQUE |
+| `kind` | ENUM | access, correction, deletion, objection, restriction, portability, withdraw_consent, other |
+| `name`, `email` | VARCHAR | The requester, as they gave it |
+| `relationship` | VARCHAR(120) NULL | In their own words: worker, applicant, client contact. Tells staff where to look |
+| `detail` | TEXT NULL | Optional |
+| `status` | ENUM | received, verifying, in_progress, completed, refused, withdrawn |
+| `acknowledged_at`, `completed_at` | DATETIME NULL | Set as the request moves |
+| `outcome_note` | VARCHAR(1000) NULL | Required, ten characters minimum, to close as completed or refused |
+| `handled_by` | INT NULL | FK to `users`, SET NULL |
+| `ip` | VARCHAR(45) NULL | Who submitted it |
+
+**No identity documents.** A public form is the wrong place to collect a passport scan, and
+gathering more personal data to answer a question about personal data is the wrong instinct.
+Verification happens afterwards, over the address on the request.
+
+**No deadline in the schema.** How long a response takes, and how it is counted, is the
+business's to state with advice; a number written here would be trusted and would go stale.
+
+## `consent_log` — index added by migration 020
+
+`ADD INDEX idx_consent_email_kind (email, kind, id)`. Marketing consent is the latest row for
+`kind = 'marketing'`, checked before every send, so it has to be a lookup and not a scan. No new
+table: an opt-out is a row with `granted = 0`, never a deletion — erasing the record that
+somebody unsubscribed is how they get signed up again by the next import.
+
+
+## `applicants.stage` — widened by migration 031
+
+`ENUM('applied','screened','interview','vetting','offer','onboarding','onboarded','rejected')`.
+
+`onboarding` is new, and sits between `offer` and `onboarded`. `ats.php?action=onboard` creates
+a pending worker and a checklist of unfinished tasks, and it used to set the stage to
+`onboarded` in the same transaction — so the pipeline said a candidate was through onboarding at
+the moment none of it had been done, and no stage was left to mean cleared and working.
+
+The migration reclassifies existing rows by what is true of them rather than in bulk: an
+`onboarded` row with outstanding tasks, or with no checklist at all, becomes `onboarding`; one
+whose checklist is finished keeps the word, because the word is then accurate. The checklist is
+the evidence and is untouched either way.
+
+Reaching `onboarded` is the activation step's job, and activation is Phase 3 of
+`docs/LEAN-CMS-LAUNCH-PLAN.md`. Until it exists, nothing writes `onboarded` automatically.
+
+## `counters.payroll` — seeded by migration 032
+
+Not a new table. `next_payroll_no()` formats `next_seq($conn, 'payroll')`, and `next_seq()`
+starts a counter it has never seen at 1. `workers.payroll_no` is UNIQUE (migration 001).
+
+On any database that already holds numbered workers and has no `payroll` row in `counters` —
+one where the numbers predate the counter, or one restored from a dump without it — the next
+worker created would be offered `RG-000001`, the unique key would refuse it, and the conversion
+would fail with a 500 that explained nothing. The migration raises the counter to the highest
+number already in use. It never lowers it and never renumbers anybody, so re-running changes
+nothing.
+
+`server/backfill-payroll.php` fills in workers that have no number at all: report by default,
+`--go` to allocate, safe to run twice, and it refuses to start if the counter is behind a number
+already in use. Archived workers are included — a leaver's payroll number is still cited by the
+records of the work they did.
+
+
+## Recruitment detail — migration 033
+
+Four additions. Not a workflow engine: the stage model stays a fixed list in
+`RG_STAGES` / `RG_STAGE_EXITS` in `server/pure.php`.
+
+**`applicants.recruiter_id`** `INT NULL`, FK → `users(id)` **ON DELETE SET NULL**. Who is dealing
+with this candidate, which was previously answered in somebody's head. `SET NULL` rather than
+cascade: a recruiter leaving must not take their candidates with them.
+
+**`applicants.outcome_reason`** `VARCHAR(500) NULL`. Why they left the pipeline. Cleared when they
+come back into it, because then they did not leave.
+
+**`applicants.stage`** gains `withdrawn`. A candidate who takes another job is not a candidate the
+company turned down, and recording both as `rejected` loses the difference between a pipeline
+problem and a market one.
+
+**`applicant_stage_history`** — `from_stage`, `to_stage`, `reason`, `changed_by`, `changed_at`.
+`audit_log` already records the change and is the wrong place to read it from: it is a security
+record spanning every table, and a recruiter looking at one candidate should not be handed a tool
+that pages through everybody's. Existing applications are backfilled with their current stage,
+`changed_by` NULL — nobody can now say who moved them, and inventing an attribution is worse than
+admitting there is none.
+
+**`applicant_interviews`** — `scheduled_at` (wall-clock DATETIME, like `shifts.starts_at`),
+`interviewer_id`, `location`, `outcome` ∈ scheduled/passed/failed/no_show/cancelled, `notes`,
+`decided_at`, `decided_by`, `deleted_at`. A cancelled interview is recorded as cancelled, not
+erased.
+
+**`onboarding_tasks`** gains `owner_id`, `due_on`, `done_at`, `done_by`. A checklist nobody owns
+and nothing is due on cannot be chased, which is the only thing a checklist is for. Un-ticking a
+task clears `done_at` and `done_by`: "Right to work verified" with nobody's name against it is not
+evidence that anybody verified anything. Tasks already marked done keep NULL — `NOW()` would be a
+lie about when the work happened.
+
+## `feature_switches`: migration 036
+
+Which optional areas of the system the owner has switched on. One row per switch; the names
+are fixed in code (`rg_feature_defaults()` in `server/pure.php`) and `server/features.php` can
+set a switch but not create one. Created by the migration only, not in `schema.sql`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | VARCHAR(40) PK | `finance`, `online_payments`, `sms_whatsapp`, `inbox`; and `ai_assistant`, retired in S9 (row kept, read by nothing) |
+| `enabled` | TINYINT(1) NOT NULL | |
+| `updated_by` | INT NULL | FK → `users(id)` **ON DELETE SET NULL**. NULL for a seeded row nobody has changed |
+| `updated_at` | DATETIME NULL | UTC, set on change |
+
+Seeded with `INSERT IGNORE`, so re-running never undoes the owner's choice: everything on
+except `ai_assistant`. That switch was retired in S9 with `ai.php`: it left
+`rg_feature_defaults()`, so `features.php` neither lists nor sets it, and its seeded row stays
+as data nobody reads (no data was deleted). That preserves what production did before
+the table existed. A missing row, or a missing table on a server whose PHP is ahead of its
+migrations, reads as the same default. What each switch does when off is in `docs/API.md`
+§54c; `finance` only changes the navigation.
+
+## The person profile: migration 037
+
+Re-runnable throughout. Applied locally by the database suite; **not** applied to production.
+
+**`people.emergency_contact2_name`** `VARCHAR(160) NULL`, **`emergency_contact2_phone`**
+`VARCHAR(40) NULL`, **`emergency_contact2_relationship`** `VARCHAR(80) NULL`. A second emergency
+contact beside the first from migration 001. Both are written only through
+`rg_save_emergency_contacts()` in `server/people-lib.php`, which validates them with
+`rg_validate_emergency_contacts()` and audits the names of the changed fields, never the values.
+
+**`workers.suspended_at`** `DATETIME NULL`, **`suspended_by`** `INT NULL`,
+**`suspension_reason`** `VARCHAR(255) NULL`. Who suspended a worker, when and why, written by
+`workers.php?action=suspend` and cleared by `reinstate`. No foreign key on `suspended_by`, so the
+migration stays re-runnable (MySQL has no `ADD CONSTRAINT IF NOT EXISTS`).
+
+**`onboarding_template_items`**: `id`, `service` (the division ENUM), `label` `VARCHAR(160)`
+(the same width as `onboarding_tasks.label`, which it becomes), `sort_order`, `active`,
+`created_by` FK → `users(id)` **ON DELETE SET NULL**, `created_at`, `updated_at`.
+`UNIQUE (service, label)`. One table keyed by service rather than a template table and an item
+table, because there is exactly one checklist per service. Items are retired with `active = 0`,
+never deleted. Seeded with defaults for each service from the checks in
+[`docs/UK_GOVERNANCE.md`](UK_GOVERNANCE.md), "Role checks per service"; checks that apply only to some people (an NMC PIN,
+a DBS for a cleaner on some sites, first aid where required) are left for the office to add to
+the one person, because a task that does not apply cannot be finished and would block approval.
+
+**`enrolments.learner_name`** becomes `NULL`-able. A training record added from the person
+profile links through `enrolments.person_id` (migration 001) and reads the name from `people`;
+copying the name into this row as well would be a second copy of the person.
+
+## The rota: migration 038
+
+Applied locally by the database suite; **not** applied to production. Re-runnable apart from
+`fk_shifts_site`, which MySQL cannot add `IF NOT EXISTS` (as with migrations 027 and 029).
+`schema.sql` carries a pointer to it, not a copy.
+
+**`shifts.is_draft`** `TINYINT(1) NOT NULL DEFAULT 0`. Whether workers can see the shift.
+`status` keeps its four values and its meaning (who is on it; whether it happened); being a
+draft is a separate fact. The default is 0 so every shift that already existed counts as
+published, which they all were; every office path that creates a shift sets 1 explicitly.
+`rg_shift_state()` derives the word the rota shows (`draft`, `open`, `offered`, `assigned`,
+`completed`, `cancelled`). Indexed `(is_draft, starts_at)`.
+**`published_at`** `DATETIME NULL`, **`published_by`** `INT NULL`: set when a draft is
+published; NULL on shifts that predate drafts.
+**`cancel_reason`** `VARCHAR(255) NULL`, **`cancelled_at`** `DATETIME NULL`,
+**`cancelled_by`** `INT NULL`: a cancellation needs a reason, and it is what the worker is told.
+**`site_id`** `INT NULL`, FK `fk_shifts_site` → `sites(id)` **ON DELETE SET NULL**, indexed
+`(site_id, starts_at)`. Backfilled where the shift's client and `site_name` match a site exactly.
+`site_name` stays: it is what older shifts carry and it is history.
+
+**`sites`** gains `postcode` `VARCHAR(12)`, `access_notes` `VARCHAR(1000)`, `contact_name`
+`VARCHAR(160)`, `contact_phone` `VARCHAR(40)` and `active` `TINYINT(1) NOT NULL DEFAULT 1`. A
+closed site takes no new shifts and is kept, because shifts point at it.
+
+**`site_requirements`**: `site_id` FK → `sites(id)` **ON DELETE CASCADE**, `requirement_id` FK →
+`compliance_requirements(id)` **ON DELETE CASCADE**, `created_by`, `created_at`; primary key
+`(site_id, requirement_id)`. What a site insists on beyond the service's own rules.
+`rg_load_rules($conn, $service, $role, $siteId)` adds these as mandatory rules, so the same
+evaluator decides; the site verdict is never written to `person_services`.
+
+**`availability_blocks`**: `id`, `person_id` FK → `people(id)` **ON DELETE CASCADE**,
+`starts_at`, `ends_at` (wall-clock DATETIME, like shifts), `note` `VARCHAR(255)`, `created_by` FK
+→ `users(id)` **ON DELETE SET NULL**, `created_at`, `deleted_at`. A period the worker has marked
+unavailable: a warning the office acknowledges, never a block. Keyed by person, because somebody
+unavailable is unavailable for every service.
+
+**`app_settings`**: `name` `VARCHAR(60)` PK, `value` `VARCHAR(255)`, `updated_by` FK →
+`users(id)` **ON DELETE SET NULL**, `updated_at`. Numbers the owner may change; the names and
+defaults are fixed in `rg_setting_defaults()`, and a value that is not a whole number or is out of
+bounds reads as the default. Seeded `rest_gap_min_hours = 11` with `INSERT IGNORE`.
+
+**`timesheets.status`** becomes `ENUM('draft','pending','approved','rejected','queried')`.
+`draft` is made from a clock-in and clock-out (`rg_timesheet_from_clock()`), `queried` is the
+office asking the worker (the reason in `decision_note`). `pending` keeps its meaning, submitted
+and waiting, so every existing row keeps its place. Only `approved` is paid.
+**`source`** `ENUM('office','clock') NOT NULL DEFAULT 'office'` and **`submitted_at`**
+`DATETIME NULL`. Corrections are not a table: each one is an audit row with the values before
+and after and the reason (`timesheets.php?action=correct`), which is the entry's history.
+
+**`service_requests.owner_id`** and **`contact_enquiries.owner_id`** `INT NULL`, indexed. Who in
+the office owns the request (`requests.php`). No foreign key: users are archived, not deleted.
+
+## Careers, forms and company details: migration 039
+
+Re-runnable throughout (`CREATE TABLE IF NOT EXISTS`, `INSERT IGNORE`). Created by the
+migration only, not in `schema.sql`. Applied locally by the database suite; **not** applied to
+production.
+
+**`website_forms`**: the forms directory. `id`, `title` `VARCHAR(160)`, `purpose`
+`ENUM('recruitment','training','other')`, `service` ENUM of the four services, NULL for any,
+`google_form_id` `VARCHAR(200)` (the id only, never the pasted address; checked by
+`rg_parse_google_form()`), `display` `ENUM('embedded','link')`, `active` `TINYINT(1)`, `owner_id`
+FK → `users(id)` **ON DELETE SET NULL**, `integration_id` FK → `integrations(id)` **ON DELETE SET
+NULL** (the intake key its Apps Script posts to), `last_reviewed_at` `DATE` (set to today on
+create and by "reviewed"), `created_by` FK → `users(id)`, `created_at`, `updated_at`,
+`deleted_at`. Previous values are kept in `audit_log` (`website_form.update`), not a history
+table.
+
+**`vacancies`**: roles for `/careers`. `id`, `slug` `VARCHAR(80)` UNIQUE (fixed once
+`published_at` is set), `title`, `service` ENUM NOT NULL, `location`, `hours_text`, `pay_text`
+`VARCHAR(160) NULL` (free text, optional), `summary` `TEXT NOT NULL`, `requirements`, `checks`
+(`TEXT`, one item per line; `checks` prefilled per service), `status`
+`ENUM('draft','published','closed')`, `form_id` FK → `website_forms(id)` **ON DELETE SET NULL**,
+`owner_id` FK → `users(id)` **ON DELETE SET NULL**, `published_at` (first publication, kept on
+reopening), `closed_at`, `created_by`, `created_at`, `updated_at`, `deleted_at` (archive).
+
+**`company_settings`**: one row, `id = 1`. `trading_name`, `legal_name`, `company_no`, `phone`,
+`urgent_phone`, `email`, `office_hours`, `area`, `registered_address`, `instagram_url`,
+`facebook_url`, `linkedin_url`, `tiktok_url`, `whatsapp_url` (empty means "not shown"),
+`updated_by` FK → `users(id)` **ON DELETE SET NULL**, `updated_at`. Seeded from
+`src/lib/company.ts`. A separate table rather than `app_settings` (migration 038), whose rows are
+owner-tunable numbers as name/value pairs of 255 characters: this is one public record with a
+fixed field list, read whole by the website.
+
+## Spreadsheet import: migration 042
+
+Re-runnable throughout. Created by the migration only, not in `schema.sql`. Applied locally by
+the database suite; **not** applied to production. Numbered 042 because S4 and S5 may take 040
+and 041 in parallel; renumber at merge if either does not.
+
+**`sheet_import_mappings`**: column heading to field, saved per form or source and reused. `id`,
+`name` `VARCHAR(160)` UNIQUE, `website_form_id` FK → `website_forms(id)` **ON DELETE SET NULL**
+(a mapping can belong to a form in the directory), `purpose`
+`ENUM('applications','staff_updates')`, `default_service` ENUM of the four services NULL,
+`columns_json` `TEXT` (`{"normalised heading": "field"}`; fields outside `RG_IMPORT_FIELDS` are
+stored as `ignore`), `created_by`, `updated_by` FK → `users(id)` **ON DELETE SET NULL**,
+`created_at`, `updated_at`, `deleted_at`.
+
+**`sheet_imports`**: one upload. `id`, `file_name` `VARCHAR(190)`, `file_sha256` `CHAR(64)`,
+`mapping_id` FK → `sheet_import_mappings(id)` **ON DELETE SET NULL**, `columns_json` (the mapping
+actually used, copied), `headers_json`, `purpose`, `default_service`, `status`
+`ENUM('open','applied','closed')`, `row_count`, `created_count`, `updated_count`,
+`skipped_count`, `failed_count`, `created_by`, `created_at`, `applied_at`, `applied_by`,
+`closed_at`. The uploaded file is not stored.
+
+**`sheet_import_rows`**: one spreadsheet row. `id`, `import_id` FK → `sheet_imports(id)` **ON
+DELETE CASCADE**, `row_no` (the row number in the sheet; header is 1; UNIQUE with `import_id`),
+`cells_json` `MEDIUMTEXT NULL` (the parsed cells; cleared on apply except for failed rows, and
+cleared entirely on close), `fingerprint` `CHAR(64)` (`rg_import_fingerprint()`),
+`applied_fingerprint` `CHAR(64) NULL` **UNIQUE** (set only when the row created or updated
+something, so the database refuses the same row being applied twice, from any file or two
+simultaneous applies), `response_id`, `response_at`, `outcome`
+`ENUM('pending','created','updated','skipped','failed')`, `reason` `VARCHAR(500)`, `person_id` FK →
+`people(id)`, `applicant_id` FK → `applicants(id)` (both **ON DELETE SET NULL**), `changed_fields`
+(field names only), `applied_at`.
+
+Also a `retention_policies` row, `sheet_import_rows`, with no period (see `docs/RETENTION.md`).
+
+## Scheduled job runs: migration 043
+
+Re-runnable (`CREATE TABLE IF NOT EXISTS`). Created by the migration only, not in `schema.sql`.
+Applied locally by the database suite; **not** applied to production. (Numbered 043 so it applies after S8's 042.)
+
+**`cron_runs`**: one row per scheduled job, the latest run only. `job` `VARCHAR(64)` primary key
+(`backup`, `expiry_alerts`, `retention_sweep`, `send_queued_mail`), `last_started_at`,
+`last_finished_at` (written on shutdown whatever happened), `last_success_at` (only when the job
+reached its own success point), `last_detail` `VARCHAR(255)`, `runs` `INT`. Written by
+`rg_cron_started()` and `rg_cron_succeeded()` in `server/lib.php`, which swallow errors so a
+missing table never fails the job. Read by `system-health.php`; no row means "unknown".

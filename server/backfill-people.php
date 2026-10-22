@@ -29,8 +29,9 @@ $args = array_slice($argv, 1);
 $go = in_array('--go', $args, true);
 $productionFlag = in_array('--production', $args, true);
 
-$localHosts = ['localhost', '127.0.0.1', '::1'];
-$isLocal = in_array(DB_HOST, $localHosts, true);
+// Declared, not inferred. See rg_is_local_database() in lib.php: DB_HOST is
+// localhost on the production host as well, so it cannot answer this.
+$isLocal = rg_is_local_database();
 
 // Refuse to run before the schema is ready, rather than failing halfway through.
 if (!$conn->query("SHOW TABLES LIKE 'people'")->num_rows) {
@@ -42,7 +43,8 @@ echo $go ? "Mode:     APPLY\n\n" : "Mode:     dry run (add --go to apply)\n\n";
 
 if ($go && !$isLocal) {
     if (!$productionFlag) {
-        exit("REFUSED: " . DB_HOST . " is not local. Add --production if you mean it.\n");
+        exit("REFUSED: " . DB_NAME . " is not declared as a local database. Add --production if you mean it.\n"
+            . rg_env_hint());
     }
     echo "About to write to a NON-LOCAL database: " . DB_NAME . "\n";
     echo "Take a restore-tested backup first. Type the database name to continue: ";
@@ -93,10 +95,27 @@ foreach ($groups as $key => $group) {
 }
 foreach (array_keys($ambiguous) as $key) unset($groups[$key]);
 
-$merges = array_filter($groups, static fn($g) => count($g) > 1);
+// Only groups that still have something to link. A group whose rows already
+// share a person is not a merge waiting to happen, it is a merge that happened.
+$merges = array_filter(
+    $groups,
+    static fn($g) => count($g) > 1 && array_filter($g, static fn($r) => empty($r['person_id']))
+);
+
+$alreadyLinked = count(array_filter($rows, static fn($r) => !empty($r['person_id'])));
+$toCreate = 0;
+foreach (array_merge(array_values($groups), array_map(static fn($r) => [$r], $unmatchable)) as $g) {
+    $hasPerson = array_filter(array_map(static fn($r) => $r['person_id'] ?? null, $g));
+    $hasUnlinked = array_filter($g, static fn($r) => empty($r['person_id']));
+    if (!$hasPerson && $hasUnlinked) $toCreate++;
+}
 
 echo "Analysis\n";
-echo sprintf("  %-34s %d\n", "people to create", count($groups) + count($unmatchable));
+// What will actually change, not what a first run would have done: on a database
+// that has already been backfilled or seeded these are all zero, and reporting
+// otherwise made a no-op look like a rewrite of the spine.
+echo sprintf("  %-34s %d\n", "already linked, left alone", $alreadyLinked);
+echo sprintf("  %-34s %d\n", "people to create", $toCreate);
 echo sprintf("  %-34s %d\n", "records that collapse into one", array_sum(array_map('count', $merges)));
 echo sprintf("  %-34s %d\n", "  across this many people", count($merges));
 echo sprintf("  %-34s %d\n", "no email or phone, kept separate", count($unmatchable));
@@ -141,28 +160,67 @@ $linkers = [
 
 $created = 0;
 $linked = 0;
+$skipped = 0;
+$conflicts = [];
 
 // Each group is one person. Prefer the richest record for the canonical values:
 // a worker record generally holds more than an application.
 $rank = ['workers' => 0, 'applicants' => 1, 'users' => 2];
-$apply = function (array $group, ?string $key) use ($conn, $insertPerson, $linkers, $rank, &$created, &$linked): void {
-    usort($group, static fn($a, $b) => ($rank[$a['source']] ?? 9) <=> ($rank[$b['source']] ?? 9));
-    $best = $group[0];
 
-    $name = (string) $best['name'];
-    $email = rg_normalise_email($best['email'] ?? null);
-    $phone = $best['phone'] ?? null;
-    foreach ($group as $r) {
-        if ($email === null) $email = rg_normalise_email($r['email'] ?? null);
-        if (!$phone) $phone = $r['phone'] ?? null;
+/**
+ * Apply one group.
+ *
+ * Rows that already carry a person_id are left exactly as they are, and their
+ * person is reused for anything unlinked beside them. Without this the script
+ * was not safe to run twice: it inserted a fresh person for every group
+ * regardless, repointed every record at the duplicate, and orphaned the
+ * original — along with the right-to-work checks, verifications, eligibility
+ * and leave records still hanging off it. The README quickstart and the
+ * production runbook both run it after a seed, by which time everything is
+ * already linked.
+ *
+ * A group whose rows point at DIFFERENT people is a genuine conflict, not
+ * something to resolve by picking one: merging two employment histories is the
+ * hardest thing here to undo. Reported and skipped.
+ */
+$apply = function (array $group, ?string $key) use (
+    $conn, $insertPerson, $linkers, $rank, &$created, &$linked, &$skipped, &$conflicts
+): void {
+    $existing = array_values(array_unique(array_filter(
+        array_map(static fn($r) => $r['person_id'] ?? null, $group)
+    )));
+    if (count($existing) > 1) {
+        $conflicts[] = $group;
+        return;
     }
 
-    $insertPerson->bind_param('ssss', $name, $email, $phone, $key);
-    $insertPerson->execute();
-    $personId = $conn->insert_id;
-    $created++;
+    $unlinked = array_values(array_filter($group, static fn($r) => empty($r['person_id'])));
+    if (!$unlinked) {
+        $skipped += count($group);
+        return;
+    }
 
-    foreach ($group as $r) {
+    if ($existing) {
+        $personId = (int) $existing[0];
+    } else {
+        usort($group, static fn($a, $b) => ($rank[$a['source']] ?? 9) <=> ($rank[$b['source']] ?? 9));
+        $best = $group[0];
+
+        $name = (string) $best['name'];
+        $email = rg_normalise_email($best['email'] ?? null);
+        $phone = $best['phone'] ?? null;
+        foreach ($group as $r) {
+            if ($email === null) $email = rg_normalise_email($r['email'] ?? null);
+            if (!$phone) $phone = $r['phone'] ?? null;
+        }
+
+        $insertPerson->bind_param('ssss', $name, $email, $phone, $key);
+        $insertPerson->execute();
+        $personId = (int) $conn->insert_id;
+        $created++;
+    }
+
+    foreach ($unlinked as $r) {
         $stmt = $linkers[$r['source']];
         $stmt->bind_param('ii', $personId, $r['id']);
         $stmt->execute();
@@ -175,7 +233,20 @@ foreach ($groups as $key => $group) $apply($group, $key);
 // which is the safe direction to be wrong in.
 foreach ($unmatchable as $row) $apply([$row], null);
 
-echo "Created $created people, linked $linked records.\n";
+echo "Created $created people, linked $linked records";
+echo $skipped ? ", left $skipped already-linked record(s) alone.\n" : ".\n";
+
+if ($conflicts) {
+    echo "\n" . count($conflicts) . " group(s) point at MORE THAN ONE person and were left alone.\n";
+    echo "Merging two people is the hardest thing here to undo, so resolve these by hand:\n";
+    foreach ($conflicts as $group) {
+        $refs = implode(', ', array_map(
+            static fn($r) => "{$r['source']}#{$r['id']}→person " . ($r['person_id'] ?? 'NULL'),
+            $group
+        ));
+        echo "  {$group[0]['name']} — $refs\n";
+    }
+}
 
 if ($ambiguous) {
     echo "\n" . count($ambiguous) . " ambiguous group(s) were left untouched. Their records still\n";

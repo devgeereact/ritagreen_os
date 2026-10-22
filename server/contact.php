@@ -1,6 +1,11 @@
 <?php
-// Public enquiry endpoint for the corporate site contact form.
-// POST /contact.php {name, email, phone, division, message} -> { ok: true }
+// Public enquiry endpoint for the corporate site's enquiry forms.
+// POST /contact.php {name, email, phone, division, message, type?} -> { ok: true }
+//
+// `type` says which form sent it: "general" (the contact page, the default),
+// "care" (a family or person asking about support) or "training" (a course or
+// group booking). Request staff goes to bookings.php and a cleaning quote to
+// quotes.php?action=request; neither comes here.
 require __DIR__ . '/lib.php';
 
 if (method() !== 'POST') fail('Method not allowed.', 405);
@@ -16,23 +21,54 @@ $email = trim((string) ($data['email'] ?? ''));
 $phone = trim(str_replace(["\r", "\n"], ' ', (string) ($data['phone'] ?? '')));
 $division = trim((string) ($data['division'] ?? ''));
 $message = trim((string) ($data['message'] ?? ''));
+// Optional and separate. Replying to an enquiry is what the person came here
+// for and needs no consent; marketing is a different thing being asked for at
+// the same time, so it is its own unticked box and its own record. Absent means
+// no -- an empty field must never read as agreement.
+$marketing = !empty($data['marketing_consent']);
+$source = trim((string) ($data['source'] ?? 'contact'));
+if (!in_array($source, ['contact', 'quote', 'care', 'training'], true)) $source = 'contact';
+
+// Which form this came from. There is no column for it: contact_enquiries is
+// read by the office Enquiries screen, which shows the service and the message,
+// so the type is carried by both. A care enquiry is filed under Healthcare and a
+// training enquiry under Training whatever the form said, and the message opens
+// with a line naming the type, so the office sees "Care enquiry" on the record
+// itself rather than having to infer it. An unknown type is a general enquiry.
+$types = ['general' => '', 'care' => 'Care enquiry', 'training' => 'Training enquiry'];
+$type = trim((string) ($data['type'] ?? 'general'));
+if (!array_key_exists($type, $types)) $type = 'general';
 
 if ($name === '' || $email === '' || $message === '') {
     fail('Please add your name, email and a message.');
 }
 if (mb_strlen($name) > 160) fail('That name is too long.');
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) fail('That email is not valid.');
+// Caps match the contact_enquiries columns (email VARCHAR(190), phone
+// VARCHAR(40)) and bookings.php. Without them an oversized value reached MySQL
+// in strict mode and came back as a 500 instead of a message the sender can fix.
+if (mb_strlen($email) > 190) fail('That email is too long.');
+if (mb_strlen($phone) > 40) fail('That phone number is too long.');
 if (mb_strlen($message) > 5000) fail('That message is too long.');
 
 // Normalise the division to a known value, else store as "other".
 $allowed = ['care', 'academy', 'cleaning', 'security', 'other'];
 if (!in_array($division, $allowed, true)) $division = 'other';
+if ($type === 'care') $division = 'care';
+if ($type === 'training') $division = 'academy';
+// After the length check, so the cap stays the one the form was told about.
+if ($types[$type] !== '') $message = 'Enquiry type: ' . $types[$type] . "\n\n" . $message;
 
 $stmt = $conn->prepare(
     'INSERT INTO contact_enquiries (name, email, phone, division, message) VALUES (?, ?, ?, ?, ?)'
 );
 $stmt->bind_param('sssss', $name, $email, $phone, $division, $message);
 $stmt->execute();
+
+// Only a yes is recorded here. A no from someone who has never opted in adds a
+// row saying nothing, and a no must not overwrite a yes given elsewhere -- if
+// they want off the list, the unsubscribe link is the route that records it.
+if ($marketing) record_marketing_consent($conn, $email, true, $source);
 
 // Notify the office and confirm to the sender.
 //
@@ -51,7 +87,9 @@ $stmt->execute();
     // 1) Office alert — reply goes straight to the sender.
     $officeSubject = $isCareers
         ? "New careers application — $name"
-        : "New website enquiry ($division) — $name";
+        : ($types[$type] !== ''
+            ? "New website " . strtolower($types[$type]) . ": $name"
+            : "New website enquiry ($division) — $name");
     $officeBody = "A new $kind came in from the RitaGreen website.\n\n"
         . "Name:     $name\n"
         . "Email:    $email\n"

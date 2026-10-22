@@ -42,26 +42,22 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # Reports but does not block. 19 errors remain in application code, down
-      # from 27: the production-readiness audit cleared the two `any`s, the
-      # unused expression, two dead template components, and scoped
-      # react-refresh/only-export-components off the VENDORED shadcn primitives
-      # in src/components/ui (upstream ships Button beside buttonVariants; the
-      # rule still applies to everything we write).
+      # Blocking, at zero. It reported 27 errors, then 19, and now none.
       #
-      # What is left is React 19's new hook ruleset -- set-state-in-effect,
-      # static-components, refs, purity -- on code that works. static-components
-      # in particular is a false positive here: divisionIcon() SELECTS a
-      # module-level lucide component from a lookup table, it does not create
-      # one, so no state is reset. Clearing the rest means restructuring effects,
-      # which changes runtime behaviour and needs its own change with its own
-      # testing, not a tidy-up inside an audit.
+      # The last 19 were React 19's hook ruleset on working code, and were
+      # cleared by changing the code rather than the rules: the unreferenced
+      # FullCalendar template under src/components/calendar was deleted (it read
+      # a ref during render, so its own title never updated); icons are rendered
+      # with createElement() where a capitalised local read as a component
+      # defined during render; effects no longer set state synchronously in
+      # Scheduling, Verify, the auth provider and the theme toggle; homeFor(),
+      # openStorageNotice() and PageLoader moved out of the modules that mix them
+      # with components; and the vendored sidebar skeleton derives its width from
+      # useId() instead of Math.random().
       #
-      # The baseline is tracked as "ESLint baseline clean" in docs/STATUS.json.
-      # Flip continue-on-error to false, and add --max-warnings 0, once it is zero.
+      # --max-warnings 0 so a warning cannot quietly become the new baseline.
       - name: Lint
-        run: npm run lint
-        continue-on-error: true
+        run: npm run lint -- --max-warnings 0
 
       - name: Test
         run: npm test
@@ -115,6 +111,70 @@ jobs:
             exit 1
           fi
 
+  database:
+    name: Database-backed HTTP tests
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC
+      RG_TEST_DB_HOST: 127.0.0.1
+      RG_TEST_DB_USER: root
+      RG_TEST_DB_PASS: rg_ci_local_only
+      RG_TEST_DB_NAME: ritagreen_os_test
+
+    # server/tests/run.php covers the pure logic and says so: anything needing a
+    # database is out of its scope. That left authorisation, service scope, state
+    # transitions and persistence untested by anything -- and those are the parts
+    # that decide who can read a worker's compliance record.
+    #
+    # This job builds a database from server/schema.sql and every migration on
+    # each run, so "a fresh install works" is asserted rather than remembered. It
+    # was not working: schema.sql altered a table it never created, and repeated
+    # three statements the migrations own, so a new database stopped at migration
+    # 020 with eleven migrations unapplied.
+    #
+    # MariaDB, not MySQL: the host runs MariaDB and schema.sql and the migrations
+    # use its ADD COLUMN / ADD KEY IF NOT EXISTS, which stock MySQL 8 rejects
+    # (docs/ARCHITECTURE.md). On mysql:8.0 this job failed at schema.sql before a
+    # single case ran.
+    services:
+      mysql:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: rg_ci_local_only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mysqli, curl
+          coverage: none
+
+      # No config.php is present and none is created. The suite loads
+      # server/tests/db/config.php through RG_CONFIG, which holds no secret and
+      # switches every outbound integration off. Nothing here can email anyone.
+      - name: Refuse to run with a config.php present
+        run: |
+          if [ -f server/config.php ]; then
+            echo "server/config.php exists in the CI checkout. It must never be committed."
+            exit 1
+          fi
+
+      # Called directly rather than through npm: the job installs no node
+      # modules, and the script is one php invocation.
+      - name: Database-backed HTTP tests
+        run: php server/tests/db/run.php
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest
@@ -127,7 +187,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Fails if docs/PROGRESS.md is out of step with docs/STATUS.json, or if
-      # docs/TRACEABILITY.md cites a source file that does not exist.
+      # Fails if docs/PROGRESS.md is out of step with docs/STATUS.json, if
+      # docs/TRACEABILITY.md cites a source file that does not exist, if a relative
+      # markdown link in docs/, the root, .agent/ or server/README.md is broken, or
+      # if a retired brand colour reappears in src/ or docs/.
+      - name: Test the documentation checks and the agent guard hooks
+        run: python3 scripts/test_docs_sync.py && python3 scripts/test_agent_guard.py
       - name: Check documentation consistency
         run: python3 scripts/docs_sync.py --check

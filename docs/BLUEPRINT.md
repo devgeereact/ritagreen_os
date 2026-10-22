@@ -1,9 +1,8 @@
-# Blueprint — the target model and the gap to it
+# Blueprint: the model, the modules as built, and the gaps it started from
 
-**Status:** baseline, written against the codebase as it stood on 2026-08-31.
-
-This document is the spine of the programme. It states the target architecture, then records
-honestly what is already built, what is missing, and what is actively wrong.
+**Status:** Part 1 is the model. Part 2 describes the modules as built at the end of the 2026
+build (sections S1 to S10, 10 October 2026). Part 3 is the gap analysis of 2026-08-31, kept as
+history: item-level status is [`docs/PROGRESS.md`](PROGRESS.md), not this file.
 
 Read `docs/PRD.md` first for why. This is the what.
 
@@ -37,8 +36,9 @@ John Smith
   Security  ELIGIBLE
 ```
 
-This is the single most important consequence of the person-centred model. It is impossible
-to express in the current schema, where `workers.division` is a single-value ENUM.
+This is the single most important consequence of the person-centred model. It was impossible
+to express while `workers.division` was the only service field; `person_services` (person by
+service, with eligibility per service) now carries it.
 
 ### 1.3 Compliance-driven
 
@@ -97,7 +97,7 @@ REQUESTED → RECEIVED → UNDER REVIEW → VERIFIED
 ```
 RITAGREEN
 ├── PEOPLE          candidates · workers · learners
-├── SERVICES        Care · Academy · Cleaning · Security
+├── SERVICES        Healthcare · Cleaning · Security · Training (ids care · cleaning · security · academy)
 ├── CLIENTS         organisations · sites
 ├── RECRUITMENT     applications · pipeline · tasks
 ├── ONBOARDING      checklists · contracts · activation
@@ -115,42 +115,169 @@ RITAGREEN
 
 ---
 
-## Part 2 — What already exists
+## Part 2: Modules as built
 
-This system is not a blank page. The following is built, working, and must not be rebuilt.
+What the code does at the end of the 2026 build. Endpoints are listed in
+[`docs/API.md`](API.md) and tables in [`docs/SCHEMA.md`](SCHEMA.md); this part says how they fit
+together for the people who use them.
+
+### 2.1 The office app: eight destinations
+
+The sidebar is data in `src/lib/nav.ts`: eight destinations, each one page with its secondary
+pages beneath, plus **Finance** (invoicing, quotes, contracts, payroll) only while the owner has
+it switched on. A link shows only if `src/lib/access.ts` lets the account open it. The table of
+destinations and their secondary pages is in [`docs/DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md),
+"Office navigation".
+
+| Destination | What it is for |
+|---|---|
+| **Today** (`/app`) | Tiles for unfilled shifts, checks to review, evidence expiring in 30 days and approvals waiting; today's shifts; "Needs action" naming the people, each with a button to the place to act. Built on the Action Centre (`action-centre.php`), which obeys service scope and zones |
+| **Recruitment** (`/app/ats`) | Applicant board by stage, applicant detail, interviews, tasks, and **Import from spreadsheet** (`/app/ats/import`). Stages move only as `rg_stage_transition()` allows |
+| **People** (`/app/workers`) | The staff list and one profile per person (2.2); Training records beneath |
+| **Compliance** (`/app/compliance`) | Verification queue (oldest first), right-to-work checks, onboarding lists, expiry list |
+| **Rota** (`/app/scheduling`) | The rota (2.3), Timesheets, Requests (website cover requests and enquiries in one list with an owner), Clients with their Sites, Jobs, Field ops, Incidents |
+| **Website** (`/app/blog`) | Posts, Vacancies, Forms (the forms directory), Testimonials, Company details and social links |
+| **Reports** (`/app/reports`) | Recruitment pipeline, active and blocked workers with reasons, evidence expiring at 30, 60 and 90 days, unfilled shifts by week, approved hours by week (payroll zone), staff workload. CSV is built on the server from declared columns and recorded in `export_log` |
+| **Settings** (`/app/settings`) | The tabs in 2.7; Inbox (while switched on), Comms, Files and Help beneath |
+
+Notifications live in the header bell and the ⌘K palette, which is built from
+`src/lib/app-routes.ts`.
+
+### 2.2 The person profile
+
+`/app/people/:personId`, read through `server/people.php`. The header shows each service with
+the person's status in it and the one next action the server works out
+(`rg_person_next_action()`). Tabs:
+
+| Tab | Contents |
+|---|---|
+| Overview | Services and status per service, payroll number, contact details, start date, next shift |
+| Checks and documents | Every requirement for every service the person works in, with a calculated chip (Valid, Due soon, Expired, Awaiting review, Missing), the evidence file and where it came from, verifier, date checked, expiry. Upload evidence, verify with what was checked, reject with a reason |
+| Training | Courses, certificates and renewal dates; records go to `enrolments` against the person |
+| Shifts | Upcoming and past shifts |
+| Employment | Contract evidence (agreed version, sent, accepted, signed copy, review, new version), approval and suspension, pay rate history, leave |
+| Emergency contacts | Two contacts, saved through `rg_save_emergency_contacts()` |
+| Activity | The audit trail for the person |
+
+A section outside the account's zone comes back as `{restricted: true}` and the tab says so.
+**Approval** is offered only when `rg_approval_blockers()` is empty: onboarding finished and a
+signed employment contract that has been reviewed. "Download profile for client" produces a PDF
+with client-safe fields only (compliance zone, audited).
+
+### 2.3 The rota
+
+One scheduling engine (`server/scheduling.php`, `server/rota-lib.php`) for every service.
+
+- **Draft and publish.** Every new shift is a draft that workers, offers, the client portal and
+  the field board never see. "Publish drafts" publishes the week shown, as filtered, and tells
+  each booked worker once. "Copy last week" and weekly patterns make drafts.
+- **Changes are told.** Editing, moving or taking somebody off a published shift tells them what
+  changed, in the app and by email. Cancelling needs a reason, which the worker is told.
+- **Offers.** Offers by name or broadcast, accepted by text link (`offer.php`) or in the staff
+  portal; the first eligible acceptance wins.
+- **One assignment check on every path** (`rg_assignment_check()` in `compliance-lib.php`):
+  employment state and evidence (`rg_deployment_check()`), a clash, and approved **leave** block.
+  A period the worker marked unavailable, and a **rest gap** under the minimum, are warnings the
+  office must acknowledge, and the acknowledgement is audited. The minimum rest is
+  `app_settings.rest_gap_min_hours` (11 by default), measured in Europe/London so the clock
+  changes count. It is set on the Rota rules card in Settings (2.7).
+- **Sites as records**, with address, access notes, a contact and required training, which joins
+  the service's rules as mandatory for shifts at that site.
+- **Screen.** A week by site or by worker on desktop, one day at a time on a phone, conflicts
+  written on each shift, and a side panel to edit, assign (eligibility and reasons first),
+  acknowledge warnings, offer, cancel and read the history. No dragging is needed.
+- **Timesheets from the clock.** Clocking out makes a draft timesheet; the worker confirms the
+  break and submits; the office approves, queries with a reason, or corrects with a reason, with
+  the values before and after kept.
+
+### 2.4 The staff portal (`/m`)
+
+Phone first and installable. Four tabs in `src/pages/worker/`, served by `server/me.php`, which
+takes the worker from the login on every action and never from the request.
+
+| Tab | Shows and does |
+|---|---|
+| **Home** | Next shift with site, address and a map link opened only on tap, site contact and notes; clock in from 15 minutes before the start, clock out, check call, report a problem, panic alert; what stops the worker being booked and what to do; training due; messages |
+| **Rota** | Published shifts by day, offers to accept or decline, open shifts to pick up with the server's reason on refusal, a calendar file |
+| **Records** | Checks with status chips and upload of a new copy (it goes to "received" and never verifies itself), training and certificates, timesheets to confirm and submit, gross pay by month |
+| **Me** | Contact details (written to `people`), emergency contacts, unavailable days, leave requests and balance, the office's contact details |
+
+Offline, the shell loads and each tab says so; no personal data is cached.
+
+### 2.5 The website, careers and the forms directory
+
+The public site (Healthcare, Cleaning, Security, Training, Careers, About, Contact and a Request
+staff button) reads company details, social links, vacancies, forms and posts from public
+endpoints that return named public fields only. Enquiries go to the queue that owns them: cover
+requests to `bookings.php`, the cleaning quote to `quotes.php?action=request`, care, training and
+general enquiries to `contact.php` with a type.
+
+- **Vacancies** (`server/vacancies.php`): draft, published, closed. `/careers` lists published
+  roles; `/careers/:slug` shows the role, the checks, then one way to apply: the linked Google
+  Form, or a short native form when the role has none.
+- **Forms directory** (`server/website-forms.php`): only a Google Forms responder address is
+  accepted and only its id is stored (`docs/RULES.md` rules 26 to 28). A form loads only when the
+  visitor presses the button; "open in a new tab" and the phone number are always shown.
+  `/training` lists active training forms the same way.
+- **Form intake**: an Apps Script per form posts each response to `forms-intake.php` with a key
+  and a shared secret; the applicant appears in Recruitment at "Applied", linked to one person.
+  Set-up is in [`docs/runbooks/google-forms-intake.md`](runbooks/google-forms-intake.md).
+- **`/links`**: the link-in-bio page for the social profiles.
+
+### 2.6 Spreadsheet import
+
+Recruitment, Import from spreadsheet (`server/sheet-import.php`; owner, admin and manager only):
+upload a Google Sheet downloaded as **CSV** (a spreadsheet file is refused with instructions to
+download it as CSV), map columns (the mapping is saved and reused), preview every row, decide
+uncertain matches, tick rows, apply, and read a report with a failures download. Identity is
+written through `people`; for existing staff only phone, email, address, postcode, the first
+emergency contact and availability can change. The uploaded file is never stored, and applying
+the same row twice creates nothing.
+
+### 2.7 Settings
+
+| Tab | Who | What |
+|---|---|---|
+| Security | Everyone | Two-factor authentication, sessions |
+| Users and roles | Owner (`super_admin`, `admin`) | Accounts and roles |
+| Features | Office (owner, admin, manager); only an owner changes anything | The feature switches (finance, online payments, SMS and WhatsApp, inbox), and the **Rota rules** card: the minimum rest between shifts, which an owner edits and the office reads (`scheduling.php?action=settings`, 0 to 24 hours) |
+| Form intake | Office | Each form's last submission and failures, forms not reviewed for 90 days, intake secrets (shown once) |
+| System health | Office, unscoped | When each scheduled job last ran, the email queue, form intake, the restore test |
+| Audit log | Owner | The audit trail |
+| Data requests | Owner | Requests to archive or delete a record (`server/governance.php`). **Four-eyes rule:** somebody other than the person who asked must decide, and both halves are recorded with a reason. A delete that would take other records with it is refused once with the counts, and goes ahead only when the owner confirms having read them |
+| Data and GDPR | Owner | Subject access export and erasure |
+
+The **finance** switch hides the Finance pages in the office app only; the endpoints keep their
+role and zone checks and are not refused. Online payments and the inbox are refused on the
+server while off, and SMS and WhatsApp sends are logged as skipped.
+
+### 2.8 Underlying capabilities
+
+Built before 2026 and still in use:
 
 | Capability | Where it lives |
 |---|---|
-| Recruitment pipeline, 7 stages | `applicants.stage` · `server/ats.php` |
-| Onboarding task checklist | `onboarding_tasks` · `ONBOARDING_CHECKLIST` in `server/ats.php` |
-| Certificate issue and public verification | `certificates` · `server/certificates.php` · `/verify/:id` · Open Badges 3.0 assertion |
-| Credential expiry engine | `server/expiry-alerts.php` — 90/60/30/expired tiers, deduplicated through `compliance_reminders`, run by cron, office digest plus personal nudges |
-| Compliance evidence pack | `server/compliance.php?action=pack&worker_id=N` |
-| Regulatory report packs | `server/reports.php` — `cqc_pack`, `sia_acs`, `coshh`, `skills_for_care` |
-| Reference checks with gap explanation | `worker_references` · `server/references.php` |
-| Company insurance register | `insurance` · `server/insurance.php` |
+| Certificate issue and public verification | `certificates` · `server/certificates.php` · `/verify/:id` |
+| Credential expiry engine | `server/expiry-alerts.php`: 90/60/30/expired tiers, deduplicated through `compliance_reminders`, run by cron |
+| Regulatory report packs | `server/reports.php`: `cqc_pack`, `sia_acs`, `coshh`, `skills_for_care` |
+| Reference checks | `worker_references` · `server/references.php` |
 | Incidents with RIDDOR and safeguarding flags | `incidents`, `incident_actions` · `server/incidents.php` |
-| Authentication | Opaque bearer tokens (`server/auth.php:35`), bcrypt cost 12, hand-rolled TOTP 2FA, device/session list with per-session revoke, rate limiting, Google SSO, idle lock screen |
-| GDPR export and erasure | `server/gdpr.php` · `consent_log` |
+| Authentication | Opaque bearer tokens, bcrypt, TOTP 2FA, session list with revoke, rate limiting, Google SSO, idle lock screen |
 | Audit log | `audit_log` · `server/audit.php` |
-| Clients, sites, rate cards | `clients`, `sites`, `rate_cards` · `server/clients.php` |
-| Scheduling with a compliance guard | `server/scheduling.php` — already refuses to match or assign a worker with a lapsed DBS (Care), lapsed SIA (Security), or no right to work |
-| Shift broadcast and token acceptance | `shift_offers` · `server/offer.php` — worker accepts from an SMS link, no login |
-| Field operations | `shift_events` — clock in/out, check-in, panic, signature, lat/lng · `server/field.php` |
-| Time and pay records | `timesheets`, `pay_rules`, `bank_holidays` · `server/payroll.php`, `server/pay-lib.php` |
-| Commercial pipeline | quotes → contracts → invoices → credit notes, Stripe Checkout and GoCardless Direct Debit with signature-verified webhooks |
-| Worker mobile app | `/m` · `server/me.php` — own compliance, shifts, open shifts to claim, clock in/out |
-| Client portal | `/portal` · `server/portal.php` |
-| Document storage | `files` · `server/files.php` — randomised stored names, MIME allowlist, 10 MB cap, streamed downloads behind an auth check, uploads directory blocked in `.htaccess`, text extraction from docx/xlsx/PDF |
-| Notifications | `notifications` · notification dropdown |
-| Marketing content CMS | `blog_posts`, `testimonials` · AI Content Studio via OpenRouter proxy (`server/ai.php`) |
-| Database backup | `server/backup.php` — gzipped mysqldump above the document root, 14-day prune |
-
-The blueprint's assumption that these need building is wrong. The work is elsewhere.
+| Field operations | `shift_events`: clock in and out, check calls, panic, with location · `server/field.php` |
+| Time and pay records | `timesheets`, `worker_pay_rates`, `pay_rules`, `bank_holidays` · `server/payroll.php`, `server/pay-lib.php` |
+| Commercial pipeline (Finance) | Quotes, contracts, invoices, credit notes; Stripe and GoCardless behind the online payments switch |
+| Client portal | `/portal` · `server/portal.php`, restricted until its future is decided |
+| Document storage | `files` · `server/files.php`, `server/files-lib.php`: randomised stored names, MIME allowlist, streamed behind an auth check |
+| Email queue | `email_queue`, drained by `server/send-queued-mail.php` |
+| Backup and restore test | `server/backup.php`, `server/restore-check.php`; [`docs/runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md) |
 
 ---
 
-## Part 3 — The gaps
+## Part 3: The gaps found on 2026-08-31 (history)
+
+Kept as the record of where the work started. Most of these are closed; the current state of
+each is in [`docs/PROGRESS.md`](PROGRESS.md) and the evidence in [`docs/CHANGELOG.md`](CHANGELOG.md).
 
 ### Tier 1 — architectural. These block everything downstream.
 
@@ -191,6 +318,13 @@ person with the same identity.
 Verified against a real database: two applications, an onboarding and a login creation for one
 human produce **one** person record, carrying two applications, one employment record and one
 login. Before the fix that was three or four separate identities.
+
+Two paths were still outside the spine afterwards, and both are closed now. `server/seed.php`
+inserted users, workers and applicants with no `person_id` at all — which stopped being merely
+inconsistent once migration 004 made the column `NOT NULL`, at which point seeding a migrated
+database failed outright. And `server/backfill-people.php --go` inserted a fresh person for
+every group regardless of existing links, so running it a second time duplicated every identity
+it had created the first time. A rule the tooling does not follow is a rule that comes back.
 
 #### One person, one service
 
@@ -333,25 +467,9 @@ database is not an acceptable risk.
 
 ---
 
-## Part 4 — Sequence and why
+## Part 4: Sequence
 
-```
-Milestone 0   Documentation pack               ← establishes the contract
-              ─────────────────────────────
-Prerequisite  Local development environment    ← blocks all schema work
-              ─────────────────────────────
-Milestone 1   Person spine                     ← unblocks everything
-Milestone 2   Compliance engine                ← needs the spine
-Milestone 3   Verification: RTW, SIA, DBS      ← needs the engine's requirement catalogue
-Milestone 4   Deployment gate                  ← needs a verdict to enforce
-Milestone 5   Permissions and zones
-Milestone 6   Employment records
-Milestone 7   Communications
-Milestone 8   Intake and integrations
-Milestone 9   Governance, PWA, hardening
-```
-
-The order is not negotiable through Milestone 4. Each depends on the one before it. From
-Milestone 5 onward the order is a judgement about value, and can be resequenced.
-
-Full detail in `docs/ROADMAP.md`.
+The milestone order of 2026-08-31 (spine, compliance engine, verification, deployment gate,
+then permissions, employment, communications, intake and governance) has been delivered; the
+2026 sections that followed are recorded in [`docs/DECISIONS-2026.md`](DECISIONS-2026.md). What
+remains is [`docs/ROADMAP.md`](ROADMAP.md).

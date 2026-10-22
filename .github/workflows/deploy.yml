@@ -1,19 +1,90 @@
 name: Build and deploy to cPanel
 
+# Deployment is gated on CI, for the exact commit CI tested.
+#
+# It used to trigger on `push: branches: [main]` independently of ci.yml, which
+# triggers on the same event. Two workflows on one event do not form a chain:
+# they start together, and the FTP upload finished whether or not the typecheck,
+# the tests, the build assertions or the database suite ever passed. A red CI run
+# and a deployed commit were compatible states.
+#
+# workflow_run fires only when the named workflow COMPLETES, and the conclusion
+# is checked below, because it fires for a failed run too. The checkout pins
+# head_sha rather than taking the branch tip, so a second push during the upload
+# cannot promote a commit nothing has tested.
+#
+# This uploads dist/ only and excludes *.php. The PHP tier is still placed by
+# hand, so a change under server/ does NOT reach production through this
+# workflow. Ship the frontend ahead of the API and the interface changes while
+# the API does not.
+
 on:
-  push:
-    branches: [ main ]        # change if your branch isn't main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Upload dist/ to cPanel
     runs-on: ubuntu-latest
+    # Four conditions, and every one of them is load-bearing.
+    #
+    # A workflow_run job runs in the context of THIS repository, with access to
+    # the FTP secrets, and then checks out a commit named by the event. CI also
+    # runs on `pull_request`, including from forks -- so without the last two
+    # lines, anyone could open a pull request from a fork branch they had named
+    # `main`, wait for CI to pass on their own code, and have this job check that
+    # code out and run `npm ci` and `npm run build` on it with the production
+    # credentials in the environment. `event == 'push'` and the head-repository
+    # check are what confine this to commits that reached main in this
+    # repository. See github.com/github/securitylab on preventing pwn requests.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit CI tested, not whatever main points at now.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Record what is being deployed
+        run: |
+          echo "commit:   ${{ github.event.workflow_run.head_sha }}"
+          echo "CI run:   ${{ github.event.workflow_run.html_url }}"
+          git --no-pager log -1 --format='%H %s' > deploy-manifest.txt
+          echo "ci_run_id=${{ github.event.workflow_run.id }}" >> deploy-manifest.txt
+          cat deploy-manifest.txt
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+
       - run: npm ci
       - run: npm run build
+
+      - name: Assert build output before uploading
+        run: |
+          # The same assertions CI makes. Repeated here because this job builds
+          # its own dist/ rather than downloading CI's, so CI passing is not by
+          # itself proof of what is about to be uploaded.
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          test -f dist/manifest.webmanifest || { echo "dist/manifest.webmanifest missing"; exit 1; }
+          test -f dist/sw.js || { echo "dist/sw.js missing"; exit 1; }
+          maps=$(find dist -name '*.map' | wc -l)
+          test "$maps" -eq 0 || { echo "$maps source map(s) in dist/"; exit 1; }
+
       - uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server:   ${{ secrets.FTP_SERVER }}

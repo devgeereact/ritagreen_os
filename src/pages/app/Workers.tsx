@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { Plus, Search, ShieldAlert, ShieldCheck, ShieldQuestion, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -32,11 +33,13 @@ import {
 } from "@/components/ui/select"
 import { useApi } from "@/hooks/use-api"
 import { api, ApiError } from "@/lib/api"
+import { useAuth } from "@/providers/auth-provider"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Worker, Skill } from "@/lib/types"
 import { shortDate, gbp } from "@/lib/format"
 import { EligibilityDialog } from "@/components/app/eligibility-dialog"
 import { LoadingBlock, ErrorBlock, EmptyBlock } from "@/components/app/state-block"
+import { personPath } from "@/lib/people"
 
 const ROLES = [
   { value: "carer", label: "Carer", division: "care" },
@@ -47,6 +50,10 @@ const ROLES = [
 ]
 
 export default function Workers() {
+  // Trainer and employee may read this page; only the office may onboard, and
+  // workers.php enforces that. Hide the action rather than fail the form.
+  const { hasRole } = useAuth()
+  const canOnboard = hasRole("super_admin", "admin", "manager")
   const { data, loading, error, reload } = useApi<{ workers: Worker[] }>("workers.php")
   const [q, setQ] = useState("")
   const [open, setOpen] = useState(false)
@@ -68,7 +75,7 @@ export default function Workers() {
             One workforce across four divisions, fully checked before first shift.
           </p>
         </div>
-        <NewWorkerDialog open={open} onOpenChange={setOpen} onCreated={reload} />
+        {canOnboard && <NewWorkerDialog open={open} onOpenChange={setOpen} onCreated={reload} />}
       </div>
 
       <div className="relative max-w-sm">
@@ -82,7 +89,7 @@ export default function Workers() {
         <EmptyBlock
           title="No workers yet"
           hint="Onboard your first worker. Right-to-work and DBS are captured up front."
-          action={<Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Onboard worker</Button>}
+          action={canOnboard ? <Button onClick={() => setOpen(true)}><Plus className="mr-1 size-4" /> Onboard worker</Button> : undefined}
         />
       )}
 
@@ -105,7 +112,12 @@ export default function Workers() {
               {filtered.map((w) => (
                 <TableRow key={w.id}>
                   <TableCell>
-                    <div className="font-medium">{w.name}</div>
+                    {/* One profile per person, keyed by person rather than worker. */}
+                    {w.person_id ? (
+                      <Link to={personPath(w.person_id)} className="font-medium text-primary underline-offset-2 hover:underline">{w.name}</Link>
+                    ) : (
+                      <div className="font-medium">{w.name}</div>
+                    )}
                     {w.email && <div className="text-xs text-muted-foreground">{w.email}</div>}
                   </TableCell>
                   <TableCell className="capitalize">{w.role}</TableCell>
