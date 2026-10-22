@@ -291,7 +291,10 @@ Rgt::denied('a worker login cannot read the rota', $amaraApp->get('/scheduling.p
 // ---------------------------------------------------------------------------
 Rgt::group('rota: timesheets from the clock');
 
-$worked = (int) $create($admin, ['worker_id' => $amara, 'site_id' => $oakleaf, 'starts_at' => $day(75) . ' 08:00', 'ends_at' => $day(75) . ' 16:00'])->get('id');
+// Day 66 is clear of every other shift this case gives Amara. The copy-week ones
+// land on days 75 to 88 whatever day the suite runs (day 75 used to hit her own
+// 'Copy me too'), and days 60 and 70 are taken earlier in the case.
+$worked = (int) $create($admin, ['worker_id' => $amara, 'site_id' => $oakleaf, 'starts_at' => $day(66) . ' 08:00', 'ends_at' => $day(66) . ' 16:00'])->get('id');
 $admin->post('/scheduling.php?action=publish', ['ids' => [$worked]]);
 // Clocking in opens fifteen minutes before the start (S4), so a shift weeks
 // ahead cannot be clocked in on. Move this one to now, in London wall-clock time.
