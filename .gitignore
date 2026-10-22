@@ -37,3 +37,6 @@ server/uploads/
 .playwright-mcp/
 /backups/
 __pycache__/
+
+# Local agent tool config (editor MCP ports)
+.codex/
