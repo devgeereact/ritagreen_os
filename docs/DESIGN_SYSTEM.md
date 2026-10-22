@@ -140,6 +140,18 @@ settings are honoured globally in `src/index.css`. The website's `fade-up` entra
 `animate-float` / `animate-glow` utilities, the gradient and grid backgrounds and the animated
 counters were removed in S6; do not bring them back.
 
+The website has three motions, all CSS, none of them on scroll:
+
+- **The home hero entrance**, `motion-safe:animate-rise-in` (`tailwind.config.ts`): a 12px rise
+  and fade over 500ms, staggered by `animation-delay`, once, as the page first paints. Behind
+  `motion-safe:`, so a reduced-motion visitor gets none of it. Nowhere else.
+- **Photograph hover**: a hero card or news card image scales to 1.03 over 500ms;
+  `motion-reduce:transition-none` turns it off.
+- **The Services panel** (`src/components/ui/navigation-menu.tsx`): Radix's 200ms fade and
+  zoom on open and close, and a short slide between items.
+
+No animation library: the home page is in the entry chunk, so its motion is CSS only.
+
 Focus rings are always visible: `:focus-visible` draws a 2px `--ring` outline on every
 interactive element.
 
@@ -149,9 +161,31 @@ Container centred, 1.5rem padding, capped at 1200px at `2xl`.
 
 Shells:
 
-- `PublicLayout`: the website. Navigation, footer, storage notice, light only. Its building
-  blocks (S6) are in `src/components/public/section.tsx` (`PageHeader`, `Section`,
-  `SectionTitle`, `Steps`, `CheckList`, `ServiceTag`, `CareersBand`, `CtaBand`),
+- `PublicLayout`: the website. Navigation, footer, storage notice, light only.
+  - **Header** (`PublicNav.tsx`): the contact bar, then the wordmark, four destinations
+    (**Services**, Careers, About, Contact), a quiet "Staff login" and one "Request staff"
+    button. Services is a Radix navigation menu (`src/components/ui/navigation-menu.tsx`, the
+    21st.dev "Navigation Menu" pattern) that opens a panel: a green "Request checked staff"
+    block on the left, the four services with a Lucide icon in the service accent and one line
+    each, and the two Healthcare routes underneath. Below 1024px a sheet carries the same.
+    The link data is `src/lib/site-nav.ts`, read by the header and the footer. Add a top-level
+    destination only by replacing one: seven links did not fit between 1024 and 1200px.
+  - **Footer** (`PublicFooter.tsx`): green-900, four columns (who we are with phone, email,
+    hours and icon links to the socials; Services; Company; Help with the urgent line), then
+    the legal line with the storage notice and staff login.
+  - **Home hero** (`Home.tsx`): the 21st.dev "Split Hero With Image Cards" pattern. Headline,
+    two actions (Request staff, call the office) and three check icons on the left; on the
+    right the two Healthcare routes as photograph cards with a solid green-900 scrim under the
+    words (not a gradient), and one framed "Checks in date" card in the app's status-chip style.
+    A strip of the settings staffed (care homes, hospitals, supported living, schools, offices)
+    follows; types of setting, never client names or logos.
+  - **Demo content** (`src/lib/demo-content.ts`): on `npm run dev` only, the testimonial and
+    news bands fall back to samples marked "Demo content, development only" (`DemoLabel`), so
+    the layout can be judged before anything is published. Each reader guards it with
+    `import.meta.env.DEV` at the point of use, so a production build contains none of it.
+
+  Building blocks (S6) are in `src/components/public/section.tsx` (`PageHeader`, `Section`,
+  `SectionTitle`, `Steps`, `CheckList`, `ServiceTag`, `CareersBand`, `CtaBand`, `DemoLabel`),
   `site-button.ts` (44px website buttons) and `forms/` (labelled native fields with errors tied
   by `aria-describedby`, focus to the first error, input kept on failure, a success panel that
   takes focus). The wordmark is `src/components/brand/Wordmark.tsx`. Website photographs are

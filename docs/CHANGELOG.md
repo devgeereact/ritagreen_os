@@ -7,6 +7,37 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Changed: website header, home hero and footer (2026-10-12, local, not deployed)
+
+Branch `website/hero-nav-refresh`. Frontend only: no endpoint, table or migration changes.
+
+- **Header.** Four destinations instead of seven links: **Services**, Careers, About, Contact,
+  then "Staff login" and "Request staff". Services is a Radix navigation menu (new
+  `src/components/ui/navigation-menu.tsx`, dependency `@radix-ui/react-navigation-menu`
+  1.2.22, pinned exact) in the 21st.dev "Navigation Menu" pattern: a green "Request checked
+  staff" block, the four services with a Lucide icon and one line each, and the two Healthcare
+  routes. The phone menu groups the services with their icons. Links stay links (no
+  `role="menu"`), and the current section carries `aria-current="page"`. The link data moved to
+  `src/lib/site-nav.ts`, shared with the footer.
+- **Home hero.** The 21st.dev "Split Hero With Image Cards" pattern: the two Healthcare routes,
+  which were a separate band, are now photograph cards beside the headline, with a solid scrim
+  under the words and one framed "Checks in date, confirmed before every booking" card. The
+  second action calls the office. A strip of the settings staffed follows the hero. One CSS
+  entrance (`rise-in`, behind `motion-safe:`); no animation library, because the page is in
+  the entry chunk.
+- **Footer.** Green-900, four columns, contact details with icons, icon links to the socials,
+  the legal line with the storage notice and staff login.
+- **Demo content for development.** `src/lib/demo-content.ts` fills the testimonial and news
+  bands on `npm run dev` when nothing is published, each block marked "Demo content,
+  development only". Guarded by `import.meta.env.DEV` at the point of use; `npm run build`
+  output contains none of the sample strings (checked with grep over `dist/`).
+- `docs/DESIGN_SYSTEM.md` sections 4 and 5 describe the three website motions and the new
+  header, hero, footer and demo content.
+
+Checked: typecheck, `eslint --max-warnings 0`, `npm test` (118 passed), `npm run build`; in a
+browser at 1440px (Services panel, hero, footer) and 390px (hero, phone menu, no horizontal
+scroll). Not run: `npm run test:php`, `npm run test:db`, the launch journeys.
+
 ### Added: launch gate, follow-ups and docs consolidation, section S10 (2026-10-10, local, not deployed)
 
 The last section of the 2026 build. Nothing here has been run against production.

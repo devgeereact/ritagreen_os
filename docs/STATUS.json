@@ -1127,7 +1127,7 @@
         {
           "name": "Public website rebuilt on the 2026 design (S6)",
           "status": "done",
-          "note": "Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids, floating cards or scroll animation. Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show. Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders"
+          "note": "Home, six service pages on one pattern (/healthcare, /healthcare/staffing, /healthcare/supported-living, /cleaning, /security, /training), /request, /news, About, Contact, Careers and Verify restyled to the homepage mock: paper, 1px borders, green blocks, serif headings, no gradients, grids or scroll animation. Header reduced to four destinations with a Services panel; home hero on the split image-card pattern with one framed status card and a reduced-motion-safe entrance; green-900 footer (website/hero-nav-refresh). Healthcare and Training replace Care and Academy in public copy. Sample posts and invented testimonials removed; only published records show (labelled samples appear on the dev server only, never in a build). Checked at 1280 and 375px with one h1 per page and no horizontal scroll. Photographs are still placeholders"
         },
         {
           "name": "Website enquiries reach the right queue",
