@@ -7,6 +7,29 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Deployed: the 2026 build and Clerk sign-in to production (2026-10-30, by hand over ssh; PR #21 not merged)
+
+Owner instruction: no users, no data moves. A database backup was taken first (`ritagreen_os-2026-10-30_062740.sql.gz`, 72 tables, restore not drilled).
+
+- `config.php` (mode 600): `RG_ENV` production, `APP_SECRET`, `CLERK_ISSUER`, `CLERK_AUTHORIZED_PARTIES`.
+- Server PHP uploaded by checksum (46 new, 56 changed, no config files), then `schema.sql` and `migrations/`. All 87 PHP files lint on PHP 8.4.27.
+- `php migrate.php --go --production` run by the owner: 24 migrations applied (020 to 039, 042, 043, 044); `--status` shows none pending. Row counts unchanged (8 users, 8 workers, 6 clients, 15 people).
+- `ai.php`, `weather.php`, `analytics.php` moved to `~/private_backups/php-predeploy-2026/retired/` (they now answer the app page, not JSON).
+- Live `.htaccess` merged, not overwritten: file-refusal rules, old-address redirects and the Clerk Content-Security-Policy added; the Cloudflare origin lock and SPA fallback kept. Previous file saved as `.htaccess.live-before-merge`.
+- `dist/` built with the live Clerk key and uploaded without `.htaccess` (0 differences afterwards).
+- Checks passed: public pages 200, `/services/concierge` 301, `/schema.sql`, `/README.md`, `/migrations/...`, `/migrate.php`, `/restore-check.php`, `/seed.php`, `/backfill-people.php` all 403, API 401 with no token or a bad Clerk-style token, JWKS and Clerk environment answer from `clerk.ritagreenservices.com`, the live bundle carries the live key and the lazy Clerk chunk.
+- NOT DONE: `backfill-payroll.php --go` and `backfill-people.php --go` (data writes the owner did not want; 8 workers have no payroll number; one name clash to resolve by hand: `test.worker@ritagreenservices.com`); restore rehearsal; cron additions; removing the retired `OR_*` and `OPENWEATHER_*` lines from `config.php`.
+- NOT TESTED: a real sign-in in a browser, the Content-Security-Policy against Clerk's form (the browser tool failed on this page), the three areas (office, `/m`, `/portal`), the origin lock after the merge.
+
+### Added: sign in with Clerk, email code (2026-10-30, branch `move/cpanel-clerk`, not deployed)
+
+- **Server.** `server/clerk-lib.php` checks a Clerk session token (RS256, signing keys cached, issuer, expiry, not-before and authorised-party checks) and maps it to an active `users` row; `current_user()` in `lib.php` accepts it beside the 64-hex session tokens. Migration `044_clerk_user_id.sql` adds `users.clerk_user_id` (unique, nullable, re-runnable). New keys `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` in `config.sample.php`.
+- **Linking.** The first sign-in links an active user whose email equals the token's verified email. A row linked to another Clerk user is never re-linked; an unknown email gets 401; sign-up never creates a user.
+- **App.** `/login` shows Clerk's email-code form when `VITE_CLERK_PUBLISHABLE_KEY` is set (unset keeps the password form). `RequireAuth` resolves the person through Clerk for the office, the worker app and the client portal. The Clerk code loads only there, not on the public website. The idle lock screen and the 2FA card are replaced by a note under Clerk.
+- **Content-Security-Policy.** `public/.htaccess` allows only the named Clerk hosts. NOT TESTED in a browser against the live policy.
+- **Tests.** `server/tests/clerk.php` (token checks, in `npm run test:php`), `server/tests/db/cases/250_clerk_signin.php` (linking, bad tokens, roles), `src/lib/__tests__/clerk.test.ts`.
+- **Not removed.** Password, 2FA, Google SSO, reset and the password session remain until the owner confirms.
+
 ### Changed: website header, home hero and footer (2026-10-12, local, not deployed)
 
 Branch `website/hero-nav-refresh`. Frontend only: no endpoint, table or migration changes.

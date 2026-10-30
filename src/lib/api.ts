@@ -3,6 +3,7 @@
 // React never touches MySQL. Every call goes to a PHP endpoint that returns
 // JSON. In dev we hit the live API over HTTPS (api.php sends CORS headers);
 // in production the build is served from the same domain, so the base is "".
+import { clerkEnabled, clerkToken } from "@/lib/clerk"
 import { saveAs } from "file-saver"
 
 // Both dev and prod use a relative base. In dev, Vite proxies /*.php to the
@@ -79,13 +80,21 @@ type ApiOptions = {
   auth?: boolean
 }
 
+/** The bearer for the next request: a held session token from the old sign-in, else a fresh Clerk token. */
+async function authToken(): Promise<string | null> {
+  const stored = getToken()
+  if (stored || !clerkEnabled) return stored
+  const r = await clerkToken()
+  return r.kind === "token" ? r.token : null
+}
+
 // api("clients.php", { method: "POST", body: {...} })
 export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}): Promise<T> {
   const { method = "GET", body, auth = true } = opts
   const headers: Record<string, string> = { Accept: "application/json" }
   if (body !== undefined) headers["Content-Type"] = "application/json"
   if (auth) {
-    const token = getToken()
+    const token = await authToken()
     if (token) headers["Authorization"] = `Bearer ${token}`
   }
 
@@ -130,7 +139,7 @@ export async function api<T = unknown>(endpoint: string, opts: ApiOptions = {}):
 // Multipart upload. Browser sets the Content-Type boundary, so we don't.
 export async function uploadFile<T = unknown>(endpoint: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" }
-  const token = getToken()
+  const token = await authToken()
   if (token) headers["Authorization"] = `Bearer ${token}`
 
   let res: Response
@@ -166,7 +175,7 @@ export async function uploadFile<T = unknown>(endpoint: string, form: FormData):
 // Authenticated download — fetch with the token, then save the blob.
 export async function downloadFile(endpoint: string, filename: string): Promise<void> {
   const headers: Record<string, string> = {}
-  const token = getToken()
+  const token = await authToken()
   if (token) headers["Authorization"] = `Bearer ${token}`
   const res = await fetch(`${API_BASE}/${endpoint}`, { headers })
   if (!res.ok) throw new ApiError(`Download failed (${res.status}).`, res.status)

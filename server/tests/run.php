@@ -1892,6 +1892,10 @@ check('a restore test 30 days ago is current', rg_cron_state('2026-09-09 12:00:0
 check('one 200 days ago is overdue', rg_cron_state('2026-03-23 12:00:00', RG_RESTORE_TEST_EVERY_HOURS, $cronNow), 'late');
 
 // ---------------------------------------------------------------------------
+// Clerk session token checks (clerk-lib.php); the database side is db/cases/250_clerk_signin.php.
+require __DIR__ . '/clerk.php';
+
+// ---------------------------------------------------------------------------
 $total = $passed + count($failures);
 echo "\n";
 if ($failures) {

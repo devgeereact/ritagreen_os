@@ -10,8 +10,14 @@ import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
 import { homeFor } from "@/lib/access"
 import { useSeo } from "@/hooks/use-seo"
+import { clerkEnabled } from "@/lib/clerk"
+import ClerkLogin from "@/pages/auth/ClerkLogin"
 
 export default function Login() {
+  return clerkEnabled ? <ClerkLogin /> : <PasswordLogin />
+}
+
+function PasswordLogin() {
   // A sign-in form is a step, not a destination: noindex, and no canonical.
   // Without this it inherited the homepage title AND the static canonical in
   // index.html, telling Google /login was a duplicate of the homepage.

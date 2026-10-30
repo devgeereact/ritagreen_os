@@ -117,3 +117,29 @@ deployment is a separate authorisation and is not part of this contract.
 | 4 — workforce and worker portal | S3, S4 | Office side in PR #13 (migration 038, `160_rota`); worker side in PR #15 (`180_staff_portal`, no migration) |
 | 5 — owner visibility and launch readiness | S5, S10 | Visibility in PR #17 (migration 043, `200_today`, `210_reports`, `220_profile_pack`, `230_system_health`); launch gate in S10 |
 | 6 — external Academy integration | deferred, no provider | |
+
+## Handoff: Clerk sign-in (30 October 2026, branch `move/cpanel-clerk`)
+Built and tested locally, NOT deployed (owner: no backup, no users, no data moves). `server/clerk-lib.php`, `current_user()` accepts a Clerk bearer, migration 044, `src/auth/ClerkSession|ClerkGate|ClerkArea`, `ClerkLogin`, API client token, lock screen and 2FA card off under Clerk, CSP names the Clerk hosts. Clerk app "Rita Green Services" (production instance on ritagreenservices.com, DNS verified, email code only, test user gakinz101@gmail.com). Steps: docs/runbooks/release-2026.md "Clerk sign-in".
+Evidence: `npm run test:php` 870 assertions; `npm run test:db` 1201 assertions on a private throwaway MariaDB (new case 250); `npm test` 123; typecheck and lint clean; build with the live key OK, no secret keys, entry bundle +1 KB (Clerk is lazy); `docs_sync.py --check` consistent.
+NOT TESTED: a real sign-in; the CSP in a browser; the live server (state vs `main` not inspected).
+
+## Read-only server check (30 October 2026)
+Live ritagreenservices.com is the 3 to 4 September build (migrations 001 to 019 applied; 23 repo PHP files missing; 8 users, 8 workers, 6 clients, 15 people). Not deployed: Clerk cannot go up alone and the full release changes real employment records (owner had waived a backup; not taken). Details in docs/runbooks/release-2026.md.
+
+## Release in progress (30 October 2026, owner said yes to option 1: backup, then the full release)
+- DONE: backup `~/backups/ritagreen_os-2026-10-30_062740.sql.gz` (72 tables = live, "Dump completed"; restore NOT drilled; backup.php pruned 3 old dumps by its own rule); PHP and `.htaccess` copied to `~/private_backups/php-predeploy-2026/` (with `config.php.before-clerk`).
+- DONE: live `config.php` (still 600): added RG_ENV production, APP_SECRET (generated on the server, not printed), CLERK_ISSUER and CLERK_AUTHORIZED_PARTIES.
+- DONE: uploaded server PHP by checksum (46 new, 56 changed; no config files), `schema.sql`, `migrations/` (42 files). All 87 PHP files lint on the server (8.4.27). Home 200, sign-in check unchanged.
+- BLOCKED: `migrate.php --go --production` (24 pending: 020 to 039, 042, 043, 044) was refused by the auto-mode permission classifier. Not retried. The live site still runs the old app against the new PHP; per the runbook the new PHP works on the old DB only partly, so finish the migration or roll back the PHP promptly.
+- PREPARED, not uploaded: merged `.htaccess` at `.local-test/htaccess/merged.htaccess` (live file + file-refusal block + old-address redirects + Clerk CSP; origin lock and SPA fallback kept).
+- NEXT after the migration: activation report and backfills, move the retired `ai.php`, `weather.php`, `analytics.php` aside, upload the merged `.htaccess`, then `dist/` (excluding `.htaccess`), then the checks in the runbook.
+
+## Release done (30 October 2026)
+Migrations run by the owner (24 applied, 0 pending, counts unchanged); retired endpoints moved aside; merged `.htaccess` and `dist/` live with the live Clerk key; HTTP checks pass (see docs/CHANGELOG.md "Deployed"). Open: owner to try a real sign-in at /login; no Clerk users created and sign-up is still PUBLIC, so whoever can receive mail at a users-table address (dev@, admin@, manager@, trainer@, editor@, employee@, test.worker@, test.client@ ritagreenservices.com) can claim that role. Create Clerk users for the real people and restrict sign-up. Backfills not run. Rollback: restore PHP from `~/private_backups/php-predeploy-2026/` and `.htaccess.live-before-merge`; DB restore from the dump only if data is damaged.
+
+## Sign-up restricted (30 October 2026, owner asked; chose "dev@ and admin@ only")
+Clerk production instance for ritagreenservices.com: users created (no password, email admin-verified, nothing emailed) for dev@ritagreenservices.com (super_admin) and admin@ritagreenservices.com (admin); `sign_up_mode` set to restricted (dry run first). Nobody else can sign in until a Clerk user is created for them (and a `users` row exists). Other users rows (manager@, trainer@, editor@, employee@, test.worker@, test.client@) have no Clerk user yet. An earlier test Clerk user gakinz101@gmail.com also exists but has no `users` row, so it gets "No access yet". Rollback: set sign_up_mode back to public.
+
+## Merged to main (30 Oct 2026)
+- `move/cpanel-clerk` (already live) merged into `main`, so `main` matches the server again.
+- `.github/workflows/deploy.yml` is now manual only (`workflow_dispatch`): no FTP deploy on push. Releases go over SSH (`pnpm release`, kit standard) once that script is added here.

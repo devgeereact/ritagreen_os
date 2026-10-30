@@ -198,3 +198,20 @@ not require rolling back the database.
 
 Record what was done, with times and the `--status` output, as a dated "Deployed" entry in
 `docs/CHANGELOG.md`.
+
+
+## Clerk sign-in (added 2026-10-30, not yet run)
+
+Read-only findings over `ssh cpanel` on 30 October 2026 (nothing changed): the live site is the 3 to 4 September build. `lib.php` and `auth.php` are dated 2026-09-03, migrations 001 to 019 are applied and 20 to 44 are not (23 migration files in the repo are not applied), 23 server PHP files in the repo are missing on the server (for example `people.php`, `people-lib.php`, `portal-lib.php`, `files-lib.php`, `features.php`, `company.php`, `employment-contracts.php`, `onboarding-templates.php`), `config.php` is mode 644 and has no Clerk keys, and PHP is 8.4.27. Live data: 8 users, 8 workers, 6 clients, 15 people. So the Clerk sign-in cannot go up alone: the new app needs the whole newer server and database, and the migrations run on real employment records. That is one full release, not a Clerk deploy; take a database backup first.
+
+Additive. The password sign-in keeps working until the owner confirms it can go. In order, each step approved by the owner:
+
+1. Backup (the owner may waive it; say so in the handoff), then add `CLERK_ISSUER` (`https://clerk.ritagreenservices.com`) and `CLERK_AUTHORIZED_PARTIES` to the server `config.php` (see `config.sample.php`).
+2. `php migrate.php --status`, then apply migration 044 (adds `users.clerk_user_id`; read the dry run first).
+3. Upload `server/clerk-lib.php`, then `server/lib.php`. Never `lib.php` first.
+4. **Merge** `public/.htaccess` into the live one; never overwrite it (the live file carries the Cloudflare origin lock). Add the file-refusal block and the old-address redirects after the `uploads/` rule and replace the Content-Security-Policy line (it names the Clerk hosts; without it the sign-in form is blocked). Upload the merged file immediately before `dist/`, because the old policy allows icon-font origins the new app no longer uses.
+5. Build with `VITE_CLERK_PUBLISHABLE_KEY` set to the live key and upload `dist/` with `--exclude .htaccess` (Vite copies `public/.htaccess` into `dist/`, which would overwrite the live file).
+6. Every person who should sign in needs an active `users` row with their email and a Clerk user in the production instance; then restrict sign-up in Clerk.
+7. Check: one Clerk sign-in per role (office, worker `/m`, client `/portal`), an unknown email shows "No access yet", a bad token gets 401, the public site loads no Clerk script.
+
+Rollback: restore the previous `lib.php`, `.htaccess` and `dist/`; the new column is harmless.

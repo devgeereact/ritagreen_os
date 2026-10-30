@@ -45,3 +45,7 @@ __pycache__/
 
 # Local agent tool config (editor MCP ports)
 .codex/
+
+# local scratch (tests, temp, logs, recovery)
+.local-test/
+.local-state/

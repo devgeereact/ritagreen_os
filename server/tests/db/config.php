@@ -33,6 +33,13 @@ define('DB_USER', getenv('RG_TEST_DB_USER') ?: 'rg_test');
 define('DB_PASS', getenv('RG_TEST_DB_PASS') !== false ? (string) getenv('RG_TEST_DB_PASS') : 'rg_test_local_only');
 define('DB_NAME', getenv('RG_TEST_DB_NAME') ?: 'ritagreen_os_test');
 
+// ----- Clerk sign-in -----
+// Synthetic issuer: the signing keys are written into the cache folder by the test itself, so
+// nothing is fetched. clerk_signin.php (case 250) mints its own tokens with its own key pair.
+define('CLERK_ISSUER', 'https://clerk.test.example');
+define('CLERK_AUTHORIZED_PARTIES', ['https://ritagreenservices.com', 'https://local.ritagreenservices.com']);
+define('CLERK_CACHE_DIR', sys_get_temp_dir() . '/rg-clerk-test-cache');
+
 // ----- Every outbound integration: OFF -----
 // A test run that can email a real applicant is a test run that eventually will.
 define('MAIL_ENABLED', false);

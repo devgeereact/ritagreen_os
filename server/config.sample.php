@@ -15,6 +15,14 @@
 // production, which is the safe way to be wrong.
 define('RG_ENV', 'production');
 
+// ----- Clerk sign-in (email code) -----
+// CLERK_ISSUER is the Frontend API URL of the PRODUCTION Clerk instance
+// (https://clerk.ritagreenservices.com, no trailing slash). CLERK_AUTHORIZED_PARTIES are the
+// exact origins allowed to present a token: the live site and local-live. Nothing else.
+// CLERK_CACHE_DIR (optional) is a private writable folder outside the web root for the signing keys.
+define('CLERK_ISSUER', 'https://clerk.example.com');
+define('CLERK_AUTHORIZED_PARTIES', ['https://ritagreenservices.com', 'https://local.ritagreenservices.com']);
+
 // ----- Error display -----
 // Flip GK_DEBUG to true only while debugging. In production errors are logged
 // (check cPanel error_log) but never shown, so nothing leaks to callers.

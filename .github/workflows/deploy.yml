@@ -18,11 +18,9 @@ name: Build and deploy to cPanel
 # workflow. Ship the frontend ahead of the API and the interface changes while
 # the API does not.
 
+# Manual only (30 Oct 2026): releases go over SSH with `pnpm release`, not on push. See docs/DEPLOYMENT.md.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -72,7 +70,11 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+      - name: Build
+        # Public Clerk key from a repository variable (not a secret). Unset keeps the password sign-in.
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+        run: npm run build
 
       - name: Assert build output before uploading
         run: |
