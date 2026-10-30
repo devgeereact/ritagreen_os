@@ -1,6 +1,9 @@
+import { lazy, Suspense } from "react"
 import { Navigate, Outlet, useLocation } from "react-router-dom"
 import { useAuth, type Role } from "@/providers/auth-provider"
 import { canAccess, homeFor } from "@/lib/access"
+import { getToken } from "@/lib/api"
+import { clerkEnabled } from "@/lib/clerk"
 
 // Gate for the authenticated surfaces.
 //
@@ -12,7 +15,10 @@ import { canAccess, homeFor } from "@/lib/access"
 //
 // This is a user-experience boundary, not a security one. Every endpoint
 // re-checks server-side; see docs/ARCHITECTURE.md.
-export default function RequireAuth({ roles }: { roles?: Role[] }) {
+// Lazy, so the Clerk code stays out of the public website's download.
+const ClerkArea = lazy(() => import("@/auth/ClerkArea"))
+
+function Guard({ roles }: { roles?: Role[] }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
@@ -40,4 +46,17 @@ export default function RequireAuth({ roles }: { roles?: Role[] }) {
   }
 
   return <Outlet />
+}
+
+// With Clerk on, the office, worker app and client portal all sign in by email code. A session
+// token already held from the old sign-in (still valid until it expires) keeps using Guard alone.
+export default function RequireAuth({ roles }: { roles?: Role[] }) {
+  if (!clerkEnabled || getToken() !== null) return <Guard roles={roles} />
+  return (
+    <Suspense fallback={<div className="flex min-h-svh items-center justify-center text-muted-foreground">Loading…</div>}>
+      <ClerkArea>
+        <Guard roles={roles} />
+      </ClerkArea>
+    </Suspense>
+  )
 }

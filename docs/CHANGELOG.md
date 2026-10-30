@@ -7,6 +7,15 @@ regenerating `docs/PROGRESS.md`, and adding an entry here.
 
 ## [Unreleased]
 
+### Added: sign in with Clerk, email code (2026-10-30, branch `move/cpanel-clerk`, not deployed)
+
+- **Server.** `server/clerk-lib.php` checks a Clerk session token (RS256, signing keys cached, issuer, expiry, not-before and authorised-party checks) and maps it to an active `users` row; `current_user()` in `lib.php` accepts it beside the 64-hex session tokens. Migration `044_clerk_user_id.sql` adds `users.clerk_user_id` (unique, nullable, re-runnable). New keys `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` in `config.sample.php`.
+- **Linking.** The first sign-in links an active user whose email equals the token's verified email. A row linked to another Clerk user is never re-linked; an unknown email gets 401; sign-up never creates a user.
+- **App.** `/login` shows Clerk's email-code form when `VITE_CLERK_PUBLISHABLE_KEY` is set (unset keeps the password form). `RequireAuth` resolves the person through Clerk for the office, the worker app and the client portal. The Clerk code loads only there, not on the public website. The idle lock screen and the 2FA card are replaced by a note under Clerk.
+- **Content-Security-Policy.** `public/.htaccess` allows only the named Clerk hosts. NOT TESTED in a browser against the live policy.
+- **Tests.** `server/tests/clerk.php` (token checks, in `npm run test:php`), `server/tests/db/cases/250_clerk_signin.php` (linking, bad tokens, roles), `src/lib/__tests__/clerk.test.ts`.
+- **Not removed.** Password, 2FA, Google SSO, reset and the password session remain until the owner confirms.
+
 ### Changed: website header, home hero and footer (2026-10-12, local, not deployed)
 
 Branch `website/hero-nav-refresh`. Frontend only: no endpoint, table or migration changes.

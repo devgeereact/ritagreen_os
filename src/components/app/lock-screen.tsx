@@ -6,12 +6,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/providers/auth-provider"
 import { api, ApiError } from "@/lib/api"
+import { clerkEnabled } from "@/lib/clerk"
 
 const IDLE_MS = 15 * 60 * 1000 // lock after 15 minutes idle
 
 // Idle auto-lock for the CMS. After inactivity the screen locks and the user
 // must re-enter their password (verified server-side) to continue.
+// Under Clerk there is no password to re-enter; the Clerk session ends like any other.
 export function LockScreen() {
+  return clerkEnabled ? null : <PasswordLock />
+}
+
+function PasswordLock() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [locked, setLocked] = useState(false)

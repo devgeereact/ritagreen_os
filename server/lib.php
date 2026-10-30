@@ -194,6 +194,16 @@ function current_user(mysqli $conn): ?array
 {
     $token = bearer_token();
     if (!$token) return null;
+    if (substr_count($token, '.') === 2) {
+        // Clerk session token (email code), checked in clerk-lib.php. The 64-hex session tokens
+        // issued by auth.php have no dots and take the lookup below. Verified once per request.
+        static $memo = [];
+        if (!array_key_exists($token, $memo)) {
+            require_once __DIR__ . '/clerk-lib.php';
+            $memo[$token] = rg_clerk_user_from_token($conn, $token);
+        }
+        return $memo[$token];
+    }
     $hash = hash('sha256', $token);
     $stmt = $conn->prepare(
         'SELECT u.id, u.name, u.email, u.role, u.division, u.scope_to_division, u.client_id, u.worker_id

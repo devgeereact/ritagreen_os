@@ -117,3 +117,8 @@ deployment is a separate authorisation and is not part of this contract.
 | 4 — workforce and worker portal | S3, S4 | Office side in PR #13 (migration 038, `160_rota`); worker side in PR #15 (`180_staff_portal`, no migration) |
 | 5 — owner visibility and launch readiness | S5, S10 | Visibility in PR #17 (migration 043, `200_today`, `210_reports`, `220_profile_pack`, `230_system_health`); launch gate in S10 |
 | 6 — external Academy integration | deferred, no provider | |
+
+## Handoff: Clerk sign-in (30 October 2026, branch `move/cpanel-clerk`)
+Built and tested locally, NOT deployed (owner: no backup, no users, no data moves). `server/clerk-lib.php`, `current_user()` accepts a Clerk bearer, migration 044, `src/auth/ClerkSession|ClerkGate|ClerkArea`, `ClerkLogin`, API client token, lock screen and 2FA card off under Clerk, CSP names the Clerk hosts. Clerk app "Rita Green Services" (production instance on ritagreenservices.com, DNS verified, email code only, test user gakinz101@gmail.com). Steps: docs/runbooks/release-2026.md "Clerk sign-in".
+Evidence: `npm run test:php` 870 assertions; `npm run test:db` 1201 assertions on a private throwaway MariaDB (new case 250); `npm test` 123; typecheck and lint clean; build with the live key OK, no secret keys, entry bundle +1 KB (Clerk is lazy); `docs_sync.py --check` consistent.
+NOT TESTED: a real sign-in; the CSP in a browser; the live server (state vs `main` not inspected).

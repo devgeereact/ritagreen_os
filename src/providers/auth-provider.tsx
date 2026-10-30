@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
 import { api, getToken, setToken, purgeCachedApiReads } from "@/lib/api"
+import { clerkEnabled, clerkSignOut } from "@/lib/clerk"
 
 // The seven roles enforced across RitaGreenOS. Server-side checks are the
 // source of truth; this is used only to shape the UI.
@@ -30,6 +31,8 @@ type AuthContextValue = {
   login: (email: string, password: string, code?: string) => Promise<{ twofaRequired: boolean; user?: User }>
   // Adopt a session obtained out-of-band (e.g. Google SSO callback).
   adoptSession: (token: string, user: User) => void
+  // Set (or clear) the user resolved from a Clerk session; Clerk holds the session itself.
+  adoptClerkUser: (user: User | null) => void
   logout: () => void
   hasRole: (...roles: Role[]) => boolean
 }
@@ -73,7 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
   }
 
+  const adoptClerkUser = useCallback((u: User | null) => setUser(u), [])
+
   function logout() {
+    if (clerkEnabled) void clerkSignOut().catch(() => {})
     const token = getToken()
     if (token) {
       // Best-effort server-side token revoke; ignore failures.
@@ -91,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, adoptSession, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, adoptSession, adoptClerkUser, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   )

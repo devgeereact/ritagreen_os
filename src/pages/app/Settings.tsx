@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { clerkEnabled } from "@/lib/clerk"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IntakeTab } from "@/components/app/intake-tab"
 import { SystemHealthTab } from "@/components/app/system-health"
@@ -113,6 +114,21 @@ export default function Settings() {
 }
 
 function TwoFactorCard() {
+  // Sign-in is Clerk's email code: there is no password or authenticator app to set up here.
+  if (clerkEnabled) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign-in</CardTitle>
+          <CardDescription>You sign in with a one-time code sent to your email. There is no password or authenticator to manage.</CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+  return <LegacyTwoFactorCard />
+}
+
+function LegacyTwoFactorCard() {
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [secret, setSecret] = useState("")
   const [qr, setQr] = useState("")

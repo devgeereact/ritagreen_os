@@ -198,3 +198,18 @@ not require rolling back the database.
 
 Record what was done, with times and the `--status` output, as a dated "Deployed" entry in
 `docs/CHANGELOG.md`.
+
+
+## Clerk sign-in (added 2026-10-30, not yet run)
+
+Additive. The password sign-in keeps working until the owner confirms it can go. In order, each step approved by the owner:
+
+1. Backup (the owner may waive it; say so in the handoff), then add `CLERK_ISSUER` (`https://clerk.ritagreenservices.com`) and `CLERK_AUTHORIZED_PARTIES` to the server `config.php` (see `config.sample.php`).
+2. `php migrate.php --status`, then apply migration 044 (adds `users.clerk_user_id`; read the dry run first).
+3. Upload `server/clerk-lib.php`, then `server/lib.php`. Never `lib.php` first.
+4. Replace the server `.htaccess` with `public/.htaccess` (the Content-Security-Policy names the Clerk hosts; without it the sign-in form is blocked).
+5. Build with `VITE_CLERK_PUBLISHABLE_KEY` set to the live key and upload `dist/`.
+6. Every person who should sign in needs an active `users` row with their email and a Clerk user in the production instance; then restrict sign-up in Clerk.
+7. Check: one Clerk sign-in per role (office, worker `/m`, client `/portal`), an unknown email shows "No access yet", a bad token gets 401, the public site loads no Clerk script.
+
+Rollback: restore the previous `lib.php`, `.htaccess` and `dist/`; the new column is harmless.
