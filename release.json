@@ -1,0 +1,49 @@
+{
+  "host": "cpanel",
+  "project": "ritagreen_os",
+  "url": "https://ritagreenservices.com",
+  "checks": [
+    "npm run typecheck",
+    "npm run lint",
+    "npm test",
+    "npm run test:php"
+  ],
+  "build": "VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsucml0YWdyZWVuc2VydmljZXMuY29tJA npm run build",
+  "parts": [
+    {
+      "from": "dist",
+      "to": "ritagreenservices.com",
+      "exclude": [
+        "/uploads/"
+      ]
+    },
+    {
+      "from": "server",
+      "to": "ritagreenservices.com",
+      "allow": [
+        "*.sql"
+      ],
+      "exclude": [
+        "/tests/",
+        "/uploads/",
+        "*.md",
+        "*.example",
+        "config.sample.php"
+      ]
+    }
+  ],
+  "smoke": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/auth.php?action=me",
+      "status": 401
+    },
+    {
+      "path": "/api.php",
+      "status": 401
+    }
+  ]
+}

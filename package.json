@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "release": "node scripts/release.mjs",
     "dev:api": "php -S 127.0.0.1:8122 -t server",
     "dev:prod-api": "RG_API_TARGET=https://ritagreenservices.com vite",
     "seed": "php server/seed.php",

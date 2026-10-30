@@ -8,6 +8,14 @@ by hand, in this order.
 Who: one person at the keyboard (the release lead) and the owner available for the owner
 actions and the go/no-go. Allow two hours, out of office hours, with the office told.
 
+## How to release: `npm run release` (from this Mac, over SSH)
+
+Kit standard since 30 October 2026: no FTP, no GitHub Actions deploys. `.github/workflows/deploy.yml` is manual only and is removed, with its FTP secrets and the cPanel FTP account, after the first successful release below.
+
+1. `npm run release` (dry run): `main` clean and pushed, the checks, the build with the live public Clerk key, then a checksum list of every file that would change in `~/ritagreenservices.com`: `dist/` and `server/` with `migrations/` and `schema.sql` (without tests, uploads and Markdown). Nothing changes.
+2. `npm run release -- --go`: copies every server file about to change to `~/backups/ritagreen_os/releases/<time>/` (newest 3 kept), uploads (entry files last, nothing deleted; `config.php`, `.htaccess`, `.env*`, dumps never), then smoke-tests `/` (200), `/auth.php?action=me` and `/api.php` (401); a failure restores the copies automatically.
+3. Undo: `npm run release -- --rollback --go`. Database changes stay a separate, backed-up step.
+
 ## 0. Before the day
 
 - [ ] CI is green on the exact commit of #8 that will be merged (typecheck, lint, `npm test`,
