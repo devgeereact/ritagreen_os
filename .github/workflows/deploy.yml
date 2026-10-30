@@ -18,11 +18,9 @@ name: Build and deploy to cPanel
 # workflow. Ship the frontend ahead of the API and the interface changes while
 # the API does not.
 
+# Manual only (30 Oct 2026): releases go over SSH with `pnpm release`, not on push. See docs/DEPLOYMENT.md.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

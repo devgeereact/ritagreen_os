@@ -139,3 +139,7 @@ Migrations run by the owner (24 applied, 0 pending, counts unchanged); retired e
 
 ## Sign-up restricted (30 October 2026, owner asked; chose "dev@ and admin@ only")
 Clerk production instance for ritagreenservices.com: users created (no password, email admin-verified, nothing emailed) for dev@ritagreenservices.com (super_admin) and admin@ritagreenservices.com (admin); `sign_up_mode` set to restricted (dry run first). Nobody else can sign in until a Clerk user is created for them (and a `users` row exists). Other users rows (manager@, trainer@, editor@, employee@, test.worker@, test.client@) have no Clerk user yet. An earlier test Clerk user gakinz101@gmail.com also exists but has no `users` row, so it gets "No access yet". Rollback: set sign_up_mode back to public.
+
+## Merged to main (30 Oct 2026)
+- `move/cpanel-clerk` (already live) merged into `main`, so `main` matches the server again.
+- `.github/workflows/deploy.yml` is now manual only (`workflow_dispatch`): no FTP deploy on push. Releases go over SSH (`pnpm release`, kit standard) once that script is added here.
