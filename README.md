@@ -116,8 +116,8 @@ First-time setup, cron jobs and the files that must not be served are in
 
 ## Deploying
 
-Merging into `main` deploys nothing. Release from the Mac over SSH: `npm run release` (dry run),
-then `npm run release -- --go`: `dist/` plus `server/` with `migrations/`, a snapshot of every
+Every push to `main` deploys through GitHub Actions (`deploy.yml`, SSH, no FTP; docs-only pushes do
+not). By hand from the Mac: `npm run release` (dry run), then `npm run release -- --go`: `dist/` plus `server/` with `migrations/`, a snapshot of every
 changed server file and an automatic restore. `config.php`, `.htaccess` and migrations runs stay by hand.
 
 CI runs typecheck, `eslint --max-warnings 0`, the three test suites (the database one on

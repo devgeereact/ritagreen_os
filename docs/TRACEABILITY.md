@@ -270,7 +270,7 @@ database. None has been applied to the live one, which is a separate deliberate 
 | Documentation matches the code | `docs/STATUS.json` | `scripts/docs_sync.py` | `docs/PROGRESS.md` | `scripts/docs_sync.py` `--check` |
 | Quality gates run before merge | — | `.github/workflows/ci.yml` | GitHub checks | itself |
 | Pure logic is testable without infrastructure | — | `server/pure.php` | — | `server/tests/run.php` |
-| Deploys never disturb server files | — | `scripts/release.mjs`, `release.json` | — | none |
+| Deploys never disturb server files | — | `scripts/release.mjs`, `release.json`, `.github/workflows/deploy.yml` | — | none |
 | Development does not touch production | `server/config.local.php.example` | `npm run dev:api` | `vite.config.ts` proxy defaults local | none |
 | Fixtures exist without production data | `server/seed.php` | CLI | — | none |
 | Schema changes are ordered migrations | `server/schema.sql` is the baseline | `server/migrate.php` | — | none |
