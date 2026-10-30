@@ -8,3 +8,10 @@ One audit file for this project. Every audit, check or review adds a dated secti
 - Evidence: `npm run release` dry run on `main` (30 Oct 2026): typecheck, lint, 123 Vitest tests, `test:php` 870 assertions all pass; build with the live Clerk key; `dist/` and `server/` identical to the live files (nothing to upload).
 - Result: PASS. The FTP deploy workflow was removed; GitHub FTP secrets and the cPanel FTP account are deleted by the owner (`~/Backups/scripts/remove-ftp-deploys.zsh`).
 - Not checked: a real `--go` release (nothing to upload yet), restore drill of the server backups.
+
+## 30 Oct 2026: config.php moved out of the web root
+
+- The real settings now live in `~/private-config/ritagreen_os/config.php` (0600, folder 0700). The web-root `config.php` is a stub (0600, no secrets) that loads it.
+- Original copy: `~/backups/ritagreen_os/config.php.before-private`.
+- Releases never upload `config.php` (PROTECT list), so deploys keep the stub.
+- Verified live after the move: the API check returned the expected status.
