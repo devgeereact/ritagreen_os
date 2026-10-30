@@ -209,8 +209,8 @@ Additive. The password sign-in keeps working until the owner confirms it can go.
 1. Backup (the owner may waive it; say so in the handoff), then add `CLERK_ISSUER` (`https://clerk.ritagreenservices.com`) and `CLERK_AUTHORIZED_PARTIES` to the server `config.php` (see `config.sample.php`).
 2. `php migrate.php --status`, then apply migration 044 (adds `users.clerk_user_id`; read the dry run first).
 3. Upload `server/clerk-lib.php`, then `server/lib.php`. Never `lib.php` first.
-4. Replace the server `.htaccess` with `public/.htaccess` (the Content-Security-Policy names the Clerk hosts; without it the sign-in form is blocked).
-5. Build with `VITE_CLERK_PUBLISHABLE_KEY` set to the live key and upload `dist/`.
+4. **Merge** `public/.htaccess` into the live one; never overwrite it (the live file carries the Cloudflare origin lock). Add the file-refusal block and the old-address redirects after the `uploads/` rule and replace the Content-Security-Policy line (it names the Clerk hosts; without it the sign-in form is blocked). Upload the merged file immediately before `dist/`, because the old policy allows icon-font origins the new app no longer uses.
+5. Build with `VITE_CLERK_PUBLISHABLE_KEY` set to the live key and upload `dist/` with `--exclude .htaccess` (Vite copies `public/.htaccess` into `dist/`, which would overwrite the live file).
 6. Every person who should sign in needs an active `users` row with their email and a Clerk user in the production instance; then restrict sign-up in Clerk.
 7. Check: one Clerk sign-in per role (office, worker `/m`, client `/portal`), an unknown email shows "No access yet", a bad token gets 401, the public site loads no Clerk script.
 

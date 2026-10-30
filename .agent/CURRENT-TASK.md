@@ -125,3 +125,11 @@ NOT TESTED: a real sign-in; the CSP in a browser; the live server (state vs `mai
 
 ## Read-only server check (30 October 2026)
 Live ritagreenservices.com is the 3 to 4 September build (migrations 001 to 019 applied; 23 repo PHP files missing; 8 users, 8 workers, 6 clients, 15 people). Not deployed: Clerk cannot go up alone and the full release changes real employment records (owner had waived a backup; not taken). Details in docs/runbooks/release-2026.md.
+
+## Release in progress (30 October 2026, owner said yes to option 1: backup, then the full release)
+- DONE: backup `~/backups/ritagreen_os-2026-10-30_062740.sql.gz` (72 tables = live, "Dump completed"; restore NOT drilled; backup.php pruned 3 old dumps by its own rule); PHP and `.htaccess` copied to `~/private_backups/php-predeploy-2026/` (with `config.php.before-clerk`).
+- DONE: live `config.php` (still 600): added RG_ENV production, APP_SECRET (generated on the server, not printed), CLERK_ISSUER and CLERK_AUTHORIZED_PARTIES.
+- DONE: uploaded server PHP by checksum (46 new, 56 changed; no config files), `schema.sql`, `migrations/` (42 files). All 87 PHP files lint on the server (8.4.27). Home 200, sign-in check unchanged.
+- BLOCKED: `migrate.php --go --production` (24 pending: 020 to 039, 042, 043, 044) was refused by the auto-mode permission classifier. Not retried. The live site still runs the old app against the new PHP; per the runbook the new PHP works on the old DB only partly, so finish the migration or roll back the PHP promptly.
+- PREPARED, not uploaded: merged `.htaccess` at `.local-test/htaccess/merged.htaccess` (live file + file-refusal block + old-address redirects + Clerk CSP; origin lock and SPA fallback kept).
+- NEXT after the migration: activation report and backfills, move the retired `ai.php`, `weather.php`, `analytics.php` aside, upload the merged `.htaccess`, then `dist/` (excluding `.htaccess`), then the checks in the runbook.
