@@ -202,6 +202,8 @@ Record what was done, with times and the `--status` output, as a dated "Deployed
 
 ## Clerk sign-in (added 2026-10-30, not yet run)
 
+Read-only findings over `ssh cpanel` on 30 October 2026 (nothing changed): the live site is the 3 to 4 September build. `lib.php` and `auth.php` are dated 2026-09-03, migrations 001 to 019 are applied and 20 to 44 are not (23 migration files in the repo are not applied), 23 server PHP files in the repo are missing on the server (for example `people.php`, `people-lib.php`, `portal-lib.php`, `files-lib.php`, `features.php`, `company.php`, `employment-contracts.php`, `onboarding-templates.php`), `config.php` is mode 644 and has no Clerk keys, and PHP is 8.4.27. Live data: 8 users, 8 workers, 6 clients, 15 people. So the Clerk sign-in cannot go up alone: the new app needs the whole newer server and database, and the migrations run on real employment records. That is one full release, not a Clerk deploy; take a database backup first.
+
 Additive. The password sign-in keeps working until the owner confirms it can go. In order, each step approved by the owner:
 
 1. Backup (the owner may waive it; say so in the handoff), then add `CLERK_ISSUER` (`https://clerk.ritagreenservices.com`) and `CLERK_AUTHORIZED_PARTIES` to the server `config.php` (see `config.sample.php`).
