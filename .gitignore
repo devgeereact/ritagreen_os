@@ -49,3 +49,6 @@ __pycache__/
 # local scratch (tests, temp, logs, recovery)
 .local-test/
 .local-state/
+
+# GSD planning scratch (local only)
+.planning/

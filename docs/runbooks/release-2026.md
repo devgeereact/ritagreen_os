@@ -10,7 +10,7 @@ actions and the go/no-go. Allow two hours, out of office hours, with the office 
 
 ## How to release: `npm run release` (from this Mac, over SSH)
 
-No FTP. **Automatic:** every push to `main` deploys through GitHub Actions (`.github/workflows/deploy.yml`): the same checks, build and `scripts/release.mjs --go` over SSH with a restricted deploy key (secrets `CPANEL_SSH_KEY`, `CPANEL_KNOWN_HOSTS`; set by `~/Backups/scripts/setup-github-deploy.zsh`). Docs-only pushes and `[skip ci]` commits do not deploy. Each deploy uses a few Actions minutes. The steps below are the same release run by hand from the Mac.
+No FTP. **Automatic:** every push to `main` deploys through GitHub Actions (`.github/workflows/deploy.yml`): the same checks, build and `scripts/release.mjs --go` over SSH with a restricted deploy key (secrets `CPANEL_SSH_KEY`, `CPANEL_KNOWN_HOSTS`; set by `~/Developer/build-kit/scripts/setup-github-deploy.zsh`). Docs-only pushes and `[skip ci]` commits do not deploy. Each deploy uses a few Actions minutes. The steps below are the same release run by hand from the Mac.
 
 1. `npm run release` (dry run): `main` clean and pushed, the checks, the build with the live public Clerk key, then a checksum list of every file that would change in `~/ritagreenservices.com`: `dist/` and `server/` with `migrations/` and `schema.sql` (without tests, uploads and Markdown). Nothing changes.
 2. `npm run release -- --go`: copies every server file about to change to `~/backups/ritagreen_os/releases/<time>/` (newest 3 kept), uploads (entry files last, nothing deleted; `config.php`, `.htaccess`, `.env*`, dumps never), then smoke-tests `/` (200), `/auth.php?action=me` and `/api.php` (401); a failure restores the copies automatically.
